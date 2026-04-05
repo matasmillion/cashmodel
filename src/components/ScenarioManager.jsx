@@ -11,15 +11,15 @@ export default function ScenarioManager() {
   const [newName, setNewName] = useState('');
 
   const assumptionFields = [
-    { key: 'weeklyGrowthH1', label: 'Weekly Growth (H1)', type: 'growth', step: 0.01 },
-    { key: 'weeklyGrowthH2', label: 'Weekly Growth (H2)', type: 'growth', step: 0.01 },
-    { key: 'mer', label: 'MER (Ad Spend / Rev)', type: 'percent', step: 0.01 },
-    { key: 'cogsPercent', label: 'COGS %', type: 'percent', step: 0.01 },
-    { key: 'profitPercent', label: 'Profit %', type: 'percent', step: 0.01 },
+    { key: 'weeklyGrowthRate', label: 'Weekly Growth Rate', type: 'percent', step: 0.002, min: 0, max: 0.10 },
+    { key: 'startingDailyAdSpend', label: 'Starting Daily Ad Spend', type: 'currency', step: 10, min: 0, max: 1000 },
+    { key: 'targetMER', label: 'Target MER (Ad Spend / Rev)', type: 'percent', step: 0.01 },
+    { key: 'cogsRate', label: 'COGS %', type: 'percent', step: 0.01 },
+    { key: 'aov', label: 'AOV', type: 'currency', step: 5, min: 20, max: 300 },
+    { key: 'variablePercent', label: 'Variable Costs %', type: 'percent', step: 0.005 },
     { key: 'paymentProcessingPercent', label: 'Payment Processing %', type: 'percent', step: 0.005 },
-    { key: 'fulfillmentPercent', label: 'Fulfillment %', type: 'percent', step: 0.01 },
-    { key: 'shopifyCapitalRate', label: 'Shopify Capital Rate', type: 'percent', step: 0.01 },
-    { key: 'creativePercent', label: 'Creative % of Rev', type: 'percent', step: 0.01 },
+    { key: 'opexTier1', label: 'Monthly OPEX ($)', type: 'currency', step: 100, min: 500, max: 10000 },
+    { key: 'poTriggerWeeks', label: 'PO Trigger (Weeks of Inv.)', type: 'integer', step: 1, min: 4, max: 20 },
   ];
 
   const createScenario = () => {
@@ -71,24 +71,27 @@ export default function ScenarioManager() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {assumptionFields.map(field => {
             const value = state.assumptions[field.key];
+            const min = field.min ?? (field.type === 'percent' ? 0 : 0);
+            const max = field.max ?? (field.type === 'percent' ? 0.5 : 100);
+            const displayValue = field.type === 'percent' ? formatPercent(value)
+              : field.type === 'currency' ? `$${Math.round(value).toLocaleString()}`
+              : value;
             return (
               <div key={field.key} className="space-y-1">
                 <div className="flex justify-between">
                   <label className="text-xs" style={{ color: FR.stone }}>{field.label}</label>
                   <span className="text-xs font-mono font-medium" style={{ color: FR.soil }}>
-                    {field.type === 'growth' ? `${value}x` : formatPercent(value)}
+                    {displayValue}
                   </span>
                 </div>
                 <input type="range"
-                  min={field.type === 'growth' ? 0.9 : 0}
-                  max={field.type === 'growth' ? 1.2 : 0.5}
+                  min={min}
+                  max={max}
                   step={field.step}
-                  value={value}
+                  value={value || 0}
                   onChange={e => dispatch({ type: 'UPDATE_ASSUMPTIONS', payload: { [field.key]: parseFloat(e.target.value) } })}
                   className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
-                  style={{ background: FR.sand,
-                    WebkitAppearance: 'none',
-                  }} />
+                  style={{ background: FR.sand, WebkitAppearance: 'none' }} />
                 <style>{`
                   input[type="range"]::-webkit-slider-thumb {
                     -webkit-appearance: none; width: 12px; height: 12px;
@@ -96,8 +99,8 @@ export default function ScenarioManager() {
                   }
                 `}</style>
                 <div className="flex justify-between text-[10px]" style={{ color: FR.stone }}>
-                  <span>{field.type === 'growth' ? '0.9x' : '0%'}</span>
-                  <span>{field.type === 'growth' ? '1.2x' : '50%'}</span>
+                  <span>{field.type === 'percent' ? formatPercent(min) : min}</span>
+                  <span>{field.type === 'percent' ? formatPercent(max) : max}</span>
                 </div>
               </div>
             );
