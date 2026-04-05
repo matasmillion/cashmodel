@@ -1,4 +1,6 @@
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { AppProvider, useApp } from './context/AppContext';
+import LoginPage from './components/LoginPage';
 import KPICards from './components/KPICards';
 import CashflowChart from './components/CashflowChart';
 import CashflowTable from './components/CashflowTable';
@@ -10,7 +12,7 @@ import ScenarioManager from './components/ScenarioManager';
 import IntegrationsPanel from './components/IntegrationsPanel';
 import RevenueForecast from './components/RevenueForecast';
 import AdUnitModel from './components/AdUnitModel';
-import { LayoutDashboard, Table2, Calculator, Package, Receipt, Sliders, Plug, TrendingUp, Film, CalendarRange } from 'lucide-react';
+import { LayoutDashboard, Table2, Calculator, Package, Receipt, Sliders, Plug, TrendingUp, Film, CalendarRange, LogOut, User } from 'lucide-react';
 
 const tabs = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -27,6 +29,7 @@ const tabs = [
 
 function Dashboard() {
   const { state, dispatch } = useApp();
+  const { user, logout } = useAuth();
 
   return (
     <div className="min-h-screen" style={{ background: '#F5F0E8' }}>
@@ -41,28 +44,44 @@ function Dashboard() {
                 Growth Model & Operating Dashboard
               </p>
             </div>
-            <nav className="flex gap-1 flex-wrap">
-              {tabs.map(tab => {
-                const Icon = tab.icon;
-                const isActive = state.activeTab === tab.id;
-                return (
-                  <button key={tab.id}
-                    onClick={() => dispatch({ type: 'SET_TAB', payload: tab.id })}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all"
-                    style={{
-                      background: isActive ? '#3A3A3A' : 'transparent',
-                      color: isActive ? '#F5F0E8' : '#716F70',
-                      fontFamily: "'Inter', sans-serif",
-                    }}
-                    onMouseEnter={e => { if (!isActive) { e.target.style.background = '#EBE5D5'; e.target.style.color = '#3A3A3A'; } }}
-                    onMouseLeave={e => { if (!isActive) { e.target.style.background = 'transparent'; e.target.style.color = '#716F70'; } }}
-                  >
-                    <Icon size={13} />
-                    <span className="hidden lg:inline">{tab.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
+            <div className="flex items-center gap-3">
+              <nav className="flex gap-1 flex-wrap">
+                {tabs.map(tab => {
+                  const Icon = tab.icon;
+                  const isActive = state.activeTab === tab.id;
+                  return (
+                    <button key={tab.id}
+                      onClick={() => dispatch({ type: 'SET_TAB', payload: tab.id })}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all"
+                      style={{
+                        background: isActive ? '#3A3A3A' : 'transparent',
+                        color: isActive ? '#F5F0E8' : '#716F70',
+                        fontFamily: "'Inter', sans-serif",
+                      }}
+                      onMouseEnter={e => { if (!isActive) { e.target.style.background = '#EBE5D5'; e.target.style.color = '#3A3A3A'; } }}
+                      onMouseLeave={e => { if (!isActive) { e.target.style.background = 'transparent'; e.target.style.color = '#716F70'; } }}
+                    >
+                      <Icon size={13} />
+                      <span className="hidden lg:inline">{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+              <div className="flex items-center gap-2 ml-2 pl-2 border-l" style={{ borderColor: '#EBE5D5' }}>
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg" style={{ background: '#EBE5D5' }}>
+                  <User size={12} style={{ color: '#716F70' }} />
+                  <span className="text-[10px] max-w-[100px] truncate" style={{ color: '#716F70', fontFamily: "'Inter', sans-serif" }}>
+                    {user?.email}
+                  </span>
+                </div>
+                <button onClick={logout} className="p-1.5 rounded-lg transition-colors" style={{ color: '#716F70' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = '#EBE5D5'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                  title="Sign out">
+                  <LogOut size={14} />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </header>
@@ -89,11 +108,23 @@ function Dashboard() {
   );
 }
 
-function App() {
+function AuthenticatedApp() {
+  const { user } = useAuth();
+
+  if (!user) return <LoginPage />;
+
   return (
     <AppProvider>
       <Dashboard />
     </AppProvider>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AuthenticatedApp />
+    </AuthProvider>
   );
 }
 
