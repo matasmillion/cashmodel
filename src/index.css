@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+:root {
+  /* FR Primary Palette */
+  --fr-slate: #3A3A3A;
+  --fr-salt: #F5F0E8;
+  --fr-sand: #EBE5D5;
+
+  /* FR Secondary Palette */
+  --fr-stone: #716F70;
+  --fr-soil: #9A816B;
+  --fr-sea: #B5C7D3;
+  --fr-sage: #ADBDA3;
+  --fr-sienna: #D4956A;
+}
+
+body {
+  font-family: 'Inter', 'General Sans', system-ui, -apple-system, sans-serif;
+  background: var(--fr-salt);
+  color: var(--fr-slate);
+  margin: 0;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 400;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] { -moz-appearance: textfield; }
+
+.scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: var(--fr-sand); }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: var(--fr-stone); border-radius: 3px; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fadeIn 0.3s ease-out; }
+
+/* FR brand utility classes */
+.font-display { font-family: 'Cormorant Garamond', Georgia, serif; }
+.font-body { font-family: 'Inter', 'General Sans', system-ui, sans-serif; }
+.text-fr-slate { color: var(--fr-slate); }
+.bg-fr-salt { background-color: var(--fr-salt); }
+.bg-fr-sand { background-color: var(--fr-sand); }
+.border-fr-sand { border-color: var(--fr-sand); }
