@@ -1,9 +1,8 @@
 import { createContext, useContext, useReducer, useMemo, useEffect, useRef, useCallback, useState } from 'react';
+import { useUser } from '@clerk/clerk-react';
 import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, OPEX_WAREHOUSE, CREDIT_CARDS, LOANS, AD_UNIT_TYPES, DEFAULT_EVENTS } from '../data/seedData';
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
-import { useAuth } from './AuthContext';
-import { db } from '../firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { supabase } from '../supabase';
 
 const AppContext = createContext();
 
@@ -19,6 +18,7 @@ const initialState = {
   scheduledAdUnits: [],
   events: DEFAULT_EVENTS,
   manualPOs: [],
+  rateCard: null, // parsed 3PL rate card
   scenarios: [
     { id: 'base', name: 'Base Case', assumptions: { ...DEFAULT_ASSUMPTIONS }, isActive: true },
   ],
@@ -26,11 +26,10 @@ const initialState = {
   activeTab: 'dashboard',
 };
 
-// Keys we persist to Firestore (everything except transient UI state)
 const PERSISTED_KEYS = [
   'products', 'seed', 'assumptions', 'subscriptions', 'warehouse',
   'creditCards', 'loans', 'adUnitTypes', 'scheduledAdUnits', 'events',
-  'manualPOs', 'scenarios', 'activeScenarioId',
+  'manualPOs', 'rateCard', 'scenarios', 'activeScenarioId',
 ];
 
 function reducer(state, action) {
@@ -96,6 +95,9 @@ function reducer(state, action) {
     case 'UPDATE_WAREHOUSE':
       return { ...state, warehouse: { ...state.warehouse, ...action.payload } };
 
+    case 'SET_RATE_CARD':
+      return { ...state, rateCard: action.payload };
+
     case 'ADD_SCENARIO':
       return { ...state, scenarios: [...state.scenarios, { ...action.payload, assumptions: { ...state.assumptions } }] };
     case 'SWITCH_SCENARIO': {
@@ -126,54 +128,61 @@ function reducer(state, action) {
 }
 
 export function AppProvider({ children }) {
-  const { user } = useAuth();
+  const { user } = useUser();
+  const userId = user?.id;
   const [state, dispatch] = useReducer(reducer, initialState);
   const [loaded, setLoaded] = useState(false);
   const saveTimerRef = useRef(null);
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  // Load state from Firestore on login
+  // Load state from Supabase on login
   useEffect(() => {
-    if (!user) { setLoaded(true); return; }
+    if (!userId) { setLoaded(true); return; }
     const load = async () => {
       try {
-        const snap = await getDoc(doc(db, 'users', user.uid));
-        if (snap.exists()) {
-          const saved = snap.data();
-          dispatch({ type: 'LOAD_SAVED_STATE', payload: saved });
+        const { data } = await supabase
+          .from('user_state')
+          .select('state_data')
+          .eq('user_id', userId)
+          .single();
+        if (data?.state_data) {
+          dispatch({ type: 'LOAD_SAVED_STATE', payload: data.state_data });
         }
       } catch (err) {
-        console.error('Failed to load saved state:', err);
+        // No saved state yet — first time user, use defaults
+        console.log('No saved state found, using defaults');
       }
       setLoaded(true);
     };
     setLoaded(false);
     load();
-  }, [user]);
+  }, [userId]);
 
-  // Auto-save to Firestore on state changes (debounced 2s)
-  const saveToFirestore = useCallback(() => {
-    if (!user) return;
+  // Auto-save to Supabase on state changes (debounced 2s)
+  const saveToSupabase = useCallback(() => {
+    if (!userId) return;
     const toSave = {};
     for (const key of PERSISTED_KEYS) {
       toSave[key] = stateRef.current[key];
     }
-    setDoc(doc(db, 'users', user.uid), toSave, { merge: true })
-      .catch(err => console.error('Failed to save:', err));
-  }, [user]);
+    supabase
+      .from('user_state')
+      .upsert({ user_id: userId, state_data: toSave, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+      .then(({ error }) => { if (error) console.error('Failed to save:', error); });
+  }, [userId]);
 
   useEffect(() => {
-    if (!user || !loaded) return;
+    if (!userId || !loaded) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(saveToFirestore, 2000);
+    saveTimerRef.current = setTimeout(saveToSupabase, 2000);
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   }, [
     state.products, state.seed, state.assumptions, state.subscriptions,
     state.warehouse, state.creditCards, state.loans, state.adUnitTypes,
-    state.scheduledAdUnits, state.events, state.manualPOs,
+    state.scheduledAdUnits, state.events, state.manualPOs, state.rateCard,
     state.scenarios, state.activeScenarioId,
-    user, loaded, saveToFirestore,
+    userId, loaded, saveToSupabase,
   ]);
 
   const projections = useMemo(() =>
