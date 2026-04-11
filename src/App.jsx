@@ -1,6 +1,5 @@
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { SignedIn, SignedOut, SignIn, UserButton, useUser } from '@clerk/clerk-react';
 import { AppProvider, useApp } from './context/AppContext';
-import LoginPage from './components/LoginPage';
 import KPICards from './components/KPICards';
 import CashflowChart from './components/CashflowChart';
 import CashflowTable from './components/CashflowTable';
@@ -12,7 +11,8 @@ import ScenarioManager from './components/ScenarioManager';
 import IntegrationsPanel from './components/IntegrationsPanel';
 import RevenueForecast from './components/RevenueForecast';
 import AdUnitModel from './components/AdUnitModel';
-import { LayoutDashboard, Table2, Calculator, Package, Receipt, Sliders, Plug, TrendingUp, Film, CalendarRange, LogOut, User } from 'lucide-react';
+import RateCardManager from './components/RateCardManager';
+import { LayoutDashboard, Table2, Calculator, Package, Receipt, Sliders, Plug, TrendingUp, Film, CalendarRange, Truck } from 'lucide-react';
 
 const tabs = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -20,6 +20,7 @@ const tabs = [
   { id: 'cashflow', label: 'P&L + Cash', icon: Table2 },
   { id: 'ad-units', label: 'Creative', icon: Film },
   { id: 'unit-economics', label: 'Unit Econ', icon: Calculator },
+  { id: 'fulfillment', label: 'Fulfillment', icon: Truck },
   { id: 'po-schedule', label: 'PO Schedule', icon: CalendarRange },
   { id: 'pos', label: 'New PO', icon: Package },
   { id: 'opex', label: 'OPEX', icon: Receipt },
@@ -29,7 +30,6 @@ const tabs = [
 
 function Dashboard() {
   const { state, dispatch } = useApp();
-  const { user, logout } = useAuth();
 
   return (
     <div className="min-h-screen" style={{ background: '#F5F0E8' }}>
@@ -67,19 +67,14 @@ function Dashboard() {
                   );
                 })}
               </nav>
-              <div className="flex items-center gap-2 ml-2 pl-2 border-l" style={{ borderColor: '#EBE5D5' }}>
-                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg" style={{ background: '#EBE5D5' }}>
-                  <User size={12} style={{ color: '#716F70' }} />
-                  <span className="text-[10px] max-w-[100px] truncate" style={{ color: '#716F70', fontFamily: "'Inter', sans-serif" }}>
-                    {user?.email}
-                  </span>
-                </div>
-                <button onClick={logout} className="p-1.5 rounded-lg transition-colors" style={{ color: '#716F70' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = '#EBE5D5'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-                  title="Sign out">
-                  <LogOut size={14} />
-                </button>
+              <div className="ml-2 pl-2 border-l" style={{ borderColor: '#EBE5D5' }}>
+                <UserButton
+                  appearance={{
+                    elements: {
+                      avatarBox: { width: 28, height: 28 },
+                    },
+                  }}
+                />
               </div>
             </div>
           </div>
@@ -98,6 +93,7 @@ function Dashboard() {
         {state.activeTab === 'cashflow' && <CashflowTable />}
         {state.activeTab === 'ad-units' && <AdUnitModel />}
         {state.activeTab === 'unit-economics' && <UnitEconomics />}
+        {state.activeTab === 'fulfillment' && <RateCardManager />}
         {state.activeTab === 'po-schedule' && <POSchedule />}
         {state.activeTab === 'pos' && <POBuilder />}
         {state.activeTab === 'opex' && <OpexManager />}
@@ -108,23 +104,45 @@ function Dashboard() {
   );
 }
 
-function AuthenticatedApp() {
-  const { user } = useAuth();
-
-  if (!user) return <LoginPage />;
-
+function LoginPage() {
   return (
-    <AppProvider>
-      <Dashboard />
-    </AppProvider>
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: '#F5F0E8' }}>
+      <div className="w-full max-w-sm text-center">
+        <div className="mb-8">
+          <h1 className="text-3xl tracking-wide" style={{ color: '#3A3A3A', fontFamily: "'Cormorant Garamond', Georgia, serif", letterSpacing: '0.05em' }}>
+            FOREIGN RESOURCE
+          </h1>
+          <p className="text-xs uppercase tracking-[0.15em] mt-1" style={{ color: '#716F70', fontFamily: "'Inter', sans-serif" }}>
+            Growth Model & Operating Dashboard
+          </p>
+        </div>
+        <div className="flex justify-center">
+          <SignIn
+            appearance={{
+              elements: {
+                rootBox: { width: '100%' },
+                card: { boxShadow: 'none', border: '1px solid #EBE5D5' },
+              },
+            }}
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 
 function App() {
   return (
-    <AuthProvider>
-      <AuthenticatedApp />
-    </AuthProvider>
+    <>
+      <SignedOut>
+        <LoginPage />
+      </SignedOut>
+      <SignedIn>
+        <AppProvider>
+          <Dashboard />
+        </AppProvider>
+      </SignedIn>
+    </>
   );
 }
 
