@@ -4,6 +4,18 @@ import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, O
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
 import { supabase } from '../supabase';
 
+const CLERK_ENABLED = !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const SUPABASE_ENABLED = !!import.meta.env.VITE_SUPABASE_URL && !!import.meta.env.VITE_SUPABASE_ANON_KEY;
+const LOCAL_STORAGE_KEY = 'cashmodel_state';
+
+// Safe hook: useUser only works inside ClerkProvider. When Clerk is disabled,
+// return a null user. When enabled, use the real hook.
+function useSafeUser() {
+  if (!CLERK_ENABLED) return { user: null };
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  return useUser();
+}
+
 const AppContext = createContext();
 
 const initialState = {
@@ -128,7 +140,7 @@ function reducer(state, action) {
 }
 
 export function AppProvider({ children }) {
-  const { user } = useUser();
+  const { user } = useSafeUser();
   const userId = user?.id;
   const [state, dispatch] = useReducer(reducer, initialState);
   const [loaded, setLoaded] = useState(false);
@@ -136,22 +148,35 @@ export function AppProvider({ children }) {
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  // Load state from Supabase on login
+  // Load state on mount (Supabase if logged in, else localStorage)
   useEffect(() => {
-    if (!userId) { setLoaded(true); return; }
     const load = async () => {
+      // Try Supabase first if user is logged in
+      if (userId && SUPABASE_ENABLED) {
+        try {
+          const { data } = await supabase
+            .from('user_state')
+            .select('state_data')
+            .eq('user_id', userId)
+            .single();
+          if (data?.state_data) {
+            dispatch({ type: 'LOAD_SAVED_STATE', payload: data.state_data });
+            setLoaded(true);
+            return;
+          }
+        } catch {
+          // fall through to localStorage
+        }
+      }
+      // Fallback to localStorage (guest mode or no saved Supabase state)
       try {
-        const { data } = await supabase
-          .from('user_state')
-          .select('state_data')
-          .eq('user_id', userId)
-          .single();
-        if (data?.state_data) {
-          dispatch({ type: 'LOAD_SAVED_STATE', payload: data.state_data });
+        const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (raw) {
+          const saved = JSON.parse(raw);
+          dispatch({ type: 'LOAD_SAVED_STATE', payload: saved });
         }
       } catch (err) {
-        // No saved state yet — first time user, use defaults
-        console.log('No saved state found, using defaults');
+        console.error('Failed to load from localStorage:', err);
       }
       setLoaded(true);
     };
@@ -159,30 +184,38 @@ export function AppProvider({ children }) {
     load();
   }, [userId]);
 
-  // Auto-save to Supabase on state changes (debounced 2s)
-  const saveToSupabase = useCallback(() => {
-    if (!userId) return;
+  // Auto-save on state changes (debounced 1s)
+  const save = useCallback(() => {
     const toSave = {};
     for (const key of PERSISTED_KEYS) {
       toSave[key] = stateRef.current[key];
     }
-    supabase
-      .from('user_state')
-      .upsert({ user_id: userId, state_data: toSave, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
-      .then(({ error }) => { if (error) console.error('Failed to save:', error); });
+    // Always save to localStorage as fallback
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(toSave));
+    } catch (err) {
+      console.error('Failed to save to localStorage:', err);
+    }
+    // Also save to Supabase if logged in
+    if (userId && SUPABASE_ENABLED) {
+      supabase
+        .from('user_state')
+        .upsert({ user_id: userId, state_data: toSave, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+        .then(({ error }) => { if (error) console.error('Failed to save to Supabase:', error); });
+    }
   }, [userId]);
 
   useEffect(() => {
-    if (!userId || !loaded) return;
+    if (!loaded) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(saveToSupabase, 2000);
+    saveTimerRef.current = setTimeout(save, 1000);
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   }, [
     state.products, state.seed, state.assumptions, state.subscriptions,
     state.warehouse, state.creditCards, state.loans, state.adUnitTypes,
     state.scheduledAdUnits, state.events, state.manualPOs, state.rateCard,
     state.scenarios, state.activeScenarioId,
-    userId, loaded, saveToSupabase,
+    loaded, save,
   ]);
 
   const projections = useMemo(() =>
