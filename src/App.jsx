@@ -1,5 +1,7 @@
-import { SignedIn, SignedOut, SignIn, UserButton, useUser } from '@clerk/clerk-react';
+import { SignedIn, SignedOut, SignIn, UserButton } from '@clerk/clerk-react';
 import { AppProvider, useApp } from './context/AppContext';
+
+const CLERK_ENABLED = !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 import KPICards from './components/KPICards';
 import CashflowChart from './components/CashflowChart';
 import CashflowTable from './components/CashflowTable';
@@ -67,15 +69,17 @@ function Dashboard() {
                   );
                 })}
               </nav>
-              <div className="ml-2 pl-2 border-l" style={{ borderColor: '#EBE5D5' }}>
-                <UserButton
-                  appearance={{
-                    elements: {
-                      avatarBox: { width: 28, height: 28 },
-                    },
-                  }}
-                />
-              </div>
+              {CLERK_ENABLED && (
+                <div className="ml-2 pl-2 border-l" style={{ borderColor: '#EBE5D5' }}>
+                  <UserButton
+                    appearance={{
+                      elements: {
+                        avatarBox: { width: 28, height: 28 },
+                      },
+                    }}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -132,6 +136,15 @@ function LoginPage() {
 }
 
 function App() {
+  // Guest mode: if Clerk isn't configured, run the app directly with localStorage persistence
+  if (!CLERK_ENABLED) {
+    return (
+      <AppProvider>
+        <Dashboard />
+      </AppProvider>
+    );
+  }
+
   return (
     <>
       <SignedOut>
