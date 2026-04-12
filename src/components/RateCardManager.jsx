@@ -34,6 +34,7 @@ export default function RateCardManager() {
   const [pendingFiles, setPendingFiles] = useState([]);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('anthropic_api_key') || '');
   const [showApiKey, setShowApiKey] = useState(false);
+  const [parseInstructions, setParseInstructions] = useState(() => localStorage.getItem('rate_card_instructions') || '');
 
   const rateCard = state.rateCard;
 
@@ -41,6 +42,12 @@ export default function RateCardManager() {
     setApiKey(key);
     if (key) localStorage.setItem('anthropic_api_key', key);
     else localStorage.removeItem('anthropic_api_key');
+  };
+
+  const saveInstructions = (text) => {
+    setParseInstructions(text);
+    if (text) localStorage.setItem('rate_card_instructions', text);
+    else localStorage.removeItem('rate_card_instructions');
   };
 
   const handleFilesSelected = (e) => {
@@ -87,9 +94,13 @@ export default function RateCardManager() {
         }
       }
 
+      const userInstructionBlock = parseInstructions.trim()
+        ? `\n\nUSER INSTRUCTIONS (IMPORTANT — follow these exactly when choosing which rates to extract):\n${parseInstructions.trim()}\n`
+        : '';
+
       content.push({
         type: 'text',
-        text: `You are analyzing ${pendingFiles.length} file(s) of 3PL/fulfillment rate card(s). Extract ALL fees from across all files into this exact JSON structure (merging info if multiple files cover different parts):
+        text: `You are analyzing ${pendingFiles.length} file(s) of 3PL/fulfillment rate card(s). Extract the fees into this exact JSON structure (merging info if multiple files cover different parts):
 
 {
   "provider": "3PL company name",
@@ -105,9 +116,13 @@ export default function RateCardManager() {
   "surcharges": [
     {"name": "description", "amount": <number>, "per": "order"|"unit"|"month"}
   ]
-}
+}${userInstructionBlock}
 
-Return ONLY valid JSON (no markdown, no commentary). Use 0 for any fees not listed. Convert all values to USD numbers.`,
+Rules:
+- If the rate card has MULTIPLE carriers/services (e.g., UPS Ground, DHL eCommerce, USPS Priority), use the USER INSTRUCTIONS to decide which to pull. If no instructions are given, default to the carrier/service most commonly used for standard ground shipping.
+- If the rate card has MULTIPLE zones, pull rates for the zone specified in user instructions, or average across all zones if not specified.
+- Use 0 for any fees not listed. Convert all values to USD numbers.
+- Return ONLY valid JSON (no markdown, no commentary, no explanations).`,
       });
 
       const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -261,6 +276,23 @@ Return ONLY valid JSON (no markdown, no commentary). Use 0 for any fees not list
                 Get a key at console.anthropic.com → API Keys. Required for AI parsing — manual entry below works without it.
               </p>
             )}
+          </div>
+
+          {/* Parsing Instructions */}
+          <div className="mb-4">
+            <label className="text-[10px] uppercase tracking-[0.1em] block mb-1.5" style={{ color: FR.stone }}>
+              Parsing Instructions <span className="lowercase text-[9px]">(tell AI exactly what to extract)</span>
+            </label>
+            <textarea
+              value={parseInstructions}
+              onChange={e => saveInstructions(e.target.value)}
+              placeholder={`e.g., "Use UPS Ground rates, zone 5. Ignore DHL eCommerce and USPS Priority."\n\nOther examples:\n• "Average rates across zones 2-6"\n• "Use the fastest service tier"\n• "Only extract rates for orders under 5 lbs"`}
+              rows={5}
+              style={{ ...inputStyle, fontFamily: "'Inter', sans-serif", resize: 'vertical', minHeight: 100 }}
+            />
+            <p className="text-[10px] mt-1" style={{ color: FR.stone }}>
+              The AI will use these instructions to decide which rates to pull from your rate card. Saved to your browser for next time.
+            </p>
           </div>
 
           {/* File Upload Area */}
