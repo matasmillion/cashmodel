@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatCurrency } from '../utils/calculations';
-import { Upload, FileText, Trash2, Plus, Sparkles, Check, AlertCircle, Edit3 } from 'lucide-react';
+import { Upload, FileText, Trash2, Plus, Sparkles, Check, AlertCircle, Edit3, Key, X } from 'lucide-react';
 
 const FR = { slate: '#3A3A3A', salt: '#F5F0E8', sand: '#EBE5D5', stone: '#716F70', soil: '#9A816B', sea: '#B5C7D3', sage: '#ADBDA3', sienna: '#D4956A' };
 
@@ -25,59 +25,72 @@ const EMPTY_RATE_CARD = {
 
 export default function RateCardManager() {
   const { state, dispatch } = useApp();
-  const [uploading, setUploading] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState('');
   const [editMode, setEditMode] = useState(!state.rateCard);
   const [draft, setDraft] = useState(state.rateCard || { ...EMPTY_RATE_CARD });
   const [showAddSurcharge, setShowAddSurcharge] = useState(false);
   const [newSurcharge, setNewSurcharge] = useState({ name: '', amount: 0, per: 'order' });
+  const [pendingFiles, setPendingFiles] = useState([]);
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('anthropic_api_key') || '');
+  const [showApiKey, setShowApiKey] = useState(false);
 
   const rateCard = state.rateCard;
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const saveApiKey = (key) => {
+    setApiKey(key);
+    if (key) localStorage.setItem('anthropic_api_key', key);
+    else localStorage.removeItem('anthropic_api_key');
+  };
 
-    setUploading(true);
+  const handleFilesSelected = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setPendingFiles(prev => [...prev, ...files]);
     setParseError('');
+    e.target.value = ''; // allow re-uploading the same file
+  };
+
+  const removePendingFile = (idx) => {
+    setPendingFiles(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const parseWithAI = async () => {
+    if (pendingFiles.length === 0) {
+      setParseError('Upload at least one file first.');
+      return;
+    }
+    if (!apiKey) {
+      setParseError('Enter your Anthropic API key above to enable AI parsing.');
+      return;
+    }
+
     setParsing(true);
+    setParseError('');
 
     try {
-      const base64 = await fileToBase64(file);
-      const mediaType = file.type || 'application/pdf';
-
-      const apiKey = localStorage.getItem('anthropic_api_key');
-      if (!apiKey) {
-        setParseError('Add your Anthropic API key in the Integrations tab to use AI parsing. You can still enter rates manually below.');
-        setParsing(false);
-        setUploading(false);
-        setEditMode(true);
-        return;
+      // Build content array with all files + the instruction
+      const content = [];
+      for (const file of pendingFiles) {
+        const base64 = await fileToBase64(file);
+        const mediaType = file.type || 'application/pdf';
+        if (mediaType === 'application/pdf') {
+          content.push({
+            type: 'document',
+            source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+          });
+        } else if (mediaType.startsWith('image/')) {
+          content.push({
+            type: 'image',
+            source: { type: 'base64', media_type: mediaType, data: base64 },
+          });
+        }
       }
 
-      const proxyUrl = localStorage.getItem('anthropic_proxy_url') || '/api/anthropic';
+      content.push({
+        type: 'text',
+        text: `You are analyzing ${pendingFiles.length} file(s) of 3PL/fulfillment rate card(s). Extract ALL fees from across all files into this exact JSON structure (merging info if multiple files cover different parts):
 
-      const response = await fetch(proxyUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 2000,
-          messages: [{
-            role: 'user',
-            content: [
-              {
-                type: mediaType.startsWith('image/') ? 'image' : 'document',
-                source: { type: 'base64', media_type: mediaType, data: base64 },
-              },
-              {
-                type: 'text',
-                text: `Parse this 3PL/fulfillment rate card. Extract ALL fees into this exact JSON structure:
 {
   "provider": "3PL company name",
   "pickPack": <number, per order pick & pack fee>,
@@ -86,41 +99,57 @@ export default function RateCardManager() {
   "returnsFlat": <number, flat fee per return>,
   "packagingMaterials": <number, packaging materials per order>,
   "weightTiers": [
-    {"label": "0 - 1 lb", "minLbs": 0, "maxLbs": 1, "rate": <number>},
-    {"label": "1 - 2 lbs", "minLbs": 1, "maxLbs": 2, "rate": <number>},
-    ...continue for all weight tiers listed
+    {"label": "0 - 1 lb", "minLbs": 0, "maxLbs": 1, "rate": <number>}
+    // continue for all weight tiers in the rate card
   ],
   "surcharges": [
     {"name": "description", "amount": <number>, "per": "order"|"unit"|"month"}
   ]
 }
-Return ONLY valid JSON. Use 0 for any fees not listed. Convert all values to USD numbers.`,
-              },
-            ],
-          }],
+
+Return ONLY valid JSON (no markdown, no commentary). Use 0 for any fees not listed. Convert all values to USD numbers.`,
+      });
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-5',
+          max_tokens: 3000,
+          messages: [{ role: 'user', content }],
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`);
+        const errorBody = await response.text();
+        throw new Error(`API ${response.status}: ${errorBody}`);
       }
 
       const result = await response.json();
       const text = result.content?.[0]?.text || '';
       const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error('Could not parse response');
+      if (!jsonMatch) throw new Error('AI response did not contain JSON');
 
       const parsed = JSON.parse(jsonMatch[0]);
+      // Preserve default tier shape if AI returned empty
+      if (!parsed.weightTiers || parsed.weightTiers.length === 0) {
+        parsed.weightTiers = EMPTY_RATE_CARD.weightTiers;
+      }
+      if (!parsed.surcharges) parsed.surcharges = [];
+
       setDraft(parsed);
       setEditMode(true);
-      setParsing(false);
-      setUploading(false);
+      setPendingFiles([]);
     } catch (err) {
       console.error('Parse error:', err);
-      setParseError('AI parsing failed. Enter your rates manually below.');
+      setParseError(`AI parsing failed: ${err.message}. You can still enter rates manually below.`);
+    } finally {
       setParsing(false);
-      setUploading(false);
-      setEditMode(true);
     }
   };
 
@@ -207,21 +236,72 @@ Return ONLY valid JSON. Use 0 for any fees not listed. Convert all values to USD
             <Sparkles size={18} style={{ color: FR.soil }} />
             <h3 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 18 }}>AI Rate Card Parser</h3>
           </div>
-          <p className="text-xs mb-3" style={{ color: FR.stone }}>Upload your 3PL's rate card (PDF, image, or screenshot). AI will extract all fees and populate the fields below.</p>
+          <p className="text-xs mb-4" style={{ color: FR.stone }}>Upload one or more rate card files (PDFs or images). Claude AI will extract all fees and populate the fields below.</p>
 
-          <label className="flex items-center justify-center gap-2 py-8 rounded-lg border-2 border-dashed cursor-pointer transition-colors"
+          {/* API Key Input */}
+          <div className="mb-4">
+            <label className="text-[10px] uppercase tracking-[0.1em] flex items-center gap-1 mb-1.5" style={{ color: FR.stone }}>
+              <Key size={11} /> Anthropic API Key
+              <span className="lowercase text-[9px]" style={{ color: FR.stone }}>(stored locally in your browser only)</span>
+            </label>
+            <div className="flex gap-2">
+              <input
+                type={showApiKey ? 'text' : 'password'}
+                value={apiKey}
+                onChange={e => saveApiKey(e.target.value)}
+                placeholder="sk-ant-api03-..."
+                style={{ ...inputStyle, flex: 1, fontFamily: 'monospace', fontSize: 12 }}
+              />
+              <button onClick={() => setShowApiKey(!showApiKey)} className="px-3 py-2 rounded-lg text-xs" style={{ background: FR.sand, color: FR.slate }}>
+                {showApiKey ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            {!apiKey && (
+              <p className="text-[10px] mt-1.5" style={{ color: FR.stone }}>
+                Get a key at console.anthropic.com → API Keys. Required for AI parsing — manual entry below works without it.
+              </p>
+            )}
+          </div>
+
+          {/* File Upload Area */}
+          <label className="flex items-center justify-center gap-2 py-6 rounded-lg border-2 border-dashed cursor-pointer transition-colors"
             style={{ borderColor: FR.sand, color: FR.stone }}
             onDragOver={e => e.preventDefault()}>
-            <input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={handleFileUpload} className="hidden" />
-            {parsing ? (
-              <span className="text-sm">Parsing rate card with AI...</span>
-            ) : (
-              <>
-                <Upload size={20} />
-                <span className="text-sm">Drop rate card here or click to upload</span>
-              </>
-            )}
+            <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={handleFilesSelected} className="hidden" />
+            <Upload size={20} />
+            <span className="text-sm">Click to upload files (PDF or images, multiple allowed)</span>
           </label>
+
+          {/* Pending Files List */}
+          {pendingFiles.length > 0 && (
+            <div className="mt-3 space-y-1.5">
+              <div className="text-[10px] uppercase tracking-[0.1em]" style={{ color: FR.stone }}>
+                {pendingFiles.length} file{pendingFiles.length > 1 ? 's' : ''} ready to parse
+              </div>
+              {pendingFiles.map((file, idx) => (
+                <div key={idx} className="flex items-center justify-between py-2 px-3 rounded-lg" style={{ background: FR.salt }}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText size={14} style={{ color: FR.soil }} className="shrink-0" />
+                    <span className="text-xs truncate" style={{ color: FR.slate }}>{file.name}</span>
+                    <span className="text-[10px] shrink-0" style={{ color: FR.stone }}>
+                      {(file.size / 1024).toFixed(0)} KB
+                    </span>
+                  </div>
+                  <button onClick={() => removePendingFile(idx)} className="p-1 shrink-0" style={{ color: FR.stone }}>
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={parseWithAI}
+                disabled={parsing || !apiKey}
+                className="w-full py-2.5 mt-2 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                style={{ background: FR.slate, color: FR.salt }}>
+                <Sparkles size={14} />
+                {parsing ? 'Parsing with Claude AI...' : `Parse ${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''} with AI`}
+              </button>
+            </div>
+          )}
 
           {parseError && (
             <div className="flex items-start gap-2 mt-3 p-3 rounded-lg text-xs" style={{ background: '#FEF3C7', color: '#92400E' }}>
