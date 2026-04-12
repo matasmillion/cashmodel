@@ -1,7 +1,4 @@
-import { SignedIn, SignedOut, SignIn, UserButton } from '@clerk/clerk-react';
 import { AppProvider, useApp } from './context/AppContext';
-
-const CLERK_ENABLED = !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 import KPICards from './components/KPICards';
 import CashflowChart from './components/CashflowChart';
 import CashflowTable from './components/CashflowTable';
@@ -46,41 +43,28 @@ function Dashboard() {
                 Growth Model & Operating Dashboard
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              <nav className="flex gap-1 flex-wrap">
-                {tabs.map(tab => {
-                  const Icon = tab.icon;
-                  const isActive = state.activeTab === tab.id;
-                  return (
-                    <button key={tab.id}
-                      onClick={() => dispatch({ type: 'SET_TAB', payload: tab.id })}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all"
-                      style={{
-                        background: isActive ? '#3A3A3A' : 'transparent',
-                        color: isActive ? '#F5F0E8' : '#716F70',
-                        fontFamily: "'Inter', sans-serif",
-                      }}
-                      onMouseEnter={e => { if (!isActive) { e.target.style.background = '#EBE5D5'; e.target.style.color = '#3A3A3A'; } }}
-                      onMouseLeave={e => { if (!isActive) { e.target.style.background = 'transparent'; e.target.style.color = '#716F70'; } }}
-                    >
-                      <Icon size={13} />
-                      <span className="hidden lg:inline">{tab.label}</span>
-                    </button>
-                  );
-                })}
-              </nav>
-              {CLERK_ENABLED && (
-                <div className="ml-2 pl-2 border-l" style={{ borderColor: '#EBE5D5' }}>
-                  <UserButton
-                    appearance={{
-                      elements: {
-                        avatarBox: { width: 28, height: 28 },
-                      },
+            <nav className="flex gap-1 flex-wrap">
+              {tabs.map(tab => {
+                const Icon = tab.icon;
+                const isActive = state.activeTab === tab.id;
+                return (
+                  <button key={tab.id}
+                    onClick={() => dispatch({ type: 'SET_TAB', payload: tab.id })}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all"
+                    style={{
+                      background: isActive ? '#3A3A3A' : 'transparent',
+                      color: isActive ? '#F5F0E8' : '#716F70',
+                      fontFamily: "'Inter', sans-serif",
                     }}
-                  />
-                </div>
-              )}
-            </div>
+                    onMouseEnter={e => { if (!isActive) { e.target.style.background = '#EBE5D5'; e.target.style.color = '#3A3A3A'; } }}
+                    onMouseLeave={e => { if (!isActive) { e.target.style.background = 'transparent'; e.target.style.color = '#716F70'; } }}
+                  >
+                    <Icon size={13} />
+                    <span className="hidden lg:inline">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
           </div>
         </div>
       </header>
@@ -108,54 +92,11 @@ function Dashboard() {
   );
 }
 
-function LoginPage() {
-  return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: '#F5F0E8' }}>
-      <div className="w-full max-w-sm text-center">
-        <div className="mb-8">
-          <h1 className="text-3xl tracking-wide" style={{ color: '#3A3A3A', fontFamily: "'Cormorant Garamond', Georgia, serif", letterSpacing: '0.05em' }}>
-            FOREIGN RESOURCE
-          </h1>
-          <p className="text-xs uppercase tracking-[0.15em] mt-1" style={{ color: '#716F70', fontFamily: "'Inter', sans-serif" }}>
-            Growth Model & Operating Dashboard
-          </p>
-        </div>
-        <div className="flex justify-center">
-          <SignIn
-            appearance={{
-              elements: {
-                rootBox: { width: '100%' },
-                card: { boxShadow: 'none', border: '1px solid #EBE5D5' },
-              },
-            }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function App() {
-  // Guest mode: if Clerk isn't configured, run the app directly with localStorage persistence
-  if (!CLERK_ENABLED) {
-    return (
-      <AppProvider>
-        <Dashboard />
-      </AppProvider>
-    );
-  }
-
   return (
-    <>
-      <SignedOut>
-        <LoginPage />
-      </SignedOut>
-      <SignedIn>
-        <AppProvider>
-          <Dashboard />
-        </AppProvider>
-      </SignedIn>
-    </>
+    <AppProvider>
+      <Dashboard />
+    </AppProvider>
   );
 }
 

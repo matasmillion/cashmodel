@@ -1,20 +1,8 @@
-import { createContext, useContext, useReducer, useMemo, useEffect, useRef, useCallback, useState } from 'react';
-import { useUser } from '@clerk/clerk-react';
+import { createContext, useContext, useReducer, useMemo, useEffect, useRef, useState } from 'react';
 import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, OPEX_WAREHOUSE, CREDIT_CARDS, LOANS, AD_UNIT_TYPES, DEFAULT_EVENTS } from '../data/seedData';
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
-import { supabase } from '../supabase';
 
-const CLERK_ENABLED = !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-const SUPABASE_ENABLED = !!import.meta.env.VITE_SUPABASE_URL && !!import.meta.env.VITE_SUPABASE_ANON_KEY;
 const LOCAL_STORAGE_KEY = 'cashmodel_state';
-
-// Safe hook: useUser only works inside ClerkProvider. When Clerk is disabled,
-// return a null user. When enabled, use the real hook.
-function useSafeUser() {
-  if (!CLERK_ENABLED) return { user: null };
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  return useUser();
-}
 
 const AppContext = createContext();
 
@@ -30,7 +18,7 @@ const initialState = {
   scheduledAdUnits: [],
   events: DEFAULT_EVENTS,
   manualPOs: [],
-  rateCard: null, // parsed 3PL rate card
+  rateCard: null,
   scenarios: [
     { id: 'base', name: 'Base Case', assumptions: { ...DEFAULT_ASSUMPTIONS }, isActive: true },
   ],
@@ -44,13 +32,23 @@ const PERSISTED_KEYS = [
   'manualPOs', 'rateCard', 'scenarios', 'activeScenarioId',
 ];
 
+function loadInitialState() {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      return { ...initialState, ...saved };
+    }
+  } catch (err) {
+    console.error('Failed to load saved state:', err);
+  }
+  return initialState;
+}
+
 function reducer(state, action) {
   switch (action.type) {
     case 'SET_TAB':
       return { ...state, activeTab: action.payload };
-
-    case 'LOAD_SAVED_STATE':
-      return { ...state, ...action.payload };
 
     case 'UPDATE_ASSUMPTIONS': {
       const updated = { ...state.assumptions, ...action.payload };
@@ -140,83 +138,25 @@ function reducer(state, action) {
 }
 
 export function AppProvider({ children }) {
-  const { user } = useSafeUser();
-  const userId = user?.id;
-  const [state, dispatch] = useReducer(reducer, initialState);
-  const [loaded, setLoaded] = useState(false);
+  const [state, dispatch] = useReducer(reducer, undefined, loadInitialState);
   const saveTimerRef = useRef(null);
-  const stateRef = useRef(state);
-  stateRef.current = state;
 
-  // Load state on mount (Supabase if logged in, else localStorage)
+  // Auto-save to localStorage on state changes (debounced 500ms)
   useEffect(() => {
-    const load = async () => {
-      // Try Supabase first if user is logged in
-      if (userId && SUPABASE_ENABLED) {
-        try {
-          const { data } = await supabase
-            .from('user_state')
-            .select('state_data')
-            .eq('user_id', userId)
-            .single();
-          if (data?.state_data) {
-            dispatch({ type: 'LOAD_SAVED_STATE', payload: data.state_data });
-            setLoaded(true);
-            return;
-          }
-        } catch {
-          // fall through to localStorage
-        }
-      }
-      // Fallback to localStorage (guest mode or no saved Supabase state)
-      try {
-        const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (raw) {
-          const saved = JSON.parse(raw);
-          dispatch({ type: 'LOAD_SAVED_STATE', payload: saved });
-        }
-      } catch (err) {
-        console.error('Failed to load from localStorage:', err);
-      }
-      setLoaded(true);
-    };
-    setLoaded(false);
-    load();
-  }, [userId]);
-
-  // Auto-save on state changes (debounced 1s)
-  const save = useCallback(() => {
-    const toSave = {};
-    for (const key of PERSISTED_KEYS) {
-      toSave[key] = stateRef.current[key];
-    }
-    // Always save to localStorage as fallback
-    try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(toSave));
-    } catch (err) {
-      console.error('Failed to save to localStorage:', err);
-    }
-    // Also save to Supabase if logged in
-    if (userId && SUPABASE_ENABLED) {
-      supabase
-        .from('user_state')
-        .upsert({ user_id: userId, state_data: toSave, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
-        .then(({ error }) => { if (error) console.error('Failed to save to Supabase:', error); });
-    }
-  }, [userId]);
-
-  useEffect(() => {
-    if (!loaded) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(save, 1000);
+    saveTimerRef.current = setTimeout(() => {
+      try {
+        const toSave = {};
+        for (const key of PERSISTED_KEYS) {
+          toSave[key] = state[key];
+        }
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(toSave));
+      } catch (err) {
+        console.error('Failed to save state:', err);
+      }
+    }, 500);
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [
-    state.products, state.seed, state.assumptions, state.subscriptions,
-    state.warehouse, state.creditCards, state.loans, state.adUnitTypes,
-    state.scheduledAdUnits, state.events, state.manualPOs, state.rateCard,
-    state.scenarios, state.activeScenarioId,
-    loaded, save,
-  ]);
+  }, [state]);
 
   const projections = useMemo(() =>
     generateWeeklyProjections(state.assumptions, state.seed, state.manualPOs, state.scheduledAdUnits, state.events, state.creditCards, state.loans),
@@ -233,16 +173,6 @@ export function AppProvider({ children }) {
     const warehouseTotal = Object.values(state.warehouse).reduce((sum, v) => sum + (typeof v === 'number' ? v : 0), 0);
     return activeSubs + warehouseTotal;
   }, [state.subscriptions, state.warehouse]);
-
-  if (!loaded) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#F5F0E8' }}>
-        <p className="text-xs uppercase tracking-[0.15em]" style={{ color: '#716F70', fontFamily: "'Inter', sans-serif" }}>
-          Loading your model...
-        </p>
-      </div>
-    );
-  }
 
   return (
     <AppContext.Provider value={{ state, dispatch, projections, autoPOs, totalMonthlyOpex }}>
