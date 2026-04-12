@@ -27,6 +27,4 @@ dist-ssr
 *.sw?
 src/App.css
 src/assets/
-public/favicon.svg
-public/icons.svg
 README.md
