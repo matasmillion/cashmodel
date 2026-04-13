@@ -1,6 +1,7 @@
-import { createContext, useContext, useReducer, useMemo, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useReducer, useMemo, useEffect, useRef } from 'react';
 import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, OPEX_WAREHOUSE, CREDIT_CARDS, LOANS, AD_UNIT_TYPES, DEFAULT_EVENTS } from '../data/seedData';
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
+import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
 
 const LOCAL_STORAGE_KEY = 'cashmodel_state';
 
@@ -132,6 +133,12 @@ function reducer(state, action) {
     case 'UPDATE_LOANS':
       return { ...state, loans: { ...state.loans, ...action.payload } };
 
+    case 'LOAD_CLOUD_STATE': {
+      // Replace persisted keys with cloud data, keep active tab
+      const { activeTab } = state;
+      return { ...state, ...action.payload, activeTab };
+    }
+
     default:
       return state;
   }
@@ -140,17 +147,56 @@ function reducer(state, action) {
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, undefined, loadInitialState);
   const saveTimerRef = useRef(null);
+  const userIdRef = useRef(null);
 
-  // Auto-save to localStorage on state changes (debounced 500ms)
+  // Listen to Supabase auth state — load cloud data when user signs in
+  useEffect(() => {
+    if (!IS_SUPABASE_ENABLED) return;
+
+    async function loadCloudState(userId) {
+      const { data, error } = await supabase
+        .from('user_state')
+        .select('state')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (!error && data?.state) {
+        dispatch({ type: 'LOAD_CLOUD_STATE', payload: data.state });
+      }
+    }
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        userIdRef.current = session.user.id;
+        loadCloudState(session.user.id);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      userIdRef.current = session?.user?.id ?? null;
+      if (session?.user) loadCloudState(session.user.id);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Auto-save: localStorage always, Supabase when signed in (debounced 500ms)
   useEffect(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
+    saveTimerRef.current = setTimeout(async () => {
       try {
         const toSave = {};
         for (const key of PERSISTED_KEYS) {
           toSave[key] = state[key];
         }
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(toSave));
+
+        if (IS_SUPABASE_ENABLED && userIdRef.current) {
+          await supabase.from('user_state').upsert({
+            user_id: userIdRef.current,
+            state: toSave,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id' });
+        }
       } catch (err) {
         console.error('Failed to save state:', err);
       }
