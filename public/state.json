@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-13T13:36:36.866Z",
+  "lastUpdated": "2026-04-13T14:18:17.667Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1034,6 +1034,11 @@
   ],
   "changelog": [
     {
+      "sha": "173a463",
+      "date": "2026-04-13T13:36:58+00:00",
+      "message": "Add state.json bridge file for Claude visibility across builds"
+    },
+    {
       "sha": "755c7e7",
       "date": "2026-04-13T12:54:51+00:00",
       "message": "Add Supabase auth + cloud storage + live integrations panel"
@@ -1077,11 +1082,6 @@
       "sha": "ce472d1",
       "date": "2026-04-05T15:10:32+00:00",
       "message": "Add Cash Model web app with GitHub Pages deployment"
-    },
-    {
-      "sha": "488a6ed",
-      "date": "2026-04-05T18:05:44+03:00",
-      "message": "Add files via upload"
     }
   ]
 }
