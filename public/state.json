@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-13T14:18:17.667Z",
+  "lastUpdated": "2026-04-13T14:24:07.242Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1034,6 +1034,11 @@
   ],
   "changelog": [
     {
+      "sha": "98bef50",
+      "date": "2026-04-13T14:18:25+00:00",
+      "message": "Trigger fresh deploy — Supabase auth secrets now wired in"
+    },
+    {
       "sha": "173a463",
       "date": "2026-04-13T13:36:58+00:00",
       "message": "Add state.json bridge file for Claude visibility across builds"
@@ -1077,11 +1082,6 @@
       "sha": "032b363",
       "date": "2026-04-05T15:30:59+00:00",
       "message": "Add Firebase auth, Firestore persistence, and fix ScenarioManager"
-    },
-    {
-      "sha": "ce472d1",
-      "date": "2026-04-05T15:10:32+00:00",
-      "message": "Add Cash Model web app with GitHub Pages deployment"
     }
   ]
 }
