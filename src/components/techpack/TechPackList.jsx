@@ -1,30 +1,111 @@
-// Tech Pack list view — grid of past tech packs, + a "New" button
-import { useEffect, useState } from 'react';
-import { Plus, Shirt, Copy, Trash2, FileText } from 'lucide-react';
-import { FR, DEFAULT_DATA, DEFAULT_LIBRARY } from './techPackConstants';
+// PLM Kanban board — drag-and-drop tech packs through lifecycle stages
+import { useEffect, useState, useRef } from 'react';
+import { Plus, Shirt, Copy, Trash2, GripVertical } from 'lucide-react';
+import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STATUSES } from './techPackConstants';
 import TechPackBuilder from './TechPackBuilder';
-import { listTechPacks, createTechPack, getTechPack, deleteTechPack, duplicateTechPack } from '../../utils/techPackStore';
+import { listTechPacks, createTechPack, getTechPack, deleteTechPack, duplicateTechPack, saveTechPack } from '../../utils/techPackStore';
 
 function formatDate(iso) {
   if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  } catch { return iso.slice(0, 10); }
+  try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
+  catch { return ''; }
 }
 
-function statusColor(status) {
-  switch ((status || '').toLowerCase()) {
-    case 'completed': return FR.sage;
-    case 'production': return FR.sea;
-    case 'sampling': return FR.sienna;
-    default: return FR.soil;
-  }
+const STATUS_COLORS = {
+  Design:           { bg: '#F5F0E8', border: '#EBE5D5', dot: '#9A816B' },
+  Sampling:         { bg: '#F0F4F7', border: '#D4E1EA', dot: '#B5C7D3' },
+  Testing:          { bg: '#F5F2EC', border: '#E6DDD2', dot: '#D4956A' },
+  'Pre-Production': { bg: '#F0F3EF', border: '#D6DDD2', dot: '#ADBDA3' },
+  Production:       { bg: '#EDEFED', border: '#D0D6CE', dot: '#4CAF7D' },
+  Released:         { bg: '#F2F2F2', border: '#E0E0E0', dot: '#3A3A3A' },
+};
+
+function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onDragStart, onDragEnd }) {
+  return (
+    <div
+      draggable
+      onDragStart={e => { e.dataTransfer.setData('text/plain', pack.id); onDragStart(pack.id); }}
+      onDragEnd={onDragEnd}
+      style={{
+        background: 'white', borderRadius: 8, padding: 12, marginBottom: 8,
+        border: `1px solid ${FR.sand}`, cursor: 'grab',
+        transition: 'box-shadow 0.15s, transform 0.15s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+        <GripVertical size={12} style={{ color: FR.sand, marginTop: 2, flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer' }}>
+            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 15, color: FR.slate, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {pack.style_name || 'Untitled'}
+            </div>
+            <div style={{ fontSize: 10, color: FR.stone, marginTop: 2 }}>{pack.product_category || '—'}</div>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: FR.stone, marginBottom: 2 }}>
+              <span>{pack.completion_pct || 0}%</span>
+              <span>{formatDate(pack.updated_at)}</span>
+            </div>
+            <div style={{ width: '100%', height: 3, background: FR.sand, borderRadius: 2 }}>
+              <div style={{ width: `${pack.completion_pct || 0}%`, height: '100%', background: FR.soil, borderRadius: 2 }} />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, marginTop: 6 }}>
+        <button onClick={e => { e.stopPropagation(); onDuplicate(pack.id); }} title="Duplicate"
+          style={{ padding: 4, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer' }}>
+          <Copy size={11} />
+        </button>
+        <button onClick={e => { e.stopPropagation(); onDelete(pack.id); }} title="Delete"
+          style={{ padding: 4, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer' }}>
+          <Trash2 size={11} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function KanbanColumn({ status, packs, onOpen, onDuplicate, onDelete, onDragStart, onDragEnd, onDrop, dragOverStatus, setDragOverStatus }) {
+  const colors = STATUS_COLORS[status] || STATUS_COLORS.Design;
+  const isOver = dragOverStatus === status;
+
+  return (
+    <div
+      onDragOver={e => { e.preventDefault(); setDragOverStatus(status); }}
+      onDragLeave={() => setDragOverStatus(null)}
+      onDrop={e => { e.preventDefault(); setDragOverStatus(null); const id = e.dataTransfer.getData('text/plain'); onDrop(id, status); }}
+      style={{
+        flex: 1, minWidth: 180, maxWidth: 240,
+        background: isOver ? colors.border : colors.bg,
+        borderRadius: 10, padding: 10,
+        border: `1px solid ${isOver ? FR.soil : colors.border}`,
+        transition: 'background 0.15s, border-color 0.15s',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, padding: '0 4px' }}>
+        <div style={{ width: 8, height: 8, borderRadius: 4, background: colors.dot }} />
+        <span style={{ fontSize: 11, fontWeight: 600, color: FR.slate, letterSpacing: 0.3 }}>{status}</span>
+        <span style={{ fontSize: 10, color: FR.stone, marginLeft: 'auto' }}>{packs.length}</span>
+      </div>
+      <div style={{ minHeight: 60 }}>
+        {packs.map(p => (
+          <KanbanCard key={p.id} pack={p} onOpen={onOpen} onDuplicate={onDuplicate} onDelete={onDelete}
+            onDragStart={onDragStart} onDragEnd={onDragEnd} />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function TechPackList() {
   const [packs, setPacks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activePack, setActivePack] = useState(null);
+  const [draggingId, setDraggingId] = useState(null);
+  const [dragOverStatus, setDragOverStatus] = useState(null);
 
   const refresh = async () => {
     setLoading(true);
@@ -45,17 +126,35 @@ export default function TechPackList() {
     setActivePack(row);
   };
 
-  const onDuplicate = async (id, e) => {
-    e.stopPropagation();
+  const onDuplicate = async (id) => {
     await duplicateTechPack(id);
     refresh();
   };
 
-  const onDelete = async (id, e) => {
-    e.stopPropagation();
-    if (!confirm('Delete this tech pack? This cannot be undone.')) return;
+  const onDelete = async (id) => {
+    if (!confirm('Delete this tech pack?')) return;
     await deleteTechPack(id);
     refresh();
+  };
+
+  const onDrop = async (id, newStatus) => {
+    setDraggingId(null);
+    // Normalize — map old status names if needed
+    const statusMap = { Development: 'Design', Completed: 'Released' };
+    const pack = packs.find(p => p.id === id);
+    if (!pack) return;
+    const currentStatus = statusMap[pack.status] || pack.status;
+    if (currentStatus === newStatus) return;
+
+    // Optimistic update
+    setPacks(prev => prev.map(p => p.id === id ? { ...p, status: newStatus } : p));
+
+    // Persist — need to fetch full pack, update status in data, and save
+    const full = await getTechPack(id);
+    if (full) {
+      const updatedData = { ...(full.data || {}), status: newStatus };
+      await saveTechPack(id, { data: updatedData, status: newStatus });
+    }
   };
 
   const closeBuilder = async () => {
@@ -67,12 +166,24 @@ export default function TechPackList() {
     return <TechPackBuilder pack={activePack} onBack={closeBuilder} />;
   }
 
+  // Group packs by status into columns
+  const columns = {};
+  STATUSES.forEach(s => { columns[s] = []; });
+  packs.forEach(p => {
+    // Normalize old status names
+    let st = p.status || 'Design';
+    if (st === 'Development') st = 'Design';
+    if (st === 'Completed') st = 'Released';
+    if (!columns[st]) st = 'Design';
+    columns[st].push(p);
+  });
+
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
         <div>
-          <h2 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 24, margin: 0 }}>Tech Packs</h2>
-          <p className="text-sm mt-1" style={{ color: FR.stone }}>Create, edit, and export factory-ready specs for every Foreign Resource product.</p>
+          <h2 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 24, margin: 0 }}>Product Lifecycle</h2>
+          <p className="text-sm mt-1" style={{ color: FR.stone }}>Drag tech packs through stages. Click a card to open it.</p>
         </div>
         <button onClick={createNew}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs"
@@ -87,7 +198,7 @@ export default function TechPackList() {
         <div style={{ padding: 40, textAlign: 'center', background: 'white', border: `1px dashed ${FR.sand}`, borderRadius: 12 }}>
           <Shirt size={32} style={{ color: FR.stone, margin: '0 auto 12px', display: 'block' }} />
           <h3 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 20, margin: 0, marginBottom: 8 }}>No tech packs yet</h3>
-          <p style={{ color: FR.stone, fontSize: 13, marginBottom: 16 }}>Start your first one to send specs to the factory.</p>
+          <p style={{ color: FR.stone, fontSize: 13, marginBottom: 16 }}>Create your first one to start building your product pipeline.</p>
           <button onClick={createNew} style={{ padding: '8px 20px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>
             + New Tech Pack
           </button>
@@ -95,62 +206,15 @@ export default function TechPackList() {
       )}
 
       {!loading && packs.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {packs.map(p => (
-            <div key={p.id} onClick={() => openPack(p.id)}
-              className="rounded-xl border p-4 cursor-pointer transition-all"
-              style={{ background: 'white', borderColor: FR.sand }}
-              onMouseEnter={e => e.currentTarget.style.borderColor = FR.soil}
-              onMouseLeave={e => e.currentTarget.style.borderColor = FR.sand}>
-              <div className="flex items-start justify-between mb-3">
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {p.style_name || 'Untitled'}
-                  </h3>
-                  <p className="text-xs mt-1" style={{ color: FR.stone }}>{p.product_category || '—'}</p>
-                </div>
-                <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full"
-                  style={{ background: statusColor(p.status), color: FR.salt }}>
-                  {p.status || 'Development'}
-                </span>
-              </div>
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: FR.stone, marginBottom: 3 }}>
-                  <span>Completion</span><span>{p.completion_pct || 0}%</span>
-                </div>
-                <div style={{ width: '100%', height: 4, background: FR.sand, borderRadius: 2 }}>
-                  <div style={{ width: `${p.completion_pct || 0}%`, height: '100%', background: FR.soil, borderRadius: 2 }} />
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px]" style={{ color: FR.stone }}>
-                  Updated {formatDate(p.updated_at)}
-                </span>
-                <div className="flex items-center gap-1">
-                  <button onClick={e => onDuplicate(p.id, e)} title="Duplicate"
-                    style={{ padding: 5, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer' }}>
-                    <Copy size={13} />
-                  </button>
-                  <button onClick={e => onDelete(p.id, e)} title="Delete"
-                    style={{ padding: 5, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer' }}>
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
-            </div>
+        <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8 }}>
+          {STATUSES.map(status => (
+            <KanbanColumn key={status} status={status} packs={columns[status]}
+              onOpen={openPack} onDuplicate={onDuplicate} onDelete={onDelete}
+              onDragStart={setDraggingId} onDragEnd={() => setDraggingId(null)}
+              onDrop={onDrop} dragOverStatus={dragOverStatus} setDragOverStatus={setDragOverStatus} />
           ))}
         </div>
       )}
-
-      <div className="rounded-xl p-4 mt-6" style={{ background: FR.salt, border: `1px solid ${FR.sand}` }}>
-        <div className="flex items-start gap-3">
-          <FileText size={16} style={{ color: FR.soil, marginTop: 2 }} />
-          <div className="text-xs" style={{ color: FR.stone, lineHeight: 1.6 }}>
-            <strong style={{ color: FR.slate }}>Generate & Download</strong> on the final step (Review & Export) produces a PDF and SVG.
-            Tech packs auto-save to your account as you fill them in — open them on any device.
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

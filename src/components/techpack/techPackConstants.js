@@ -22,14 +22,15 @@ export const BOM_COMPONENT_OPTIONS = [
 
 export const DEFAULT_LIBRARY = { bom: [], fabrics: [], trims: [], labels: [], locations: [], shipMethods: [] };
 
-export const STATUSES = ['Development', 'Sampling', 'Pre-Production', 'Production', 'Completed'];
+export const STATUSES = ['Design', 'Sampling', 'Testing', 'Pre-Production', 'Production', 'Released'];
 
-// Steps that are gated — read-only until status reaches Pre-Production
-// Indices: 1 = SKU, 11 = Labels, 12 = Order & Delivery
+// Steps locked until Pre-Production: SKU (1), Labels (11), Order (12)
 export const LOCKED_STEPS = new Set([1, 11, 12]);
 export function isStepLocked(stepIndex, status) {
   if (!LOCKED_STEPS.has(stepIndex)) return false;
-  return status === 'Development' || status === 'Sampling' || !status;
+  const unlockAt = STATUSES.indexOf('Pre-Production');
+  const current = STATUSES.indexOf(status);
+  return current < unlockAt || current === -1;
 }
 
 export const STEPS = [
