@@ -197,18 +197,14 @@ export async function generateTechPackPDF(pack) {
   doc.setTextColor(...hex(FR.slate));
   doc.text(d.flatLayNotes || '', 10, 140, { maxWidth: W - 20 });
 
-  // ─── Page 5: Materials & BOM ───
-  newPage('Materials & BOM');
+  // ─── Page 5: Bill of Materials ───
+  newPage('Bill of Materials');
   y = 28;
-  sectionHeading('Shell Fabric', y); y += 8;
-  field('Fabric Type', d.shellFabric, 10, y);
-  field('Weight (GSM)', d.shellWeight, 80, y);
-  field('Composition', d.shellComposition, 150, y); y += 14;
-  field('Rib Composition', d.ribComposition, 10, y); y += 16;
-  sectionHeading('Trims & Accessories', y); y += 8;
-  const trimRows = (d.trims || []).filter(t => t.component).map(t =>
-    [t.component, t.type, t.material, t.color, t.notes]);
-  table(['Component', 'Type', 'Material', 'Color', 'Notes'], trimRows, 10, y, [50, 60, 50, 40, 77]);
+  sectionHeading('Components', y); y += 8;
+  const bomItems = d.bom || d.trims || [];
+  const bomRows = bomItems.filter(b => b.component || b.type).map(b =>
+    [b.component, b.type, b.material, b.color, b.weight || '', b.supplier || '', b.costPerUnit || '', b.notes]);
+  table(['Component', 'Type / Spec', 'Material', 'Color', 'Weight', 'Supplier', 'Cost/Unit', 'Notes'], bomRows, 10, y, [30, 40, 35, 25, 20, 35, 25, 67]);
 
   // ─── Page 6: Color & Artwork ───
   newPage('Color & Artwork');

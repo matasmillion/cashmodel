@@ -125,16 +125,12 @@ export function generateTechPackSVG(pack) {
   // ─── Materials & BOM ───
   yOff += pageH;
   svg += `<g id="page-3-materials" transform="translate(0 ${yOff})">`;
-  svg += pageFrame('Materials & BOM', null, 3, numPages, styleInfo);
-  svg += sectionHeading('Shell Fabric', 40, 110);
-  svg += field('Fabric Type', d.shellFabric, 40, 145);
-  svg += field('Weight (GSM)', d.shellWeight, 300, 145);
-  svg += field('Composition', d.shellComposition, 550, 145);
-  svg += field('Rib Composition', d.ribComposition, 40, 195);
-  svg += sectionHeading('Trims & Accessories', 40, 260);
-  const trimRows = (d.trims || []).filter(t => t.component).map(t => [t.component, t.type, t.material, t.color, t.notes]);
-  if (trimRows.length) {
-    const t1 = table(40, 290, ['Component', 'Type', 'Material', 'Color', 'Notes'], trimRows, [180, 220, 180, 150, 313]);
+  svg += pageFrame('Bill of Materials', null, 3, numPages, styleInfo);
+  svg += sectionHeading('Components', 40, 110);
+  const bomItems = d.bom || d.trims || [];
+  const bomRows = bomItems.filter(b => b.component || b.type).map(b => [b.component, b.type, b.material, b.color, b.weight || '', b.supplier || '', b.costPerUnit || '']);
+  if (bomRows.length) {
+    const t1 = table(40, 140, ['Component', 'Type / Spec', 'Material', 'Color', 'Weight', 'Supplier', 'Cost/Unit'], bomRows, [120, 180, 150, 110, 80, 180, 223]);
     svg += t1.svg;
   }
   svg += `</g>`;

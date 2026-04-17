@@ -8,10 +8,19 @@ export const FR = {
 export const FR_COLOR_OPTIONS = [
   { name: 'Slate', hex: '#3A3A3A' }, { name: 'Salt', hex: '#F5F0E8' }, { name: 'Sand', hex: '#EBE5D5' },
   { name: 'Stone', hex: '#716F70' }, { name: 'Soil', hex: '#9A816B' }, { name: 'Sea', hex: '#B5C7D3' },
-  { name: 'Sage', hex: '#ADBDA3' }, { name: 'Sienna', hex: '#D4956A' },
+  { name: 'Sage', hex: '#ADBDA3' }, { name: 'Sienna', hex: '#D4956A' }, { name: 'PFD', hex: '#F0EDE6' },
 ];
 
-export const DEFAULT_LIBRARY = { fabrics: [], trims: [], labels: [] };
+export const BOM_COMPONENT_OPTIONS = [
+  'Fabric', 'Lining', 'Rib', 'Interfacing / Fusing',
+  'Zipper', 'Button', 'Snap', 'Rivet', 'Aglet',
+  'Drawstring / Cord', 'Elastic', 'Thread', 'Tape / Binding',
+  'Label (Main)', 'Label (Care)', 'Label (Size)', 'Hang Tag',
+  'Patch', 'Embroidery', 'Sticker / Card', 'Packaging',
+  'Other',
+];
+
+export const DEFAULT_LIBRARY = { bom: [], fabrics: [], trims: [], labels: [] };
 
 export const STEPS = [
   { id: 'identity', title: 'Identity & Classification', icon: '01' },
@@ -19,7 +28,7 @@ export const STEPS = [
   { id: 'factory', title: 'Factory Assignment', icon: '03' },
   { id: 'design', title: 'Design & Construction', icon: '04' },
   { id: 'flatlays', title: 'Flat Lay Diagrams', icon: '05' },
-  { id: 'materials', title: 'Materials & BOM', icon: '06' },
+  { id: 'materials', title: 'Bill of Materials', icon: '06' },
   { id: 'color', title: 'Color & Artwork', icon: '07' },
   { id: 'construction', title: 'Construction Details', icon: '08' },
   { id: 'pattern', title: 'Pattern & Cutting', icon: '09' },
@@ -35,8 +44,7 @@ export const DEFAULT_DATA = {
   styleNumber: '', skuPrefix: '', barcodeMethod: 'Shopify Retail Barcode Labels',
   factory: '', factoryContact: '', fabricType: '',
   designNotes: '', fit: '', keyFeatures: '', flatLayNotes: '',
-  shellFabric: '', shellWeight: '', shellComposition: '', ribComposition: '',
-  trims: [{ component: '', type: '', material: '', color: '', notes: '' }],
+  bom: [{ component: '', type: '', material: '', color: '', weight: '', supplier: '', supplierContact: '', costPerUnit: '', notes: '' }],
   colorways: [{ name: '', frColor: 'Slate', pantone: '', hex: '#3A3A3A' }],
   logoFront: '', logoBack: '', logoMethod: '',
   seams: [{ operation: '', seamType: '', stitchType: '', spiSpcm: '', threadColor: '', notes: '' }],
@@ -63,7 +71,7 @@ export const DEFAULT_DATA = {
   cartons: [{ cartonNum: '', colorway: '', sizeBreakdown: '', qtyPerCarton: '', dims: '', grossWeight: '', netWeight: '' }],
 };
 
-export const IMG_STEPS = new Set([3, 4, 6, 7, 8, 9, 10, 11]);
+export const IMG_STEPS = new Set([3, 4, 5, 6, 7, 8, 9, 10, 11]);
 
 export function resizeImage(file, maxW = 1200) {
   return new Promise((resolve) => {

@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-17T09:33:29.204Z",
+  "lastUpdated": "2026-04-17T11:52:00.700Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "8cab126",
+      "date": "2026-04-17T09:33:58+00:00",
+      "message": "Add Product tab with Tech Pack Builder — pivot toward ERP"
+    },
+    {
       "sha": "32c6f52",
       "date": "2026-04-17T09:17:42+00:00",
       "message": "Merge remote-tracking branch 'origin/main' into claude/build-cash-model-app-11msn"
@@ -1087,11 +1092,6 @@
       "sha": "b22a3a9",
       "date": "2026-04-12T16:59:15+00:00",
       "message": "Add Foreign Resource FR monogram favicon"
-    },
-    {
-      "sha": "2e3825e",
-      "date": "2026-04-12T16:20:52+00:00",
-      "message": "Merge branch 'claude/build-cash-model-app-11msn'"
     }
   ]
 }

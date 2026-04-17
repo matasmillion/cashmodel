@@ -1,5 +1,5 @@
 // All 14 step components for the Tech Pack builder
-import { FR, FR_COLOR_OPTIONS, DEFAULT_DATA, computeCompletion } from './techPackConstants';
+import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, DEFAULT_DATA, computeCompletion } from './techPackConstants';
 import { Input, Select, Row, SectionTitle, ArrayTable, PhotoUpload, LibraryPicker, FRColorCell } from './TechPackPrimitives';
 
 export function StepIdentity({ data, set }) {
@@ -9,7 +9,7 @@ export function StepIdentity({ data, set }) {
       <Row>
         <Input label="Style Name" value={data.styleName} onChange={v => set('styleName', v)} placeholder="e.g. Borderless Basic Hoodie" />
         <Select label="Product Category" value={data.productCategory} onChange={v => set('productCategory', v)}
-          options={['Hoodie', 'Sweatpants', 'T-Shirt', 'Shorts', 'Jacket / Outerwear', 'Bag / Sling', 'Accessory', 'Denim', 'Pants', 'Button-up / Woven Shirt']} />
+          options={['Hoodie', 'Zip Up Hoodie', 'Sweatpants', 'T-Shirt', 'Shorts', 'Jacket / Outerwear', 'Bag / Sling', 'Accessory', 'Denim', 'Pants', 'Button-up / Woven Shirt']} />
       </Row>
       <Row>
         <Select label="Product Tier" value={data.productTier} onChange={v => set('productTier', v)}
@@ -31,7 +31,7 @@ export function StepSku({ data, set }) {
   return (
     <div>
       <SectionTitle>SKU & Numbering</SectionTitle>
-      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 12 }}>SKU auto-generates once system is finalized. Enter what you have or leave blank.</p>
+      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 12 }}>SKUs and barcodes auto-generate via Shopify when this tech pack moves from Sampling → Production. Enter manually if you already have one.</p>
       <Row>
         <Input label="Style Number" value={data.styleNumber} onChange={v => set('styleNumber', v)} placeholder="e.g. FR-BB-HD-001" />
         <Input label="SKU Prefix" value={data.skuPrefix} onChange={v => set('skuPrefix', v)} placeholder="Auto-generated" />
@@ -78,49 +78,80 @@ export function StepFlatlays({ data, set, images, onUpload, onRemove }) {
   );
 }
 
-export function StepMaterials({ data, set, library, saveToLibrary }) {
-  const updateTrim = (i, k, v) => { const t = [...data.trims]; t[i] = { ...t[i], [k]: v }; set('trims', t); };
-  const addTrim = () => set('trims', [...data.trims, { component: '', type: '', material: '', color: '', notes: '' }]);
-  const removeTrim = (i) => set('trims', data.trims.filter((_, idx) => idx !== i));
-  const saveTrimToLib = (trim) => {
-    if (!trim.component) return;
-    const exists = (library.trims || []).some(t => t.component === trim.component && t.type === trim.type && t.material === trim.material);
-    if (!exists) saveToLibrary('trims', trim);
+export function StepMaterials({ data, set, library, saveToLibrary, images, onUpload, onRemove }) {
+  // Unified BOM — migrate old tech packs that had separate trims/shellFabric
+  const bom = data.bom || (data.trims
+    ? [
+        ...(data.shellFabric ? [{ component: 'Fabric', type: data.shellFabric, material: data.shellComposition || '', color: '', weight: data.shellWeight || '', supplier: '', supplierContact: '', costPerUnit: '', notes: '' }] : []),
+        ...data.trims.map(t => ({ ...t, weight: '', supplier: '', supplierContact: '', costPerUnit: '' })),
+      ]
+    : [{ component: '', type: '', material: '', color: '', weight: '', supplier: '', supplierContact: '', costPerUnit: '', notes: '' }]);
+
+  const updateBom = (i, k, v) => { const b = [...bom]; b[i] = { ...b[i], [k]: v }; set('bom', b); };
+  const addBom = () => set('bom', [...bom, { component: '', type: '', material: '', color: '', weight: '', supplier: '', supplierContact: '', costPerUnit: '', notes: '' }]);
+  const removeBom = (i) => set('bom', bom.filter((_, idx) => idx !== i));
+
+  const saveBomToLib = (item) => {
+    if (!item.component && !item.type) return;
+    const lib = library.bom || [];
+    const exists = lib.some(b => b.component === item.component && b.type === item.type && b.material === item.material);
+    if (!exists) saveToLibrary('bom', item);
   };
+
+  const libCount = (library.bom || []).length + (library.trims || []).length;
+
+  const componentRender = (val, onChange) => (
+    <select value={val || ''} onChange={e => onChange(e.target.value)}
+      style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 0', color: FR.slate, fontFamily: "'Helvetica Neue',sans-serif" }}>
+      <option value="">Select...</option>
+      {BOM_COMPONENT_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+    </select>
+  );
+
   const colorRender = (val, onChange) => <FRColorCell value={val} onChange={onChange} />;
+
   return (
     <div>
-      <SectionTitle>Materials & BOM</SectionTitle>
-      <h4 style={{ fontSize: 12, color: FR.slate, margin: '12px 0 8px', fontWeight: 600 }}>Shell Fabric</h4>
-      <Row cols="1fr 1fr 1fr">
-        <Input label="Fabric Type" value={data.shellFabric} onChange={v => set('shellFabric', v)} placeholder="e.g. French Terry" />
-        <Input label="Weight (GSM)" value={data.shellWeight} onChange={v => set('shellWeight', v)} placeholder="400" />
-        <Input label="Composition" value={data.shellComposition} onChange={v => set('shellComposition', v)} placeholder="100% Cotton" />
-      </Row>
-      <Input label="Rib Composition" value={data.ribComposition} onChange={v => set('ribComposition', v)} placeholder="95% Cotton / 5% Spandex" />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16, marginBottom: 8 }}>
-        <h4 style={{ fontSize: 12, color: FR.slate, margin: 0, fontWeight: 600 }}>Trims & Accessories</h4>
-        <LibraryPicker category="trims" library={library} buttonLabel={`★ From Library (${(library.trims || []).length})`}
-          onSelect={item => set('trims', [...data.trims, { ...item }])} />
+      <SectionTitle>Bill of Materials</SectionTitle>
+      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 12, lineHeight: 1.5 }}>
+        All fabrics, trims, and accessories for this garment. Add supplier info so automations can contact them for samples and POs.
+      </p>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+        <LibraryPicker category="bom" library={library} buttonLabel={`★ From Library (${libCount})`}
+          onSelect={item => set('bom', [...bom, { ...item }])} />
+        {/* Also pick from legacy trims library */}
+        {(library.trims || []).length > 0 && (
+          <LibraryPicker category="trims" library={library} buttonLabel={`★ Legacy Trims (${library.trims.length})`}
+            onSelect={item => set('bom', [...bom, { ...item, weight: '', supplier: '', supplierContact: '', costPerUnit: '' }])} />
+        )}
       </div>
+
       <ArrayTable
         headers={[
-          { key: 'component', label: 'Component', placeholder: 'e.g. Zipper' },
-          { key: 'type', label: 'Type', placeholder: 'e.g. YKK #5 Coil' },
-          { key: 'material', label: 'Material', placeholder: 'e.g. Metal' },
+          { key: 'component', label: 'Component', render: componentRender },
+          { key: 'type', label: 'Type / Spec', placeholder: 'e.g. YKK #5 Coil' },
+          { key: 'material', label: 'Material', placeholder: 'e.g. 100% Cotton' },
           { key: 'color', label: 'Color', render: colorRender },
+          { key: 'weight', label: 'Weight / GSM', placeholder: '400' },
+          { key: 'supplier', label: 'Supplier', placeholder: 'Name' },
+          { key: 'supplierContact', label: 'Contact', placeholder: 'Email / WeChat' },
+          { key: 'costPerUnit', label: 'Cost/Unit', placeholder: '$' },
           { key: 'notes', label: 'Notes', placeholder: '' },
         ]}
-        rows={data.trims} onUpdate={updateTrim} onAdd={addTrim} onRemove={removeTrim} />
-      {data.trims.some(t => t.component) && (
+        rows={bom} onUpdate={updateBom} onAdd={addBom} onRemove={removeBom} />
+
+      {bom.some(b => b.component || b.type) && (
         <div style={{ marginTop: 4, marginBottom: 8 }}>
-          <button onClick={() => data.trims.forEach(t => saveTrimToLib(t))}
+          <button onClick={() => bom.forEach(b => saveBomToLib(b))}
             style={{ padding: '5px 14px', background: FR.soil, border: 'none', borderRadius: 3, fontSize: 10, color: FR.salt, cursor: 'pointer' }}>
-            Save all trims to library
+            Save all to library
           </button>
           <span style={{ fontSize: 9, color: FR.stone, marginLeft: 8 }}>Duplicates are skipped automatically</span>
         </div>
       )}
+
+      <PhotoUpload label="Material Samples / Supplier References" slotKey="bom-refs" images={images} onUpload={onUpload} onRemove={onRemove} />
     </div>
   );
 }
