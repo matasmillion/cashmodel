@@ -99,6 +99,39 @@ export function StepFlatlays({ data, set, images, onUpload, onRemove }) {
 }
 
 export function StepMaterials({ data, set, library, saveToLibrary, images, onUpload, onRemove }) {
+  const [componentPicker, setComponentPicker] = useState(false);
+  const [componentList, setComponentList] = useState([]);
+
+  // Lazy-load component packs on first open of picker
+  const openComponentPicker = async () => {
+    if (componentList.length === 0) {
+      const { listComponentPacks } = await import('../../utils/componentPackStore');
+      setComponentList(await listComponentPacks());
+    }
+    setComponentPicker(true);
+  };
+
+  const addFromComponent = async (compId) => {
+    const { getComponentPack } = await import('../../utils/componentPackStore');
+    const full = await getComponentPack(compId);
+    if (!full) return;
+    const c = full.data || {};
+    const newRow = {
+      component: c.componentCategory || '',
+      type: c.componentName || '',
+      material: c.material || c.composition || '',
+      color: c.frColor || '',
+      weight: c.weight || '',
+      supplier: c.supplier || '',
+      supplierContact: c.supplierContact || c.supplierEmail || '',
+      costPerUnit: c.costPerUnit || '',
+      notes: (c.hex ? `Hex: ${c.hex}` : '') + (c.dyeMethod ? (c.hex ? ' · ' : '') + c.dyeMethod : ''),
+      componentPackId: compId,
+    };
+    set('bom', [...bom, newRow]);
+    setComponentPicker(false);
+  };
+
   // Unified BOM — migrate old tech packs that had separate trims/shellFabric
   const bom = data.bom || (data.trims
     ? [
@@ -137,13 +170,38 @@ export function StepMaterials({ data, set, library, saveToLibrary, images, onUpl
         All fabrics, trims, and accessories for this garment. Add supplier info so automations can contact them for samples and POs.
       </p>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap', position: 'relative' }}>
+        <button onClick={openComponentPicker}
+          style={{ padding: '5px 12px', background: FR.slate, border: 'none', borderRadius: 3, fontSize: 11, color: FR.salt, cursor: 'pointer' }}>
+          ◆ Pick from Component Pack
+        </button>
         <LibraryPicker category="bom" library={library} buttonLabel={`★ From Library (${libCount})`}
           onSelect={item => set('bom', [...bom, { ...item }])} />
-        {/* Also pick from legacy trims library */}
         {(library.trims || []).length > 0 && (
           <LibraryPicker category="trims" library={library} buttonLabel={`★ Legacy Trims (${library.trims.length})`}
             onSelect={item => set('bom', [...bom, { ...item, weight: '', supplier: '', supplierContact: '', costPerUnit: '' }])} />
+        )}
+
+        {componentPicker && (
+          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: 'white', border: `1px solid ${FR.sand}`, borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 300, overflowY: 'auto', minWidth: 320, marginTop: 4 }}>
+            <div style={{ padding: '8px 12px', background: FR.salt, fontSize: 10, color: FR.stone, display: 'flex', justifyContent: 'space-between' }}>
+              <span>Select a Component Pack ({componentList.length})</span>
+              <button onClick={() => setComponentPicker(false)} style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 12 }}>×</button>
+            </div>
+            {componentList.length === 0 ? (
+              <div style={{ padding: 14, fontSize: 11, color: FR.stone, textAlign: 'center' }}>
+                No Component Packs yet. Create one in the PLM → Components tab.
+              </div>
+            ) : componentList.map(c => (
+              <button key={c.id} onClick={() => addFromComponent(c.id)}
+                style={{ display: 'block', width: '100%', padding: '8px 12px', border: 'none', borderBottom: `1px solid ${FR.sand}`, background: 'white', cursor: 'pointer', textAlign: 'left', fontSize: 11, color: FR.slate }}>
+                <strong>{c.component_name || 'Untitled'}</strong>
+                <span style={{ color: FR.stone, marginLeft: 6 }}>
+                  {c.component_category} {c.supplier ? `· ${c.supplier}` : ''} {c.cost_per_unit ? `· ${c.currency || 'USD'} ${c.cost_per_unit}` : ''}
+                </span>
+              </button>
+            ))}
+          </div>
         )}
       </div>
 
