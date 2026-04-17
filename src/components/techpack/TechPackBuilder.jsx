@@ -1,7 +1,7 @@
 // Main Tech Pack builder — 14-step wizard embedded inside the Product tab
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STEPS, IMG_STEPS, computeCompletion } from './techPackConstants';
+import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STEPS, IMG_STEPS, computeCompletion, isStepLocked } from './techPackConstants';
 import { STEP_FNS } from './TechPackSteps';
 import { saveTechPack } from '../../utils/techPackStore';
 import { generateTechPackPDF } from '../../utils/techPackPDF';
@@ -77,7 +77,15 @@ export default function TechPackBuilder({ pack, onBack }) {
   }, []);
 
   const saveToLibrary = useCallback((category, item) => {
-    setLibrary(p => ({ ...p, [category]: [...(p[category] || []), { ...item }] }));
+    setLibrary(p => {
+      const existing = p[category] || [];
+      // Handle strings (simple dropdown options) and objects (BOM items, etc.)
+      if (typeof item === 'string') {
+        if (existing.includes(item)) return p;
+        return { ...p, [category]: [...existing, item] };
+      }
+      return { ...p, [category]: [...existing, { ...item }] };
+    });
   }, []);
 
   const handleSubmit = useCallback(async () => {
@@ -147,13 +155,17 @@ export default function TechPackBuilder({ pack, onBack }) {
       {/* Body */}
       <div style={{ display: 'flex' }}>
         <div style={{ width: 220, minWidth: 220, padding: '14px 0', borderRight: `1px solid ${FR.sand}`, background: FR.salt }}>
-          {STEPS.map((s, i) => (
-            <button key={s.id} onClick={() => setStep(i)}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 16px', border: 'none', cursor: 'pointer', background: i === step ? FR.white : 'transparent', borderLeft: i === step ? `3px solid ${FR.soil}` : '3px solid transparent' }}>
-              <span style={{ fontSize: 10, color: i === step ? FR.soil : FR.stone, fontWeight: 700, width: 18 }}>{s.icon}</span>
-              <span style={{ fontSize: 11, color: i === step ? FR.slate : FR.stone, textAlign: 'left' }}>{s.title}</span>
-            </button>
-          ))}
+          {STEPS.map((s, i) => {
+            const stepLocked = isStepLocked(i, data.status);
+            return (
+              <button key={s.id} onClick={() => setStep(i)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 16px', border: 'none', cursor: 'pointer', background: i === step ? FR.white : 'transparent', borderLeft: i === step ? `3px solid ${FR.soil}` : '3px solid transparent' }}>
+                <span style={{ fontSize: 10, color: i === step ? FR.soil : FR.stone, fontWeight: 700, width: 18 }}>{s.icon}</span>
+                <span style={{ fontSize: 11, color: i === step ? FR.slate : FR.stone, textAlign: 'left', flex: 1, opacity: stepLocked ? 0.5 : 1 }}>{s.title}</span>
+                {stepLocked && <span style={{ fontSize: 10, color: FR.stone }}>🔒</span>}
+              </button>
+            );
+          })}
         </div>
         <div style={{ flex: 1, padding: '20px 28px', maxHeight: '75vh', overflowY: 'auto' }}>
           <Comp {...stepProps} />

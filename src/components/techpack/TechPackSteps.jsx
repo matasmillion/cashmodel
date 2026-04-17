@@ -1,6 +1,8 @@
 // All 14 step components for the Tech Pack builder
-import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, DEFAULT_DATA, computeCompletion } from './techPackConstants';
-import { Input, Select, Row, SectionTitle, ArrayTable, PhotoUpload, LibraryPicker, FRColorCell } from './TechPackPrimitives';
+import { useState } from 'react';
+import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, DEFAULT_DATA, computeCompletion, isStepLocked } from './techPackConstants';
+import { Input, Select, Row, SectionTitle, ArrayTable, PhotoUpload, LibraryPicker, FRColorCell, EditableSelect } from './TechPackPrimitives';
+import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
 
 export function StepIdentity({ data, set }) {
   return (
@@ -22,21 +24,39 @@ export function StepIdentity({ data, set }) {
         <Input label="Target FOB Price" value={data.targetFOB} onChange={v => set('targetFOB', v)} placeholder="$" />
       </Row>
       <Select label="Status" value={data.status} onChange={v => set('status', v)}
-        options={['Development', 'Sampling', 'Production', 'Completed']} />
+        options={STATUSES} />
+      <p style={{ fontSize: 10, color: FR.stone, marginTop: -4, lineHeight: 1.5 }}>
+        SKU & Numbering, Labels & Packaging, and Order & Delivery are locked during Development and Sampling. They unlock at Pre-Production.
+      </p>
+    </div>
+  );
+}
+
+function LockedBanner({ status }) {
+  return (
+    <div style={{ padding: 14, background: FR.salt, border: `1px dashed ${FR.soil}`, borderRadius: 6, marginBottom: 16 }}>
+      <div style={{ fontSize: 12, color: FR.slate, fontWeight: 600, marginBottom: 4 }}>🔒 Locked until Pre-Production</div>
+      <div style={{ fontSize: 11, color: FR.stone, lineHeight: 1.5 }}>
+        Current status: <strong>{status || 'Development'}</strong>. This step unlocks when you set the status to <strong>Pre-Production</strong> (or later) on step 1.
+      </div>
     </div>
   );
 }
 
 export function StepSku({ data, set }) {
+  const locked = isStepLocked(1, data.status);
   return (
     <div>
       <SectionTitle>SKU & Numbering</SectionTitle>
+      {locked && <LockedBanner status={data.status} />}
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 12 }}>SKUs and barcodes auto-generate via Shopify when this tech pack moves from Sampling → Production. Enter manually if you already have one.</p>
-      <Row>
-        <Input label="Style Number" value={data.styleNumber} onChange={v => set('styleNumber', v)} placeholder="e.g. FR-BB-HD-001" />
-        <Input label="SKU Prefix" value={data.skuPrefix} onChange={v => set('skuPrefix', v)} placeholder="Auto-generated" />
-      </Row>
-      <Input label="Barcode Method" value={data.barcodeMethod} onChange={v => set('barcodeMethod', v)} />
+      <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
+        <Row>
+          <Input label="Style Number" value={data.styleNumber} onChange={v => set('styleNumber', v)} placeholder="e.g. FR-BB-HD-001" />
+          <Input label="SKU Prefix" value={data.skuPrefix} onChange={v => set('skuPrefix', v)} placeholder="Auto-generated" />
+        </Row>
+        <Input label="Barcode Method" value={data.barcodeMethod} onChange={v => set('barcodeMethod', v)} />
+      </fieldset>
     </div>
   );
 }
@@ -304,78 +324,140 @@ export function StepTreatments({ data, set, images, onUpload, onRemove }) {
 }
 
 export function StepLabels({ data, set, images, onUpload, onRemove }) {
+  const locked = isStepLocked(11, data.status);
   return (
     <div>
       <SectionTitle>Labels & Packaging</SectionTitle>
-      <PhotoUpload label="Label Artwork (care, main, size)" slotKey="label-artwork" images={images} onUpload={onUpload} onRemove={onRemove} />
-      <Input label="Care Instructions" value={data.careInstructions} onChange={v => set('careInstructions', v)} multiline />
-      <Select label="Packaging" value={data.packaging} onChange={v => set('packaging', v)} options={['Standard FR Packaging', 'Custom', 'Minimal']} />
-      {data.packaging === 'Standard FR Packaging' && (
-        <div style={{ padding: 12, background: FR.salt, borderRadius: 4, fontSize: 11, color: FR.stone, marginBottom: 12, lineHeight: 1.6 }}>
-          Matte Slate poly mailer + Sand dust bag + Salt hang tag + tissue + sticker
-        </div>
-      )}
-      <Input label="Packaging Notes" value={data.packagingNotes} onChange={v => set('packagingNotes', v)} multiline />
+      {locked && <LockedBanner status={data.status} />}
+      <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
+        <PhotoUpload label="Label Artwork (care, main, size)" slotKey="label-artwork" images={images} onUpload={onUpload} onRemove={onRemove} />
+        <Input label="Care Instructions" value={data.careInstructions} onChange={v => set('careInstructions', v)} multiline />
+        <Select label="Packaging" value={data.packaging} onChange={v => set('packaging', v)} options={['Standard FR Packaging', 'Custom', 'Minimal']} />
+        {data.packaging === 'Standard FR Packaging' && (
+          <div style={{ padding: 12, background: FR.salt, borderRadius: 4, fontSize: 11, color: FR.stone, marginBottom: 12, lineHeight: 1.6 }}>
+            Matte Slate poly mailer + Sand dust bag + Salt hang tag + tissue + sticker
+          </div>
+        )}
+        <Input label="Packaging Notes" value={data.packagingNotes} onChange={v => set('packagingNotes', v)} multiline />
+      </fieldset>
     </div>
   );
 }
 
-export function StepOrder({ data, set }) {
+export function StepOrder({ data, set, library, saveToLibrary }) {
+  const locked = isStepLocked(12, data.status);
+  const [unitWeightG, setUnitWeightG] = useState(data.unitWeightGrams || '500');
+  const [aiKey, setAiKey] = useState(getStoredKey());
+  const [aiNotes, setAiNotes] = useState('');
+  const [aiRunning, setAiRunning] = useState(false);
+  const [aiError, setAiError] = useState('');
+
   const updateQ = (i, k, v) => { const q = [...data.quantities]; q[i] = { ...q[i], [k]: v }; set('quantities', q); };
   const addQ = () => set('quantities', [...data.quantities, { colorway: '', s: '', m: '', l: '', xl: '', unitCost: '' }]);
   const removeQ = (i) => set('quantities', data.quantities.filter((_, idx) => idx !== i));
   const updateC = (i, k, v) => { const c = [...data.cartons]; c[i] = { ...c[i], [k]: v }; set('cartons', c); };
   const addC = () => set('cartons', [...data.cartons, { cartonNum: '', colorway: '', sizeBreakdown: '', qtyPerCarton: '', dims: '', grossWeight: '', netWeight: '' }]);
   const removeC = (i) => set('cartons', data.cartons.filter((_, idx) => idx !== i));
+
   const cwOptions = data.colorways.filter(c => c.name).map(c => c.name);
   const cwRender = (val, onChange) => (
     <select value={val || ''} onChange={e => onChange(e.target.value)} style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, color: FR.slate, fontFamily: "'Helvetica Neue',sans-serif" }}>
-      <option value="">Select...</option>
+      <option value="">Select…</option>
       {cwOptions.map(n => <option key={n} value={n}>{n}</option>)}
-      <option value="__custom">Other...</option>
     </select>
   );
+
+  const addLocation = (val) => saveToLibrary && saveToLibrary('locations', val);
+
+  async function runAIPackingList() {
+    setAiRunning(true);
+    setAiError('');
+    try {
+      if (aiKey) saveKey(aiKey);
+      const cartons = await generatePackingList({
+        apiKey: aiKey,
+        styleName: data.styleName,
+        productCategory: data.productCategory,
+        quantities: data.quantities,
+        unitWeightGrams: parseFloat(unitWeightG) || 500,
+        shipMethod: data.shipMethod,
+        notes: aiNotes,
+      });
+      set('cartons', cartons);
+      set('unitWeightGrams', unitWeightG);
+    } catch (err) {
+      setAiError(err.message);
+    }
+    setAiRunning(false);
+  }
+
   return (
     <div>
       <SectionTitle>Order & Delivery</SectionTitle>
-      <h4 style={{ fontSize: 12, color: FR.slate, margin: '8px 0', fontWeight: 600 }}>Quantity Per Size</h4>
-      <ArrayTable
-        headers={[
-          { key: 'colorway', label: 'Colorway', render: cwOptions.length > 0 ? cwRender : undefined, placeholder: 'Slate Wash' },
-          { key: 's', label: 'S', placeholder: '0' },
-          { key: 'm', label: 'M', placeholder: '0' },
-          { key: 'l', label: 'L', placeholder: '0' },
-          { key: 'xl', label: 'XL', placeholder: '0' },
-          { key: 'unitCost', label: 'Unit $', placeholder: '$' },
-        ]}
-        rows={data.quantities} onUpdate={updateQ} onAdd={addQ} onRemove={removeQ} />
-      <h4 style={{ fontSize: 12, color: FR.slate, margin: '16px 0 8px', fontWeight: 600 }}>Delivery Details</h4>
-      <Row>
-        <Input label="Ship To (Address)" value={data.shipTo} onChange={v => set('shipTo', v)} />
-        <Input label="Delivery Location / Warehouse" value={data.deliveryLocation} onChange={v => set('deliveryLocation', v)} />
-      </Row>
-      <Row cols="1fr 1fr 1fr">
-        <Select label="Ship Method" value={data.shipMethod} onChange={v => set('shipMethod', v)} options={['Air', 'Sea', 'Express (DHL/FedEx)']} />
-        <Select label="Incoterm" value={data.incoterm} onChange={v => set('incoterm', v)} options={['FOB', 'CIF', 'EXW', 'DDP']} />
-        <Input label="Freight Forwarder" value={data.freightForwarder} onChange={v => set('freightForwarder', v)} />
-      </Row>
-      <Row>
-        <Input label="Target Ship Date" value={data.targetShipDate} onChange={v => set('targetShipDate', v)} placeholder="YYYY-MM-DD" />
-        <Input label="Target Arrival Date" value={data.targetArrivalDate} onChange={v => set('targetArrivalDate', v)} placeholder="YYYY-MM-DD" />
-      </Row>
-      <Input label="Special Instructions" value={data.specialInstructions} onChange={v => set('specialInstructions', v)} multiline />
-      <h4 style={{ fontSize: 12, color: FR.slate, margin: '16px 0 8px', fontWeight: 600 }}>Packing List</h4>
-      <ArrayTable
-        headers={[
-          { key: 'cartonNum', label: '#', placeholder: '1' },
-          { key: 'colorway', label: 'Colorway' },
-          { key: 'sizeBreakdown', label: 'Size Breakdown', placeholder: 'S:10 M:20 L:15 XL:5' },
-          { key: 'qtyPerCarton', label: 'Qty', placeholder: '50' },
-          { key: 'dims', label: 'Dims (cm)', placeholder: '60x40x30' },
-          { key: 'grossWeight', label: 'Gross kg' },
-          { key: 'netWeight', label: 'Net kg' },
-        ]}
-        rows={data.cartons} onUpdate={updateC} onAdd={addC} onRemove={removeC} />
+      {locked && <LockedBanner status={data.status} />}
+      <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
+        <h4 style={{ fontSize: 12, color: FR.slate, margin: '8px 0', fontWeight: 600 }}>Quantity Per Size</h4>
+        <ArrayTable
+          headers={[
+            { key: 'colorway', label: 'Colorway', render: cwOptions.length > 0 ? cwRender : undefined, placeholder: 'Slate Wash' },
+            { key: 's', label: 'S', placeholder: '0' },
+            { key: 'm', label: 'M', placeholder: '0' },
+            { key: 'l', label: 'L', placeholder: '0' },
+            { key: 'xl', label: 'XL', placeholder: '0' },
+            { key: 'unitCost', label: 'Unit $', placeholder: '$' },
+          ]}
+          rows={data.quantities} onUpdate={updateQ} onAdd={addQ} onRemove={removeQ} />
+
+        <h4 style={{ fontSize: 12, color: FR.slate, margin: '16px 0 8px', fontWeight: 600 }}>Delivery Details</h4>
+        <Row>
+          <EditableSelect label="Ship To (Address)" value={data.shipTo} onChange={v => set('shipTo', v)}
+            options={(library && library.locations) || []} onAddOption={addLocation}
+            placeholder="New ship-to address…" />
+          <EditableSelect label="Delivery Location / Warehouse" value={data.deliveryLocation} onChange={v => set('deliveryLocation', v)}
+            options={(library && library.locations) || []} onAddOption={addLocation}
+            placeholder="New warehouse…" />
+        </Row>
+        <Row cols="1fr 1fr 1fr">
+          <Select label="Ship Method" value={data.shipMethod} onChange={v => set('shipMethod', v)} options={['Air', 'Sea', 'Express (DHL/FedEx)']} />
+          <Select label="Incoterm" value={data.incoterm} onChange={v => set('incoterm', v)} options={['FOB', 'CIF', 'EXW', 'DDP']} />
+          <Input label="Freight Forwarder" value={data.freightForwarder} onChange={v => set('freightForwarder', v)} />
+        </Row>
+        <Row>
+          <Input label="Target Ship Date" value={data.targetShipDate} onChange={v => set('targetShipDate', v)} placeholder="YYYY-MM-DD" />
+          <Input label="Target Arrival Date" value={data.targetArrivalDate} onChange={v => set('targetArrivalDate', v)} placeholder="YYYY-MM-DD" />
+        </Row>
+        <Input label="Special Instructions" value={data.specialInstructions} onChange={v => set('specialInstructions', v)} multiline />
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '16px 0 8px' }}>
+          <h4 style={{ fontSize: 12, color: FR.slate, margin: 0, fontWeight: 600 }}>Packing List</h4>
+          <div style={{ fontSize: 10, color: FR.stone }}>AI will distribute units across cartons based on weight + ship method</div>
+        </div>
+
+        <div style={{ padding: 14, background: FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 6, marginBottom: 12 }}>
+          <Row cols="1fr 2fr">
+            <Input label="Unit Weight (grams)" value={unitWeightG} onChange={setUnitWeightG} placeholder="500" />
+            <Input label="AI Notes (optional)" value={aiNotes} onChange={setAiNotes} placeholder="e.g. use 50×30×25cm cartons, single colorway only" />
+          </Row>
+          <Input label="Anthropic API key" value={aiKey} onChange={setAiKey} placeholder="sk-ant-…" />
+          <button onClick={runAIPackingList} disabled={aiRunning || !aiKey}
+            style={{ padding: '7px 16px', background: aiRunning ? FR.stone : FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 11, cursor: aiRunning ? 'wait' : 'pointer', fontWeight: 600 }}>
+            {aiRunning ? 'Generating…' : '✨ Generate with AI'}
+          </button>
+          {aiError && <p style={{ fontSize: 10, color: '#C0392B', marginTop: 8 }}>{aiError}</p>}
+        </div>
+
+        <ArrayTable
+          headers={[
+            { key: 'cartonNum', label: '#', placeholder: '1' },
+            { key: 'colorway', label: 'Colorway' },
+            { key: 'sizeBreakdown', label: 'Size Breakdown', placeholder: 'S:10 M:20 L:15 XL:5' },
+            { key: 'qtyPerCarton', label: 'Qty', placeholder: '50' },
+            { key: 'dims', label: 'Dims (cm)', placeholder: '60x40x30' },
+            { key: 'grossWeight', label: 'Gross kg' },
+            { key: 'netWeight', label: 'Net kg' },
+          ]}
+          rows={data.cartons} onUpdate={updateC} onAdd={addC} onRemove={removeC} />
+      </fieldset>
     </div>
   );
 }

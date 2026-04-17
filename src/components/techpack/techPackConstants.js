@@ -20,7 +20,17 @@ export const BOM_COMPONENT_OPTIONS = [
   'Other',
 ];
 
-export const DEFAULT_LIBRARY = { bom: [], fabrics: [], trims: [], labels: [] };
+export const DEFAULT_LIBRARY = { bom: [], fabrics: [], trims: [], labels: [], locations: [], shipMethods: [] };
+
+export const STATUSES = ['Development', 'Sampling', 'Pre-Production', 'Production', 'Completed'];
+
+// Steps that are gated — read-only until status reaches Pre-Production
+// Indices: 1 = SKU, 11 = Labels, 12 = Order & Delivery
+export const LOCKED_STEPS = new Set([1, 11, 12]);
+export function isStepLocked(stepIndex, status) {
+  if (!LOCKED_STEPS.has(stepIndex)) return false;
+  return status === 'Development' || status === 'Sampling' || !status;
+}
 
 export const STEPS = [
   { id: 'identity', title: 'Identity & Classification', icon: '01' },

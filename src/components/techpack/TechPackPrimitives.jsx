@@ -2,8 +2,8 @@
 import { useState, useRef } from 'react';
 import { FR, FR_COLOR_OPTIONS, resizeImage } from './techPackConstants';
 
-const labelStyle = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' };
-const inputBase = { width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.slate, background: FR.white, outline: 'none', boxSizing: 'border-box' };
+export const labelStyle = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' };
+export const inputBase = { width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.slate, background: FR.white, outline: 'none', boxSizing: 'border-box' };
 
 export function Input({ label, value, onChange, placeholder, multiline }) {
   const props = { value, onChange: e => onChange(e.target.value), placeholder, style: inputBase, onFocus: e => e.target.style.borderColor = FR.soil, onBlur: e => e.target.style.borderColor = FR.sand };
@@ -147,6 +147,54 @@ export function LibraryPicker({ category, library, onSelect, buttonLabel }) {
             </button>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+// EditableSelect — dropdown with a saved library of options + ability to add new values
+// `options` is the full list of saved options (strings). `onAddOption(value)` persists new ones.
+export function EditableSelect({ label, value, onChange, options = [], onAddOption, placeholder = 'Type new value…' }) {
+  const [mode, setMode] = useState('select'); // 'select' | 'add'
+  const [newValue, setNewValue] = useState('');
+
+  const handleChange = (v) => {
+    if (v === '__add__') {
+      setMode('add');
+      setNewValue('');
+    } else {
+      onChange(v);
+    }
+  };
+
+  const commitAdd = () => {
+    const val = newValue.trim();
+    if (!val) { setMode('select'); return; }
+    onChange(val);
+    if (onAddOption && !options.includes(val)) onAddOption(val);
+    setMode('select');
+    setNewValue('');
+  };
+
+  const allOptions = [...new Set([...(options || []), ...(value ? [value] : [])])];
+
+  return (
+    <div style={{ marginBottom: 10 }}>
+      {label && <label style={labelStyle}>{label}</label>}
+      {mode === 'add' ? (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input autoFocus value={newValue} onChange={e => setNewValue(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') commitAdd(); if (e.key === 'Escape') setMode('select'); }}
+            placeholder={placeholder} style={inputBase} />
+          <button onClick={commitAdd} style={{ padding: '6px 12px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 11, cursor: 'pointer' }}>Save</button>
+          <button onClick={() => setMode('select')} style={{ padding: '6px 12px', background: 'none', color: FR.stone, border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 11, cursor: 'pointer' }}>Cancel</button>
+        </div>
+      ) : (
+        <select value={value || ''} onChange={e => handleChange(e.target.value)} style={inputBase}>
+          <option value="">Select…</option>
+          {allOptions.map(o => <option key={o} value={o}>{o}</option>)}
+          <option value="__add__">+ Add new…</option>
+        </select>
       )}
     </div>
   );
