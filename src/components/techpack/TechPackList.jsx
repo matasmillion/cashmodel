@@ -1,6 +1,6 @@
 // PLM Kanban board — drag-and-drop tech packs through lifecycle stages
 import { useEffect, useState, useRef } from 'react';
-import { Plus, Shirt, Copy, Trash2, GripVertical } from 'lucide-react';
+import { Plus, Shirt, Copy, Trash2, GripVertical, GitBranch, Search } from 'lucide-react';
 import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STATUSES } from './techPackConstants';
 import TechPackBuilder from './TechPackBuilder';
 import { listTechPacks, createTechPack, getTechPack, deleteTechPack, duplicateTechPack, saveTechPack } from '../../utils/techPackStore';
@@ -20,7 +20,7 @@ const STATUS_COLORS = {
   Released:         { bg: '#F2F2F2', border: '#E0E0E0', dot: '#3A3A3A' },
 };
 
-function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onDragStart, onDragEnd }) {
+function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onCreateVariant, onDragStart, onDragEnd }) {
   return (
     <div
       draggable
@@ -55,6 +55,12 @@ function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onDragStart, onDragEn
         </div>
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, marginTop: 6 }}>
+        {pack.style_name && (
+          <button onClick={e => { e.stopPropagation(); onCreateVariant(pack.id); }} title="Create Variant"
+            style={{ padding: 4, border: 'none', background: 'transparent', color: FR.soil, cursor: 'pointer' }}>
+            <GitBranch size={11} />
+          </button>
+        )}
         <button onClick={e => { e.stopPropagation(); onDuplicate(pack.id); }} title="Duplicate"
           style={{ padding: 4, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer' }}>
           <Copy size={11} />
@@ -68,7 +74,7 @@ function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onDragStart, onDragEn
   );
 }
 
-function KanbanColumn({ status, packs, onOpen, onDuplicate, onDelete, onDragStart, onDragEnd, onDrop, dragOverStatus, setDragOverStatus }) {
+function KanbanColumn({ status, packs, onOpen, onDuplicate, onDelete, onCreateVariant, onDragStart, onDragEnd, onDrop, dragOverStatus, setDragOverStatus }) {
   const colors = STATUS_COLORS[status] || STATUS_COLORS.Design;
   const isOver = dragOverStatus === status;
 
@@ -93,7 +99,7 @@ function KanbanColumn({ status, packs, onOpen, onDuplicate, onDelete, onDragStar
       <div style={{ minHeight: 60 }}>
         {packs.map(p => (
           <KanbanCard key={p.id} pack={p} onOpen={onOpen} onDuplicate={onDuplicate} onDelete={onDelete}
-            onDragStart={onDragStart} onDragEnd={onDragEnd} />
+            onCreateVariant={onCreateVariant} onDragStart={onDragStart} onDragEnd={onDragEnd} />
         ))}
       </div>
     </div>
@@ -106,6 +112,8 @@ export default function TechPackList() {
   const [activePack, setActivePack] = useState(null);
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverStatus, setDragOverStatus] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
 
   const refresh = async () => {
     setLoading(true);
@@ -137,6 +145,27 @@ export default function TechPackList() {
     refresh();
   };
 
+  const onCreateVariant = async (parentId) => {
+    const parent = await getTechPack(parentId);
+    if (!parent) return;
+    const variantData = {
+      ...(parent.data || DEFAULT_DATA),
+      styleName: (parent.data?.styleName || '') + ' — Variant',
+      parentStyleId: parentId,
+      parentStyleName: parent.data?.styleName || parent.style_name || '',
+      styleNumber: '',
+      skuPrefix: '',
+      status: 'Design',
+      revisions: [],
+      samples: [],
+      colorways: [{ name: '', frColor: '', pantone: '', hex: '' }],
+      quantities: [{ colorway: '', s: '', m: '', l: '', xl: '', unitCost: '' }],
+      cartons: [{ cartonNum: '', colorway: '', sizeBreakdown: '', qtyPerCarton: '', dims: '', grossWeight: '', netWeight: '' }],
+    };
+    const row = await createTechPack(variantData, parent.library || DEFAULT_LIBRARY);
+    setActivePack(row);
+  };
+
   const onDrop = async (id, newStatus) => {
     setDraggingId(null);
     // Normalize — map old status names if needed
@@ -166,11 +195,19 @@ export default function TechPackList() {
     return <TechPackBuilder pack={activePack} onBack={closeBuilder} />;
   }
 
-  // Group packs by status into columns
+  // Filter packs
+  const q = searchQuery.toLowerCase();
+  const allCategories = [...new Set(packs.map(p => p.product_category).filter(Boolean))];
+  const filtered = packs.filter(p => {
+    if (q && !(p.style_name || '').toLowerCase().includes(q) && !(p.product_category || '').toLowerCase().includes(q)) return false;
+    if (filterCategory && p.product_category !== filterCategory) return false;
+    return true;
+  });
+
+  // Group filtered packs by status into columns
   const columns = {};
   STATUSES.forEach(s => { columns[s] = []; });
-  packs.forEach(p => {
-    // Normalize old status names
+  filtered.forEach(p => {
     let st = p.status || 'Design';
     if (st === 'Development') st = 'Design';
     if (st === 'Completed') st = 'Released';
@@ -180,7 +217,7 @@ export default function TechPackList() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-3">
         <div>
           <h3 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 20, margin: 0 }}>Product Pipeline</h3>
           <p className="text-sm mt-1" style={{ color: FR.stone }}>Drag tech packs through stages. Click a card to open it.</p>
@@ -191,6 +228,26 @@ export default function TechPackList() {
           <Plus size={14} /> New Tech Pack
         </button>
       </div>
+
+      {/* Search + Filter bar */}
+      {packs.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
+          <div style={{ position: 'relative', flex: 1, maxWidth: 260 }}>
+            <Search size={13} style={{ position: 'absolute', left: 8, top: 8, color: FR.stone }} />
+            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search styles…"
+              style={{ width: '100%', padding: '6px 8px 6px 28px', border: `1px solid ${FR.sand}`, borderRadius: 6, fontSize: 12, color: FR.slate, background: 'white', outline: 'none', boxSizing: 'border-box' }} />
+          </div>
+          {allCategories.length > 1 && (
+            <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
+              style={{ padding: '6px 8px', border: `1px solid ${FR.sand}`, borderRadius: 6, fontSize: 11, color: FR.slate, background: 'white' }}>
+              <option value="">All categories</option>
+              {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+          <span style={{ fontSize: 10, color: FR.stone }}>{filtered.length} of {packs.length}</span>
+        </div>
+      )}
 
       {loading && <p style={{ color: FR.stone, fontSize: 12 }}>Loading…</p>}
 
@@ -209,7 +266,7 @@ export default function TechPackList() {
         <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8 }}>
           {STATUSES.map(status => (
             <KanbanColumn key={status} status={status} packs={columns[status]}
-              onOpen={openPack} onDuplicate={onDuplicate} onDelete={onDelete}
+              onOpen={openPack} onDuplicate={onDuplicate} onDelete={onDelete} onCreateVariant={onCreateVariant}
               onDragStart={setDraggingId} onDragEnd={() => setDraggingId(null)}
               onDrop={onDrop} dragOverStatus={dragOverStatus} setDragOverStatus={setDragOverStatus} />
           ))}

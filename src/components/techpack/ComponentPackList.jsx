@@ -1,7 +1,7 @@
 // Component Pack Kanban — drag-and-drop component specs through lifecycle stages
 
 import { useEffect, useState } from 'react';
-import { Plus, Boxes, Copy, Trash2, GripVertical } from 'lucide-react';
+import { Plus, Boxes, Copy, Trash2, GripVertical, Search } from 'lucide-react';
 import { FR, STATUSES, DEFAULT_COMPONENT_DATA } from './componentPackConstants';
 import ComponentPackBuilder from './ComponentPackBuilder';
 import { listComponentPacks, createComponentPack, getComponentPack, deleteComponentPack, duplicateComponentPack, saveComponentPack } from '../../utils/componentPackStore';
@@ -92,6 +92,8 @@ export default function ComponentPackList() {
   const [activePack, setActivePack] = useState(null);
   const [dragOverStatus, setDragOverStatus] = useState(null);
   const [draggingId, setDraggingId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
 
   const refresh = async () => {
     setLoading(true);
@@ -131,9 +133,17 @@ export default function ComponentPackList() {
 
   if (activePack) return <ComponentPackBuilder pack={activePack} onBack={closeBuilder} />;
 
+  const q = searchQuery.toLowerCase();
+  const allCats = [...new Set(packs.map(p => p.component_category).filter(Boolean))];
+  const filtered = packs.filter(p => {
+    if (q && !(p.component_name || '').toLowerCase().includes(q) && !(p.component_category || '').toLowerCase().includes(q) && !(p.supplier || '').toLowerCase().includes(q)) return false;
+    if (filterCategory && p.component_category !== filterCategory) return false;
+    return true;
+  });
+
   const columns = {};
   STATUSES.forEach(s => { columns[s] = []; });
-  packs.forEach(p => {
+  filtered.forEach(p => {
     let st = p.status || 'Design';
     if (!columns[st]) st = 'Design';
     columns[st].push(p);
@@ -152,6 +162,25 @@ export default function ComponentPackList() {
           <Plus size={14} /> New Component
         </button>
       </div>
+
+      {packs.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
+          <div style={{ position: 'relative', flex: 1, maxWidth: 260 }}>
+            <Search size={13} style={{ position: 'absolute', left: 8, top: 8, color: FR.stone }} />
+            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search components…"
+              style={{ width: '100%', padding: '6px 8px 6px 28px', border: `1px solid ${FR.sand}`, borderRadius: 6, fontSize: 12, color: FR.slate, background: 'white', outline: 'none', boxSizing: 'border-box' }} />
+          </div>
+          {allCats.length > 1 && (
+            <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
+              style={{ padding: '6px 8px', border: `1px solid ${FR.sand}`, borderRadius: 6, fontSize: 11, color: FR.slate, background: 'white' }}>
+              <option value="">All types</option>
+              {allCats.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+          <span style={{ fontSize: 10, color: FR.stone }}>{filtered.length} of {packs.length}</span>
+        </div>
+      )}
 
       {loading && <p style={{ color: FR.stone, fontSize: 12 }}>Loading…</p>}
 

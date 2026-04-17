@@ -4,10 +4,15 @@ import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, DEFAULT_DATA, co
 import { Input, Select, Row, SectionTitle, ArrayTable, PhotoUpload, LibraryPicker, FRColorCell, EditableSelect } from './TechPackPrimitives';
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
 
-export function StepIdentity({ data, set }) {
+export function StepIdentity({ data, set, bomCost, costVariance }) {
   return (
     <div>
       <SectionTitle>Identity & Classification</SectionTitle>
+      {data.parentStyleName && (
+        <div style={{ padding: 10, background: FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 6, marginBottom: 12, fontSize: 11, color: FR.stone }}>
+          Variant of <strong style={{ color: FR.slate }}>{data.parentStyleName}</strong>
+        </div>
+      )}
       <Row>
         <Input label="Style Name" value={data.styleName} onChange={v => set('styleName', v)} placeholder="e.g. Borderless Basic Hoodie" />
         <Select label="Product Category" value={data.productCategory} onChange={v => set('productCategory', v)}
@@ -26,8 +31,31 @@ export function StepIdentity({ data, set }) {
       <Select label="Status" value={data.status} onChange={v => set('status', v)}
         options={STATUSES} />
       <p style={{ fontSize: 10, color: FR.stone, marginTop: -4, lineHeight: 1.5 }}>
-        SKU & Numbering, Labels & Packaging, and Order & Delivery are locked during Development and Sampling. They unlock at Pre-Production.
+        SKU, Labels, and Order & Delivery are locked during Design, Sampling, and Testing. They unlock at Pre-Production.
       </p>
+
+      {/* Cost roll-up from BOM */}
+      {bomCost > 0 && (
+        <div style={{ marginTop: 12, padding: 12, background: FR.salt, borderRadius: 6, border: `1px solid ${FR.sand}` }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: 10, color: FR.soil, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Calculated FOB (from BOM)</div>
+              <div style={{ fontSize: 18, color: FR.slate, fontWeight: 600, fontFamily: "'Cormorant Garamond', serif" }}>${bomCost.toFixed(2)}</div>
+            </div>
+            {parseFloat(data.targetFOB) > 0 && (
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 10, color: FR.soil, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Variance</div>
+                <div style={{ fontSize: 14, color: costVariance > 0 ? '#C0392B' : '#4CAF7D', fontWeight: 600 }}>
+                  {costVariance > 0 ? '+' : ''}{costVariance.toFixed(2)}
+                  <span style={{ fontSize: 10, fontWeight: 400, marginLeft: 4 }}>
+                    ({costVariance > 0 ? 'over target' : 'under target'})
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

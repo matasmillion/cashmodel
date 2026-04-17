@@ -80,6 +80,11 @@ export const DEFAULT_DATA = {
   quantities: [{ colorway: '', s: '', m: '', l: '', xl: '', unitCost: '' }],
   shipTo: '', deliveryLocation: '', shipMethod: '', incoterm: 'FOB', targetShipDate: '', targetArrivalDate: '', freightForwarder: '', specialInstructions: '',
   cartons: [{ cartonNum: '', colorway: '', sizeBreakdown: '', qtyPerCarton: '', dims: '', grossWeight: '', netWeight: '' }],
+  // PLM features
+  parentStyleId: null,
+  parentStyleName: '',
+  revisions: [],
+  samples: [],
 };
 
 export const IMG_STEPS = new Set([3, 4, 5, 6, 7, 8, 9, 10, 11]);
@@ -101,6 +106,14 @@ export function resizeImage(file, maxW = 1200) {
     };
     reader.readAsDataURL(file);
   });
+}
+
+export const SAMPLE_TYPES = ['Proto', 'Fit', 'SMS (Salesman)', 'PP (Pre-Production)', 'TOP (Top of Production)'];
+export const SAMPLE_VERDICTS = ['Pending', 'Approved', 'Rejected', 'Revise'];
+
+export function computeBOMCost(data) {
+  const bom = data.bom || data.trims || [];
+  return bom.reduce((sum, item) => sum + (parseFloat(item.costPerUnit) || 0), 0);
 }
 
 export function computeCompletion(data) {
