@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-13T14:24:07.242Z",
+  "lastUpdated": "2026-04-17T09:33:29.204Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -56,6 +56,16 @@
       "components": [
         "UnitEconomics"
       ]
+    },
+    {
+      "id": "product",
+      "name": "Product",
+      "status": "built",
+      "components": [
+        "TechPackList",
+        "TechPackBuilder"
+      ],
+      "notes": "14-step tech pack builder. Auto-saves to Supabase. Generate & Download produces PDF + SVG. Pivots app toward a full ERP for solo fashion founders."
     },
     {
       "id": "fulfillment",
@@ -1034,6 +1044,21 @@
   ],
   "changelog": [
     {
+      "sha": "32c6f52",
+      "date": "2026-04-17T09:17:42+00:00",
+      "message": "Merge remote-tracking branch 'origin/main' into claude/build-cash-model-app-11msn"
+    },
+    {
+      "sha": "d851c40",
+      "date": "2026-04-17T12:15:22+03:00",
+      "message": "Add files via upload"
+    },
+    {
+      "sha": "4d37107",
+      "date": "2026-04-13T14:25:26+00:00",
+      "message": "Refresh state.json timestamp from local build"
+    },
+    {
       "sha": "98bef50",
       "date": "2026-04-13T14:18:25+00:00",
       "message": "Trigger fresh deploy — Supabase auth secrets now wired in"
@@ -1049,39 +1074,24 @@
       "message": "Add Supabase auth + cloud storage + live integrations panel"
     },
     {
+      "sha": "06f360c",
+      "date": "2026-04-12T18:00:02+00:00",
+      "message": "Trigger fresh deployment"
+    },
+    {
+      "sha": "2a6efaf",
+      "date": "2026-04-12T16:59:16+00:00",
+      "message": "Merge branch 'claude/build-cash-model-app-11msn'"
+    },
+    {
       "sha": "b22a3a9",
       "date": "2026-04-12T16:59:15+00:00",
       "message": "Add Foreign Resource FR monogram favicon"
     },
     {
-      "sha": "0520e0e",
-      "date": "2026-04-12T16:20:51+00:00",
-      "message": "Add parsing instructions textarea to rate card AI parser"
-    },
-    {
-      "sha": "eedf8bc",
-      "date": "2026-04-12T15:46:17+00:00",
-      "message": "Fix rate card AI parser — multi-file upload + inline API key"
-    },
-    {
-      "sha": "c418c94",
-      "date": "2026-04-12T15:32:19+00:00",
-      "message": "Fix empty screen crash by removing Clerk/Supabase from default build"
-    },
-    {
-      "sha": "041b6f2",
-      "date": "2026-04-12T15:21:56+00:00",
-      "message": "Make auth + persistence optional for instant preview"
-    },
-    {
-      "sha": "e1b2f36",
-      "date": "2026-04-11T18:27:48+00:00",
-      "message": "Replace Firebase with Clerk auth + Supabase, add 3PL rate card parser"
-    },
-    {
-      "sha": "032b363",
-      "date": "2026-04-05T15:30:59+00:00",
-      "message": "Add Firebase auth, Firestore persistence, and fix ScenarioManager"
+      "sha": "2e3825e",
+      "date": "2026-04-12T16:20:52+00:00",
+      "message": "Merge branch 'claude/build-cash-model-app-11msn'"
     }
   ]
 }

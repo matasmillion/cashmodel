@@ -195,6 +195,7 @@ const state = {
     { id: 'cashflow',      name: 'P&L + Cash',    status: 'built',       components: ['CashflowTable'] },
     { id: 'ad-units',      name: 'Creative',      status: 'built',       components: ['AdUnitModel'] },
     { id: 'unit-economics',name: 'Unit Econ',     status: 'built',       components: ['UnitEconomics'] },
+    { id: 'product',       name: 'Product',       status: 'built',       components: ['TechPackList', 'TechPackBuilder'], notes: '14-step tech pack builder. Auto-saves to Supabase. Generate & Download produces PDF + SVG. Pivots app toward a full ERP for solo fashion founders.' },
     { id: 'fulfillment',   name: 'Fulfillment',   status: 'built',       components: ['RateCardManager'], notes: 'AI rate card parser using Anthropic API' },
     { id: 'po-schedule',   name: 'PO Schedule',   status: 'built',       components: ['POSchedule'] },
     { id: 'pos',           name: 'New PO',        status: 'built',       components: ['POBuilder'] },

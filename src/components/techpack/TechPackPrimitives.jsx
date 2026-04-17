@@ -1,0 +1,163 @@
+// Reusable UI primitives for the Tech Pack builder — ported from the original artifact
+import { useState, useRef } from 'react';
+import { FR, FR_COLOR_OPTIONS, resizeImage } from './techPackConstants';
+
+const labelStyle = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' };
+const inputBase = { width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.slate, background: FR.white, outline: 'none', boxSizing: 'border-box' };
+
+export function Input({ label, value, onChange, placeholder, multiline }) {
+  const props = { value, onChange: e => onChange(e.target.value), placeholder, style: inputBase, onFocus: e => e.target.style.borderColor = FR.soil, onBlur: e => e.target.style.borderColor = FR.sand };
+  return (
+    <div style={{ marginBottom: 10 }}>
+      {label && <label style={labelStyle}>{label}</label>}
+      {multiline
+        ? <textarea {...props} rows={4} style={{ ...inputBase, resize: 'vertical', minHeight: 60 }} />
+        : <input {...props} />}
+    </div>
+  );
+}
+
+export function Select({ label, value, onChange, options }) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      {label && <label style={labelStyle}>{label}</label>}
+      <select value={value} onChange={e => onChange(e.target.value)} style={inputBase}>
+        <option value="">Select...</option>
+        {options.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+}
+
+export function Row({ children, cols }) {
+  return <div style={{ display: 'grid', gridTemplateColumns: cols || '1fr 1fr', gap: 12 }}>{children}</div>;
+}
+
+export function SectionTitle({ children }) {
+  return (
+    <div style={{ marginBottom: 16, marginTop: 8 }}>
+      <h3 style={{ fontFamily: "'Cormorant Garamond','Georgia',serif", fontSize: 20, fontWeight: 400, color: FR.slate, margin: 0, marginBottom: 4 }}>{children}</h3>
+      <div style={{ width: 50, height: 2, background: FR.soil }} />
+    </div>
+  );
+}
+
+export function ArrayTable({ headers, rows, onUpdate, onAdd, onRemove }) {
+  return (
+    <div style={{ marginBottom: 12, overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+        <thead>
+          <tr>
+            {headers.map(h => (
+              <th key={h.key} style={{ textAlign: 'left', padding: '5px 6px', background: FR.slate, color: FR.salt, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                {h.label}
+              </th>
+            ))}
+            <th style={{ width: 30, background: FR.slate }} />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, ri) => (
+            <tr key={ri} style={{ background: ri % 2 === 0 ? FR.salt : FR.white }}>
+              {headers.map(h => (
+                <td key={h.key} style={{ padding: '3px 4px', borderBottom: `1px solid ${FR.sand}` }}>
+                  {h.render
+                    ? h.render(row[h.key], v => onUpdate(ri, h.key, v), row)
+                    : <input value={row[h.key] || ''} onChange={e => onUpdate(ri, h.key, e.target.value)} placeholder={h.placeholder || ''}
+                        style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box' }} />}
+                </td>
+              ))}
+              <td style={{ padding: 3, borderBottom: `1px solid ${FR.sand}`, textAlign: 'center' }}>
+                {rows.length > 1 && (
+                  <button onClick={() => onRemove(ri)} style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 13 }}>×</button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button onClick={onAdd} style={{ marginTop: 6, padding: '4px 12px', background: 'none', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 10, color: FR.soil, cursor: 'pointer' }}>+ Add Row</button>
+    </div>
+  );
+}
+
+export function PhotoUpload({ label, slotKey, images, onUpload, onRemove }) {
+  const fileRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
+  const handleFiles = async (files) => {
+    for (const f of files) {
+      if (!f.type.startsWith('image/')) continue;
+      onUpload(slotKey, await resizeImage(f), f.name);
+    }
+  };
+  const slotImages = (images || []).filter(img => img.slot === slotKey);
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label style={labelStyle}>{label}</label>
+      <div onClick={() => fileRef.current?.click()}
+        onDrop={e => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files); }}
+        onDragOver={e => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        style={{ border: `2px dashed ${dragging ? FR.soil : FR.sand}`, borderRadius: 6, padding: slotImages.length ? 10 : 24, textAlign: 'center', cursor: 'pointer', background: dragging ? FR.sand : FR.white, transition: 'all 0.2s', minHeight: 50 }}>
+        <input ref={fileRef} type="file" accept="image/*" multiple onChange={e => { if (e.target.files.length) handleFiles(e.target.files); e.target.value = ''; }} style={{ display: 'none' }} />
+        {slotImages.length === 0 ? (
+          <>
+            <div style={{ fontSize: 20, color: FR.sand }}>+</div>
+            <div style={{ fontSize: 11, color: FR.stone }}>Click or drag photos here</div>
+            <div style={{ fontSize: 9, color: FR.sand, marginTop: 2 }}>JPG, PNG — auto-resized</div>
+          </>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {slotImages.map((img, i) => (
+              <div key={i} style={{ position: 'relative', width: 100, height: 100, borderRadius: 4, overflow: 'hidden', border: `1px solid ${FR.sand}` }}>
+                <img src={img.data} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <button onClick={e => { e.stopPropagation(); onRemove(slotKey, i); }}
+                  style={{ position: 'absolute', top: 2, right: 2, width: 18, height: 18, borderRadius: 9, background: FR.slate, color: FR.salt, border: 'none', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(58,58,58,0.7)', padding: '2px 4px', fontSize: 8, color: FR.salt, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{img.name || `Photo ${i + 1}`}</div>
+              </div>
+            ))}
+            <div style={{ width: 100, height: 100, borderRadius: 4, border: `2px dashed ${FR.sand}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: FR.stone, fontSize: 24 }}>+</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function LibraryPicker({ category, library, onSelect, buttonLabel }) {
+  const [open, setOpen] = useState(false);
+  const items = library[category] || [];
+  if (items.length === 0) return null;
+  return (
+    <div style={{ position: 'relative', display: 'inline-block', marginBottom: 8 }}>
+      <button onClick={() => setOpen(!open)} style={{ padding: '4px 10px', background: FR.white, border: `1px solid ${FR.soil}`, borderRadius: 3, fontSize: 10, color: FR.soil, cursor: 'pointer' }}>
+        {buttonLabel || `★ Pick from Library (${items.length})`}
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: FR.white, border: `1px solid ${FR.sand}`, borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 200, overflowY: 'auto', minWidth: 280, marginTop: 4 }}>
+          {items.map((item, i) => (
+            <button key={i} onClick={() => { onSelect(item); setOpen(false); }}
+              style={{ display: 'block', width: '100%', padding: '8px 12px', border: 'none', borderBottom: `1px solid ${FR.sand}`, background: i % 2 === 0 ? FR.salt : FR.white, cursor: 'pointer', textAlign: 'left', fontSize: 11, color: FR.slate }}>
+              <strong>{item.component || item.name || item.labelType}</strong>
+              <span style={{ color: FR.stone, marginLeft: 6 }}>
+                {item.type || item.fabric || ''}
+                {item.material ? ` · ${item.material}` : ''}
+                {item.color ? ` · ${item.color}` : ''}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function FRColorCell({ value, onChange }) {
+  return (
+    <select value={value || ''} onChange={e => onChange(e.target.value)}
+      style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 0', color: FR.slate, fontFamily: "'Helvetica Neue',sans-serif" }}>
+      <option value="">Select color...</option>
+      {FR_COLOR_OPTIONS.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+    </select>
+  );
+}

@@ -11,9 +11,10 @@ import IntegrationsPanel from './components/IntegrationsPanel';
 import RevenueForecast from './components/RevenueForecast';
 import AdUnitModel from './components/AdUnitModel';
 import RateCardManager from './components/RateCardManager';
+import TechPackList from './components/techpack/TechPackList';
 import AuthGate from './auth/AuthGate';
 import { supabase, IS_SUPABASE_ENABLED } from './lib/supabase';
-import { LayoutDashboard, Table2, Calculator, Package, Receipt, Sliders, Plug, TrendingUp, Film, CalendarRange, Truck, LogOut } from 'lucide-react';
+import { LayoutDashboard, Table2, Calculator, Package, Receipt, Sliders, Plug, TrendingUp, Film, CalendarRange, Truck, LogOut, Shirt } from 'lucide-react';
 
 const tabs = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -21,6 +22,7 @@ const tabs = [
   { id: 'cashflow', label: 'P&L + Cash', icon: Table2 },
   { id: 'ad-units', label: 'Creative', icon: Film },
   { id: 'unit-economics', label: 'Unit Econ', icon: Calculator },
+  { id: 'product', label: 'Product', icon: Shirt },
   { id: 'fulfillment', label: 'Fulfillment', icon: Truck },
   { id: 'po-schedule', label: 'PO Schedule', icon: CalendarRange },
   { id: 'pos', label: 'New PO', icon: Package },
@@ -97,6 +99,7 @@ function Dashboard() {
         {state.activeTab === 'cashflow' && <CashflowTable />}
         {state.activeTab === 'ad-units' && <AdUnitModel />}
         {state.activeTab === 'unit-economics' && <UnitEconomics />}
+        {state.activeTab === 'product' && <TechPackList />}
         {state.activeTab === 'fulfillment' && <RateCardManager />}
         {state.activeTab === 'po-schedule' && <POSchedule />}
         {state.activeTab === 'pos' && <POBuilder />}
