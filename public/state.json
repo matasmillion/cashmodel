@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-19T09:18:32.855Z",
+  "lastUpdated": "2026-04-19T09:58:18.426Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "5b05d81",
+      "date": "2026-04-19T09:19:18+00:00",
+      "message": "Auto-crop cover photos to the subject's bounding box"
+    },
+    {
       "sha": "a28f9ea",
       "date": "2026-04-19T09:14:19+00:00",
       "message": "Deep-link routing: PLM section, active pack, and wizard step in URL"
@@ -1087,11 +1092,6 @@
       "sha": "30731a3",
       "date": "2026-04-17T11:57:33+00:00",
       "message": "Tech Pack: status gating, editable location dropdowns, AI packing list"
-    },
-    {
-      "sha": "ada6439",
-      "date": "2026-04-17T11:52:25+00:00",
-      "message": "Restructure BOM into unified Bill of Materials table"
     }
   ]
 }

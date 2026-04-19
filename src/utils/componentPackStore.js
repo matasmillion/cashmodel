@@ -26,18 +26,15 @@ function extractCover(images) {
   return cover ? cover.data : null;
 }
 
+// See listTechPacks comment — avoid pulling the images JSONB column from
+// Supabase because it's the source of heavy lag when components have photos.
 export async function listComponentPacks() {
   if (IS_SUPABASE_ENABLED) {
     const { data, error } = await supabase
       .from('component_packs')
-      .select('id, component_name, component_category, status, supplier, cost_per_unit, currency, updated_at, created_at, images')
+      .select('id, component_name, component_category, status, supplier, cost_per_unit, currency, updated_at, created_at')
       .order('updated_at', { ascending: false });
-    if (!error && data) {
-      return data.map(r => {
-        const { images, ...rest } = r;
-        return { ...rest, cover_image: extractCover(images) };
-      });
-    }
+    if (!error && data) return data.map(r => ({ ...r, cover_image: null }));
   }
   return readLocal()
     .map(p => ({

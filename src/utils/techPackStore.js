@@ -41,21 +41,20 @@ function extractCover(images) {
   return cover ? cover.data : null;
 }
 
-// List all tech packs. Images are fetched so list cards can show the cover
-// thumbnail — the full images array is trimmed to just the cover on return.
+// List all tech packs. Deliberately do NOT fetch the images JSONB column from
+// Supabase — a pack with reference photos can be multiple MB per row and
+// downloading the full catalogue of images on every list render freezes the
+// browser. LocalStorage always has images inline so the fallback still shows
+// thumbnails; Supabase users get placeholder icons until a dedicated
+// cover_image column is migrated.
 export async function listTechPacks() {
   if (IS_SUPABASE_ENABLED) {
     const { data, error } = await supabase
       .from('tech_packs')
-      .select('id, style_name, product_category, status, completion_pct, updated_at, created_at, images')
+      .select('id, style_name, product_category, status, completion_pct, updated_at, created_at')
       .order('updated_at', { ascending: false });
     if (error) console.error('listTechPacks:', error);
-    if (data) {
-      return data.map(r => {
-        const { images, ...rest } = r;
-        return { ...rest, cover_image: extractCover(images) };
-      });
-    }
+    if (data) return data.map(r => ({ ...r, cover_image: null }));
   }
   // Fallback — localStorage
   return readLocal()
