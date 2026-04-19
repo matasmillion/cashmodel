@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-19T09:13:50.522Z",
+  "lastUpdated": "2026-04-19T09:18:32.855Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "a28f9ea",
+      "date": "2026-04-19T09:14:19+00:00",
+      "message": "Deep-link routing: PLM section, active pack, and wizard step in URL"
+    },
+    {
       "sha": "e324a5a",
       "date": "2026-04-19T08:47:43+00:00",
       "message": "Sync active tab with URL hash so refresh + back/forward work"
@@ -1087,11 +1092,6 @@
       "sha": "ada6439",
       "date": "2026-04-17T11:52:25+00:00",
       "message": "Restructure BOM into unified Bill of Materials table"
-    },
-    {
-      "sha": "8cab126",
-      "date": "2026-04-17T09:33:58+00:00",
-      "message": "Add Product tab with Tech Pack Builder — pivot toward ERP"
     }
   ]
 }

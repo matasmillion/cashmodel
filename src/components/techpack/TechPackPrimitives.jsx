@@ -1,6 +1,7 @@
 // Reusable UI primitives for the Tech Pack builder — ported from the original artifact
 import { useState, useRef } from 'react';
 import { FR, FR_COLOR_OPTIONS, resizeImage } from './techPackConstants';
+import { autoCropDataUrl } from '../../utils/autoCrop';
 
 export const labelStyle = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' };
 export const inputBase = { width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.slate, background: FR.white, outline: 'none', boxSizing: 'border-box' };
@@ -126,18 +127,37 @@ export function PhotoUpload({ label, slotKey, images, onUpload, onRemove }) {
 
 // CoverPhoto — single-image drop zone used as the "hero" reference card on
 // the first step of each builder. Upload replaces the existing photo in the
-// slot so there's only ever one cover.
-export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height = 240 }) {
+// slot so there's only ever one cover. Auto-crop tightens the photo to the
+// bounding box of the subject (background sampled from corners).
+export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height = 240, autoCropOnUpload = true }) {
   const fileRef = useRef(null);
   const [dragging, setDragging] = useState(false);
+  const [cropping, setCropping] = useState(false);
   const slotImages = (images || []).filter(img => img.slot === slotKey);
   const current = slotImages[0];
 
   const handleFile = async (file) => {
     if (!file || !file.type.startsWith('image/')) return;
-    // Remove any existing cover first so the slot stays single-image
     if (current) onRemove(slotKey, 0);
-    onUpload(slotKey, await resizeImage(file), file.name);
+    let dataUrl = await resizeImage(file);
+    if (autoCropOnUpload) {
+      try { dataUrl = await autoCropDataUrl(dataUrl); } catch (e) { /* keep original */ }
+    }
+    onUpload(slotKey, dataUrl, file.name);
+  };
+
+  const handleAutoCropExisting = async () => {
+    if (!current || cropping) return;
+    setCropping(true);
+    try {
+      const cropped = await autoCropDataUrl(current.data);
+      if (cropped !== current.data) {
+        onRemove(slotKey, 0);
+        onUpload(slotKey, cropped, current.name);
+      }
+    } finally {
+      setCropping(false);
+    }
   };
 
   return (
@@ -167,8 +187,16 @@ export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height 
           <>
             <img src={current.data} alt={current.name || 'Cover'}
               style={{ width: '100%', height: '100%', objectFit: 'contain', background: FR.white }} />
-            <button onClick={e => { e.stopPropagation(); onRemove(slotKey, 0); }}
-              style={{ position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 12, background: FR.slate, color: FR.salt, border: 'none', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+            <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
+              <button onClick={e => { e.stopPropagation(); handleAutoCropExisting(); }} disabled={cropping}
+                title="Auto-crop to subject"
+                style={{ padding: '4px 10px', borderRadius: 12, background: FR.soil, color: FR.salt, border: 'none', fontSize: 10, cursor: cropping ? 'wait' : 'pointer', fontWeight: 600, letterSpacing: 0.3 }}>
+                {cropping ? 'Cropping…' : 'Auto-crop'}
+              </button>
+              <button onClick={e => { e.stopPropagation(); onRemove(slotKey, 0); }}
+                title="Remove"
+                style={{ width: 24, height: 24, borderRadius: 12, background: FR.slate, color: FR.salt, border: 'none', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+            </div>
             <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(58,58,58,0.75)', padding: '4px 10px', fontSize: 10, color: FR.salt }}>
               {current.name || 'Cover image'} · click or drop a new file to replace
             </div>
@@ -177,7 +205,7 @@ export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height 
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 32, color: FR.sand, lineHeight: 1 }}>+</div>
             <div style={{ fontSize: 12, color: FR.stone, marginTop: 6 }}>Click or drop the product render here</div>
-            <div style={{ fontSize: 10, color: FR.sand, marginTop: 3 }}>This image becomes the cover card on the list view</div>
+            <div style={{ fontSize: 10, color: FR.sand, marginTop: 3 }}>Auto-cropped to the subject · becomes the cover card on the list view</div>
           </div>
         )}
       </div>
