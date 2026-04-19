@@ -45,6 +45,12 @@ export const DEFAULT_COMPONENT_DATA = {
   // Page 2 — Specification & Artwork
   pomMethod: 'As appropriate for component type. Specify instrument and conditions.',
   poms: [{ measurement: '', spec: '', unit: 'mm', tolerance: '', method: '' }],
+
+  // Page 3 — BOM & Color
+  materials: [{ component: '', typeDescription: '', composition: '', weightGauge: '', supplier: '', notes: '' }],
+  colorwaysList: [{ name: '', frColor: '', pantone: '', hex: '', swatch: '', approvalStatus: 'Pending' }],
+  artworkPlacements: [{ placement: '', artworkFile: '', method: '', size: '', position: '', color: '', notes: '' }],
 };
 
 export const POM_UNITS = ['mm', 'cm', 'in', 'other'];
+export const APPROVAL_STATUSES = ['Pending', 'Approved', 'Rejected', 'Revise'];

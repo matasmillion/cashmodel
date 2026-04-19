@@ -4,9 +4,9 @@
 //   3. BOM & Color               — placeholder
 //   4. Construction, QC & Approval — placeholder
 
-import { STATUSES, COMPONENT_TYPES, POM_UNITS } from './componentPackConstants';
-import { FR } from './techPackConstants';
-import { Input, Select, Row, SectionTitle, CoverPhoto, EditableSelect, PhotoUpload, ArrayTable } from './TechPackPrimitives';
+import { STATUSES, COMPONENT_TYPES, POM_UNITS, APPROVAL_STATUSES } from './componentPackConstants';
+import { FR, FR_COLOR_OPTIONS } from './techPackConstants';
+import { Input, Select, Row, SectionTitle, CoverPhoto, EditableSelect, PhotoUpload, ArrayTable, FRColorCell } from './TechPackPrimitives';
 
 function Signature({ label, value, onNameChange, onDateChange }) {
   const v = value || { name: '', date: '' };
@@ -140,7 +140,100 @@ export function StepSpec({ data, set, images, onUpload, onRemove }) {
     </div>
   );
 }
-export function StepBOMColor() { return <ComingSoon title="BOM & Color" />; }
+export function StepBOMColor({ data, set, images, onUpload, onRemove, existingSuppliers = [] }) {
+  // Materials
+  const materials = data.materials && data.materials.length ? data.materials : [{ component: '', typeDescription: '', composition: '', weightGauge: '', supplier: '', notes: '' }];
+  const updateMat = (i, k, v) => set('materials', materials.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addMat = () => set('materials', [...materials, { component: '', typeDescription: '', composition: '', weightGauge: '', supplier: '', notes: '' }]);
+  const removeMat = (i) => set('materials', materials.filter((_, idx) => idx !== i));
+
+  // Colorways
+  const colorways = data.colorwaysList && data.colorwaysList.length ? data.colorwaysList : [{ name: '', frColor: '', pantone: '', hex: '', swatch: '', approvalStatus: 'Pending' }];
+  const updateCW = (i, k, v) => {
+    set('colorwaysList', colorways.map((r, idx) => {
+      if (idx !== i) return r;
+      if (k === 'frColor') {
+        const match = FR_COLOR_OPTIONS.find(c => c.name === v);
+        return { ...r, frColor: v, hex: match ? match.hex : r.hex };
+      }
+      return { ...r, [k]: v };
+    }));
+  };
+  const addCW = () => set('colorwaysList', [...colorways, { name: '', frColor: '', pantone: '', hex: '', swatch: '', approvalStatus: 'Pending' }]);
+  const removeCW = (i) => set('colorwaysList', colorways.filter((_, idx) => idx !== i));
+
+  // Artwork placements
+  const placements = data.artworkPlacements && data.artworkPlacements.length ? data.artworkPlacements : [{ placement: '', artworkFile: '', method: '', size: '', position: '', color: '', notes: '' }];
+  const updateAP = (i, k, v) => set('artworkPlacements', placements.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addAP = () => set('artworkPlacements', [...placements, { placement: '', artworkFile: '', method: '', size: '', position: '', color: '', notes: '' }]);
+  const removeAP = (i) => set('artworkPlacements', placements.filter((_, idx) => idx !== i));
+
+  const sectionLabel = (text) => ({ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' });
+
+  return (
+    <div>
+      <SectionTitle>BOM & Color</SectionTitle>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel()}>Materials</label>
+        <ArrayTable
+          headers={[
+            { key: 'component',       label: 'Component',        placeholder: 'Shell / Trim / Thread' },
+            { key: 'typeDescription', label: 'Type / Description', placeholder: 'Twill, YKK #5, etc.' },
+            { key: 'composition',     label: 'Composition',      placeholder: '100% Cotton' },
+            { key: 'weightGauge',     label: 'Weight / Gauge',   placeholder: '400 GSM / 6mm' },
+            { key: 'supplier',        label: 'Supplier',         render: (v, onChange) => (
+              <EditableSelect value={v} onChange={onChange} options={existingSuppliers} placeholder="Add new…" />
+            ) },
+            { key: 'notes',           label: 'Notes',            placeholder: 'Optional' },
+          ]}
+          rows={materials} onUpdate={updateMat} onAdd={addMat} onRemove={removeMat} />
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel()}>Colorway Specification</label>
+        <ArrayTable
+          headers={[
+            { key: 'name',           label: 'Name',           placeholder: 'Natural / Black' },
+            { key: 'frColor',        label: 'FR Color',       render: (v, onChange) => <FRColorCell value={v} onChange={onChange} /> },
+            { key: 'pantone',        label: 'Pantone',        placeholder: '19-4305' },
+            { key: 'hex',            label: 'Hex',            placeholder: '#3A3A3A' },
+            { key: 'swatch',         label: 'Swatch',         placeholder: 'Physical ref #' },
+            { key: 'approvalStatus', label: 'Approval',       render: (v, onChange) => (
+              <select value={v || 'Pending'} onChange={e => onChange(e.target.value)}
+                style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box' }}>
+                {APPROVAL_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            ) },
+          ]}
+          rows={colorways} onUpdate={updateCW} onAdd={addCW} onRemove={removeCW} />
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel()}>Artwork / Marking Placement</label>
+        <Row>
+          <PhotoUpload label="Face — Position, Size, Method" slotKey="component-artwork-face" images={images} onUpload={onUpload} onRemove={onRemove} />
+          <PhotoUpload label="Back — Position, Size, Method" slotKey="component-artwork-back" images={images} onUpload={onUpload} onRemove={onRemove} />
+        </Row>
+      </div>
+
+      <div style={{ marginBottom: 10 }}>
+        <label style={sectionLabel()}>Placement</label>
+        <ArrayTable
+          headers={[
+            { key: 'placement',   label: 'Placement',    placeholder: 'Face / Back / Side' },
+            { key: 'artworkFile', label: 'Artwork File', placeholder: 'logo-v1.ai' },
+            { key: 'method',      label: 'Method',       placeholder: 'Embroidery / Print / Emboss' },
+            { key: 'size',        label: 'Size',         placeholder: '40 × 15 mm' },
+            { key: 'position',    label: 'Position',     placeholder: '20 mm from top' },
+            { key: 'color',       label: 'Color',        placeholder: 'Black / Pantone ref' },
+            { key: 'notes',       label: 'Notes',        placeholder: 'Optional' },
+          ]}
+          rows={placements} onUpdate={updateAP} onAdd={addAP} onRemove={removeAP} />
+      </div>
+    </div>
+  );
+}
 export function StepQC() { return <ComingSoon title="Construction, QC & Approval" />; }
 
 export const COMPONENT_STEP_FNS = [StepCover, StepSpec, StepBOMColor, StepQC];
