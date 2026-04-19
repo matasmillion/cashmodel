@@ -9,6 +9,7 @@ import { Plus, Boxes, Copy, Trash2, Search, ChevronDown, ChevronRight, Package }
 import { FR, DEFAULT_COMPONENT_DATA, BOM_COMPONENT_OPTIONS } from './componentPackConstants';
 import ComponentPackBuilder from './ComponentPackBuilder';
 import { listComponentPacks, createComponentPack, getComponentPack, deleteComponentPack, duplicateComponentPack } from '../../utils/componentPackStore';
+import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
 
 function formatDate(iso) {
   if (!iso) return '';
@@ -105,19 +106,56 @@ export default function ComponentPackList() {
 
   useEffect(() => { refresh(); }, []);
 
+  // Open the pack referenced by the URL on mount + when the hash changes.
+  useEffect(() => {
+    let cancelled = false;
+    const tryOpenFromHash = async () => {
+      const { section, packId } = parsePLMHash();
+      if (section !== 'components') return;
+      if (packId && activePack?.id === packId) return;
+      if (!packId && activePack) {
+        setActivePack(null);
+        return;
+      }
+      if (packId) {
+        const full = await getComponentPack(packId);
+        if (cancelled) return;
+        if (full) setActivePack(full);
+        else setPLMHash({ section: 'components' });
+      }
+    };
+    tryOpenFromHash();
+    const onHash = () => tryOpenFromHash();
+    window.addEventListener('hashchange', onHash);
+    window.addEventListener('popstate', onHash);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('hashchange', onHash);
+      window.removeEventListener('popstate', onHash);
+    };
+  }, [activePack?.id]);
+
   const openPack = async (id) => {
     const full = await getComponentPack(id);
-    if (full) setActivePack(full);
+    if (full) {
+      setActivePack(full);
+      setPLMHash({ section: 'components', packId: id });
+    }
   };
 
   const createNew = async () => {
     const row = await createComponentPack(DEFAULT_COMPONENT_DATA);
     setActivePack(row);
+    setPLMHash({ section: 'components', packId: row.id });
   };
 
   const onDuplicate = async (id) => { await duplicateComponentPack(id); refresh(); };
   const onDelete = async (id) => { if (!confirm('Delete this component?')) return; await deleteComponentPack(id); refresh(); };
-  const closeBuilder = async () => { setActivePack(null); refresh(); };
+  const closeBuilder = async () => {
+    setActivePack(null);
+    setPLMHash({ section: 'components' });
+    refresh();
+  };
 
   if (activePack) return <ComponentPackBuilder pack={activePack} onBack={closeBuilder} />;
 

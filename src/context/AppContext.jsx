@@ -40,8 +40,10 @@ const VALID_TABS = new Set([
 
 function readTabFromHash() {
   if (typeof window === 'undefined') return null;
-  const h = (window.location.hash || '').replace(/^#\/?/, '');
-  return VALID_TABS.has(h) ? h : null;
+  const raw = (window.location.hash || '').replace(/^#\/?/, '');
+  // First segment is the tab; sub-segments belong to nested routing (PLM, etc.)
+  const first = raw.split('/')[0];
+  return VALID_TABS.has(first) ? first : null;
 }
 
 function loadInitialState() {
@@ -161,22 +163,21 @@ export function AppProvider({ children }) {
   const saveTimerRef = useRef(null);
   const userIdRef = useRef(null);
 
-  // Sync activeTab with URL hash so refresh + back/forward + deep-linking work.
+  // Sync activeTab with URL hash. Only touches the first segment, so nested
+  // routing inside a tab (e.g. #product/styles/abc/5) is preserved when the
+  // user is already on that tab.
   useEffect(() => {
-    const desired = `#${state.activeTab}`;
-    if (window.location.hash !== desired) {
-      // history.replaceState so switching tabs doesn't spam the back button.
-      // Use pushState only when the user navigates intentionally — which for
-      // tab changes is already the case, so pushState gives proper back nav.
-      window.history.pushState(null, '', desired);
+    const currentFirst = (window.location.hash || '').replace(/^#\/?/, '').split('/')[0];
+    if (currentFirst !== state.activeTab) {
+      window.history.pushState(null, '', `#${state.activeTab}`);
     }
   }, [state.activeTab]);
 
   useEffect(() => {
     const onHashChange = () => {
-      const h = (window.location.hash || '').replace(/^#\/?/, '');
-      if (VALID_TABS.has(h) && h !== state.activeTab) {
-        dispatch({ type: 'SET_TAB', payload: h });
+      const first = (window.location.hash || '').replace(/^#\/?/, '').split('/')[0];
+      if (VALID_TABS.has(first) && first !== state.activeTab) {
+        dispatch({ type: 'SET_TAB', payload: first });
       }
     };
     window.addEventListener('hashchange', onHashChange);

@@ -8,6 +8,7 @@ import { saveTechPack } from '../../utils/techPackStore';
 import { generateTechPackPDF } from '../../utils/techPackPDF';
 import { generateTechPackSVG, svgToBlob } from '../../utils/techPackSVG';
 import { resizeImage } from './techPackConstants';
+import { parsePLMHash, replacePLMHash } from '../../utils/plmRouting';
 
 function sanitizeFilename(s) {
   return (s || 'techpack').replace(/[^\w\-]+/g, '_').slice(0, 60);
@@ -128,7 +129,11 @@ function SamplePanel({ samples, onAdd, onUpdate, onRemove }) {
 
 // ─── Main Builder ────────────────────────────────────────────────────────────
 export default function TechPackBuilder({ pack, onBack }) {
-  const [step, setStep] = useState(0);
+  // Initial step comes from the URL so refresh keeps you on the same wizard step.
+  const [step, setStep] = useState(() => {
+    const { packId, step } = parsePLMHash();
+    return packId === pack.id ? Math.min(step, STEPS.length - 1) : 0;
+  });
   const [data, setData] = useState(pack.data || DEFAULT_DATA);
   const [images, setImages] = useState(pack.images || []);
   const [library, setLibrary] = useState(pack.library || DEFAULT_LIBRARY);
@@ -136,6 +141,28 @@ export default function TechPackBuilder({ pack, onBack }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState(null);
   const saveTimerRef = useRef(null);
+
+  // Push step into URL on every change (replaceState — flicking through
+  // 14 steps shouldn't pollute the back stack).
+  useEffect(() => {
+    replacePLMHash({ section: 'styles', packId: pack.id, step });
+  }, [step, pack.id]);
+
+  // Browser back/forward → keep wizard step in sync with the URL
+  useEffect(() => {
+    const sync = () => {
+      const { packId, step: urlStep } = parsePLMHash();
+      if (packId === pack.id && urlStep !== step) {
+        setStep(Math.min(urlStep, STEPS.length - 1));
+      }
+    };
+    window.addEventListener('hashchange', sync);
+    window.addEventListener('popstate', sync);
+    return () => {
+      window.removeEventListener('hashchange', sync);
+      window.removeEventListener('popstate', sync);
+    };
+  }, [step, pack.id]);
 
   // Derived: BOM cost roll-up
   const bomCost = computeBOMCost(data);

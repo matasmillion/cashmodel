@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-19T08:47:31.256Z",
+  "lastUpdated": "2026-04-19T09:13:50.522Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "e324a5a",
+      "date": "2026-04-19T08:47:43+00:00",
+      "message": "Sync active tab with URL hash so refresh + back/forward work"
+    },
+    {
       "sha": "3a72675",
       "date": "2026-04-19T08:40:22+00:00",
       "message": "PLM: cover image first, list thumbnails, library grouped by category"
@@ -1087,11 +1092,6 @@
       "sha": "8cab126",
       "date": "2026-04-17T09:33:58+00:00",
       "message": "Add Product tab with Tech Pack Builder — pivot toward ERP"
-    },
-    {
-      "sha": "32c6f52",
-      "date": "2026-04-17T09:17:42+00:00",
-      "message": "Merge remote-tracking branch 'origin/main' into claude/build-cash-model-app-11msn"
     }
   ]
 }

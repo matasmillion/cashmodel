@@ -4,6 +4,7 @@ import { Plus, Shirt, Copy, Trash2, GripVertical, GitBranch, Search } from 'luci
 import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STATUSES } from './techPackConstants';
 import TechPackBuilder from './TechPackBuilder';
 import { listTechPacks, createTechPack, getTechPack, deleteTechPack, duplicateTechPack, saveTechPack } from '../../utils/techPackStore';
+import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
 
 function formatDate(iso) {
   if (!iso) return '';
@@ -131,14 +132,51 @@ export default function TechPackList() {
 
   useEffect(() => { refresh(); }, []);
 
+  // If the URL points to a specific pack on mount or hashchange, open it.
+  useEffect(() => {
+    let cancelled = false;
+    const tryOpenFromHash = async () => {
+      const { section, packId } = parsePLMHash();
+      if (section !== 'styles') return;
+      // Already showing this pack? Skip.
+      if (packId && activePack?.id === packId) return;
+      if (!packId && activePack) {
+        setActivePack(null);
+        return;
+      }
+      if (packId) {
+        const full = await getTechPack(packId);
+        if (cancelled) return;
+        if (full) setActivePack(full);
+        else {
+          // Pack disappeared (deleted) — clean up the URL
+          setPLMHash({ section: 'styles' });
+        }
+      }
+    };
+    tryOpenFromHash();
+    const onHash = () => tryOpenFromHash();
+    window.addEventListener('hashchange', onHash);
+    window.addEventListener('popstate', onHash);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('hashchange', onHash);
+      window.removeEventListener('popstate', onHash);
+    };
+  }, [activePack?.id]);
+
   const openPack = async (id) => {
     const full = await getTechPack(id);
-    if (full) setActivePack(full);
+    if (full) {
+      setActivePack(full);
+      setPLMHash({ section: 'styles', packId: id });
+    }
   };
 
   const createNew = async () => {
     const row = await createTechPack(DEFAULT_DATA, DEFAULT_LIBRARY);
     setActivePack(row);
+    setPLMHash({ section: 'styles', packId: row.id });
   };
 
   const onDuplicate = async (id) => {
@@ -171,6 +209,7 @@ export default function TechPackList() {
     };
     const row = await createTechPack(variantData, parent.library || DEFAULT_LIBRARY);
     setActivePack(row);
+    setPLMHash({ section: 'styles', packId: row.id });
   };
 
   const onDrop = async (id, newStatus) => {
@@ -195,6 +234,7 @@ export default function TechPackList() {
 
   const closeBuilder = async () => {
     setActivePack(null);
+    setPLMHash({ section: 'styles' });
     refresh();
   };
 

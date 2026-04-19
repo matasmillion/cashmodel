@@ -1,13 +1,33 @@
 // PLM container — sub-tabs for Styles (tech packs) and Components (component packs)
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Shirt, Boxes } from 'lucide-react';
 import { FR } from './techPackConstants';
 import TechPackList from './TechPackList';
 import ComponentPackList from './ComponentPackList';
+import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
 
 export default function PLMView() {
-  const [view, setView] = useState('styles');
+  const [view, setView] = useState(() => parsePLMHash().section || 'styles');
+
+  // Keep section in sync with the URL — back/forward, manual edits, deep links
+  useEffect(() => {
+    const sync = () => {
+      const { section } = parsePLMHash();
+      if (section && section !== view) setView(section);
+    };
+    window.addEventListener('hashchange', sync);
+    window.addEventListener('popstate', sync);
+    return () => {
+      window.removeEventListener('hashchange', sync);
+      window.removeEventListener('popstate', sync);
+    };
+  }, [view]);
+
+  const switchView = (next) => {
+    setView(next);
+    setPLMHash({ section: next });
+  };
 
   const tabStyle = (active) => ({
     padding: '8px 16px',
@@ -30,10 +50,10 @@ export default function PLMView() {
         <h2 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 24, margin: 0, marginRight: 16 }}>
           Product Lifecycle Management
         </h2>
-        <button onClick={() => setView('styles')} style={tabStyle(view === 'styles')}>
+        <button onClick={() => switchView('styles')} style={tabStyle(view === 'styles')}>
           <Shirt size={13} /> Styles
         </button>
-        <button onClick={() => setView('components')} style={tabStyle(view === 'components')}>
+        <button onClick={() => switchView('components')} style={tabStyle(view === 'components')}>
           <Boxes size={13} /> Components
         </button>
       </div>

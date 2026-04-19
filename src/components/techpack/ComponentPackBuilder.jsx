@@ -10,13 +10,38 @@ import { FR_COLOR_OPTIONS } from './techPackConstants';
 import { COMPONENT_STEP_FNS } from './ComponentPackSteps';
 import ComponentPackPagePreview from './ComponentPackPagePreview';
 import { saveComponentPack } from '../../utils/componentPackStore';
+import { parsePLMHash, replacePLMHash } from '../../utils/plmRouting';
 
 export default function ComponentPackBuilder({ pack, onBack }) {
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(() => {
+    const { packId, step } = parsePLMHash();
+    return packId === pack.id ? Math.min(step, COMPONENT_STEPS.length - 1) : 0;
+  });
   const [data, setData] = useState(pack.data || DEFAULT_COMPONENT_DATA);
   const [images, setImages] = useState(pack.images || []);
   const [saving, setSaving] = useState(false);
   const saveTimerRef = useRef(null);
+
+  // Push step into URL on every change so refresh keeps you on the same step.
+  useEffect(() => {
+    replacePLMHash({ section: 'components', packId: pack.id, step });
+  }, [step, pack.id]);
+
+  // Sync from browser back/forward
+  useEffect(() => {
+    const sync = () => {
+      const { packId, step: urlStep } = parsePLMHash();
+      if (packId === pack.id && urlStep !== step) {
+        setStep(Math.min(urlStep, COMPONENT_STEPS.length - 1));
+      }
+    };
+    window.addEventListener('hashchange', sync);
+    window.addEventListener('popstate', sync);
+    return () => {
+      window.removeEventListener('hashchange', sync);
+      window.removeEventListener('popstate', sync);
+    };
+  }, [step, pack.id]);
 
   useEffect(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
