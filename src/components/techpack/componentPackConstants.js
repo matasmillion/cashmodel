@@ -50,7 +50,18 @@ export const DEFAULT_COMPONENT_DATA = {
   materials: [{ component: '', typeDescription: '', composition: '', weightGauge: '', supplier: '', notes: '' }],
   colorwaysList: [{ name: '', frColor: '', pantone: '', hex: '', swatch: '', approvalStatus: 'Pending' }],
   artworkPlacements: [{ placement: '', artworkFile: '', method: '', size: '', position: '', color: '', notes: '' }],
+
+  // Page 4 — Construction, QC & Approval
+  processSpec: [{ operation: '', type: '', specification: '', notes: '' }],
+  testingStandards: [{ test: '', standardRequirement: '', testMethod: '', passFail: 'Pending' }],
+  revisions: [],
+  finalApproval: {
+    designer:   { name: '', signature: '', date: '' },
+    brandOwner: { name: '', signature: '', date: '' },
+    factory:    { name: '', signature: '', dateChop: '' },
+  },
 };
 
 export const POM_UNITS = ['mm', 'cm', 'in', 'other'];
 export const APPROVAL_STATUSES = ['Pending', 'Approved', 'Rejected', 'Revise'];
+export const PASS_FAIL = ['Pass', 'Fail', 'Pending'];

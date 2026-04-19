@@ -4,7 +4,7 @@
 //   3. BOM & Color               — placeholder
 //   4. Construction, QC & Approval — placeholder
 
-import { STATUSES, COMPONENT_TYPES, POM_UNITS, APPROVAL_STATUSES } from './componentPackConstants';
+import { STATUSES, COMPONENT_TYPES, POM_UNITS, APPROVAL_STATUSES, PASS_FAIL } from './componentPackConstants';
 import { FR, FR_COLOR_OPTIONS } from './techPackConstants';
 import { Input, Select, Row, SectionTitle, CoverPhoto, EditableSelect, PhotoUpload, ArrayTable, FRColorCell } from './TechPackPrimitives';
 
@@ -234,6 +234,106 @@ export function StepBOMColor({ data, set, images, onUpload, onRemove, existingSu
     </div>
   );
 }
-export function StepQC() { return <ComingSoon title="Construction, QC & Approval" />; }
+function ApprovalCard({ title, value, onChange, dateLabel = 'Date' }) {
+  const v = value || { name: '', signature: '', date: '', dateChop: '' };
+  const dateKey = dateLabel === 'Date / Chop' ? 'dateChop' : 'date';
+  const update = (k, val) => onChange({ ...v, [k]: val });
+  return (
+    <div style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white }}>
+      <div style={{ fontSize: 10, color: FR.soil, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 }}>{title}</div>
+      <Input label="Name" value={v.name} onChange={val => update('name', val)} />
+      <Input label="Signature" value={v.signature} onChange={val => update('signature', val)} placeholder="Typed signature" />
+      <div style={{ marginBottom: 4 }}>
+        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' }}>{dateLabel}</label>
+        <input type="date" value={v[dateKey] || ''} onChange={e => update(dateKey, e.target.value)}
+          style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.slate, background: FR.white, outline: 'none', boxSizing: 'border-box' }} />
+      </div>
+    </div>
+  );
+}
+
+export function StepQC({ data, set }) {
+  // Process spec
+  const procRows = data.processSpec && data.processSpec.length ? data.processSpec : [{ operation: '', type: '', specification: '', notes: '' }];
+  const updateProc = (i, k, v) => set('processSpec', procRows.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addProc = () => set('processSpec', [...procRows, { operation: '', type: '', specification: '', notes: '' }]);
+  const removeProc = (i) => set('processSpec', procRows.filter((_, idx) => idx !== i));
+
+  // Testing
+  const testRows = data.testingStandards && data.testingStandards.length ? data.testingStandards : [{ test: '', standardRequirement: '', testMethod: '', passFail: 'Pending' }];
+  const updateTest = (i, k, v) => set('testingStandards', testRows.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addTest = () => set('testingStandards', [...testRows, { test: '', standardRequirement: '', testMethod: '', passFail: 'Pending' }]);
+  const removeTest = (i) => set('testingStandards', testRows.filter((_, idx) => idx !== i));
+
+  // Revisions (seed first row from componentPack fields when empty)
+  const seedRevision = () => ({ rev: '1.0', date: data.dateCreated || '', changedBy: '', description: 'Initial release', approvedBy: '' });
+  const revRows = data.revisions && data.revisions.length ? data.revisions : [seedRevision()];
+  const updateRev = (i, k, v) => set('revisions', revRows.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addRev = () => set('revisions', [...revRows, { rev: '', date: '', changedBy: '', description: '', approvedBy: '' }]);
+  const removeRev = (i) => set('revisions', revRows.filter((_, idx) => idx !== i));
+
+  // Final approval
+  const fa = data.finalApproval || { designer: {}, brandOwner: {}, factory: {} };
+  const setFA = (key, val) => set('finalApproval', { ...fa, [key]: val });
+
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+
+  return (
+    <div>
+      <SectionTitle>Construction, QC & Approval</SectionTitle>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel}>Construction / Process Specification</label>
+        <ArrayTable
+          headers={[
+            { key: 'operation',     label: 'Operation',     placeholder: 'Weaving / Cutting / Assembly' },
+            { key: 'type',          label: 'Type',          placeholder: 'Damask / Laser / Ultrasonic' },
+            { key: 'specification', label: 'Specification', placeholder: 'Stitch count, tension, etc.' },
+            { key: 'notes',         label: 'Notes',         placeholder: 'Optional' },
+          ]}
+          rows={procRows} onUpdate={updateProc} onAdd={addProc} onRemove={removeProc} />
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel}>Quality & Testing Standards</label>
+        <ArrayTable
+          headers={[
+            { key: 'test',                 label: 'Test',                   placeholder: 'Colorfastness / Pull strength' },
+            { key: 'standardRequirement',  label: 'Standard or Requirement',placeholder: 'AATCC 61 / ≥ 15N' },
+            { key: 'testMethod',           label: 'Test Method',            placeholder: 'ISO 105-C06 / Instron' },
+            { key: 'passFail',             label: 'Pass / Fail',            render: (v, onChange) => (
+              <select value={v || 'Pending'} onChange={e => onChange(e.target.value)}
+                style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box' }}>
+                {PASS_FAIL.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            ) },
+          ]}
+          rows={testRows} onUpdate={updateTest} onAdd={addTest} onRemove={removeTest} />
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel}>Revision History</label>
+        <ArrayTable
+          headers={[
+            { key: 'rev',         label: 'Rev #',                  placeholder: '1.0' },
+            { key: 'date',        label: 'Date',                   placeholder: 'YYYY-MM-DD' },
+            { key: 'changedBy',   label: 'Changed By',             placeholder: 'Name' },
+            { key: 'description', label: 'Description of Change',  placeholder: 'Initial release' },
+            { key: 'approvedBy',  label: 'Approved By',            placeholder: 'Name' },
+          ]}
+          rows={revRows} onUpdate={updateRev} onAdd={addRev} onRemove={removeRev} />
+      </div>
+
+      <div style={{ marginBottom: 10 }}>
+        <label style={sectionLabel}>Final Approval</label>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+          <ApprovalCard title="Designer"         value={fa.designer}   onChange={v => setFA('designer', v)} />
+          <ApprovalCard title="Brand Owner"      value={fa.brandOwner} onChange={v => setFA('brandOwner', v)} />
+          <ApprovalCard title="Factory / Supplier" value={fa.factory}    onChange={v => setFA('factory', v)} dateLabel="Date / Chop" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export const COMPONENT_STEP_FNS = [StepCover, StepSpec, StepBOMColor, StepQC];

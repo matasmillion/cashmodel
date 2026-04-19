@@ -441,11 +441,97 @@ function PageBOMColor({ d, images }) {
   );
 }
 
+function ApprovalPreviewCard({ x, y, w, h, title, name, signature, date, dateLabel = 'Date:' }) {
+  const lineY = (row) => y + 60 + row * 40;
+  const Line = ({ row, label, value }) => (
+    <g>
+      <text x={x + 14} y={lineY(row)} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">{esc(label)}</text>
+      {value
+        ? <text x={x + 60} y={lineY(row)} fontSize="11" fill={FR.slate}>{clampLine(esc(value), w - 74, 6.2)}</text>
+        : <line x1={x + 60} y1={lineY(row) + 2} x2={x + w - 14} y2={lineY(row) + 2} stroke={FR.sand} />}
+    </g>
+  );
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} fill={FR.white} stroke={FR.sand} />
+      <rect x={x} y={y} width={w} height={28} fill={FR.salt} />
+      <text x={x + 14} y={y + 18} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="1.8">{esc(title.toUpperCase())}</text>
+      <Line row={0} label="NAME:"      value={name} />
+      <Line row={1} label="SIG:"       value={signature} />
+      <Line row={2} label={dateLabel.toUpperCase()} value={date} />
+    </g>
+  );
+}
+
+function PageQC({ d }) {
+  // Table column specs (tableW = 1043)
+  const procCols = [
+    { key: '#',             label: '#',              w: 30  },
+    { key: 'operation',     label: 'Operation',      w: 200 },
+    { key: 'type',          label: 'Type',           w: 200 },
+    { key: 'specification', label: 'Specification',  w: 370 },
+    { key: 'notes',         label: 'Notes',          w: 243 },
+  ];
+  const testCols = [
+    { key: '#',                    label: '#',                       w: 30  },
+    { key: 'test',                 label: 'Test',                    w: 220 },
+    { key: 'standardRequirement',  label: 'Standard or Requirement', w: 280 },
+    { key: 'testMethod',           label: 'Test Method',             w: 260 },
+    { key: 'passFail',             label: 'Pass / Fail',             w: 253 },
+  ];
+  const revCols = [
+    { key: 'rev',         label: 'Rev #',                   w: 70  },
+    { key: 'date',        label: 'Date',                    w: 110 },
+    { key: 'changedBy',   label: 'Changed By',              w: 180 },
+    { key: 'description', label: 'Description of Change',   w: 503 },
+    { key: 'approvedBy',  label: 'Approved By',             w: 180 },
+  ];
+
+  const procRows = (d.processSpec || []).filter(r => r.operation || r.type || r.specification || r.notes);
+  const testRows = (d.testingStandards || []).filter(r => r.test || r.standardRequirement || r.testMethod);
+  const revRows  = (d.revisions || []).filter(r => r.rev || r.date || r.changedBy || r.description || r.approvedBy);
+
+  const fa = d.finalApproval || {};
+  const designer = fa.designer || {};
+  const brand    = fa.brandOwner || {};
+  const factory  = fa.factory || {};
+
+  // Approval cards
+  const cardY = 530;
+  const cardH = 220;
+  const cardGap = 16;
+  const cardW = (PAGE_W - 80 - cardGap * 2) / 3;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      {/* Construction / Process Specification */}
+      <SectionHeading x={40} y={158}>Construction / Process Specification</SectionHeading>
+      <GridTable x={40} y={170} cols={procCols} rows={procRows} bodyRows={3} />
+
+      {/* Quality & Testing Standards */}
+      <SectionHeading x={40} y={280}>Quality & Testing Standards</SectionHeading>
+      <GridTable x={40} y={292} cols={testCols} rows={testRows} bodyRows={3} />
+
+      {/* Revision History */}
+      <SectionHeading x={40} y={402}>Revision History</SectionHeading>
+      <GridTable x={40} y={414} cols={revCols} rows={revRows} bodyRows={3} />
+
+      {/* Final Approval */}
+      <SectionHeading x={40} y={515}>Final Approval</SectionHeading>
+      <ApprovalPreviewCard x={40}                              y={cardY} w={cardW} h={cardH} title="Designer"           name={designer.name} signature={designer.signature} date={designer.date} />
+      <ApprovalPreviewCard x={40 + cardW + cardGap}            y={cardY} w={cardW} h={cardH} title="Brand Owner"        name={brand.name}    signature={brand.signature}    date={brand.date} />
+      <ApprovalPreviewCard x={40 + (cardW + cardGap) * 2}      y={cardY} w={cardW} h={cardH} title="Factory / Supplier" name={factory.name}  signature={factory.signature}  date={factory.dateChop} dateLabel="Date / Chop:" />
+    </g>
+  );
+}
+
 const PAGE_FNS = [
   { title: 'Cover & Identity',              body: ({ d, images }) => <PageCover d={d} images={images} /> },
   { title: 'Specification & Artwork',       body: ({ d, images }) => <PageSpec d={d} images={images} /> },
   { title: 'Bill of Materials & Color',     body: ({ d, images }) => <PageBOMColor d={d} images={images} /> },
-  { title: 'Construction, QC & Approval',   body: () => <ComingSoonPage pageNum={4} /> },
+  { title: 'Construction, QC & Approval',   body: ({ d }) => <PageQC d={d} /> },
 ];
 
 export default function ComponentPackPagePreview({ data, images, step }) {
