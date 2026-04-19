@@ -1,4 +1,5 @@
 import { AppProvider, useApp } from './context/AppContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import KPICards from './components/KPICards';
 import CashflowChart from './components/CashflowChart';
 import CashflowTable from './components/CashflowTable';
@@ -113,11 +114,13 @@ function Dashboard() {
 
 function App() {
   return (
-    <AuthGate>
-      <AppProvider>
-        <Dashboard />
-      </AppProvider>
-    </AuthGate>
+    <ErrorBoundary>
+      <AuthGate>
+        <AppProvider>
+          <Dashboard />
+        </AppProvider>
+      </AuthGate>
+    </ErrorBoundary>
   );
 }
 
