@@ -143,9 +143,147 @@ function ComingSoonPage({ pageNum }) {
   );
 }
 
+function InfoStripCell({ x, y, w, label, value }) {
+  return (
+    <g>
+      <text x={x + 10} y={y + 14} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">{esc((label || '').toUpperCase())}</text>
+      <text x={x + 10} y={y + 32} fontSize="11" fill={FR.slate}>{clampLine(esc(value || '—'), w - 20, 6.5)}</text>
+    </g>
+  );
+}
+
+function DrawingSlot({ x, y, w, h, label, image }) {
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} fill={FR.white} stroke={FR.soil} strokeDasharray="5 4" />
+      {image
+        ? <image href={image.data} x={x + 4} y={y + 4} width={w - 8} height={h - 8} preserveAspectRatio="xMidYMid meet" />
+        : (
+          <text x={x + w / 2} y={y + h / 2 + 4} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
+            Drop {label.toLowerCase()} here
+          </text>
+        )}
+      <rect x={x} y={y + h} width={w} height={22} fill={FR.salt} stroke={FR.sand} />
+      <text x={x + w / 2} y={y + h + 15} textAnchor="middle" fontSize="9" fontWeight="bold" fill={FR.slate} letterSpacing="1">
+        {esc(label.toUpperCase())}
+      </text>
+    </g>
+  );
+}
+
+function PageSpec({ d, images }) {
+  const imgs = images || [];
+  const front = imgs.find(img => img.slot === 'component-front');
+  const back  = imgs.find(img => img.slot === 'component-back');
+  const side  = imgs.find(img => img.slot === 'component-side');
+
+  // Info strip
+  const stripY = 90;
+  const stripH = 46;
+  const cellW = (PAGE_W - 80) / 4;
+
+  // Drawing row
+  const drawY = 170;
+  const drawH = 210;
+  const drawGap = 16;
+  const drawW = (PAGE_W - 80 - drawGap * 2) / 3;
+
+  // POM table
+  const tableX = 40;
+  const tableTop = 470;
+  const rowH = 24;
+  const headerH = 26;
+  const widths = [40, 320, 130, 90, 130, 273]; // sum = 983 = PAGE_W - 80 - 60? Need PAGE_W - 80 = 1043
+  // Recalc to exactly fill: 1043 total. Use 40, 340, 130, 100, 140, 293.
+  const cols = [
+    { key: '#',           w: 40 },
+    { key: 'Measurement', w: 340 },
+    { key: 'Spec',        w: 140 },
+    { key: 'Unit',        w: 90 },
+    { key: 'Tolerance',   w: 140 },
+    { key: 'Method',      w: 293 },
+  ];
+  const rows = (d.poms || []).filter(p => p.measurement || p.spec || p.tolerance || p.method).slice(0, 8);
+
+  let runningX = tableX;
+  const colX = cols.map(c => { const x = runningX; runningX += c.w; return x; });
+  const tableW = cols.reduce((a, c) => a + c.w, 0);
+
+  return (
+    <g>
+      {/* Info strip */}
+      <rect x={40} y={stripY} width={PAGE_W - 80} height={stripH} fill={FR.salt} stroke={FR.sand} />
+      <InfoStripCell x={40 + cellW * 0} y={stripY} w={cellW} label="Style #"        value={d.styleNumber} />
+      <InfoStripCell x={40 + cellW * 1} y={stripY} w={cellW} label="Component Name" value={d.componentName} />
+      <InfoStripCell x={40 + cellW * 2} y={stripY} w={cellW} label="Supplier"       value={d.supplier} />
+      <InfoStripCell x={40 + cellW * 3} y={stripY} w={cellW} label="Date"           value={d.dateCreated} />
+
+      {/* Component Drawing section heading */}
+      <text x={40} y={160} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="18" fill={FR.slate}>Component Drawing</text>
+      <rect x={40} y={164} width="60" height="2" fill={FR.soil} />
+
+      {/* Three drawing slots */}
+      <DrawingSlot x={40}                              y={drawY} w={drawW} h={drawH} label="Front / Top"       image={front} />
+      <DrawingSlot x={40 + drawW + drawGap}            y={drawY} w={drawW} h={drawH} label="Back / Bottom"     image={back} />
+      <DrawingSlot x={40 + (drawW + drawGap) * 2}      y={drawY} w={drawW} h={drawH} label="Side / Cross-Section" image={side} />
+
+      {/* Caption */}
+      <text x={PAGE_W / 2} y={drawY + drawH + 48} textAnchor="middle" fontSize="10" fill={FR.stone} fontStyle="italic">
+        Place annotated diagrams with dimensions, callouts, and tolerances above.
+      </text>
+
+      {/* Dimensions / POM heading */}
+      <text x={40} y={tableTop - 18} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="18" fill={FR.slate}>Dimensions / Points of Measure</text>
+      <rect x={40} y={tableTop - 14} width="60" height="2" fill={FR.soil} />
+
+      {/* Table header */}
+      <rect x={tableX} y={tableTop} width={tableW} height={headerH} fill={FR.slate} />
+      {cols.map((c, i) => (
+        <text key={c.key} x={colX[i] + 8} y={tableTop + 17} fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="0.5">
+          {esc(c.key.toUpperCase())}
+        </text>
+      ))}
+
+      {/* Body rows (always render 6 rows for visual consistency) */}
+      {Array.from({ length: 6 }).map((_, ri) => {
+        const ry = tableTop + headerH + ri * rowH;
+        const row = rows[ri];
+        return (
+          <g key={ri}>
+            {ri % 2 === 0 && <rect x={tableX} y={ry} width={tableW} height={rowH} fill={FR.salt} />}
+            <line x1={tableX} y1={ry + rowH} x2={tableX + tableW} y2={ry + rowH} stroke={FR.sand} />
+            {row ? (
+              <>
+                <text x={colX[0] + 8} y={ry + 16} fontSize="10" fill={FR.stone}>{ri + 1}</text>
+                <text x={colX[1] + 8} y={ry + 16} fontSize="10" fill={FR.slate}>{clampLine(esc(row.measurement || ''), cols[1].w - 16)}</text>
+                <text x={colX[2] + 8} y={ry + 16} fontSize="10" fill={FR.slate}>{clampLine(esc(row.spec || ''), cols[2].w - 16)}</text>
+                <text x={colX[3] + 8} y={ry + 16} fontSize="10" fill={FR.slate}>{clampLine(esc(row.unit || ''), cols[3].w - 16)}</text>
+                <text x={colX[4] + 8} y={ry + 16} fontSize="10" fill={FR.slate}>{clampLine(esc(row.tolerance || ''), cols[4].w - 16)}</text>
+                <text x={colX[5] + 8} y={ry + 16} fontSize="10" fill={FR.slate}>{clampLine(esc(row.method || ''), cols[5].w - 16)}</text>
+              </>
+            ) : (
+              <text x={colX[0] + 8} y={ry + 16} fontSize="10" fill={FR.sand}>{ri + 1}</text>
+            )}
+          </g>
+        );
+      })}
+
+      {/* POM method note */}
+      <text x={40} y={tableTop + headerH + 6 * rowH + 28} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">
+        MEASUREMENT METHOD
+      </text>
+      <foreignObject x="40" y={tableTop + headerH + 6 * rowH + 34} width={PAGE_W - 80} height="48">
+        <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: 10, color: FR.stone, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
+          {d.pomMethod || 'As appropriate for component type. Specify instrument and conditions.'}
+        </div>
+      </foreignObject>
+    </g>
+  );
+}
+
 const PAGE_FNS = [
   { title: 'Cover & Identity',              body: ({ d, images }) => <PageCover d={d} images={images} /> },
-  { title: 'Specification & Artwork',       body: () => <ComingSoonPage pageNum={2} /> },
+  { title: 'Specification & Artwork',       body: ({ d, images }) => <PageSpec d={d} images={images} /> },
   { title: 'BOM & Color',                   body: () => <ComingSoonPage pageNum={3} /> },
   { title: 'Construction, QC & Approval',   body: () => <ComingSoonPage pageNum={4} /> },
 ];

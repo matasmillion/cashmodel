@@ -41,4 +41,10 @@ export const DEFAULT_COMPONENT_DATA = {
   designedBy: { name: '', date: '' },
   approvedBy: { name: '', date: '' },
   supplierConfirmed: { name: '', date: '' },
+
+  // Page 2 — Specification & Artwork
+  pomMethod: 'As appropriate for component type. Specify instrument and conditions.',
+  poms: [{ measurement: '', spec: '', unit: 'mm', tolerance: '', method: '' }],
 };
+
+export const POM_UNITS = ['mm', 'cm', 'in', 'other'];
