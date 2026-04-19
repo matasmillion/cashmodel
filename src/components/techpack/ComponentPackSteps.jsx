@@ -1,169 +1,97 @@
-// 8 step components for the Component Pack wizard. Mirrors the per-step
-// architecture of TechPackSteps — each step is a small, isolated section
-// that feeds the matching page of the live Component Pack preview.
+// Component Pack wizard step panels. Scoped to the 4-page template:
+//   1. Cover & Identity (fully built)
+//   2. Specification & Artwork  — placeholder
+//   3. BOM & Color               — placeholder
+//   4. Construction, QC & Approval — placeholder
 
-import { FR, STATUSES, BOM_COMPONENT_OPTIONS, CURRENCIES, DYE_METHODS, CERTIFICATIONS } from './componentPackConstants';
-import { FR_COLOR_OPTIONS } from './techPackConstants';
-import { Input, Select, Row, SectionTitle, ArrayTable, PhotoUpload, CoverPhoto, EditableSelect } from './TechPackPrimitives';
+import { STATUSES, COMPONENT_TYPES } from './componentPackConstants';
+import { Input, Select, Row, SectionTitle, CoverPhoto, EditableSelect } from './TechPackPrimitives';
 
-export function StepIdentity({ data, set, images, onUpload, onRemove }) {
+function Signature({ label, value, onNameChange, onDateChange }) {
+  const v = value || { name: '', date: '' };
   return (
-    <div>
-      <SectionTitle>Identity & Classification</SectionTitle>
-      <CoverPhoto label="Component Photo" slotKey="component-cover" images={images} onUpload={onUpload} onRemove={onRemove} />
-      <Row>
-        <Input label="Component Name" value={data.componentName} onChange={v => set('componentName', v)} placeholder="e.g. YKK #5 Coil Zipper - Slate" />
-        <Select label="Category" value={data.componentCategory} onChange={v => set('componentCategory', v)} options={BOM_COMPONENT_OPTIONS} />
-      </Row>
-      <Row cols="1fr 1fr 1fr">
-        <Input label="Component Number" value={data.componentNumber} onChange={v => set('componentNumber', v)} placeholder="e.g. FR-ZIP-001" />
-        <Select label="Status" value={data.status} onChange={v => set('status', v)} options={STATUSES} />
-        <Input label="Season" value={data.season} onChange={v => set('season', v)} placeholder="Core / SS26 / FW26" />
-      </Row>
-    </div>
+    <Row>
+      <Input label={`${label} — Name`} value={v.name} onChange={onNameChange} />
+      <Input label={`${label} — Date`} value={v.date} onChange={onDateChange} placeholder="YYYY-MM-DD" />
+    </Row>
   );
 }
 
-export function StepSupplier({ data, set, existingSuppliers = [] }) {
+export function StepCover({ data, set, images, onUpload, onRemove, existingSuppliers = [] }) {
+  const setSig = (field, key, value) => set(field, { ...(data[field] || { name: '', date: '' }), [key]: value });
+
   return (
     <div>
-      <SectionTitle>Supplier</SectionTitle>
+      <SectionTitle>Cover & Identity</SectionTitle>
+
+      <CoverPhoto label="Component Photo" slotKey="component-cover" images={images} onUpload={onUpload} onRemove={onRemove} />
+
       <Row>
+        <Input label="Component Name" value={data.componentName} onChange={v => set('componentName', v)} placeholder="e.g. Main Label — Woven" />
+        <Input label="Style #" value={data.styleNumber} onChange={v => set('styleNumber', v)} placeholder="e.g. FR-CMP-001" />
+      </Row>
+
+      <Row cols="1fr 1fr 1fr">
+        <Select label="Component Type" value={data.componentType} onChange={v => set('componentType', v)} options={COMPONENT_TYPES} />
         <EditableSelect
-          label="Supplier Name"
+          label="Supplier"
           value={data.supplier}
           onChange={v => set('supplier', v)}
           options={existingSuppliers}
           placeholder="Add a new supplier…" />
-        <Input label="Contact Name" value={data.supplierContact} onChange={v => set('supplierContact', v)} />
+        <Input label="Season" value={data.season} onChange={v => set('season', v)} placeholder="SS26 / FW26 / Core" />
       </Row>
+
       <Row cols="1fr 1fr 1fr">
-        <Input label="Email" value={data.supplierEmail} onChange={v => set('supplierEmail', v)} placeholder="sales@..." />
-        <Input label="Phone / WeChat" value={data.supplierPhone} onChange={v => set('supplierPhone', v)} />
-        <Input label="Website" value={data.supplierWebsite} onChange={v => set('supplierWebsite', v)} placeholder="https://..." />
+        <Input label="Date Created" value={data.dateCreated} onChange={v => set('dateCreated', v)} placeholder="YYYY-MM-DD" />
+        <Input label="Revision" value={data.revision} onChange={v => set('revision', v)} placeholder="V1.0" />
+        <Select label="Status" value={data.status} onChange={v => set('status', v)} options={STATUSES} />
       </Row>
+
+      <Row>
+        <Input label="Parent Styles" value={data.parentStyles} onChange={v => set('parentStyles', v)} placeholder="Comma-separated style numbers" />
+        <Input label="Colorways" value={data.colorways} onChange={v => set('colorways', v)} placeholder="e.g. Black, Natural, Slate" />
+      </Row>
+
       <Row cols="1fr 1fr 1fr">
-        <Input label="Lead Time (days)" value={data.leadTime} onChange={v => set('leadTime', v)} placeholder="30" />
+        <Input label="Dimensions" value={data.dimensions} onChange={v => set('dimensions', v)} placeholder='e.g. 40 × 15 mm' />
+        <Input label="Target Unit Cost ($)" value={data.targetUnitCost} onChange={v => set('targetUnitCost', v)} placeholder="0.85" />
         <Input label="MOQ" value={data.moq} onChange={v => set('moq', v)} placeholder="1000" />
-        <Select label="MOQ Unit" value={data.moqUnit} onChange={v => set('moqUnit', v)} options={['units', 'meters', 'yards', 'kg', 'rolls', 'pieces']} />
       </Row>
+
+      <SectionTitle>Approvals</SectionTitle>
+      <Signature
+        label="Designed By"
+        value={data.designedBy}
+        onNameChange={v => setSig('designedBy', 'name', v)}
+        onDateChange={v => setSig('designedBy', 'date', v)} />
+      <Signature
+        label="Approved By"
+        value={data.approvedBy}
+        onNameChange={v => setSig('approvedBy', 'name', v)}
+        onDateChange={v => setSig('approvedBy', 'date', v)} />
+      <Signature
+        label="Supplier Confirmed"
+        value={data.supplierConfirmed}
+        onNameChange={v => setSig('supplierConfirmed', 'name', v)}
+        onDateChange={v => setSig('supplierConfirmed', 'date', v)} />
     </div>
   );
 }
 
-export function StepSpecs({ data, set }) {
+function ComingSoon({ title }) {
   return (
     <div>
-      <SectionTitle>Specifications</SectionTitle>
-      <Row>
-        <Input label="Material" value={data.material} onChange={v => set('material', v)} placeholder="e.g. Nylon, Cotton Twill, Metal" />
-        <Input label="Composition" value={data.composition} onChange={v => set('composition', v)} placeholder="e.g. 100% Cotton, 95/5 Cotton/Spandex" />
-      </Row>
-      <Row cols="1fr 1fr 1fr">
-        <Input label="Weight / GSM" value={data.weight} onChange={v => set('weight', v)} placeholder="400 GSM" />
-        <Input label="Width" value={data.width} onChange={v => set('width', v)} placeholder="cm or inches" />
-        <Input label="Dimensions" value={data.dimensions} onChange={v => set('dimensions', v)} placeholder="5×10×2mm (for trims)" />
-      </Row>
-      <Input label="Finish" value={data.finish} onChange={v => set('finish', v)} placeholder="e.g. Matte, Brushed, Enzyme Washed" />
-      <Input label="Spec Notes" value={data.specNotes} onChange={v => set('specNotes', v)} multiline placeholder="Any additional technical details, shrinkage %, colorfastness, etc." />
-    </div>
-  );
-}
-
-export function StepColor({ data, set, pickFRColor }) {
-  return (
-    <div>
-      <SectionTitle>Color</SectionTitle>
-      <Row cols="1fr 1fr 1fr">
-        <Select label="FR Color" value={data.frColor} onChange={pickFRColor} options={FR_COLOR_OPTIONS.map(c => c.name)} />
-        <Input label="Custom Color Name" value={data.customColorName} onChange={v => set('customColorName', v)} placeholder="Non-FR palette" />
-        <Select label="Dye Method" value={data.dyeMethod} onChange={v => set('dyeMethod', v)} options={DYE_METHODS} />
-      </Row>
-      <Row>
-        <Input label="Pantone" value={data.pantone} onChange={v => set('pantone', v)} placeholder="Pantone 19-4305" />
-        <Input label="Hex" value={data.hex} onChange={v => set('hex', v)} placeholder="#3A3A3A" />
-      </Row>
-    </div>
-  );
-}
-
-export function StepCost({ data, set }) {
-  const updatePB = (i, k, v) => { const b = [...(data.priceBreaks || [])]; b[i] = { ...b[i], [k]: v }; set('priceBreaks', b); };
-  const addPB = () => set('priceBreaks', [...(data.priceBreaks || []), { qty: '', price: '' }]);
-  const removePB = (i) => set('priceBreaks', (data.priceBreaks || []).filter((_, idx) => idx !== i));
-
-  return (
-    <div>
-      <SectionTitle>Cost & Pricing</SectionTitle>
-      <Row cols="1fr 1fr">
-        <Input label="Cost per Unit" value={data.costPerUnit} onChange={v => set('costPerUnit', v)} placeholder="0.85" />
-        <Select label="Currency" value={data.currency} onChange={v => set('currency', v)} options={CURRENCIES} />
-      </Row>
-      <div style={{ marginTop: 8 }}>
-        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>Price Breaks</label>
-        <ArrayTable
-          headers={[
-            { key: 'qty', label: 'Min Qty', placeholder: '1000' },
-            { key: 'price', label: `Price (${data.currency || 'USD'})`, placeholder: '0.80' },
-          ]}
-          rows={data.priceBreaks || []} onUpdate={updatePB} onAdd={addPB} onRemove={removePB} />
+      <SectionTitle>{title}</SectionTitle>
+      <div style={{ padding: '40px 20px', textAlign: 'center', color: '#716F70', fontSize: 13, fontStyle: 'italic', border: '1px dashed #EBE5D5', borderRadius: 6, background: '#F5F0E8' }}>
+        Coming in the next session
       </div>
     </div>
   );
 }
 
-export function StepCompliance({ data, set }) {
-  const toggleCert = (cert) => {
-    const current = data.certifications || [];
-    if (current.includes(cert)) set('certifications', current.filter(c => c !== cert));
-    else set('certifications', [...current, cert]);
-  };
+export function StepSpec() { return <ComingSoon title="Specification & Artwork" />; }
+export function StepBOMColor() { return <ComingSoon title="BOM & Color" />; }
+export function StepQC() { return <ComingSoon title="Construction, QC & Approval" />; }
 
-  return (
-    <div>
-      <SectionTitle>Compliance</SectionTitle>
-      <div style={{ marginBottom: 12 }}>
-        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>Certifications</label>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {CERTIFICATIONS.map(cert => {
-            const active = (data.certifications || []).includes(cert);
-            return (
-              <button key={cert} onClick={() => toggleCert(cert)}
-                style={{ padding: '5px 12px', borderRadius: 20, border: `1px solid ${active ? FR.soil : FR.sand}`, background: active ? FR.soil : 'white', color: active ? FR.salt : FR.stone, fontSize: 11, cursor: 'pointer' }}>
-                {cert}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      <Row>
-        <Input label="Country of Origin" value={data.countryOfOrigin} onChange={v => set('countryOfOrigin', v)} placeholder="China" />
-        <Input label="HS Code" value={data.hsCode} onChange={v => set('hsCode', v)} placeholder="9607.11.00" />
-      </Row>
-    </div>
-  );
-}
-
-export function StepImages({ images, onUpload, onRemove }) {
-  return (
-    <div>
-      <SectionTitle>Reference Images</SectionTitle>
-      <PhotoUpload label="Product Photos" slotKey="component-photo" images={images} onUpload={onUpload} onRemove={onRemove} />
-      <PhotoUpload label="Swatch / Sample Photos" slotKey="component-swatch" images={images} onUpload={onUpload} onRemove={onRemove} />
-      <PhotoUpload label="Spec Sheet / Tech Drawing" slotKey="component-spec" images={images} onUpload={onUpload} onRemove={onRemove} />
-    </div>
-  );
-}
-
-export function StepNotes({ data, set }) {
-  return (
-    <div>
-      <SectionTitle>Notes</SectionTitle>
-      <Input value={data.notes} onChange={v => set('notes', v)} multiline placeholder="Anything else worth remembering about this component…" />
-    </div>
-  );
-}
-
-export const COMPONENT_STEP_FNS = [
-  StepIdentity, StepSupplier, StepSpecs, StepColor, StepCost, StepCompliance, StepImages, StepNotes,
-];
+export const COMPONENT_STEP_FNS = [StepCover, StepSpec, StepBOMColor, StepQC];
