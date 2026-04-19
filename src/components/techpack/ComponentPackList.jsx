@@ -157,9 +157,8 @@ export default function ComponentPackList() {
     refresh();
   };
 
-  if (activePack) return <ComponentPackBuilder pack={activePack} onBack={closeBuilder} />;
-
-  // Filter by search
+  // Filter by search (computed regardless of activePack so the hook below
+  // is called in the same order on every render — React rules of hooks).
   const q = searchQuery.toLowerCase();
   const filtered = packs.filter(p => {
     if (!q) return true;
@@ -180,6 +179,8 @@ export default function ComponentPackList() {
     });
     return byCat;
   }, [filtered]);
+
+  if (activePack) return <ComponentPackBuilder pack={activePack} onBack={closeBuilder} />;
 
   const toggleCategory = (name) =>
     setOpenCategories(prev => ({ ...prev, [name]: !(prev[name] ?? packsInCategoryDefaultOpen(grouped[name])) }));

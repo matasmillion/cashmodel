@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-19T11:48:11.786Z",
+  "lastUpdated": "2026-04-19T11:57:30.039Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "146243a",
+      "date": "2026-04-19T11:48:54+00:00",
+      "message": "Enable source maps so production crashes give real stack traces"
+    },
+    {
       "sha": "8133bc5",
       "date": "2026-04-19T11:42:16+00:00",
       "message": "Add ErrorBoundary so PLM crashes surface instead of blanking the page"
@@ -1087,11 +1092,6 @@
       "sha": "4c03213",
       "date": "2026-04-17T13:52:23+00:00",
       "message": "PLM parity: revisions, cost roll-up, variants, samples, filter/search"
-    },
-    {
-      "sha": "7555a3c",
-      "date": "2026-04-17T13:20:37+00:00",
-      "message": "Add Component Packs + rename Product tab to PLM"
     }
   ]
 }
