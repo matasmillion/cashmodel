@@ -129,20 +129,29 @@ function PhotoGrid({ images, slot, x, y, cols = 3, cellW = 180, cellH = 180, gap
 // Each Page* returns the children for a PageFrame. Step indexes map 1:1 to
 // tech pack page numbers (1-indexed for the user).
 
-function PageCover({ d }) {
+function PageCover({ d, images }) {
+  const cover = (images || []).find(img => img.slot === 'cover');
   return (
     <g>
-      <text x={PAGE_W / 2} y="340" textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="54" fill={FR.slate}>
-        {clampLine(d.styleName || 'Untitled Tech Pack', 900, 26)}
+      {cover
+        ? <image href={cover.data} x={PAGE_W / 2 - 200} y={110} width="400" height="300" preserveAspectRatio="xMidYMid meet" />
+        : (
+          <g>
+            <rect x={PAGE_W / 2 - 200} y={110} width="400" height="300" fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" />
+            <text x={PAGE_W / 2} y={270} textAnchor="middle" fontSize="12" fill={FR.stone} fontStyle="italic">Product render goes here</text>
+          </g>
+        )}
+      <text x={PAGE_W / 2} y="470" textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="44" fill={FR.slate}>
+        {clampLine(d.styleName || 'Untitled Tech Pack', 900, 22)}
       </text>
-      <text x={PAGE_W / 2} y="380" textAnchor="middle" fontSize="16" fill={FR.soil}>
+      <text x={PAGE_W / 2} y="510" textAnchor="middle" fontSize="14" fill={FR.soil}>
         {esc(d.styleNumber || 'STYLE-000')}
       </text>
-      <text x={PAGE_W / 2} y="415" textAnchor="middle" fontSize="12" fill={FR.stone}>
+      <text x={PAGE_W / 2} y="540" textAnchor="middle" fontSize="11" fill={FR.stone}>
         {[d.productCategory, d.productTier, d.season].filter(Boolean).join('  ·  ') || '—'}
       </text>
-      <rect x={PAGE_W / 2 - 80} y="440" width="160" height="36" rx="6" fill={FR.soil} />
-      <text x={PAGE_W / 2} y="464" textAnchor="middle" fontSize="11" fontWeight="bold" fill={FR.salt} letterSpacing="1">
+      <rect x={PAGE_W / 2 - 80} y="565" width="160" height="36" rx="6" fill={FR.soil} />
+      <text x={PAGE_W / 2} y="589" textAnchor="middle" fontSize="11" fontWeight="bold" fill={FR.salt} letterSpacing="1">
         {esc((d.status || 'DESIGN').toUpperCase())}
       </text>
     </g>
@@ -407,19 +416,10 @@ const PAGE_FNS = [
   { title: 'Review & Export', body: PageReview },
 ];
 
-// Step index 0 = Identity, but we show Cover as page 1 of the tech pack.
-// To keep it simple: step 0 shows Cover + Identity summary stacked on cover.
-// We actually map step 0 → Cover since the title block already carries identity.
-// For all other steps, the page matches the form section 1:1.
-function PageIdentityCombined({ d }) {
-  return (
-    <g>
-      <PageCover d={d} />
-      <g transform="translate(0 10)">
-        <PageIdentity d={d} />
-      </g>
-    </g>
-  );
+// Step 0 (Identity form) shows the cover page — product render + title —
+// since that's what the user is filling in on the first section.
+function PageIdentityCombined({ d, images }) {
+  return <PageCover d={d} images={images} />;
 }
 
 export default function TechPackPagePreview({ data, images, step }) {

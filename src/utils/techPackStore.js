@@ -34,15 +34,28 @@ function currentUserId() {
   }
 }
 
-// List all tech packs (summary rows only — no image blobs)
+// Pull the cover image (first entry with slot=cover) out of an images array
+function extractCover(images) {
+  const list = Array.isArray(images) ? images : [];
+  const cover = list.find(img => img && img.slot === 'cover');
+  return cover ? cover.data : null;
+}
+
+// List all tech packs. Images are fetched so list cards can show the cover
+// thumbnail — the full images array is trimmed to just the cover on return.
 export async function listTechPacks() {
   if (IS_SUPABASE_ENABLED) {
     const { data, error } = await supabase
       .from('tech_packs')
-      .select('id, style_name, product_category, status, completion_pct, updated_at, created_at')
+      .select('id, style_name, product_category, status, completion_pct, updated_at, created_at, images')
       .order('updated_at', { ascending: false });
     if (error) console.error('listTechPacks:', error);
-    if (data) return data;
+    if (data) {
+      return data.map(r => {
+        const { images, ...rest } = r;
+        return { ...rest, cover_image: extractCover(images) };
+      });
+    }
   }
   // Fallback — localStorage
   return readLocal()
@@ -54,6 +67,7 @@ export async function listTechPacks() {
       completion_pct: p.completion_pct || 0,
       updated_at: p.updated_at,
       created_at: p.created_at,
+      cover_image: extractCover(p.images),
     }))
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }

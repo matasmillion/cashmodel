@@ -1,10 +1,10 @@
 // All 14 step components for the Tech Pack builder
 import { useState } from 'react';
 import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, DEFAULT_DATA, computeCompletion, isStepLocked } from './techPackConstants';
-import { Input, Select, Row, SectionTitle, ArrayTable, PhotoUpload, LibraryPicker, FRColorCell, EditableSelect } from './TechPackPrimitives';
+import { Input, Select, Row, SectionTitle, ArrayTable, PhotoUpload, CoverPhoto, LibraryPicker, FRColorCell, EditableSelect } from './TechPackPrimitives';
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
 
-export function StepIdentity({ data, set, bomCost, costVariance }) {
+export function StepIdentity({ data, set, bomCost, costVariance, images, onUpload, onRemove }) {
   return (
     <div>
       <SectionTitle>Identity & Classification</SectionTitle>
@@ -13,6 +13,7 @@ export function StepIdentity({ data, set, bomCost, costVariance }) {
           Variant of <strong style={{ color: FR.slate }}>{data.parentStyleName}</strong>
         </div>
       )}
+      <CoverPhoto label="Product Render" slotKey="cover" images={images} onUpload={onUpload} onRemove={onRemove} />
       <Row>
         <Input label="Style Name" value={data.styleName} onChange={v => set('styleName', v)} placeholder="e.g. Borderless Basic Hoodie" />
         <Select label="Product Category" value={data.productCategory} onChange={v => set('productCategory', v)}

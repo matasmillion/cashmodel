@@ -20,13 +20,24 @@ function currentUserId() {
   } catch { return null; }
 }
 
+function extractCover(images) {
+  const list = Array.isArray(images) ? images : [];
+  const cover = list.find(img => img && img.slot === 'component-cover');
+  return cover ? cover.data : null;
+}
+
 export async function listComponentPacks() {
   if (IS_SUPABASE_ENABLED) {
     const { data, error } = await supabase
       .from('component_packs')
-      .select('id, component_name, component_category, status, supplier, cost_per_unit, currency, updated_at, created_at')
+      .select('id, component_name, component_category, status, supplier, cost_per_unit, currency, updated_at, created_at, images')
       .order('updated_at', { ascending: false });
-    if (!error && data) return data;
+    if (!error && data) {
+      return data.map(r => {
+        const { images, ...rest } = r;
+        return { ...rest, cover_image: extractCover(images) };
+      });
+    }
   }
   return readLocal()
     .map(p => ({
@@ -39,6 +50,7 @@ export async function listComponentPacks() {
       currency: p.data?.currency || 'USD',
       updated_at: p.updated_at,
       created_at: p.created_at,
+      cover_image: extractCover(p.images),
     }))
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }

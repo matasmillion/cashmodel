@@ -4,12 +4,13 @@
 
 import { FR, STATUSES, BOM_COMPONENT_OPTIONS, CURRENCIES, DYE_METHODS, CERTIFICATIONS } from './componentPackConstants';
 import { FR_COLOR_OPTIONS } from './techPackConstants';
-import { Input, Select, Row, SectionTitle, ArrayTable, PhotoUpload } from './TechPackPrimitives';
+import { Input, Select, Row, SectionTitle, ArrayTable, PhotoUpload, CoverPhoto } from './TechPackPrimitives';
 
-export function StepIdentity({ data, set }) {
+export function StepIdentity({ data, set, images, onUpload, onRemove }) {
   return (
     <div>
       <SectionTitle>Identity & Classification</SectionTitle>
+      <CoverPhoto label="Component Photo" slotKey="component-cover" images={images} onUpload={onUpload} onRemove={onRemove} />
       <Row>
         <Input label="Component Name" value={data.componentName} onChange={v => set('componentName', v)} placeholder="e.g. YKK #5 Coil Zipper - Slate" />
         <Select label="Category" value={data.componentCategory} onChange={v => set('componentCategory', v)} options={BOM_COMPONENT_OPTIONS} />

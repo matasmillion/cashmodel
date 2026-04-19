@@ -124,6 +124,67 @@ export function PhotoUpload({ label, slotKey, images, onUpload, onRemove }) {
   );
 }
 
+// CoverPhoto — single-image drop zone used as the "hero" reference card on
+// the first step of each builder. Upload replaces the existing photo in the
+// slot so there's only ever one cover.
+export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height = 240 }) {
+  const fileRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
+  const slotImages = (images || []).filter(img => img.slot === slotKey);
+  const current = slotImages[0];
+
+  const handleFile = async (file) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    // Remove any existing cover first so the slot stays single-image
+    if (current) onRemove(slotKey, 0);
+    onUpload(slotKey, await resizeImage(file), file.name);
+  };
+
+  return (
+    <div style={{ marginBottom: 18 }}>
+      {label && <label style={labelStyle}>{label}</label>}
+      <div onClick={() => fileRef.current?.click()}
+        onDrop={e => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files?.[0]); }}
+        onDragOver={e => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        style={{
+          position: 'relative',
+          border: `2px dashed ${dragging ? FR.soil : FR.sand}`,
+          borderRadius: 8,
+          height,
+          cursor: 'pointer',
+          background: current ? 'transparent' : (dragging ? FR.sand : FR.salt),
+          transition: 'all 0.2s',
+          overflow: 'hidden',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+        <input ref={fileRef} type="file" accept="image/*"
+          onChange={e => { if (e.target.files?.[0]) handleFile(e.target.files[0]); e.target.value = ''; }}
+          style={{ display: 'none' }} />
+        {current ? (
+          <>
+            <img src={current.data} alt={current.name || 'Cover'}
+              style={{ width: '100%', height: '100%', objectFit: 'contain', background: FR.white }} />
+            <button onClick={e => { e.stopPropagation(); onRemove(slotKey, 0); }}
+              style={{ position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 12, background: FR.slate, color: FR.salt, border: 'none', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(58,58,58,0.75)', padding: '4px 10px', fontSize: 10, color: FR.salt }}>
+              {current.name || 'Cover image'} · click or drop a new file to replace
+            </div>
+          </>
+        ) : (
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 32, color: FR.sand, lineHeight: 1 }}>+</div>
+            <div style={{ fontSize: 12, color: FR.stone, marginTop: 6 }}>Click or drop the product render here</div>
+            <div style={{ fontSize: 10, color: FR.sand, marginTop: 3 }}>This image becomes the cover card on the list view</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function LibraryPicker({ category, library, onSelect, buttonLabel }) {
   const [open, setOpen] = useState(false);
   const items = library[category] || [];

@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-19T08:31:39.001Z",
+  "lastUpdated": "2026-04-19T08:39:54.158Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "0a87c8a",
+      "date": "2026-04-19T08:31:52+00:00",
+      "message": "Use full window width + larger PLM preview pane"
+    },
+    {
       "sha": "457013e",
       "date": "2026-04-19T08:27:36+00:00",
       "message": "PLM: live page preview + Component Pack wizard parity"
@@ -1087,11 +1092,6 @@
       "sha": "d851c40",
       "date": "2026-04-17T12:15:22+03:00",
       "message": "Add files via upload"
-    },
-    {
-      "sha": "4d37107",
-      "date": "2026-04-13T14:25:26+00:00",
-      "message": "Refresh state.json timestamp from local build"
     }
   ]
 }

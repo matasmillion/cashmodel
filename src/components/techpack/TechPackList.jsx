@@ -27,13 +27,19 @@ function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onCreateVariant, onDr
       onDragStart={e => { e.dataTransfer.setData('text/plain', pack.id); onDragStart(pack.id); }}
       onDragEnd={onDragEnd}
       style={{
-        background: 'white', borderRadius: 8, padding: 12, marginBottom: 8,
+        background: 'white', borderRadius: 8, marginBottom: 8,
         border: `1px solid ${FR.sand}`, cursor: 'grab',
-        transition: 'box-shadow 0.15s, transform 0.15s',
+        transition: 'box-shadow 0.15s, transform 0.15s', overflow: 'hidden',
       }}
       onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
     >
+      <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer', width: '100%', aspectRatio: '4 / 3', background: FR.salt, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${FR.sand}` }}>
+        {pack.cover_image
+          ? <img src={pack.cover_image} alt={pack.style_name || 'Cover'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : <Shirt size={28} style={{ color: FR.sand }} />}
+      </div>
+      <div style={{ padding: 12 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
         <GripVertical size={12} style={{ color: FR.sand, marginTop: 2, flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -70,6 +76,7 @@ function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onCreateVariant, onDr
           <Trash2 size={11} />
         </button>
       </div>
+      </div>
     </div>
   );
 }
@@ -84,7 +91,7 @@ function KanbanColumn({ status, packs, onOpen, onDuplicate, onDelete, onCreateVa
       onDragLeave={() => setDragOverStatus(null)}
       onDrop={e => { e.preventDefault(); setDragOverStatus(null); const id = e.dataTransfer.getData('text/plain'); onDrop(id, status); }}
       style={{
-        flex: 1, minWidth: 180, maxWidth: 240,
+        flex: 1, minWidth: 220, maxWidth: 320,
         background: isOver ? colors.border : colors.bg,
         borderRadius: 10, padding: 10,
         border: `1px solid ${isOver ? FR.soil : colors.border}`,

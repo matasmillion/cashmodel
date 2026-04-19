@@ -113,28 +113,37 @@ function PhotoGrid({ images, slot, x, y, cols = 3, cellW = 180, cellH = 180, gap
 }
 
 // ─── Page bodies ─────────────────────────────────────────────────────────────
-function PageIdentity({ d }) {
+function PageIdentity({ d, images }) {
+  const cover = (images || []).find(img => img.slot === 'component-cover');
   return (
     <g>
-      <text x={PAGE_W / 2} y="260" textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="48" fill={FR.slate}>
-        {clampLine(d.componentName || 'New Component', 900, 24)}
+      {cover
+        ? <image href={cover.data} x={PAGE_W / 2 - 160} y={105} width="320" height="240" preserveAspectRatio="xMidYMid meet" />
+        : (
+          <g>
+            <rect x={PAGE_W / 2 - 160} y={105} width="320" height="240" fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" />
+            <text x={PAGE_W / 2} y={230} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">Component photo goes here</text>
+          </g>
+        )}
+      <text x={PAGE_W / 2} y="385" textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="40" fill={FR.slate}>
+        {clampLine(d.componentName || 'New Component', 900, 22)}
       </text>
-      <text x={PAGE_W / 2} y="300" textAnchor="middle" fontSize="14" fill={FR.soil}>
+      <text x={PAGE_W / 2} y="415" textAnchor="middle" fontSize="13" fill={FR.soil}>
         {esc(d.componentNumber || 'FR-CMP-000')}
       </text>
-      <text x={PAGE_W / 2} y="330" textAnchor="middle" fontSize="12" fill={FR.stone}>
+      <text x={PAGE_W / 2} y="440" textAnchor="middle" fontSize="11" fill={FR.stone}>
         {[d.componentCategory, d.season].filter(Boolean).join('  ·  ') || '—'}
       </text>
-      <rect x={PAGE_W / 2 - 80} y="355" width="160" height="36" rx="6" fill={FR.soil} />
-      <text x={PAGE_W / 2} y="379" textAnchor="middle" fontSize="11" fontWeight="bold" fill={FR.salt} letterSpacing="1">
+      <rect x={PAGE_W / 2 - 80} y="460" width="160" height="32" rx="6" fill={FR.soil} />
+      <text x={PAGE_W / 2} y="481" textAnchor="middle" fontSize="11" fontWeight="bold" fill={FR.salt} letterSpacing="1">
         {esc((d.status || 'DESIGN').toUpperCase())}
       </text>
-      <SectionHeading x={40} y={460}>Identity & Classification</SectionHeading>
-      <Field x={40} y={495} label="Component Name" value={d.componentName} />
-      <Field x={400} y={495} label="Category" value={d.componentCategory} />
-      <Field x={760} y={495} label="Component #" value={d.componentNumber} />
-      <Field x={40} y={555} label="Status" value={d.status} />
-      <Field x={400} y={555} label="Season" value={d.season} />
+      <SectionHeading x={40} y={545}>Identity & Classification</SectionHeading>
+      <Field x={40} y={580} label="Component Name" value={d.componentName} />
+      <Field x={400} y={580} label="Category" value={d.componentCategory} />
+      <Field x={760} y={580} label="Component #" value={d.componentNumber} />
+      <Field x={40} y={640} label="Status" value={d.status} />
+      <Field x={400} y={640} label="Season" value={d.season} />
     </g>
   );
 }
