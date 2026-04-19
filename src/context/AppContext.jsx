@@ -1,6 +1,7 @@
-import { createContext, useContext, useReducer, useMemo, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useReducer, useMemo, useEffect, useRef } from 'react';
 import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, OPEX_WAREHOUSE, CREDIT_CARDS, LOANS, AD_UNIT_TYPES, DEFAULT_EVENTS } from '../data/seedData';
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
+import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
 
 const LOCAL_STORAGE_KEY = 'cashmodel_state';
 
@@ -32,17 +33,31 @@ const PERSISTED_KEYS = [
   'manualPOs', 'rateCard', 'scenarios', 'activeScenarioId',
 ];
 
+const VALID_TABS = new Set([
+  'dashboard', 'revenue', 'cashflow', 'ad-units', 'unit-economics',
+  'product', 'fulfillment', 'po-schedule', 'pos', 'opex', 'scenarios', 'integrations',
+]);
+
+function readTabFromHash() {
+  if (typeof window === 'undefined') return null;
+  const raw = (window.location.hash || '').replace(/^#\/?/, '');
+  // First segment is the tab; sub-segments belong to nested routing (PLM, etc.)
+  const first = raw.split('/')[0];
+  return VALID_TABS.has(first) ? first : null;
+}
+
 function loadInitialState() {
+  const hashTab = readTabFromHash();
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (raw) {
       const saved = JSON.parse(raw);
-      return { ...initialState, ...saved };
+      return { ...initialState, ...saved, ...(hashTab ? { activeTab: hashTab } : {}) };
     }
   } catch (err) {
     console.error('Failed to load saved state:', err);
   }
-  return initialState;
+  return { ...initialState, ...(hashTab ? { activeTab: hashTab } : {}) };
 }
 
 function reducer(state, action) {
@@ -132,6 +147,12 @@ function reducer(state, action) {
     case 'UPDATE_LOANS':
       return { ...state, loans: { ...state.loans, ...action.payload } };
 
+    case 'LOAD_CLOUD_STATE': {
+      // Replace persisted keys with cloud data, keep active tab
+      const { activeTab } = state;
+      return { ...state, ...action.payload, activeTab };
+    }
+
     default:
       return state;
   }
@@ -140,17 +161,81 @@ function reducer(state, action) {
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, undefined, loadInitialState);
   const saveTimerRef = useRef(null);
+  const userIdRef = useRef(null);
 
-  // Auto-save to localStorage on state changes (debounced 500ms)
+  // Sync activeTab with URL hash. Only touches the first segment, so nested
+  // routing inside a tab (e.g. #product/styles/abc/5) is preserved when the
+  // user is already on that tab.
+  useEffect(() => {
+    const currentFirst = (window.location.hash || '').replace(/^#\/?/, '').split('/')[0];
+    if (currentFirst !== state.activeTab) {
+      window.history.pushState(null, '', `#${state.activeTab}`);
+    }
+  }, [state.activeTab]);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      const first = (window.location.hash || '').replace(/^#\/?/, '').split('/')[0];
+      if (VALID_TABS.has(first) && first !== state.activeTab) {
+        dispatch({ type: 'SET_TAB', payload: first });
+      }
+    };
+    window.addEventListener('hashchange', onHashChange);
+    window.addEventListener('popstate', onHashChange);
+    return () => {
+      window.removeEventListener('hashchange', onHashChange);
+      window.removeEventListener('popstate', onHashChange);
+    };
+  }, [state.activeTab]);
+
+  // Listen to Supabase auth state — load cloud data when user signs in
+  useEffect(() => {
+    if (!IS_SUPABASE_ENABLED) return;
+
+    async function loadCloudState(userId) {
+      const { data, error } = await supabase
+        .from('user_state')
+        .select('state')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (!error && data?.state) {
+        dispatch({ type: 'LOAD_CLOUD_STATE', payload: data.state });
+      }
+    }
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        userIdRef.current = session.user.id;
+        loadCloudState(session.user.id);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      userIdRef.current = session?.user?.id ?? null;
+      if (session?.user) loadCloudState(session.user.id);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Auto-save: localStorage always, Supabase when signed in (debounced 500ms)
   useEffect(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
+    saveTimerRef.current = setTimeout(async () => {
       try {
         const toSave = {};
         for (const key of PERSISTED_KEYS) {
           toSave[key] = state[key];
         }
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(toSave));
+
+        if (IS_SUPABASE_ENABLED && userIdRef.current) {
+          await supabase.from('user_state').upsert({
+            user_id: userIdRef.current,
+            state: toSave,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id' });
+        }
       } catch (err) {
         console.error('Failed to save state:', err);
       }

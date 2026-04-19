@@ -1,4 +1,5 @@
 import { AppProvider, useApp } from './context/AppContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import KPICards from './components/KPICards';
 import CashflowChart from './components/CashflowChart';
 import CashflowTable from './components/CashflowTable';
@@ -11,7 +12,10 @@ import IntegrationsPanel from './components/IntegrationsPanel';
 import RevenueForecast from './components/RevenueForecast';
 import AdUnitModel from './components/AdUnitModel';
 import RateCardManager from './components/RateCardManager';
-import { LayoutDashboard, Table2, Calculator, Package, Receipt, Sliders, Plug, TrendingUp, Film, CalendarRange, Truck } from 'lucide-react';
+import PLMView from './components/techpack/PLMView';
+import AuthGate from './auth/AuthGate';
+import { supabase, IS_SUPABASE_ENABLED } from './lib/supabase';
+import { LayoutDashboard, Table2, Calculator, Package, Receipt, Sliders, Plug, TrendingUp, Film, CalendarRange, Truck, LogOut, Shirt } from 'lucide-react';
 
 const tabs = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -19,6 +23,7 @@ const tabs = [
   { id: 'cashflow', label: 'P&L + Cash', icon: Table2 },
   { id: 'ad-units', label: 'Creative', icon: Film },
   { id: 'unit-economics', label: 'Unit Econ', icon: Calculator },
+  { id: 'product', label: 'PLM', icon: Shirt },
   { id: 'fulfillment', label: 'Fulfillment', icon: Truck },
   { id: 'po-schedule', label: 'PO Schedule', icon: CalendarRange },
   { id: 'pos', label: 'New PO', icon: Package },
@@ -33,15 +38,29 @@ function Dashboard() {
   return (
     <div className="min-h-screen" style={{ background: '#F5F0E8' }}>
       <header className="backdrop-blur-sm border-b sticky top-0 z-50" style={{ background: 'rgba(245,240,232,0.95)', borderColor: '#EBE5D5' }}>
-        <div className="max-w-[1400px] mx-auto px-6 py-4">
+        <div className="px-6 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl tracking-wide" style={{ color: '#3A3A3A', fontFamily: "'Cormorant Garamond', Georgia, serif", letterSpacing: '0.05em' }}>
-                FOREIGN RESOURCE
-              </h1>
-              <p className="text-xs uppercase tracking-[0.15em] mt-0.5" style={{ color: '#716F70', fontFamily: "'Inter', sans-serif" }}>
-                Growth Model & Operating Dashboard
-              </p>
+            <div className="flex items-center gap-4">
+              <div>
+                <h1 className="text-2xl tracking-wide" style={{ color: '#3A3A3A', fontFamily: "'Cormorant Garamond', Georgia, serif", letterSpacing: '0.05em' }}>
+                  FOREIGN RESOURCE
+                </h1>
+                <p className="text-xs uppercase tracking-[0.15em] mt-0.5" style={{ color: '#716F70', fontFamily: "'Inter', sans-serif" }}>
+                  Growth Model & Operating Dashboard
+                </p>
+              </div>
+              {IS_SUPABASE_ENABLED && (
+                <button
+                  onClick={() => supabase.auth.signOut()}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs"
+                  title="Sign out"
+                  style={{ color: '#716F70', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = '#EBE5D5'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <LogOut size={13} />
+                </button>
+              )}
             </div>
             <nav className="flex gap-1 flex-wrap">
               {tabs.map(tab => {
@@ -69,7 +88,7 @@ function Dashboard() {
         </div>
       </header>
 
-      <main className="max-w-[1400px] mx-auto px-6 py-6 space-y-6">
+      <main className="px-6 py-6 space-y-6">
         {state.activeTab === 'dashboard' && (
           <>
             <KPICards />
@@ -81,6 +100,7 @@ function Dashboard() {
         {state.activeTab === 'cashflow' && <CashflowTable />}
         {state.activeTab === 'ad-units' && <AdUnitModel />}
         {state.activeTab === 'unit-economics' && <UnitEconomics />}
+        {state.activeTab === 'product' && <PLMView />}
         {state.activeTab === 'fulfillment' && <RateCardManager />}
         {state.activeTab === 'po-schedule' && <POSchedule />}
         {state.activeTab === 'pos' && <POBuilder />}
@@ -94,9 +114,13 @@ function Dashboard() {
 
 function App() {
   return (
-    <AppProvider>
-      <Dashboard />
-    </AppProvider>
+    <ErrorBoundary>
+      <AuthGate>
+        <AppProvider>
+          <Dashboard />
+        </AppProvider>
+      </AuthGate>
+    </ErrorBoundary>
   );
 }
 
