@@ -33,17 +33,29 @@ const PERSISTED_KEYS = [
   'manualPOs', 'rateCard', 'scenarios', 'activeScenarioId',
 ];
 
+const VALID_TABS = new Set([
+  'dashboard', 'revenue', 'cashflow', 'ad-units', 'unit-economics',
+  'product', 'fulfillment', 'po-schedule', 'pos', 'opex', 'scenarios', 'integrations',
+]);
+
+function readTabFromHash() {
+  if (typeof window === 'undefined') return null;
+  const h = (window.location.hash || '').replace(/^#\/?/, '');
+  return VALID_TABS.has(h) ? h : null;
+}
+
 function loadInitialState() {
+  const hashTab = readTabFromHash();
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (raw) {
       const saved = JSON.parse(raw);
-      return { ...initialState, ...saved };
+      return { ...initialState, ...saved, ...(hashTab ? { activeTab: hashTab } : {}) };
     }
   } catch (err) {
     console.error('Failed to load saved state:', err);
   }
-  return initialState;
+  return { ...initialState, ...(hashTab ? { activeTab: hashTab } : {}) };
 }
 
 function reducer(state, action) {
@@ -148,6 +160,32 @@ export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, undefined, loadInitialState);
   const saveTimerRef = useRef(null);
   const userIdRef = useRef(null);
+
+  // Sync activeTab with URL hash so refresh + back/forward + deep-linking work.
+  useEffect(() => {
+    const desired = `#${state.activeTab}`;
+    if (window.location.hash !== desired) {
+      // history.replaceState so switching tabs doesn't spam the back button.
+      // Use pushState only when the user navigates intentionally — which for
+      // tab changes is already the case, so pushState gives proper back nav.
+      window.history.pushState(null, '', desired);
+    }
+  }, [state.activeTab]);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      const h = (window.location.hash || '').replace(/^#\/?/, '');
+      if (VALID_TABS.has(h) && h !== state.activeTab) {
+        dispatch({ type: 'SET_TAB', payload: h });
+      }
+    };
+    window.addEventListener('hashchange', onHashChange);
+    window.addEventListener('popstate', onHashChange);
+    return () => {
+      window.removeEventListener('hashchange', onHashChange);
+      window.removeEventListener('popstate', onHashChange);
+    };
+  }, [state.activeTab]);
 
   // Listen to Supabase auth state — load cloud data when user signs in
   useEffect(() => {

@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-19T08:39:54.158Z",
+  "lastUpdated": "2026-04-19T08:47:31.256Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "3a72675",
+      "date": "2026-04-19T08:40:22+00:00",
+      "message": "PLM: cover image first, list thumbnails, library grouped by category"
+    },
+    {
       "sha": "0a87c8a",
       "date": "2026-04-19T08:31:52+00:00",
       "message": "Use full window width + larger PLM preview pane"
@@ -1087,11 +1092,6 @@
       "sha": "32c6f52",
       "date": "2026-04-17T09:17:42+00:00",
       "message": "Merge remote-tracking branch 'origin/main' into claude/build-cash-model-app-11msn"
-    },
-    {
-      "sha": "d851c40",
-      "date": "2026-04-17T12:15:22+03:00",
-      "message": "Add files via upload"
     }
   ]
 }
