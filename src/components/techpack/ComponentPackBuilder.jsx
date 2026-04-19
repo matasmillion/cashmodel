@@ -12,7 +12,7 @@ import ComponentPackPagePreview from './ComponentPackPagePreview';
 import { saveComponentPack } from '../../utils/componentPackStore';
 import { parsePLMHash, replacePLMHash } from '../../utils/plmRouting';
 
-export default function ComponentPackBuilder({ pack, onBack }) {
+export default function ComponentPackBuilder({ pack, onBack, existingSuppliers = [] }) {
   const [step, setStep] = useState(() => {
     const { packId, step } = parsePLMHash();
     return packId === pack.id ? Math.min(step, COMPONENT_STEPS.length - 1) : 0;
@@ -85,7 +85,7 @@ export default function ComponentPackBuilder({ pack, onBack }) {
   }, [set]);
 
   const Comp = COMPONENT_STEP_FNS[step];
-  const stepProps = { data, set, images, onUpload: handleImgUpload, onRemove: handleImgRemove, pickFRColor };
+  const stepProps = { data, set, images, onUpload: handleImgUpload, onRemove: handleImgRemove, pickFRColor, existingSuppliers };
 
   return (
     <div style={{ background: FR.salt, fontFamily: "'Helvetica Neue','Inter',sans-serif", borderRadius: 8, overflow: 'hidden', border: `1px solid ${FR.sand}` }}>

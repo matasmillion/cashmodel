@@ -180,7 +180,10 @@ export default function ComponentPackList() {
     return byCat;
   }, [filtered]);
 
-  if (activePack) return <ComponentPackBuilder pack={activePack} onBack={closeBuilder} />;
+  if (activePack) {
+    const existingSuppliers = [...new Set(packs.map(p => (p.supplier || '').trim()).filter(Boolean))].sort();
+    return <ComponentPackBuilder pack={activePack} onBack={closeBuilder} existingSuppliers={existingSuppliers} />;
+  }
 
   const toggleCategory = (name) =>
     setOpenCategories(prev => ({ ...prev, [name]: !(prev[name] ?? packsInCategoryDefaultOpen(grouped[name])) }));

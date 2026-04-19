@@ -4,7 +4,7 @@
 
 import { FR, STATUSES, BOM_COMPONENT_OPTIONS, CURRENCIES, DYE_METHODS, CERTIFICATIONS } from './componentPackConstants';
 import { FR_COLOR_OPTIONS } from './techPackConstants';
-import { Input, Select, Row, SectionTitle, ArrayTable, PhotoUpload, CoverPhoto } from './TechPackPrimitives';
+import { Input, Select, Row, SectionTitle, ArrayTable, PhotoUpload, CoverPhoto, EditableSelect } from './TechPackPrimitives';
 
 export function StepIdentity({ data, set, images, onUpload, onRemove }) {
   return (
@@ -24,12 +24,17 @@ export function StepIdentity({ data, set, images, onUpload, onRemove }) {
   );
 }
 
-export function StepSupplier({ data, set }) {
+export function StepSupplier({ data, set, existingSuppliers = [] }) {
   return (
     <div>
       <SectionTitle>Supplier</SectionTitle>
       <Row>
-        <Input label="Supplier Name" value={data.supplier} onChange={v => set('supplier', v)} placeholder="e.g. YKK China" />
+        <EditableSelect
+          label="Supplier Name"
+          value={data.supplier}
+          onChange={v => set('supplier', v)}
+          options={existingSuppliers}
+          placeholder="Add a new supplier…" />
         <Input label="Contact Name" value={data.supplierContact} onChange={v => set('supplierContact', v)} />
       </Row>
       <Row cols="1fr 1fr 1fr">
