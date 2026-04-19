@@ -24,8 +24,8 @@ export const DEFAULT_LIBRARY = { bom: [], fabrics: [], trims: [], labels: [], lo
 
 export const STATUSES = ['Design', 'Sampling', 'Testing', 'Pre-Production', 'Production', 'Released'];
 
-// Steps locked until Pre-Production: SKU (1), Labels (11), Order (12)
-export const LOCKED_STEPS = new Set([1, 11, 12]);
+// Steps locked until Pre-Production: Labels (10), Order (11), Compliance (12)
+export const LOCKED_STEPS = new Set([10, 11, 12]);
 export function isStepLocked(stepIndex, status) {
   if (!LOCKED_STEPS.has(stepIndex)) return false;
   const unlockAt = STATUSES.indexOf('Pre-Production');
@@ -33,30 +33,45 @@ export function isStepLocked(stepIndex, status) {
   return current < unlockAt || current === -1;
 }
 
+// 14-step wizard mapping 1:1 to the FR_TechPack_Template_Blank.pdf pages.
 export const STEPS = [
-  { id: 'identity', title: 'Identity & Classification', icon: '01' },
-  { id: 'sku', title: 'SKU & Numbering', icon: '02' },
-  { id: 'factory', title: 'Factory Assignment', icon: '03' },
-  { id: 'design', title: 'Design & Construction', icon: '04' },
-  { id: 'flatlays', title: 'Flat Lay Diagrams', icon: '05' },
-  { id: 'materials', title: 'Bill of Materials', icon: '06' },
-  { id: 'color', title: 'Color & Artwork', icon: '07' },
-  { id: 'construction', title: 'Construction Details', icon: '08' },
-  { id: 'pattern', title: 'Pattern & Cutting', icon: '09' },
-  { id: 'pom', title: 'Points of Measure', icon: '10' },
-  { id: 'treatments', title: 'Garment Treatments', icon: '11' },
-  { id: 'labels', title: 'Labels & Packaging', icon: '12' },
-  { id: 'order', title: 'Order & Delivery', icon: '13' },
-  { id: 'review', title: 'Review & Export', icon: '14' },
+  { id: 'cover',         title: 'Cover & Identity',                 icon: '01' },
+  { id: 'design',        title: 'Design Overview',                  icon: '02' },
+  { id: 'flatlays',      title: 'Technical Flat Lay Diagrams',      icon: '03' },
+  { id: 'bom',           title: 'Bill of Materials',                icon: '04' },
+  { id: 'color',         title: 'Color & Artwork',                  icon: '05' },
+  { id: 'construction',  title: 'Construction Details',             icon: '06' },
+  { id: 'sketches',      title: 'Construction Detail Sketches',     icon: '07' },
+  { id: 'pattern',       title: 'Pattern Pieces & Cutting',         icon: '08' },
+  { id: 'pom',           title: 'Points of Measure',                icon: '09' },
+  { id: 'treatments',    title: 'Garment Treatments',               icon: '10' },
+  { id: 'labels',        title: 'Labels & Packaging',               icon: '11' },
+  { id: 'order',         title: 'Order & Delivery',                 icon: '12' },
+  { id: 'compliance',    title: 'Compliance & Quality',             icon: '13' },
+  { id: 'revision',      title: 'Revision History & Approval',      icon: '14' },
 ];
 
+const todayISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 export const DEFAULT_DATA = {
-  styleName: '', productCategory: '', productTier: '', season: '', targetRetail: '', targetFOB: '', status: 'Development',
+  // Page 1 — Cover & Identity
+  styleName: '', productCategory: '', productTier: '', season: '', targetRetail: '', targetFOB: '', status: 'Design',
   styleNumber: '', skuPrefix: '', barcodeMethod: 'Shopify Retail Barcode Labels',
+  dateCreated: todayISO(),
+  revision: 'V1.0',
+  sizeRange: 'S / M / L / XL',
+  designedBy: { name: '', date: '' },
+  approvedBy: { name: '', date: '' },
+  factoryConfirmed: { name: '', date: '' },
+
+  // Page 2+
   factory: '', factoryContact: '', fabricType: '',
   designNotes: '', fit: '', keyFeatures: '', flatLayNotes: '',
   bom: [{ component: '', type: '', material: '', color: '', weight: '', supplier: '', supplierContact: '', costPerUnit: '', notes: '' }],
-  colorways: [{ name: '', frColor: 'Slate', pantone: '', hex: '#3A3A3A' }],
+  colorways: [{ name: '', frColor: '', pantone: '', hex: '' }],
   logoFront: '', logoBack: '', logoMethod: '',
   seams: [{ operation: '', seamType: '', stitchType: '', spiSpcm: '', threadColor: '', notes: '' }],
   constructionNotes: '',
