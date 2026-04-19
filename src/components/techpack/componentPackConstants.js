@@ -9,6 +9,18 @@ export const CURRENCIES = ['USD', 'CNY', 'EUR', 'GBP', 'JPY'];
 export const DYE_METHODS = ['Stock Color', 'PFD (Prepared for Dye)', 'Dye-to-match (DTM)', 'Reactive Dye', 'Pigment Dye', 'Yarn Dye', 'N/A'];
 export const CERTIFICATIONS = ['OEKO-TEX Standard 100', 'GOTS', 'GRS', 'bluesign', 'REACH', 'Prop 65', 'Leather Working Group', 'RWS', 'None'];
 
+// 8-step wizard, mirrors the Tech Pack section/page architecture
+export const COMPONENT_STEPS = [
+  { id: 'identity',   title: 'Identity & Classification', icon: '01' },
+  { id: 'supplier',   title: 'Supplier',                  icon: '02' },
+  { id: 'specs',      title: 'Specifications',            icon: '03' },
+  { id: 'color',      title: 'Color',                     icon: '04' },
+  { id: 'cost',       title: 'Cost & Pricing',            icon: '05' },
+  { id: 'compliance', title: 'Compliance',                icon: '06' },
+  { id: 'images',     title: 'Reference Images',          icon: '07' },
+  { id: 'notes',      title: 'Notes',                     icon: '08' },
+];
+
 export const DEFAULT_COMPONENT_DATA = {
   // Identity
   componentName: '',

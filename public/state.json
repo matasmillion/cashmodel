@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-17T13:51:53.551Z",
+  "lastUpdated": "2026-04-19T08:26:45.906Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "4c03213",
+      "date": "2026-04-17T13:52:23+00:00",
+      "message": "PLM parity: revisions, cost roll-up, variants, samples, filter/search"
+    },
+    {
       "sha": "7555a3c",
       "date": "2026-04-17T13:20:37+00:00",
       "message": "Add Component Packs + rename Product tab to PLM"
@@ -1087,11 +1092,6 @@
       "sha": "98bef50",
       "date": "2026-04-13T14:18:25+00:00",
       "message": "Trigger fresh deploy — Supabase auth secrets now wired in"
-    },
-    {
-      "sha": "173a463",
-      "date": "2026-04-13T13:36:58+00:00",
-      "message": "Add state.json bridge file for Claude visibility across builds"
     }
   ]
 }

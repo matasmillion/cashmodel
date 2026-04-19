@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { ArrowLeft, History, Plus, CheckCircle, XCircle, Clock, Camera } from 'lucide-react';
 import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STEPS, IMG_STEPS, computeCompletion, isStepLocked, computeBOMCost, SAMPLE_TYPES, SAMPLE_VERDICTS } from './techPackConstants';
 import { STEP_FNS } from './TechPackSteps';
+import TechPackPagePreview from './TechPackPagePreview';
 import { saveTechPack } from '../../utils/techPackStore';
 import { generateTechPackPDF } from '../../utils/techPackPDF';
 import { generateTechPackSVG, svgToBlob } from '../../utils/techPackSVG';
@@ -299,7 +300,7 @@ export default function TechPackBuilder({ pack, onBack }) {
         </div>
 
         {/* Main content */}
-        <div style={{ flex: 1, padding: '20px 28px', maxHeight: '75vh', overflowY: 'auto' }}>
+        <div style={{ flex: 1, minWidth: 0, padding: '20px 28px', maxHeight: '75vh', overflowY: 'auto' }}>
           <Comp {...stepProps} />
 
           {/* Revision panel on the Review step */}
@@ -318,6 +319,15 @@ export default function TechPackBuilder({ pack, onBack }) {
               {step === STEPS.length - 2 ? 'Review' : 'Next'}
             </button>
           </div>
+        </div>
+
+        {/* Live page preview */}
+        <div style={{ width: 480, minWidth: 360, maxWidth: 520, borderLeft: `1px solid ${FR.sand}`, background: FR.sand, padding: '20px 20px', maxHeight: '75vh', overflowY: 'auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+            <div style={{ fontSize: 9, color: FR.stone, letterSpacing: 2, fontWeight: 600, textTransform: 'uppercase' }}>Live Preview</div>
+            <div style={{ fontSize: 9, color: FR.stone }}>Page {step + 1} / {STEPS.length}</div>
+          </div>
+          <TechPackPagePreview data={data} images={images} step={step} />
         </div>
       </div>
     </div>
