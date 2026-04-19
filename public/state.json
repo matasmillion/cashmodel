@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-19T08:26:45.906Z",
+  "lastUpdated": "2026-04-19T08:31:39.001Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "457013e",
+      "date": "2026-04-19T08:27:36+00:00",
+      "message": "PLM: live page preview + Component Pack wizard parity"
+    },
+    {
       "sha": "4c03213",
       "date": "2026-04-17T13:52:23+00:00",
       "message": "PLM parity: revisions, cost roll-up, variants, samples, filter/search"
@@ -1087,11 +1092,6 @@
       "sha": "4d37107",
       "date": "2026-04-13T14:25:26+00:00",
       "message": "Refresh state.json timestamp from local build"
-    },
-    {
-      "sha": "98bef50",
-      "date": "2026-04-13T14:18:25+00:00",
-      "message": "Trigger fresh deploy — Supabase auth secrets now wired in"
     }
   ]
 }

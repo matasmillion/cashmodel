@@ -37,7 +37,7 @@ function Dashboard() {
   return (
     <div className="min-h-screen" style={{ background: '#F5F0E8' }}>
       <header className="backdrop-blur-sm border-b sticky top-0 z-50" style={{ background: 'rgba(245,240,232,0.95)', borderColor: '#EBE5D5' }}>
-        <div className="max-w-[1400px] mx-auto px-6 py-4">
+        <div className="px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div>
@@ -87,7 +87,7 @@ function Dashboard() {
         </div>
       </header>
 
-      <main className="max-w-[1400px] mx-auto px-6 py-6 space-y-6">
+      <main className="px-6 py-6 space-y-6">
         {state.activeTab === 'dashboard' && (
           <>
             <KPICards />
