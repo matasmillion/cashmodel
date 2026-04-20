@@ -590,6 +590,50 @@ function PagePom({ d, images }) {
   );
 }
 
+// ─── Page 10 — Garment Treatments ───────────────────────────────────────────
+function PageTreatments({ d, images }) {
+  const imgs = images || [];
+  const before = imgs.find(i => i.slot === 'treatment-before');
+  const after  = imgs.find(i => i.slot === 'treatment-after');
+
+  const treatments  = (d.treatments  || []).filter(r => r.step || r.treatment || r.process);
+  const distressing = (d.distressing || []).filter(r => r.area || r.technique || r.intensity);
+
+  const tCols = [
+    { key: 'step',        label: 'Step',                 w: 60  },
+    { key: 'treatment',   label: 'Treatment',            w: 180 },
+    { key: 'process',     label: 'Process',              w: 180 },
+    { key: 'temperature', label: 'Temp',                 w: 90  },
+    { key: 'duration',    label: 'Duration',             w: 100 },
+    { key: 'chemicals',   label: 'Chemicals or Agents',  w: 230 },
+    { key: 'notes',       label: 'Notes',                w: 203 },
+  ];
+
+  const dCols = [
+    { key: 'area',           label: 'Area',            w: 180 },
+    { key: 'technique',      label: 'Technique',       w: 210 },
+    { key: 'intensity',      label: 'Intensity (1-5)', w: 140 },
+    { key: 'referenceImage', label: 'Reference Image', w: 260 },
+    { key: 'notes',          label: 'Notes',           w: 253 },
+  ];
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <SectionHeading x={40} y={158}>Wash &amp; Dye Treatments</SectionHeading>
+      <GridTable x={40} y={170} cols={tCols} rows={treatments} bodyRows={4} />
+
+      <SectionHeading x={40} y={306}>Distressing &amp; Special Finishes</SectionHeading>
+      <GridTable x={40} y={318} cols={dCols} rows={distressing} bodyRows={4} />
+
+      <SectionHeading x={40} y={454}>Before / After Reference</SectionHeading>
+      <PhotoSlot x={40}                                 y={475} w={(PAGE_W - 80 - 16) / 2} h={230} label="Before Treatment" image={before} />
+      <PhotoSlot x={40 + (PAGE_W - 80 - 16) / 2 + 16}  y={475} w={(PAGE_W - 80 - 16) / 2} h={230} label="After Treatment"  image={after} />
+    </g>
+  );
+}
+
 // ─── Placeholder for pages 2–14 ─────────────────────────────────────────────
 function ComingSoon({ pageNum, title }) {
   return (
@@ -615,7 +659,7 @@ const PAGE_FNS = [
   { title: 'Construction Detail Sketches', body: ({ d, images }) => <PageSketches d={d} images={images} /> },
   { title: 'Pattern Pieces & Cutting',     body: ({ d, images }) => <PagePattern d={d} images={images} /> },
   { title: 'Points of Measure',            body: ({ d, images }) => <PagePom d={d} images={images} /> },
-  { title: 'Garment Treatments',           body: () => <ComingSoon pageNum={10} title="Garment Treatments" /> },
+  { title: 'Garment Treatments',           body: ({ d, images }) => <PageTreatments d={d} images={images} /> },
   { title: 'Labels & Packaging',           body: () => <ComingSoon pageNum={11} title="Labels & Packaging" /> },
   { title: 'Order & Delivery',             body: () => <ComingSoon pageNum={12} title="Order & Delivery" /> },
   { title: 'Compliance & Quality',         body: () => <ComingSoon pageNum={13} title="Compliance & Quality" /> },

@@ -550,7 +550,68 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
     </div>
   );
 }
-export function StepTreatments()       { return <ComingSoon title="Garment Treatments" />; }
+export function StepTreatments({ data, set, images, onUpload, onRemove }) {
+  const treatments = data.treatments && data.treatments.length ? data.treatments : [{ step: '', treatment: '', process: '', temperature: '', duration: '', chemicals: '', notes: '' }];
+  const updT = (i, k, v) => set('treatments', treatments.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addT = () => set('treatments', [...treatments, { step: '', treatment: '', process: '', temperature: '', duration: '', chemicals: '', notes: '' }]);
+  const rmT  = (i) => set('treatments', treatments.filter((_, idx) => idx !== i));
+
+  const distressing = data.distressing && data.distressing.length ? data.distressing : [{ area: '', technique: '', intensity: '', referenceImage: '', notes: '' }];
+  const updD = (i, k, v) => set('distressing', distressing.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addD = () => set('distressing', [...distressing, { area: '', technique: '', intensity: '', referenceImage: '', notes: '' }]);
+  const rmD  = (i) => set('distressing', distressing.filter((_, idx) => idx !== i));
+
+  const intensityRender = (v, onChange) => (
+    <select value={v || ''} onChange={e => onChange(e.target.value)}
+      style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box' }}>
+      <option value="">—</option>
+      {[1, 2, 3, 4, 5].map(n => <option key={n} value={String(n)}>{n}</option>)}
+    </select>
+  );
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+
+  return (
+    <div>
+      <SectionTitle>Garment Treatments</SectionTitle>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel}>Wash &amp; Dye Treatments</label>
+        <ArrayTable
+          headers={[
+            { key: 'step',        label: 'Step',                  placeholder: '1 / 2 / 3' },
+            { key: 'treatment',   label: 'Treatment',             placeholder: 'Acid Wash / Garment Dye' },
+            { key: 'process',     label: 'Process',               placeholder: 'Stone wash, enzyme, etc.' },
+            { key: 'temperature', label: 'Temperature',           placeholder: '40°C' },
+            { key: 'duration',    label: 'Duration',              placeholder: '45 min' },
+            { key: 'chemicals',   label: 'Chemicals or Agents',   placeholder: 'Pumice, enzyme, sodium…' },
+            { key: 'notes',       label: 'Notes' },
+          ]}
+          rows={treatments} onUpdate={updT} onAdd={addT} onRemove={rmT} />
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel}>Distressing &amp; Special Finishes</label>
+        <ArrayTable
+          headers={[
+            { key: 'area',           label: 'Area',             placeholder: 'Front pocket / Knee' },
+            { key: 'technique',      label: 'Technique',        placeholder: 'Sandblast / Hand scrape' },
+            { key: 'intensity',      label: 'Intensity (1-5)',  render: intensityRender },
+            { key: 'referenceImage', label: 'Reference Image',  placeholder: 'Filename' },
+            { key: 'notes',          label: 'Notes' },
+          ]}
+          rows={distressing} onUpdate={updD} onAdd={addD} onRemove={rmD} />
+      </div>
+
+      <div style={{ marginBottom: 10 }}>
+        <label style={sectionLabel}>Before / After Reference</label>
+        <Row>
+          <PhotoUpload label="Before Treatment" slotKey="treatment-before" images={images} onUpload={onUpload} onRemove={onRemove} />
+          <PhotoUpload label="After Treatment"  slotKey="treatment-after"  images={images} onUpload={onUpload} onRemove={onRemove} />
+        </Row>
+      </div>
+    </div>
+  );
+}
 export function StepLabels()           { return <ComingSoon title="Labels & Packaging" />; }
 export function StepOrder()            { return <ComingSoon title="Order & Delivery" />; }
 export function StepCompliance()       { return <ComingSoon title="Compliance & Quality" />; }
