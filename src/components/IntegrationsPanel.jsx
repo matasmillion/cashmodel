@@ -220,7 +220,7 @@ function ShopifyCard({ creds, onSave, onClear, dispatch }) {
                     </tbody>
                   </table>
                   <p className="mt-2 text-[10px]" style={{ color: FR.stone }}>
-                    Numbers are pulled directly from Shopify's Reports API (ShopifyQL: <code>FROM sales SHOW total_sales, orders GROUP BY week</code>) — the exact same engine that powers Shopify → Analytics → Reports → <strong>Total sales</strong>. No client-side arithmetic.
+                    Pulls orders via Shopify's GraphQL Admin API, bucketed by <code>processedAt</code> (same timestamp Shopify Analytics uses), summing <code>currentTotalPriceSet</code> on non-cancelled, non-test orders. Matches Shopify → Analytics → Reports → <strong>Total sales</strong>.
                   </p>
                 </details>
               </div>

@@ -141,81 +141,78 @@ export async function testShopifyProxy() {
 }
 
 /**
- * Pulls weekly Total sales + order count from Shopify's Reports API via
- * ShopifyQL. These are the exact same numbers the Shopify Analytics UI
- * shows — no client-side arithmetic on individual orders.
+ * Pulls weekly Total sales + order count by querying Shopify's Admin GraphQL
+ * orders endpoint. Uses `processedAt` (same timestamp Shopify Analytics uses
+ * for bucketing) and sums `currentTotalPriceSet` (net of refunds/returns,
+ * same value that feeds Shopify's Total sales report). Paginates automatically.
  *
- * Requires the `read_reports` scope on the Admin API token.
+ * Requires `read_orders` scope.
  * Returns an array of { startDate, endDate, label, revenue, orders, isCurrent }.
  */
 export async function syncShopifyActuals(/* creds unused — proxy holds creds */) {
   const weeks = getPast13Weeks();
-  const since = weeks[0].startDate;  // YYYY-MM-DD
+  const since = weeks[0].startDate; // YYYY-MM-DD
 
-  // ShopifyQL: weekly total_sales + orders since the oldest week's Monday.
-  // TIMESERIES + BY week aggregates into Shopify's own week buckets.
   const gqlQuery = `
-    query ReportsWeekly($q: String!) {
-      shopifyqlQuery(query: $q) {
-        __typename
-        ... on TableResponse {
-          tableData {
-            rowData
-            columns { name dataType }
+    query FetchOrders($cursor: String, $q: String!) {
+      orders(first: 250, after: $cursor, query: $q, sortKey: PROCESSED_AT) {
+        pageInfo { hasNextPage endCursor }
+        edges {
+          node {
+            processedAt
+            cancelledAt
+            test
+            currentTotalPriceSet { shopMoney { amount } }
           }
-        }
-        ... on ParseError {
-          code
-          parseErrors { message code range { start { line character } } }
         }
       }
     }
   `;
-  const shopifyQL = `FROM sales SHOW total_sales, orders GROUP BY week SINCE ${since} UNTIL today ORDER BY week ASC`;
+  const queryFilter = `processed_at:>=${since}`;
 
-  const data = await callShopifyProxy('graphql.json', null, {
-    query: gqlQuery,
-    variables: { q: shopifyQL },
-  });
+  // Fetch all pages (safety cap at 10 pages = 2500 orders over 13 weeks)
+  const all = [];
+  let cursor = null;
+  for (let page = 0; page < 10; page++) {
+    const data = await callShopifyProxy('graphql.json', null, {
+      query: gqlQuery,
+      variables: { cursor, q: queryFilter },
+    });
 
-  if (data.errors?.length) {
-    throw new Error(`ShopifyQL error: ${data.errors.map(e => e.message).join('; ')}`);
+    if (data.errors?.length) {
+      throw new Error(`Shopify: ${data.errors.map(e => e.message).join('; ')}`);
+    }
+
+    const orders = data.data?.orders;
+    if (!orders) break;
+
+    for (const edge of orders.edges) {
+      all.push(edge.node);
+    }
+    if (!orders.pageInfo.hasNextPage) break;
+    cursor = orders.pageInfo.endCursor;
   }
 
-  const result = data.data?.shopifyqlQuery;
-  if (!result) throw new Error('Empty ShopifyQL response');
-  if (result.__typename === 'ParseError') {
-    const msg = result.parseErrors?.map(e => e.message).join('; ') || 'Unknown ShopifyQL parse error';
-    throw new Error(`ShopifyQL parse error: ${msg}`);
-  }
-
-  const cols = result.tableData?.columns || [];
-  const rows = result.tableData?.rowData || [];
-  const weekIdx = cols.findIndex(c => c.name === 'week');
-  const salesIdx = cols.findIndex(c => c.name === 'total_sales');
-  const ordersIdx = cols.findIndex(c => c.name === 'orders');
-
-  // Build a map of weekStartDate (YYYY-MM-DD, Monday) → { revenue, orders }
-  const byWeek = new Map();
-  for (const row of rows) {
-    const weekStartRaw = row[weekIdx];
-    if (!weekStartRaw) continue;
-    // ShopifyQL returns ISO date (possibly with time); normalize to YYYY-MM-DD
-    const weekStart = String(weekStartRaw).slice(0, 10);
-    const revenue = parseFloat(row[salesIdx] ?? 0) || 0;
-    const orderCount = parseInt(row[ordersIdx] ?? 0, 10) || 0;
-    byWeek.set(weekStart, { revenue, orders: orderCount });
-  }
+  // Drop cancelled + test orders — same filter Shopify Analytics applies
+  const valid = all.filter(o => !o.cancelledAt && !o.test);
 
   return weeks.map(week => {
-    const hit = byWeek.get(week.startDate);
+    const weekOrders = valid.filter(o => {
+      const d = new Date(o.processedAt);
+      return d >= new Date(week.startISO) && d <= new Date(week.endISO);
+    });
+    const revenue = weekOrders.reduce((s, o) => {
+      const raw = o.currentTotalPriceSet?.shopMoney?.amount;
+      const v = parseFloat(raw);
+      return s + (Number.isFinite(v) ? v : 0);
+    }, 0);
     return {
       startDate: week.startDate,
       endDate: week.endDate,
       label: week.label,
       isCurrent: week.isCurrent,
-      revenue: hit ? Math.round(hit.revenue * 100) / 100 : 0,
-      orders: hit ? hit.orders : 0,
+      revenue: Math.round(revenue * 100) / 100,
+      orders: weekOrders.length,
     };
   });
 }
