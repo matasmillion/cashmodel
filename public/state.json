@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-19T12:14:58.995Z",
+  "lastUpdated": "2026-04-20T12:17:36.571Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,54 +1044,54 @@
   ],
   "changelog": [
     {
-      "sha": "46dd3b3",
-      "date": "2026-04-19T11:57:51+00:00",
-      "message": "Fix PLM crash: move useMemo above conditional return (rules of hooks)"
+      "sha": "b3fb264",
+      "date": "2026-04-20T08:15:07+00:00",
+      "message": "Add liveDataSync utility — Shopify, Meta, Mercury fetch helpers"
     },
     {
-      "sha": "146243a",
-      "date": "2026-04-19T11:48:54+00:00",
-      "message": "Enable source maps so production crashes give real stack traces"
+      "sha": "40a62b2",
+      "date": "2026-04-20T07:51:04+00:00",
+      "message": "Tech Pack Page 14: Revision History & Approval"
     },
     {
-      "sha": "8133bc5",
-      "date": "2026-04-19T11:42:16+00:00",
-      "message": "Add ErrorBoundary so PLM crashes surface instead of blanking the page"
+      "sha": "69834d6",
+      "date": "2026-04-20T07:45:19+00:00",
+      "message": "Tech Pack Page 13: Compliance & Quality"
     },
     {
-      "sha": "b082b28",
-      "date": "2026-04-19T09:58:40+00:00",
-      "message": "Fix PLM lag: stop fetching full images array on list queries"
+      "sha": "c7aedea",
+      "date": "2026-04-20T07:41:22+00:00",
+      "message": "Tech Pack Page 12: Order & Delivery"
     },
     {
-      "sha": "5b05d81",
-      "date": "2026-04-19T09:19:18+00:00",
-      "message": "Auto-crop cover photos to the subject's bounding box"
+      "sha": "65ba497",
+      "date": "2026-04-20T07:35:54+00:00",
+      "message": "Tech Pack Page 11: Labels & Packaging"
     },
     {
-      "sha": "a28f9ea",
-      "date": "2026-04-19T09:14:19+00:00",
-      "message": "Deep-link routing: PLM section, active pack, and wizard step in URL"
+      "sha": "29b83de",
+      "date": "2026-04-20T07:09:23+00:00",
+      "message": "Tech Pack Page 10: Garment Treatments"
     },
     {
-      "sha": "e324a5a",
-      "date": "2026-04-19T08:47:43+00:00",
-      "message": "Sync active tab with URL hash so refresh + back/forward work"
+      "sha": "40e9537",
+      "date": "2026-04-20T07:05:15+00:00",
+      "message": "Tech Pack Pages 8-9: Pattern Pieces + Points of Measure"
     },
     {
-      "sha": "3a72675",
-      "date": "2026-04-19T08:40:22+00:00",
-      "message": "PLM: cover image first, list thumbnails, library grouped by category"
+      "sha": "b4cc84e",
+      "date": "2026-04-20T07:00:37+00:00",
+      "message": "Tech Pack Pages 6-7: Construction Details + Detail Sketches"
     },
     {
-      "sha": "0a87c8a",
-      "date": "2026-04-19T08:31:52+00:00",
-      "message": "Use full window width + larger PLM preview pane"
+      "sha": "12d9694",
+      "date": "2026-04-20T06:50:06+00:00",
+      "message": "Tech Pack Page 5: Color & Artwork"
     },
     {
-      "sha": "457013e",
-      "date": "2026-04-19T08:27:36+00:00",
-      "message": "PLM: live page preview + Component Pack wizard parity"
+      "sha": "68d083f",
+      "date": "2026-04-20T06:45:34+00:00",
+      "message": "Tech Pack Page 4: Bill of Materials"
     }
   ]
 }
