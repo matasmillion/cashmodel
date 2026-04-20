@@ -178,18 +178,54 @@ function ShopifyCard({ creds, onSave, onClear, dispatch }) {
             )}
           </div>
 
-          {creds.lastSync && (
-            <div className="p-2 rounded-lg text-xs" style={{ background: 'white', border: `1px solid ${FR.sand}` }}>
-              <div className="flex justify-between mb-1" style={{ color: FR.stone }}>
-                <span>This week's revenue</span>
-                <strong style={{ color: FR.slate }}>${creds.lastSync.currentWeekRevenue?.toFixed(2) ?? '—'}</strong>
+          {creds.lastSync && (() => {
+            const weeks = creds.lastSync.weeks || [];
+            const current = weeks.find(w => w.isCurrent);
+            const fmt = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+            return (
+              <div className="p-2 rounded-lg text-xs" style={{ background: 'white', border: `1px solid ${FR.sand}` }}>
+                <div className="mb-2 pb-2" style={{ borderBottom: `1px solid ${FR.sand}` }}>
+                  <div className="flex justify-between mb-1" style={{ color: FR.stone }}>
+                    <span>
+                      This week ({current ? `${fmt(current.startDate)} – ${fmt(current.endDate)}` : '—'})
+                    </span>
+                    <strong style={{ color: FR.slate }}>${creds.lastSync.currentWeekRevenue?.toFixed(2) ?? '—'}</strong>
+                  </div>
+                  <div className="flex justify-between" style={{ color: FR.stone }}>
+                    <span>Orders</span>
+                    <strong style={{ color: FR.slate }}>{creds.lastSync.currentWeekOrders ?? '—'}</strong>
+                  </div>
+                </div>
+
+                <details>
+                  <summary className="cursor-pointer select-none text-[10px]" style={{ color: FR.stone }}>
+                    Show all 13 weeks
+                  </summary>
+                  <table className="w-full mt-2 text-[10px]" style={{ color: FR.slate }}>
+                    <thead>
+                      <tr style={{ color: FR.stone }}>
+                        <th className="text-left font-normal py-1">Week starting</th>
+                        <th className="text-right font-normal py-1">Revenue</th>
+                        <th className="text-right font-normal py-1">Orders</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {weeks.map((w, i) => (
+                        <tr key={i} style={{ background: w.isCurrent ? FR.salt : 'transparent' }}>
+                          <td className="py-0.5">{fmt(w.startDate)}{w.isCurrent ? ' (current)' : ''}</td>
+                          <td className="py-0.5 text-right font-mono tabular-nums">${(w.revenue || 0).toFixed(2)}</td>
+                          <td className="py-0.5 text-right font-mono tabular-nums">{w.orders ?? 0}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="mt-2 text-[10px]" style={{ color: FR.stone }}>
+                    Weeks run Monday–Sunday (local time). Revenue uses Shopify's <code>total_price</code> — item price + tax + shipping − discounts — for paid / partially-paid orders. Compare against Shopify → Analytics → Reports → Total sales for the same date range.
+                  </p>
+                </details>
               </div>
-              <div className="flex justify-between" style={{ color: FR.stone }}>
-                <span>Orders</span>
-                <strong style={{ color: FR.slate }}>{creds.lastSync.currentWeekOrders ?? '—'}</strong>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           <button onClick={handleSync} disabled={syncStatus === 'syncing'}
             className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm"
