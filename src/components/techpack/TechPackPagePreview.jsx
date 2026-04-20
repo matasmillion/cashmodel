@@ -634,6 +634,66 @@ function PageTreatments({ d, images }) {
   );
 }
 
+// ─── Page 11 — Labels & Packaging ────────────────────────────────────────────
+function PageLabels({ d, images }) {
+  const imgs = images || [];
+  const care = imgs.find(i => i.slot === 'label-care');
+  const main = imgs.find(i => i.slot === 'label-main');
+  const size = imgs.find(i => i.slot === 'label-size');
+
+  const packaging = (d.packagingItems || []).filter(r => r.component || r.material || r.size);
+
+  const pkgCols = [
+    { key: 'component',    label: 'Component',        w: 180 },
+    { key: 'material',     label: 'Material',         w: 170 },
+    { key: 'color',        label: 'Color',            w: 120 },
+    { key: 'size',         label: 'Size',             w: 140 },
+    { key: 'artworkPrint', label: 'Artwork / Print',  w: 200 },
+    { key: 'qtyPerOrder',  label: 'Qty / Order',      w: 110 },
+    { key: 'notes',        label: 'Notes',            w: 123 },
+  ];
+
+  const careLines = (d.careInstructions || '').split('\n').filter(Boolean);
+
+  // Layout: left column = 3 label photo slots stacked, right column = care lines
+  const labelY = 160;
+  const labelGap = 12;
+  const labelW = 260;
+  const labelH = 100;
+  const careX = 40 + labelW + 30;
+  const careW = PAGE_W - 40 - careX;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <SectionHeading x={40} y={152}>Care &amp; Content Labels</SectionHeading>
+
+      <PhotoSlot x={40} y={labelY + 8}                             w={labelW} h={labelH} label="Care Label" image={care} />
+      <PhotoSlot x={40} y={labelY + 8 + (labelH + 22 + labelGap)}  w={labelW} h={labelH} label="Main Label" image={main} />
+      <PhotoSlot x={40} y={labelY + 8 + (labelH + 22 + labelGap) * 2} w={labelW} h={labelH} label="Size Label" image={size} />
+
+      {/* Care instructions on the right */}
+      <text x={careX} y={labelY + 22} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">CARE INSTRUCTIONS</text>
+      {careLines.length === 0 ? (
+        <text x={careX} y={labelY + 46} fontSize="10" fill={FR.stone} fontStyle="italic">No care instructions yet</text>
+      ) : (
+        careLines.map((line, i) => (
+          <g key={i}>
+            <rect x={careX} y={labelY + 34 + i * 26} width={careW} height={22} fill={i % 2 === 0 ? FR.salt : FR.white} stroke={FR.sand} />
+            <text x={careX + 10} y={labelY + 49 + i * 26} fontSize="10.5" fill={FR.slate}>
+              {clampLine(esc(line), careW - 20, 6)}
+            </text>
+          </g>
+        ))
+      )}
+
+      <SectionHeading x={40} y={566}>Packaging Specification</SectionHeading>
+      <GridTable x={40} y={578} cols={pkgCols} rows={packaging} bodyRows={5} />
+    </g>
+  );
+}
+
 // ─── Placeholder for pages 2–14 ─────────────────────────────────────────────
 function ComingSoon({ pageNum, title }) {
   return (
@@ -660,7 +720,7 @@ const PAGE_FNS = [
   { title: 'Pattern Pieces & Cutting',     body: ({ d, images }) => <PagePattern d={d} images={images} /> },
   { title: 'Points of Measure',            body: ({ d, images }) => <PagePom d={d} images={images} /> },
   { title: 'Garment Treatments',           body: ({ d, images }) => <PageTreatments d={d} images={images} /> },
-  { title: 'Labels & Packaging',           body: () => <ComingSoon pageNum={11} title="Labels & Packaging" /> },
+  { title: 'Labels & Packaging',           body: ({ d, images }) => <PageLabels d={d} images={images} /> },
   { title: 'Order & Delivery',             body: () => <ComingSoon pageNum={12} title="Order & Delivery" /> },
   { title: 'Compliance & Quality',         body: () => <ComingSoon pageNum={13} title="Compliance & Quality" /> },
   { title: 'Revision History & Approval',  body: () => <ComingSoon pageNum={14} title="Revision History & Approval" /> },

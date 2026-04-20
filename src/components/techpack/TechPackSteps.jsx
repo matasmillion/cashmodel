@@ -5,8 +5,19 @@
 // that will be replaced in subsequent prompts.
 
 import { useState } from 'react';
-import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, DEFAULT_DATA } from './techPackConstants';
+import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, DEFAULT_DATA, isStepLocked } from './techPackConstants';
 import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, EditableSelect, FRColorCell } from './TechPackPrimitives';
+
+function LockedBanner({ status }) {
+  return (
+    <div style={{ padding: 14, background: FR.salt, border: `1px dashed ${FR.soil}`, borderRadius: 6, marginBottom: 16 }}>
+      <div style={{ fontSize: 12, color: FR.slate, fontWeight: 600, marginBottom: 4 }}>🔒 Locked until Pre-Production</div>
+      <div style={{ fontSize: 11, color: FR.stone, lineHeight: 1.5 }}>
+        Current status: <strong>{status || 'Design'}</strong>. This step unlocks when you set the status to <strong>Pre-Production</strong> (or later) on Page 1.
+      </div>
+    </div>
+  );
+}
 
 function ComingSoon({ title }) {
   return (
@@ -612,7 +623,53 @@ export function StepTreatments({ data, set, images, onUpload, onRemove }) {
     </div>
   );
 }
-export function StepLabels()           { return <ComingSoon title="Labels & Packaging" />; }
+export function StepLabels({ data, set, images, onUpload, onRemove }) {
+  const locked = isStepLocked(10, data.status);
+
+  const packaging = data.packagingItems && data.packagingItems.length ? data.packagingItems : [{ component: '', material: '', color: '', size: '', artworkPrint: '', qtyPerOrder: '', notes: '' }];
+  const updP = (i, k, v) => set('packagingItems', packaging.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addP = () => set('packagingItems', [...packaging, { component: '', material: '', color: '', size: '', artworkPrint: '', qtyPerOrder: '', notes: '' }]);
+  const rmP  = (i) => set('packagingItems', packaging.filter((_, idx) => idx !== i));
+
+  const colorRender = (v, onChange) => <FRColorCell value={v} onChange={onChange} />;
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+
+  return (
+    <div>
+      <SectionTitle>Labels &amp; Packaging</SectionTitle>
+      {locked && <LockedBanner status={data.status} />}
+      <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={sectionLabel}>Care &amp; Content Labels</label>
+          <Row cols="1fr 1fr 1fr">
+            <PhotoUpload label="Care Label Artwork" slotKey="label-care" images={images} onUpload={onUpload} onRemove={onRemove} />
+            <PhotoUpload label="Main Label Artwork" slotKey="label-main" images={images} onUpload={onUpload} onRemove={onRemove} />
+            <PhotoUpload label="Size Label Artwork" slotKey="label-size" images={images} onUpload={onUpload} onRemove={onRemove} />
+          </Row>
+        </div>
+
+        <Input label="Care Instructions" value={data.careInstructions} onChange={v => set('careInstructions', v)} multiline
+          placeholder="One instruction per line" />
+
+        <div style={{ marginTop: 16 }}>
+          <label style={sectionLabel}>Packaging Specification</label>
+          <ArrayTable
+            headers={[
+              { key: 'component',    label: 'Component',         placeholder: 'Poly mailer / Dust bag / Hang tag' },
+              { key: 'material',     label: 'Material',          placeholder: 'Recycled poly / Cotton muslin' },
+              { key: 'color',        label: 'Color',             render: colorRender },
+              { key: 'size',         label: 'Size',              placeholder: '35 × 45 cm' },
+              { key: 'artworkPrint', label: 'Artwork or Print',  placeholder: 'Filename / Pantone' },
+              { key: 'qtyPerOrder',  label: 'Qty per Order',     placeholder: '500' },
+              { key: 'notes',        label: 'Notes' },
+            ]}
+            rows={packaging} onUpdate={updP} onAdd={addP} onRemove={rmP} />
+        </div>
+      </fieldset>
+    </div>
+  );
+}
 export function StepOrder()            { return <ComingSoon title="Order & Delivery" />; }
 export function StepCompliance()       { return <ComingSoon title="Compliance & Quality" />; }
 export function StepRevision()         { return <ComingSoon title="Revision History & Approval" />; }

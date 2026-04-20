@@ -99,6 +99,7 @@ export const DEFAULT_DATA = {
   treatments: [{ step: '', treatment: '', process: '', temperature: '', duration: '', chemicals: '', notes: '' }],
   distressing: [{ area: '', technique: '', intensity: '', referenceImage: '', notes: '' }],
   careInstructions: 'Machine wash cold, inside out\nTumble dry low\nDo not bleach\nIron low if needed\nDo not dry clean',
+  packagingItems: [{ component: '', material: '', color: '', size: '', artworkPrint: '', qtyPerOrder: '', notes: '' }],
   packaging: 'Standard FR Packaging', packagingNotes: '',
   quantities: [{ colorway: '', s: '', m: '', l: '', xl: '', unitCost: '' }],
   shipTo: '', deliveryLocation: '', shipMethod: '', incoterm: 'FOB', targetShipDate: '', targetArrivalDate: '', freightForwarder: '', specialInstructions: '',
