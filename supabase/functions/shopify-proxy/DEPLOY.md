@@ -15,16 +15,38 @@ token lives in Supabase secrets, never in the browser.
 supabase login
 supabase link --project-ref <your-project-ref>
 
-# 3. Set the Shopify credentials as secrets (never committed)
+# 3. Set the Shopify credentials + email allowlist as secrets (never committed)
 supabase secrets set \
   SHOPIFY_DOMAIN=your-store.myshopify.com \
-  SHOPIFY_TOKEN=shpat_xxxxxxxxxxxxxxxxxx
+  SHOPIFY_TOKEN=shpat_xxxxxxxxxxxxxxxxxx \
+  ALLOWED_EMAILS=you@example.com
 
 # 4. Deploy
 supabase functions deploy shopify-proxy
 ```
 
-## Rotating the token
+## Security model
+
+- **Token is server-only.** `SHOPIFY_TOKEN` lives in Supabase secrets
+  (encrypted at rest, never in the repo, never in the browser).
+- **Only allowlisted emails can call the proxy.** The function verifies the
+  caller's Supabase JWT, resolves it to a user, and returns 403 if the user's
+  email isn't in `ALLOWED_EMAILS`. Even if someone signs up to your Supabase
+  project, they can't pull data unless you explicitly add their email.
+- **Read-only endpoint allowlist.** Only paths in `ALLOWED_PATHS` are
+  forwarded — all are read-only. The proxy cannot mutate your store.
+
+## Adding/removing users
+
+```sh
+# Single user
+supabase secrets set ALLOWED_EMAILS=you@example.com
+
+# Multiple users (comma-separated, no spaces)
+supabase secrets set ALLOWED_EMAILS=you@example.com,partner@example.com
+```
+
+## Rotating the Shopify token
 
 ```sh
 supabase secrets set SHOPIFY_TOKEN=shpat_new_token_here
@@ -41,12 +63,11 @@ supabase secrets set SHOPIFY_TOKEN=shpat_new_token_here
 ## What the proxy does
 
 - Accepts `POST` with JSON body `{ path, query? }`
+- Verifies the Authorization JWT and resolves it to an allowlisted user
 - Validates `path` against an allowlist of read-only Shopify endpoints
 - Forwards to `https://{SHOPIFY_DOMAIN}/admin/api/2024-01/{path}?{query}` with the
   `X-Shopify-Access-Token` header
 - Returns the raw JSON response with CORS headers
-- Supabase enforces JWT auth on the function by default, so only signed-in
-  users of your app can call it
 
 ## Allowed paths
 

@@ -4,6 +4,7 @@
 // Configure secrets:
 //   supabase secrets set SHOPIFY_DOMAIN=your-store.myshopify.com
 //   supabase secrets set SHOPIFY_TOKEN=shpat_...
+//   supabase secrets set ALLOWED_EMAILS=you@foreignresource.com  (comma-separated for multiple)
 //
 // Deploy:
 //   supabase functions deploy shopify-proxy
@@ -12,10 +13,16 @@
 // Response: the raw JSON from Shopify, or { error } on failure.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SHOPIFY_DOMAIN = Deno.env.get('SHOPIFY_DOMAIN');
 const SHOPIFY_TOKEN = Deno.env.get('SHOPIFY_TOKEN');
 const API_VERSION = Deno.env.get('SHOPIFY_API_VERSION') || '2024-01';
+const ALLOWED_EMAILS = (Deno.env.get('ALLOWED_EMAILS') || '')
+  .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 
 // Only allow GETs against read-only endpoints; block anything that could mutate data.
 const ALLOWED_PATHS = [
@@ -66,6 +73,39 @@ serve(async (req) => {
       origin,
     );
   }
+
+  // ── Auth check: verify the caller is an allowlisted user ────────────────
+  if (ALLOWED_EMAILS.length === 0) {
+    return json(
+      { error: 'Proxy has no ALLOWED_EMAILS configured. Set supabase secrets set ALLOWED_EMAILS=you@example.com before exposing this endpoint.' },
+      500,
+      origin,
+    );
+  }
+
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return json({ error: 'Missing Authorization header' }, 401, origin);
+  }
+  const token = authHeader.slice('Bearer '.length);
+
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    return json({ error: 'SUPABASE_URL / SUPABASE_ANON_KEY env not set (these are provided automatically by Supabase — redeploy the function).' }, 500, origin);
+  }
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+  if (userErr || !userData?.user) {
+    return json({ error: 'Invalid session token' }, 401, origin);
+  }
+
+  const userEmail = (userData.user.email || '').toLowerCase();
+  if (!ALLOWED_EMAILS.includes(userEmail)) {
+    return json({ error: `User ${userEmail} is not allowed to call this proxy` }, 403, origin);
+  }
+  // ────────────────────────────────────────────────────────────────────────
 
   let body: { path?: string; query?: Record<string, string | number> };
   try {
