@@ -1,11 +1,14 @@
-import { useState, useEffect } from 'react';
-import { ShoppingBag, BarChart3, CreditCard, Mail, Truck, CheckCircle, XCircle, Loader, ChevronDown, ChevronUp, ExternalLink, RefreshCw, Copy, Server } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { ShoppingBag, BarChart3, CreditCard, Mail, Truck, CheckCircle, XCircle, Loader, ChevronDown, ChevronUp, ExternalLink, RefreshCw, Copy, Server, Landmark, Plus, Trash2 } from 'lucide-react';
+import { usePlaidLink } from 'react-plaid-link';
 import { useApp } from '../context/AppContext';
 import {
   syncShopifyActuals, syncMetaActuals, testShopifyProxy,
   saveShopifyCredentials, loadShopifyIntegration, deleteShopifyCredentials,
   syncMercuryActuals, testMercuryProxy,
   saveMercuryCredentials, loadMercuryIntegration, deleteMercuryCredentials,
+  createPlaidLinkToken, exchangePlaidPublicToken, listPlaidItems,
+  removePlaidItem, syncPlaidActuals,
 } from '../utils/liveDataSync';
 
 const FR = { slate: '#3A3A3A', salt: '#F5F0E8', sand: '#EBE5D5', stone: '#716F70', soil: '#9A816B', sea: '#B5C7D3', sage: '#ADBDA3', sienna: '#D4956A', green: '#4CAF7D', red: '#C0392B' };
@@ -630,6 +633,271 @@ function MercuryCard({ creds, onSave, onClear, dispatch }) {
   );
 }
 
+// ─── Plaid (Chase, AMEX, any bank or card via Plaid Link) ────────────────────
+function PlaidLauncher({ linkToken, onSuccess, disabled, label }) {
+  const { open, ready } = usePlaidLink({
+    token: linkToken,
+    onSuccess: (public_token, metadata) => onSuccess(public_token, metadata),
+  });
+  return (
+    <button
+      type="button"
+      onClick={() => open()}
+      disabled={!ready || disabled || !linkToken}
+      className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm"
+      style={{
+        background: FR.slate, color: 'white',
+        cursor: ready && linkToken && !disabled ? 'pointer' : 'not-allowed',
+        opacity: ready && linkToken && !disabled ? 1 : 0.6, border: 'none',
+      }}>
+      <Plus size={13} /> {label}
+    </button>
+  );
+}
+
+function PlaidCard({ dispatch }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [linkToken, setLinkToken] = useState(null);
+  const [connectStatus, setConnectStatus] = useState(null); // null | 'preparing' | 'exchanging' | 'ok' | 'error'
+  const [connectErr, setConnectErr] = useState('');
+  const [syncStatus, setSyncStatus] = useState(null);
+  const [syncErr, setSyncErr] = useState('');
+  const [lastSync, setLastSync] = useState(null);
+  const [open, setOpen] = useState(false);
+
+  const refreshItems = useCallback(async () => {
+    try {
+      const rows = await listPlaidItems();
+      setItems(rows);
+    } catch (err) {
+      console.warn('[plaid] listItems failed:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { refreshItems(); }, [refreshItems]);
+
+  useEffect(() => {
+    if (!loading && items.length === 0) setOpen(true);
+  }, [loading, items.length]);
+
+  async function prepareLink() {
+    setConnectStatus('preparing');
+    setConnectErr('');
+    try {
+      const token = await createPlaidLinkToken();
+      setLinkToken(token);
+      setConnectStatus(null);
+    } catch (err) {
+      setConnectStatus('error');
+      setConnectErr(err.message);
+    }
+  }
+
+  async function handleLinkSuccess(publicToken /*, metadata */) {
+    setConnectStatus('exchanging');
+    setConnectErr('');
+    try {
+      await exchangePlaidPublicToken(publicToken);
+      setLinkToken(null);
+      setConnectStatus('ok');
+      await refreshItems();
+    } catch (err) {
+      setConnectStatus('error');
+      setConnectErr(err.message);
+    }
+  }
+
+  async function handleRemove(itemId) {
+    try {
+      await removePlaidItem(itemId);
+      await refreshItems();
+    } catch (err) {
+      alert(`Remove failed: ${err.message}`);
+    }
+  }
+
+  async function handleSync() {
+    if (items.length === 0) return;
+    setSyncStatus('syncing');
+    setSyncErr('');
+    try {
+      const { totals, depositoryAccounts, creditAccounts } = await syncPlaidActuals();
+
+      // Push depository cash into the seed (supplements Mercury if they overlap,
+      // so pick whichever feels right — for now Plaid wins if present).
+      if (totals.depository > 0) {
+        dispatch({
+          type: 'UPDATE_SEED',
+          payload: {
+            totalCash: totals.depository,
+            sbMain: totals.depository,
+          },
+        });
+      }
+
+      // Match credit accounts by last-4 mask to existing cards and push balances.
+      for (const a of creditAccounts) {
+        if (!a.mask) continue;
+        // Our card IDs sometimes contain the mask (e.g. 'chase-5718'); fallback to name substring.
+        const id = guessCardIdFromMask(a.mask);
+        if (id) {
+          dispatch({ type: 'UPDATE_CREDIT_CARD', payload: { id, updates: { balance: a.balance } } });
+        }
+      }
+
+      setLastSync({
+        at: new Date().toISOString(),
+        depository: totals.depository,
+        credit: totals.credit,
+        depositoryAccounts,
+        creditAccounts,
+      });
+      setSyncStatus('ok');
+    } catch (err) {
+      setSyncStatus('error');
+      setSyncErr(err.message);
+    }
+  }
+
+  const hasItems = items.length > 0;
+
+  return (
+    <IntegrationCard
+      name="Banks & Cards (Plaid)"
+      description="Chase, AMEX, and any US bank or credit card via secure Plaid Link"
+      icon={Landmark}
+      iconColor={FR.sea}
+      connected={hasItems}
+      open={open}
+      onToggle={() => setOpen(o => !o)}
+    >
+      <div className="mt-3 space-y-3">
+        <div className="p-2 rounded-lg text-xs flex items-start gap-2" style={{ background: FR.salt, border: `1px solid ${FR.sand}` }}>
+          <Server size={12} style={{ color: FR.soil, marginTop: 2, flexShrink: 0 }} />
+          <span style={{ color: FR.stone }}>
+            Your bank credentials never touch this site — Plaid Link handles the login in their own iframe and returns a secure token that's stored encrypted in our database, scoped to your account.
+          </span>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center gap-2 text-xs py-2" style={{ color: FR.stone }}>
+            <Loader size={12} className="animate-spin" /> Loading connected accounts…
+          </div>
+        ) : hasItems ? (
+          <div className="space-y-2">
+            {items.map(item => (
+              <div key={item.item_id} className="p-2 rounded-lg text-xs" style={{ background: 'white', border: `1px solid ${FR.sand}` }}>
+                <div className="flex items-center justify-between mb-1">
+                  <strong style={{ color: FR.slate }}>{item.institution_name || 'Connected institution'}</strong>
+                  <button
+                    onClick={() => handleRemove(item.item_id)}
+                    className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded"
+                    style={{ background: FR.sand, color: FR.stone, border: 'none' }}>
+                    <Trash2 size={10} /> Remove
+                  </button>
+                </div>
+                <div className="space-y-0.5" style={{ color: FR.stone }}>
+                  {(item.accounts || []).map((a, i) => (
+                    <div key={i} className="flex justify-between">
+                      <span>{a.name}{a.mask ? ` ••${a.mask}` : ''}</span>
+                      <span className="text-[10px]" style={{ color: FR.stone }}>{a.subtype || a.type}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {/* Connect new item */}
+        <div className="flex flex-wrap items-center gap-2">
+          {!linkToken && (
+            <button
+              type="button"
+              onClick={prepareLink}
+              disabled={connectStatus === 'preparing'}
+              className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm"
+              style={{
+                background: FR.slate, color: 'white', border: 'none',
+                cursor: connectStatus === 'preparing' ? 'not-allowed' : 'pointer',
+              }}>
+              {connectStatus === 'preparing' ? <Loader size={13} className="animate-spin" /> : <Plus size={13} />}
+              {connectStatus === 'preparing' ? 'Preparing Plaid…' : hasItems ? 'Connect another account' : 'Connect a bank or card'}
+            </button>
+          )}
+          {linkToken && (
+            <PlaidLauncher
+              linkToken={linkToken}
+              onSuccess={handleLinkSuccess}
+              disabled={connectStatus === 'exchanging'}
+              label={connectStatus === 'exchanging' ? 'Saving…' : 'Continue to Plaid'}
+            />
+          )}
+          {hasItems && (
+            <button
+              type="button"
+              onClick={handleSync}
+              disabled={syncStatus === 'syncing'}
+              className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm"
+              style={{
+                background: syncStatus === 'ok' ? FR.green : syncStatus === 'error' ? FR.red : FR.soil,
+                color: 'white', border: 'none',
+                cursor: syncStatus === 'syncing' ? 'not-allowed' : 'pointer',
+              }}>
+              {syncStatus === 'syncing' ? <Loader size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+              {syncStatus === 'syncing' ? 'Syncing…'
+                : syncStatus === 'ok' ? 'Synced — balances pushed to model'
+                : 'Sync balances'}
+            </button>
+          )}
+        </div>
+
+        {connectStatus === 'error' && connectErr && (
+          <p className="text-xs" style={{ color: FR.red }}>{connectErr}</p>
+        )}
+        {syncStatus === 'error' && syncErr && (
+          <p className="text-xs" style={{ color: FR.red }}>{syncErr}</p>
+        )}
+
+        {lastSync && (
+          <div className="p-2 rounded-lg text-xs" style={{ background: 'white', border: `1px solid ${FR.sand}` }}>
+            <div className="flex justify-between mb-1" style={{ color: FR.stone }}>
+              <span>Cash on hand (depository)</span>
+              <strong style={{ color: FR.slate }}>${lastSync.depository.toLocaleString()}</strong>
+            </div>
+            <div className="flex justify-between" style={{ color: FR.stone }}>
+              <span>Credit card balances</span>
+              <strong style={{ color: FR.slate }}>${lastSync.credit.toLocaleString()}</strong>
+            </div>
+            <div className="text-[10px] mt-1" style={{ color: FR.stone }}>
+              Synced {formatSyncedAt(lastSync.at)}
+            </div>
+          </div>
+        )}
+      </div>
+    </IntegrationCard>
+  );
+}
+
+/**
+ * Fuzzy-match a Plaid account mask to one of our seeded credit card ids.
+ * Our card ids look like 'chase-5718' / 'amex-blue' / 'amex-plum' with the
+ * last-4 either in the id or in the card name. Keep this conservative —
+ * if we can't confidently match, return null and the user updates manually.
+ */
+function guessCardIdFromMask(mask) {
+  const knownCards = [
+    { id: 'chase-5718', last4: '5718' },
+    { id: 'amex-blue',  last4: '1005' },   // 71005 → last 4 = 1005
+    { id: 'amex-plum',  last4: null  },    // unknown — leave manual
+  ];
+  const match = knownCards.find(c => c.last4 && c.last4 === mask);
+  return match?.id || null;
+}
+
 // ─── Shared components ────────────────────────────────────────────────────────
 function IntegrationCard({ name, description, icon: Icon, iconColor, connected, open, onToggle, onDisconnect, children }) {
   return (
@@ -728,6 +996,7 @@ export default function IntegrationsPanel() {
         <MetaAdsCard creds={creds.meta} onSave={d => update('meta', d)} onClear={() => update('meta', null)} dispatch={dispatch} />
         <KlaviyoCard creds={creds.klaviyo} onSave={d => update('klaviyo', d)} onClear={() => update('klaviyo', null)} />
         <MercuryCard creds={creds.mercury} onSave={d => update('mercury', d)} onClear={() => update('mercury', null)} dispatch={dispatch} />
+        <PlaidCard dispatch={dispatch} />
 
         {/* 3PL — handled by the Fulfillment tab */}
         <div className="rounded-xl border p-4 flex items-center gap-3" style={{ background: 'white', borderColor: FR.sand }}>

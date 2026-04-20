@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useMemo, useEffect, useRef, useState } from 'react';
 import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, OPEX_WAREHOUSE, CREDIT_CARDS, LOANS, AD_UNIT_TYPES, DEFAULT_EVENTS } from '../data/seedData';
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
-import { syncShopifyActuals, syncMetaActuals, syncMercuryActuals } from '../utils/liveDataSync';
+import { syncShopifyActuals, syncMetaActuals, syncMercuryActuals, syncPlaidActuals, listPlaidItems } from '../utils/liveDataSync';
 import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
 
 const LOCAL_STORAGE_KEY = 'cashmodel_state';
@@ -102,10 +102,56 @@ async function runAutoSync(dispatch) {
     );
   }
 
+  // Plaid (Chase / AMEX / any bank or card) — detection is server-side, no
+  // localStorage flag. If there's at least one connected item, sync it.
+  tasks.push((async () => {
+    const items = await listPlaidItems().catch(() => []);
+    if (!items || items.length === 0) return;
+    sources.push('plaid');
+    try {
+      const { totals, creditAccounts } = await syncPlaidActuals();
+      // Only overwrite totalCash / sbMain if Mercury didn't already fill it.
+      // Plaid depository totals typically equal Mercury's for the same accounts,
+      // so either source is fine — but if both exist we prefer Mercury
+      // (its API is the source of truth for Mercury balances).
+      if (!creds.mercury?.connected && totals.depository > 0) {
+        dispatch({
+          type: 'UPDATE_SEED',
+          payload: {
+            totalCash: totals.depository,
+            sbMain: totals.depository,
+          },
+        });
+      }
+      for (const a of creditAccounts) {
+        if (!a.mask) continue;
+        const id = guessCardIdFromMask(a.mask);
+        if (id) {
+          dispatch({ type: 'UPDATE_CREDIT_CARD', payload: { id, updates: { balance: a.balance } } });
+        }
+      }
+    } catch (err) {
+      errors.plaid = err.message;
+      console.warn('[auto-sync] Plaid:', err.message);
+    }
+  })());
+
   if (tasks.length === 0) return { sources: [], errors: {}, syncedAt: null };
   await Promise.allSettled(tasks);
   if (changed) saveIntegrations(updated);
   return { sources, errors, syncedAt: now };
+}
+
+// Keep this in sync with the copy in IntegrationsPanel — we match Plaid
+// account mask to the seeded credit cards by last-4 only when we're sure.
+function guessCardIdFromMask(mask) {
+  const knownCards = [
+    { id: 'chase-5718', last4: '5718' },
+    { id: 'amex-blue',  last4: '1005' },
+    { id: 'amex-plum',  last4: null  },
+  ];
+  const match = knownCards.find(c => c.last4 && c.last4 === mask);
+  return match?.id || null;
 }
 
 const AppContext = createContext();

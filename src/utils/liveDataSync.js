@@ -407,6 +407,127 @@ export async function syncMercuryActuals(/* creds unused — proxy holds creds *
   return { accounts, primaryBalance };
 }
 
+// ─── Plaid (multi-institution, via Supabase Edge Function proxy) ────────────
+
+/**
+ * Shared helper for every Plaid proxy action.
+ */
+export async function callPlaidProxy(action, payload = {}) {
+  if (!IS_SUPABASE_ENABLED || !supabase) {
+    throw new Error('Supabase not configured — cannot reach the Plaid proxy');
+  }
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Sign in to use the Plaid proxy');
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/plaid-proxy`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      apikey: anonKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ action, ...payload }),
+  });
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!res.ok) {
+    const msg = data?.error || data?.errors || `${res.status} ${res.statusText}`;
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+  }
+  return data;
+}
+
+/** Returns a short-lived link_token that Plaid Link needs to open. */
+export async function createPlaidLinkToken() {
+  const data = await callPlaidProxy('link-token/create');
+  return data.link_token;
+}
+
+/**
+ * After the user finishes Plaid Link, swap the public_token for a long-lived
+ * access_token (stored server-side) and persist the item.
+ */
+export async function exchangePlaidPublicToken(publicToken) {
+  return callPlaidProxy('public-token/exchange', { public_token: publicToken });
+}
+
+/** List every Plaid item the signed-in user has connected. */
+export async function listPlaidItems() {
+  if (!IS_SUPABASE_ENABLED || !supabase) return [];
+  const { data, error } = await supabase
+    .from('user_plaid_items')
+    .select('item_id, institution_id, institution_name, accounts, updated_at')
+    .order('created_at', { ascending: true });
+  if (error) return [];
+  return data || [];
+}
+
+/** Remove a connected item (revokes the access_token at Plaid and deletes the row). */
+export async function removePlaidItem(itemId) {
+  return callPlaidProxy('item/remove', { item_id: itemId });
+}
+
+/**
+ * Refreshes balances across all of this user's Plaid items.
+ * Returns { items: [{ institution_name, accounts: [...] }], totals }
+ * totals = { depository: sum of checking+savings, credit: sum of credit card balances }
+ */
+export async function syncPlaidActuals() {
+  const data = await callPlaidProxy('accounts/all');
+  const items = data.items || [];
+
+  let depositoryTotal = 0;
+  let creditTotal = 0;
+  const creditAccounts = [];
+  const depositoryAccounts = [];
+
+  for (const item of items) {
+    if (item.error) continue;
+    for (const a of (item.accounts || [])) {
+      const current = a.balances?.current ?? 0;
+      const available = a.balances?.available ?? null;
+      const limit = a.balances?.limit ?? null;
+
+      if (a.type === 'depository') {
+        depositoryTotal += current;
+        depositoryAccounts.push({
+          institution: item.institution_name,
+          name: a.name,
+          mask: a.mask,
+          subtype: a.subtype,
+          balance: current,
+          available,
+        });
+      } else if (a.type === 'credit') {
+        creditTotal += current;
+        creditAccounts.push({
+          institution: item.institution_name,
+          name: a.name,
+          mask: a.mask,
+          subtype: a.subtype,
+          balance: current,  // amount currently owed
+          available,
+          limit,
+        });
+      }
+    }
+  }
+
+  return {
+    items,
+    totals: {
+      depository: Math.round(depositoryTotal * 100) / 100,
+      credit: Math.round(creditTotal * 100) / 100,
+    },
+    depositoryAccounts,
+    creditAccounts,
+  };
+}
+
 // ─── Merge into seed update ───────────────────────────────────────────────────
 /**
  * Builds a seed data update object from synced API data.
