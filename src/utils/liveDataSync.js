@@ -141,17 +141,29 @@ export async function testShopifyProxy() {
 }
 
 /**
- * Pulls weekly Total sales + order count by querying Shopify's Admin GraphQL
- * orders endpoint. Uses `processedAt` (same timestamp Shopify Analytics uses
- * for bucketing) and sums `currentTotalPriceSet` (net of refunds/returns,
- * same value that feeds Shopify's Total sales report). Paginates automatically.
+ * Pulls weekly Total sales + order count matching Shopify Analytics → Total sales.
+ *
+ * Methodology (mirrors Shopify's own report):
+ *   revenue(week) = Σ order.totalPrice  (orders processed in this week)
+ *                 − Σ refund.amount      (refunds created in this week, even if on older orders)
+ *
+ * Uses the Admin GraphQL orders endpoint. Query window is widened to 26 weeks
+ * so refunds created in our 13-week window are captured even when the parent
+ * order was placed earlier. `NOT status:cancelled NOT test:true` excludes the
+ * same orders Shopify's report excludes. Paginates on 250-per-page.
  *
  * Requires `read_orders` scope.
- * Returns an array of { startDate, endDate, label, revenue, orders, isCurrent }.
  */
 export async function syncShopifyActuals(/* creds unused — proxy holds creds */) {
   const weeks = getPast13Weeks();
-  const since = weeks[0].startDate; // YYYY-MM-DD
+  const windowStartISO = weeks[0].startISO;
+  const windowEndISO = weeks[12].endISO;
+
+  // Pull orders from 26 weeks ago so refunds created in our 13-week window
+  // but attached to older orders are still included.
+  const wideSince = new Date(weeks[0].startISO);
+  wideSince.setDate(wideSince.getDate() - 13 * 7);
+  const wideSinceStr = wideSince.toISOString().split('T')[0];
 
   const gqlQuery = `
     query FetchOrders($cursor: String, $q: String!) {
@@ -162,18 +174,22 @@ export async function syncShopifyActuals(/* creds unused — proxy holds creds *
             processedAt
             cancelledAt
             test
-            currentTotalPriceSet { shopMoney { amount } }
+            totalPriceSet { shopMoney { amount } }
+            refunds {
+              createdAt
+              totalRefundedSet { shopMoney { amount } }
+            }
           }
         }
       }
     }
   `;
-  const queryFilter = `processed_at:>=${since}`;
+  // Stricter filter: exclude cancelled, exclude tests. Matches Shopify's Total sales filter.
+  const queryFilter = `processed_at:>=${wideSinceStr} NOT status:cancelled NOT test:true`;
 
-  // Fetch all pages (safety cap at 10 pages = 2500 orders over 13 weeks)
   const all = [];
   let cursor = null;
-  for (let page = 0; page < 10; page++) {
+  for (let page = 0; page < 20; page++) {  // 20 * 250 = 5000 orders over 26 weeks
     const data = await callShopifyProxy('graphql.json', null, {
       query: gqlQuery,
       variables: { cursor, q: queryFilter },
@@ -193,26 +209,54 @@ export async function syncShopifyActuals(/* creds unused — proxy holds creds *
     cursor = orders.pageInfo.endCursor;
   }
 
-  // Drop cancelled + test orders — same filter Shopify Analytics applies
+  // Defensive: also drop any test/cancelled that slipped through the query filter.
   const valid = all.filter(o => !o.cancelledAt && !o.test);
 
-  return weeks.map(week => {
-    const weekOrders = valid.filter(o => {
-      const d = new Date(o.processedAt);
-      return d >= new Date(week.startISO) && d <= new Date(week.endISO);
-    });
-    const revenue = weekOrders.reduce((s, o) => {
-      const raw = o.currentTotalPriceSet?.shopMoney?.amount;
-      const v = parseFloat(raw);
-      return s + (Number.isFinite(v) ? v : 0);
-    }, 0);
+  // Bucket helper: given a Date, return the week index (0-12) it falls into, or -1.
+  const weekIndexOf = (date) => {
+    for (let i = 0; i < weeks.length; i++) {
+      const start = new Date(weeks[i].startISO);
+      const end = new Date(weeks[i].endISO);
+      if (date >= start && date <= end) return i;
+    }
+    return -1;
+  };
+
+  const buckets = weeks.map(() => ({ gross: 0, refunds: 0, orderCount: 0 }));
+
+  for (const o of valid) {
+    const processed = new Date(o.processedAt);
+    // Gross sales + order count: attributed to order's processedAt week (if inside 13w window).
+    const idx = weekIndexOf(processed);
+    if (idx >= 0) {
+      const gross = parseFloat(o.totalPriceSet?.shopMoney?.amount || 0);
+      if (Number.isFinite(gross)) {
+        buckets[idx].gross += gross;
+        buckets[idx].orderCount += 1;
+      }
+    }
+    // Refunds: attributed to refund's createdAt week — independent of order date.
+    for (const r of (o.refunds || [])) {
+      const refundDate = new Date(r.createdAt);
+      const rIdx = weekIndexOf(refundDate);
+      if (rIdx >= 0) {
+        const amt = parseFloat(r.totalRefundedSet?.shopMoney?.amount || 0);
+        if (Number.isFinite(amt)) buckets[rIdx].refunds += amt;
+      }
+    }
+  }
+
+  return weeks.map((week, i) => {
+    const net = buckets[i].gross - buckets[i].refunds;
     return {
       startDate: week.startDate,
       endDate: week.endDate,
       label: week.label,
       isCurrent: week.isCurrent,
-      revenue: Math.round(revenue * 100) / 100,
-      orders: weekOrders.length,
+      revenue: Math.round(net * 100) / 100,
+      orders: buckets[i].orderCount,
+      gross: Math.round(buckets[i].gross * 100) / 100,
+      returns: Math.round(buckets[i].refunds * 100) / 100,
     };
   });
 }

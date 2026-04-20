@@ -205,7 +205,9 @@ function ShopifyCard({ creds, onSave, onClear, dispatch }) {
                     <thead>
                       <tr style={{ color: FR.stone }}>
                         <th className="text-left font-normal py-1">Week starting</th>
-                        <th className="text-right font-normal py-1">Revenue</th>
+                        <th className="text-right font-normal py-1">Gross</th>
+                        <th className="text-right font-normal py-1">Returns</th>
+                        <th className="text-right font-normal py-1">Total sales</th>
                         <th className="text-right font-normal py-1">Orders</th>
                       </tr>
                     </thead>
@@ -213,14 +215,18 @@ function ShopifyCard({ creds, onSave, onClear, dispatch }) {
                       {weeks.map((w, i) => (
                         <tr key={i} style={{ background: w.isCurrent ? FR.salt : 'transparent' }}>
                           <td className="py-0.5">{fmt(w.startDate)}{w.isCurrent ? ' (current)' : ''}</td>
-                          <td className="py-0.5 text-right font-mono tabular-nums">${(w.revenue || 0).toFixed(2)}</td>
+                          <td className="py-0.5 text-right font-mono tabular-nums">${(w.gross ?? w.revenue ?? 0).toFixed(2)}</td>
+                          <td className="py-0.5 text-right font-mono tabular-nums" style={{ color: (w.returns || 0) > 0 ? FR.red : FR.stone }}>
+                            {(w.returns || 0) > 0 ? `-$${w.returns.toFixed(2)}` : '$0.00'}
+                          </td>
+                          <td className="py-0.5 text-right font-mono tabular-nums font-semibold">${(w.revenue || 0).toFixed(2)}</td>
                           <td className="py-0.5 text-right font-mono tabular-nums">{w.orders ?? 0}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                   <p className="mt-2 text-[10px]" style={{ color: FR.stone }}>
-                    Pulls orders via Shopify's GraphQL Admin API, bucketed by <code>processedAt</code> (same timestamp Shopify Analytics uses), summing <code>currentTotalPriceSet</code> on non-cancelled, non-test orders. Matches Shopify → Analytics → Reports → <strong>Total sales</strong>.
+                    Matches Shopify → Analytics → Reports → <strong>Total sales</strong>: gross sales (order <code>totalPriceSet</code>) bucketed by <code>processedAt</code>, returns bucketed by each refund's <code>createdAt</code> (so a return of an older order lands in the week it was refunded). Cancelled + test orders excluded.
                   </p>
                 </details>
               </div>

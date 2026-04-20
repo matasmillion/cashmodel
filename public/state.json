@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-20T14:18:02.662Z",
+  "lastUpdated": "2026-04-20T14:27:53.555Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "bc4c578",
+      "date": "2026-04-20T14:18:09+00:00",
+      "message": "Fall back from ShopifyQL to GraphQL orders query"
+    },
+    {
       "sha": "11092e9",
       "date": "2026-04-20T13:58:57+00:00",
       "message": "Pull Shopify Total sales from ShopifyQL instead of summing orders"
@@ -1087,11 +1092,6 @@
       "sha": "e86dba9",
       "date": "2026-04-20T12:21:35+00:00",
       "message": "Auto-sync Shopify + Meta on page load"
-    },
-    {
-      "sha": "f740519",
-      "date": "2026-04-20T12:18:25+00:00",
-      "message": "Regenerate public/state.json"
     }
   ]
 }
