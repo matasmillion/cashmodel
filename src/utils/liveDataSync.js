@@ -1,5 +1,7 @@
 // Live data sync utilities — Shopify, Meta Ads, Mercury
 
+import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
+
 // ─── Week helpers ─────────────────────────────────────────────────────────────
 
 /** Returns array of 13 week objects, oldest first (week -12 through week 0 = current). */
@@ -36,39 +38,72 @@ function toISO(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// ─── Shopify ──────────────────────────────────────────────────────────────────
+// ─── Shopify (via Supabase Edge Function proxy) ──────────────────────────────
 /**
- * Fetches order totals for each of the past 13 weeks from the Shopify Admin API.
- * Requires a custom app with this origin added as an allowed CORS origin.
+ * Calls the Supabase `shopify-proxy` Edge Function. The function holds the
+ * Shopify domain + access token server-side and forwards requests to Shopify's
+ * Admin API — avoiding the CORS block on direct browser calls.
+ */
+export async function callShopifyProxy(path, query = null) {
+  if (!IS_SUPABASE_ENABLED || !supabase) {
+    throw new Error('Supabase not configured — cannot reach the Shopify proxy');
+  }
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Sign in to use the Shopify proxy');
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/shopify-proxy`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      apikey: anonKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ path, query }),
+  });
+
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+  if (!res.ok) {
+    const msg = data?.error || data?.errors || `${res.status} ${res.statusText}`;
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+  }
+  return data;
+}
+
+/**
+ * Tests the proxy by fetching shop.json. Returns shop metadata on success.
+ */
+export async function testShopifyProxy() {
+  const data = await callShopifyProxy('shop.json');
+  return {
+    name: data.shop?.name,
+    currency: data.shop?.currency,
+    domain: data.shop?.myshopify_domain,
+  };
+}
+
+/**
+ * Fetches order totals for each of the past 13 weeks via the proxy.
  * Returns an array of { startDate, endDate, label, revenue, orders } objects.
  */
-export async function syncShopifyActuals(creds) {
-  if (!creds?.connected || !creds.domain || !creds.token) {
-    throw new Error('Shopify not connected');
-  }
-
+export async function syncShopifyActuals(/* creds unused — proxy holds creds */) {
   const weeks = getPast13Weeks();
-  const store = creds.domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
-  const token = creds.token;
-
-  // Pull all paid/partially-paid orders created in the 13-week window in one call
   const since = weeks[0].startISO;
-  const url = `https://${store}/admin/api/2024-01/orders.json?created_at_min=${since}&status=any&financial_status=paid,partially_paid&fields=total_price,created_at&limit=250`;
 
-  let orders = [];
-  try {
-    const res = await fetch(url, {
-      headers: { 'X-Shopify-Access-Token': token },
-    });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    const json = await res.json();
-    orders = json.orders || [];
-  } catch (err) {
-    const msg = err.message.includes('Failed to fetch')
-      ? 'CORS blocked — enable this origin in your Shopify custom app settings'
-      : err.message;
-    throw new Error(msg);
-  }
+  const data = await callShopifyProxy('orders.json', {
+    created_at_min: since,
+    status: 'any',
+    financial_status: 'paid,partially_paid',
+    fields: 'total_price,created_at',
+    limit: 250,
+  });
+
+  const orders = data.orders || [];
 
   return weeks.map(week => {
     const weekOrders = orders.filter(o => {

@@ -27,7 +27,7 @@ async function runAutoSync(dispatch) {
 
   if (creds.shopify?.connected) {
     tasks.push(
-      syncShopifyActuals(creds.shopify).then(weeks => {
+      syncShopifyActuals().then(weeks => {
         const current = weeks.find(w => w.isCurrent);
         if (!current) return;
         dispatch({ type: 'UPDATE_SEED', payload: { revenue: current.revenue, date: current.startDate } });
