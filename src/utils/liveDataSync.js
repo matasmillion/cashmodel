@@ -304,62 +304,107 @@ export async function syncMetaActuals(creds) {
   });
 }
 
-// ─── Mercury ──────────────────────────────────────────────────────────────────
+// ─── Mercury (credentials in Supabase, calls via edge function proxy) ───────
+
 /**
- * Fetches account balances and recent transactions from the Mercury API.
- * Returns { accounts, transactions, primaryBalance }.
+ * Save Mercury API key for the signed-in user to user_integrations (RLS-scoped).
  */
-export async function syncMercuryActuals(creds) {
-  if (!creds?.connected || !creds.apiKey) {
-    throw new Error('Mercury not connected');
-  }
+export async function saveMercuryCredentials({ token }) {
+  if (!IS_SUPABASE_ENABLED || !supabase) throw new Error('Supabase not configured');
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Sign in first');
 
-  const headers = {
-    Authorization: `Bearer ${creds.apiKey}`,
-    'Content-Type': 'application/json',
+  const { error } = await supabase
+    .from('user_integrations')
+    .upsert(
+      { user_id: user.id, provider: 'mercury', token, metadata: {} },
+      { onConflict: 'user_id,provider' },
+    );
+  if (error) throw new Error(`Failed to save credentials: ${error.message}`);
+}
+
+export async function loadMercuryIntegration() {
+  if (!IS_SUPABASE_ENABLED || !supabase) return null;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data, error } = await supabase
+    .from('user_integrations')
+    .select('metadata, updated_at')
+    .eq('provider', 'mercury')
+    .maybeSingle();
+  if (error || !data) return null;
+  return { updatedAt: data.updated_at };
+}
+
+export async function deleteMercuryCredentials() {
+  if (!IS_SUPABASE_ENABLED || !supabase) return;
+  await supabase.from('user_integrations').delete().eq('provider', 'mercury');
+}
+
+/**
+ * Calls the Supabase `mercury-proxy` Edge Function. The function verifies the
+ * caller's JWT, looks up their Mercury API key from user_integrations, and
+ * forwards the request to Mercury. CORS is handled in the function.
+ */
+export async function callMercuryProxy(path, query = null) {
+  if (!IS_SUPABASE_ENABLED || !supabase) {
+    throw new Error('Supabase not configured — cannot reach the Mercury proxy');
+  }
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Sign in to use the Mercury proxy');
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/mercury-proxy`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      apikey: anonKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ path, query }),
+  });
+
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!res.ok) {
+    const msg = data?.error || data?.errors || `${res.status} ${res.statusText}`;
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+  }
+  return data;
+}
+
+/**
+ * Test the proxy + credentials by listing accounts. Returns a summary.
+ */
+export async function testMercuryProxy() {
+  const data = await callMercuryProxy('accounts');
+  const accounts = data.accounts || [];
+  const active = accounts.filter(a => a.status === 'active');
+  const totalBalance = active
+    .filter(a => ['checking', 'savings'].includes(a.kind))
+    .reduce((s, a) => s + (a.currentBalance || 0), 0);
+  return {
+    accountCount: active.length,
+    totalBalance: Math.round(totalBalance * 100) / 100,
+    accountNames: active.map(a => a.name).filter(Boolean),
   };
+}
 
-  let accounts = [];
-  try {
-    const res = await fetch('https://app.mercury.com/api/treasury/v1/accounts', { headers });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Mercury ${res.status}: ${text.slice(0, 120)}`);
-    }
-    const json = await res.json();
-    accounts = json.accounts || [];
-  } catch (err) {
-    const msg = err.message.includes('Failed to fetch')
-      ? 'CORS blocked — Mercury API requires server-side access. Enter balance manually.'
-      : err.message;
-    throw new Error(msg);
-  }
-
-  // Sum all checking/savings balances
+/**
+ * Pulls account balances from Mercury via the proxy.
+ * Returns { accounts, primaryBalance } — primaryBalance is sum of active
+ * checking + savings balances, which is what maps to cash-on-hand in the model.
+ */
+export async function syncMercuryActuals(/* creds unused — proxy holds creds */) {
+  const data = await callMercuryProxy('accounts');
+  const accounts = data.accounts || [];
   const primaryBalance = accounts
     .filter(a => a.status === 'active' && ['checking', 'savings'].includes(a.kind))
     .reduce((sum, a) => sum + (a.currentBalance || 0), 0);
-
-  // Try to get transactions for the primary account (last 90 days)
-  let transactions = [];
-  if (accounts.length > 0) {
-    const primaryId = accounts[0].id;
-    const since = getPast13Weeks()[0].startDate;
-    try {
-      const res = await fetch(
-        `https://app.mercury.com/api/treasury/v1/account/${primaryId}/transactions?limit=500&start=${since}`,
-        { headers },
-      );
-      if (res.ok) {
-        const json = await res.json();
-        transactions = json.transactions || [];
-      }
-    } catch {
-      // Transactions optional — balance is the important part
-    }
-  }
-
-  return { accounts, transactions, primaryBalance };
+  return { accounts, primaryBalance };
 }
 
 // ─── Merge into seed update ───────────────────────────────────────────────────

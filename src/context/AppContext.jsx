@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useMemo, useEffect, useRef, useState } from 'react';
 import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, OPEX_WAREHOUSE, CREDIT_CARDS, LOANS, AD_UNIT_TYPES, DEFAULT_EVENTS } from '../data/seedData';
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
-import { syncShopifyActuals, syncMetaActuals } from '../utils/liveDataSync';
+import { syncShopifyActuals, syncMetaActuals, syncMercuryActuals } from '../utils/liveDataSync';
 import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
 
 const LOCAL_STORAGE_KEY = 'cashmodel_state';
@@ -74,6 +74,30 @@ async function runAutoSync(dispatch) {
       }).catch(err => {
         errors.meta = err.message;
         console.warn('[auto-sync] Meta:', err.message);
+      }),
+    );
+  }
+
+  if (creds.mercury?.connected) {
+    sources.push('mercury');
+    tasks.push(
+      syncMercuryActuals().then(({ accounts, primaryBalance }) => {
+        dispatch({
+          type: 'UPDATE_SEED',
+          payload: {
+            totalCash: Math.round(primaryBalance * 100) / 100,
+            sbMain: Math.round(primaryBalance * 100) / 100,
+          },
+        });
+        updated.mercury = {
+          ...creds.mercury,
+          syncedAt: now,
+          lastSync: { syncedAt: now, primaryBalance, accountCount: accounts.length },
+        };
+        changed = true;
+      }).catch(err => {
+        errors.mercury = err.message;
+        console.warn('[auto-sync] Mercury:', err.message);
       }),
     );
   }
