@@ -280,6 +280,93 @@ function PageFlatlays({ d, images }) {
   );
 }
 
+// ─── Generic table for rendering ArrayTables on preview pages ───────────────
+function GridTable({ x, y, cols, rows, bodyRows = 4, rowH = 22, headerH = 22 }) {
+  const tableW = cols.reduce((a, c) => a + c.w, 0);
+  let cx = x;
+  const colX = cols.map(c => { const xx = cx; cx += c.w; return xx; });
+  return (
+    <g>
+      <rect x={x} y={y} width={tableW} height={headerH} fill={FR.slate} />
+      {cols.map((c, i) => (
+        <text key={c.key} x={colX[i] + 6} y={y + 15} fontSize="8.5" fontWeight="bold" fill={FR.salt} letterSpacing="0.5">
+          {esc((c.label || c.key).toUpperCase())}
+        </text>
+      ))}
+      {Array.from({ length: bodyRows }).map((_, ri) => {
+        const ry = y + headerH + ri * rowH;
+        const row = rows[ri];
+        return (
+          <g key={ri}>
+            {ri % 2 === 0 && <rect x={x} y={ry} width={tableW} height={rowH} fill={FR.salt} />}
+            <line x1={x} y1={ry + rowH} x2={x + tableW} y2={ry + rowH} stroke={FR.sand} />
+            {row && cols.map((c, ci) => {
+              const val = c.key === '#' ? String(ri + 1) : (row[c.key] ?? '');
+              return (
+                <text key={c.key} x={colX[ci] + 6} y={ry + 15} fontSize="9.5" fill={c.key === '#' ? FR.stone : FR.slate}>
+                  {clampLine(esc(val), c.w - 12, 5.6)}
+                </text>
+              );
+            })}
+            {!row && <text x={colX[0] + 6} y={ry + 15} fontSize="9.5" fill={FR.sand}>{ri + 1}</text>}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+// ─── Page 4 — Bill of Materials ─────────────────────────────────────────────
+function PageBOM({ d }) {
+  const fabrics = (d.fabrics || []).filter(r => r.component || r.fabricType || r.composition);
+  const trims   = (d.trimsAccessories || []).filter(r => r.component || r.type || r.material);
+  const labels  = (d.labelsBranding || []).filter(r => r.labelType || r.material || r.placement);
+
+  const fabCols = [
+    { key: 'component',    label: 'Component',    w: 120 },
+    { key: 'fabricType',   label: 'Fabric Type',  w: 140 },
+    { key: 'composition',  label: 'Composition',  w: 170 },
+    { key: 'weightGsm',    label: 'Weight (GSM)', w: 110 },
+    { key: 'colorPantone', label: 'Color / Pantone', w: 150 },
+    { key: 'supplier',     label: 'Supplier',     w: 170 },
+    { key: 'notes',        label: 'Notes',        w: 183 },
+  ];
+
+  const trimCols = [
+    { key: 'component',     label: 'Component',   w: 140 },
+    { key: 'type',          label: 'Type',        w: 160 },
+    { key: 'material',      label: 'Material',    w: 150 },
+    { key: 'color',         label: 'Color',       w: 120 },
+    { key: 'sizeSpec',      label: 'Size / Spec', w: 130 },
+    { key: 'supplier',      label: 'Supplier',    w: 180 },
+    { key: 'qtyPerGarment', label: 'Qty/Garment', w: 163 },
+  ];
+
+  const labelCols = [
+    { key: 'labelType',  label: 'Label Type',  w: 160 },
+    { key: 'material',   label: 'Material',    w: 140 },
+    { key: 'size',       label: 'Size',        w: 130 },
+    { key: 'placement',  label: 'Placement',   w: 180 },
+    { key: 'artworkRef', label: 'Artwork Ref', w: 200 },
+    { key: 'notes',      label: 'Notes',       w: 233 },
+  ];
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <SectionHeading x={40} y={158}>Fabrics</SectionHeading>
+      <GridTable x={40} y={170} cols={fabCols} rows={fabrics} bodyRows={3} />
+
+      <SectionHeading x={40} y={280}>Trims &amp; Accessories</SectionHeading>
+      <GridTable x={40} y={292} cols={trimCols} rows={trims} bodyRows={4} />
+
+      <SectionHeading x={40} y={424}>Labels &amp; Branding</SectionHeading>
+      <GridTable x={40} y={436} cols={labelCols} rows={labels} bodyRows={4} />
+    </g>
+  );
+}
+
 // ─── Placeholder for pages 2–14 ─────────────────────────────────────────────
 function ComingSoon({ pageNum, title }) {
   return (
@@ -299,7 +386,7 @@ const PAGE_FNS = [
   { title: 'Cover & Identity',             body: ({ d, images }) => <PageCover d={d} images={images} /> },
   { title: 'Design Overview',              body: ({ d, images }) => <PageDesignOverview d={d} images={images} /> },
   { title: 'Technical Flat Lay Diagrams',  body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
-  { title: 'Bill of Materials',            body: () => <ComingSoon pageNum={4}  title="Bill of Materials" /> },
+  { title: 'Bill of Materials',            body: ({ d }) => <PageBOM d={d} /> },
   { title: 'Color & Artwork',              body: () => <ComingSoon pageNum={5}  title="Color & Artwork" /> },
   { title: 'Construction Details',         body: () => <ComingSoon pageNum={6}  title="Construction Details" /> },
   { title: 'Construction Detail Sketches', body: () => <ComingSoon pageNum={7}  title="Construction Detail Sketches" /> },

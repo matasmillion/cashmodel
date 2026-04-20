@@ -4,8 +4,9 @@
 // Page 1 (Cover & Identity) is fully built. All other pages are placeholders
 // that will be replaced in subsequent prompts.
 
-import { FR, STATUSES, DEFAULT_DATA } from './techPackConstants';
-import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable } from './TechPackPrimitives';
+import { useState } from 'react';
+import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, DEFAULT_DATA } from './techPackConstants';
+import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, EditableSelect, FRColorCell } from './TechPackPrimitives';
 
 function ComingSoon({ title }) {
   return (
@@ -170,7 +171,154 @@ export function StepFlatlays({ data, set, images, onUpload, onRemove }) {
     </div>
   );
 }
-export function StepBOM()              { return <ComingSoon title="Bill of Materials" />; }
+const FABRIC_CATEGORIES = new Set(['Fabric', 'Lining', 'Rib', 'Interfacing', 'Interfacing / Fusing']);
+
+export function StepBOM({ data, set, existingSuppliers = [] }) {
+  const [picker, setPicker] = useState(false);
+  const [components, setComponents] = useState([]);
+
+  const fabrics = data.fabrics && data.fabrics.length ? data.fabrics : [{ component: '', fabricType: '', composition: '', weightGsm: '', colorPantone: '', supplier: '', notes: '' }];
+  const trims   = data.trimsAccessories && data.trimsAccessories.length ? data.trimsAccessories : [{ component: '', type: '', material: '', color: '', sizeSpec: '', supplier: '', qtyPerGarment: '' }];
+  const labels  = data.labelsBranding && data.labelsBranding.length ? data.labelsBranding : [{ labelType: '', material: '', size: '', placement: '', artworkRef: '', notes: '' }];
+
+  const updF = (i, k, v) => set('fabrics', fabrics.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addF = () => set('fabrics', [...fabrics, { component: '', fabricType: '', composition: '', weightGsm: '', colorPantone: '', supplier: '', notes: '' }]);
+  const rmF  = (i) => set('fabrics', fabrics.filter((_, idx) => idx !== i));
+
+  const updT = (i, k, v) => set('trimsAccessories', trims.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addT = () => set('trimsAccessories', [...trims, { component: '', type: '', material: '', color: '', sizeSpec: '', supplier: '', qtyPerGarment: '' }]);
+  const rmT  = (i) => set('trimsAccessories', trims.filter((_, idx) => idx !== i));
+
+  const updL = (i, k, v) => set('labelsBranding', labels.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addL = () => set('labelsBranding', [...labels, { labelType: '', material: '', size: '', placement: '', artworkRef: '', notes: '' }]);
+  const rmL  = (i) => set('labelsBranding', labels.filter((_, idx) => idx !== i));
+
+  const openPicker = async () => {
+    if (components.length === 0) {
+      const { listComponentPacks } = await import('../../utils/componentPackStore');
+      setComponents(await listComponentPacks());
+    }
+    setPicker(true);
+  };
+
+  const addFromComponent = async (id) => {
+    const { getComponentPack } = await import('../../utils/componentPackStore');
+    const full = await getComponentPack(id);
+    if (!full) return;
+    const c = full.data || {};
+    const category = c.componentType || full.component_category || c.componentCategory || '';
+    if (FABRIC_CATEGORIES.has(category)) {
+      set('fabrics', [...fabrics, {
+        component: category,
+        fabricType: c.componentName || '',
+        composition: c.composition || c.material || '',
+        weightGsm: c.weight || '',
+        colorPantone: c.pantone || '',
+        supplier: c.supplier || '',
+        notes: c.hex ? `Hex: ${c.hex}` : '',
+      }]);
+    } else {
+      set('trimsAccessories', [...trims, {
+        component: category || c.componentName || '',
+        type: c.componentName || '',
+        material: c.material || c.composition || '',
+        color: c.frColor || '',
+        sizeSpec: c.dimensions || c.width || '',
+        supplier: c.supplier || '',
+        qtyPerGarment: '',
+      }]);
+    }
+    setPicker(false);
+  };
+
+  const supplierRender = (val, onChange) => (
+    <EditableSelect value={val} onChange={onChange} options={existingSuppliers} placeholder="Add new…" />
+  );
+  const colorRender = (val, onChange) => <FRColorCell value={val} onChange={onChange} />;
+  const componentRender = (val, onChange) => (
+    <select value={val || ''} onChange={e => onChange(e.target.value)}
+      style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 0', color: FR.slate, fontFamily: "'Helvetica Neue',sans-serif" }}>
+      <option value="">Select…</option>
+      {BOM_COMPONENT_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+    </select>
+  );
+
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+
+  return (
+    <div>
+      <SectionTitle>Bill of Materials</SectionTitle>
+
+      <div style={{ position: 'relative', marginBottom: 12 }}>
+        <button onClick={openPicker}
+          style={{ padding: '6px 14px', background: FR.slate, border: 'none', borderRadius: 3, fontSize: 11, color: FR.salt, cursor: 'pointer' }}>
+          ◆ Pick from Component Pack
+        </button>
+        {picker && (
+          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: 'white', border: `1px solid ${FR.sand}`, borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 300, overflowY: 'auto', minWidth: 340, marginTop: 4 }}>
+            <div style={{ padding: '8px 12px', background: FR.salt, fontSize: 10, color: FR.stone, display: 'flex', justifyContent: 'space-between' }}>
+              <span>Select a Component Pack ({components.length})</span>
+              <button onClick={() => setPicker(false)} style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 12 }}>×</button>
+            </div>
+            {components.length === 0 ? (
+              <div style={{ padding: 14, fontSize: 11, color: FR.stone, textAlign: 'center' }}>No Component Packs yet.</div>
+            ) : components.map(c => (
+              <button key={c.id} onClick={() => addFromComponent(c.id)}
+                style={{ display: 'block', width: '100%', padding: '8px 12px', border: 'none', borderBottom: `1px solid ${FR.sand}`, background: 'white', cursor: 'pointer', textAlign: 'left', fontSize: 11, color: FR.slate }}>
+                <strong>{c.component_name || 'Untitled'}</strong>
+                <span style={{ color: FR.stone, marginLeft: 6 }}>{c.component_category || ''} {c.supplier ? `· ${c.supplier}` : ''}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel}>Fabrics</label>
+        <ArrayTable
+          headers={[
+            { key: 'component',    label: 'Component',    render: componentRender },
+            { key: 'fabricType',   label: 'Fabric Type',  placeholder: 'Twill / Jersey / Denim' },
+            { key: 'composition',  label: 'Composition',  placeholder: '100% Cotton' },
+            { key: 'weightGsm',    label: 'Weight (GSM)', placeholder: '400' },
+            { key: 'colorPantone', label: 'Color / Pantone', placeholder: 'Pantone 19-4305' },
+            { key: 'supplier',     label: 'Supplier',     render: supplierRender },
+            { key: 'notes',        label: 'Notes' },
+          ]}
+          rows={fabrics} onUpdate={updF} onAdd={addF} onRemove={rmF} />
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel}>Trims & Accessories</label>
+        <ArrayTable
+          headers={[
+            { key: 'component',     label: 'Component',     render: componentRender },
+            { key: 'type',          label: 'Type',          placeholder: 'YKK #5 Coil' },
+            { key: 'material',      label: 'Material',      placeholder: 'Metal / Nylon' },
+            { key: 'color',         label: 'Color',         render: colorRender },
+            { key: 'sizeSpec',      label: 'Size / Spec',   placeholder: '15mm' },
+            { key: 'supplier',      label: 'Supplier',      render: supplierRender },
+            { key: 'qtyPerGarment', label: 'Qty/Garment',   placeholder: '2' },
+          ]}
+          rows={trims} onUpdate={updT} onAdd={addT} onRemove={rmT} />
+      </div>
+
+      <div style={{ marginBottom: 10 }}>
+        <label style={sectionLabel}>Labels & Branding</label>
+        <ArrayTable
+          headers={[
+            { key: 'labelType',  label: 'Label Type',  placeholder: 'Main / Care / Size / Hang Tag' },
+            { key: 'material',   label: 'Material',    placeholder: 'Woven / Printed' },
+            { key: 'size',       label: 'Size',        placeholder: '40 × 15 mm' },
+            { key: 'placement',  label: 'Placement',   placeholder: 'Back neck / Side seam' },
+            { key: 'artworkRef', label: 'Artwork Ref', placeholder: 'Filename or URL' },
+            { key: 'notes',      label: 'Notes' },
+          ]}
+          rows={labels} onUpdate={updL} onAdd={addL} onRemove={rmL} />
+      </div>
+    </div>
+  );
+}
 export function StepColor()            { return <ComingSoon title="Color & Artwork" />; }
 export function StepConstruction()     { return <ComingSoon title="Construction Details" />; }
 export function StepSketches()         { return <ComingSoon title="Construction Detail Sketches" />; }

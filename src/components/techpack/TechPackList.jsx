@@ -4,6 +4,7 @@ import { Plus, Shirt, Copy, Trash2, GripVertical, GitBranch, Search } from 'luci
 import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STATUSES } from './techPackConstants';
 import TechPackBuilder from './TechPackBuilder';
 import { listTechPacks, createTechPack, getTechPack, deleteTechPack, duplicateTechPack, saveTechPack } from '../../utils/techPackStore';
+import { listComponentPacks } from '../../utils/componentPackStore';
 import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
 
 function formatDate(iso) {
@@ -122,11 +123,13 @@ export default function TechPackList() {
   const [dragOverStatus, setDragOverStatus] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
+  const [existingSuppliers, setExistingSuppliers] = useState([]);
 
   const refresh = async () => {
     setLoading(true);
-    const rows = await listTechPacks();
+    const [rows, comps] = await Promise.all([listTechPacks(), listComponentPacks()]);
     setPacks(rows || []);
+    setExistingSuppliers([...new Set((comps || []).map(c => (c.supplier || '').trim()).filter(Boolean))].sort());
     setLoading(false);
   };
 
@@ -239,7 +242,7 @@ export default function TechPackList() {
   };
 
   if (activePack) {
-    return <TechPackBuilder pack={activePack} onBack={closeBuilder} />;
+    return <TechPackBuilder pack={activePack} onBack={closeBuilder} existingSuppliers={existingSuppliers} />;
   }
 
   // Filter packs

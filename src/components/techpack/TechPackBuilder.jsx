@@ -128,7 +128,7 @@ function SamplePanel({ samples, onAdd, onUpdate, onRemove }) {
 }
 
 // ─── Main Builder ────────────────────────────────────────────────────────────
-export default function TechPackBuilder({ pack, onBack }) {
+export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }) {
   // Initial step comes from the URL so refresh keeps you on the same wizard step.
   const [step, setStep] = useState(() => {
     const { packId, step } = parsePLMHash();
@@ -260,6 +260,7 @@ export default function TechPackBuilder({ pack, onBack }) {
     library, saveToLibrary,
     onSubmit: handleSubmit, submitting, submitResult,
     bomCost, costVariance,
+    existingSuppliers,
   };
 
   return (
