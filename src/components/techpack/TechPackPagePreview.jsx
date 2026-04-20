@@ -433,6 +433,77 @@ function PageColor({ d, images }) {
   );
 }
 
+// ─── Page 6 — Construction Details ───────────────────────────────────────────
+function PageConstruction({ d }) {
+  const seams = (d.seams || []).filter(r => r.operation || r.seamType || r.stitchType || r.threadColor);
+  const notes = (d.constructionNotesTable || []).filter(r => r.area || r.description || r.reference);
+
+  const seamCols = [
+    { key: 'operation',   label: 'Operation',     w: 180 },
+    { key: 'seamType',    label: 'Seam Type',     w: 150 },
+    { key: 'stitchType',  label: 'Stitch Type',   w: 120 },
+    { key: 'spiSpcm',     label: 'SPI / SPCM',    w: 110 },
+    { key: 'threadColor', label: 'Thread Color',  w: 130 },
+    { key: 'threadType',  label: 'Thread Type',   w: 160 },
+    { key: 'notes',       label: 'Notes',         w: 193 },
+  ];
+
+  const noteCols = [
+    { key: '#',           label: 'Detail #',    w: 70  },
+    { key: 'area',        label: 'Area',        w: 180 },
+    { key: 'description', label: 'Description', w: 540 },
+    { key: 'reference',   label: 'Reference',   w: 253 },
+  ];
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <SectionHeading x={40} y={158}>Seam &amp; Stitch Specification</SectionHeading>
+      <GridTable x={40} y={170} cols={seamCols} rows={seams} bodyRows={5} />
+
+      <SectionHeading x={40} y={338}>Construction Notes</SectionHeading>
+      <GridTable x={40} y={350} cols={noteCols} rows={notes} bodyRows={6} />
+    </g>
+  );
+}
+
+// ─── Page 7 — Construction Detail Sketches ──────────────────────────────────
+function PageSketches({ d, images }) {
+  const imgs = images || [];
+  const slots = [1, 2, 3, 4, 5, 6].map(n => imgs.find(i => i.slot === `sketch-${n}`));
+
+  const gridY = 160;
+  const gridGap = 14;
+  const cols = 3;
+  const rows = 2;
+  const cellW = (PAGE_W - 80 - gridGap * (cols - 1)) / cols;
+  const cellH = (PAGE_H - gridY - 90 - gridGap * (rows - 1)) / rows;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <text x={PAGE_W / 2} y={152} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
+        Detailed construction sketches: seam closeups, pocket assembly, cuff detail, collar build, etc.
+      </text>
+
+      {slots.map((img, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        return (
+          <PhotoSlot key={i}
+            x={40 + col * (cellW + gridGap)}
+            y={gridY + row * (cellH + gridGap)}
+            w={cellW} h={cellH - 22}
+            label={`Detail ${i + 1}`}
+            image={img} />
+        );
+      })}
+    </g>
+  );
+}
+
 // ─── Placeholder for pages 2–14 ─────────────────────────────────────────────
 function ComingSoon({ pageNum, title }) {
   return (
@@ -454,8 +525,8 @@ const PAGE_FNS = [
   { title: 'Technical Flat Lay Diagrams',  body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
   { title: 'Bill of Materials',            body: ({ d }) => <PageBOM d={d} /> },
   { title: 'Color & Artwork',              body: ({ d, images }) => <PageColor d={d} images={images} /> },
-  { title: 'Construction Details',         body: () => <ComingSoon pageNum={6}  title="Construction Details" /> },
-  { title: 'Construction Detail Sketches', body: () => <ComingSoon pageNum={7}  title="Construction Detail Sketches" /> },
+  { title: 'Construction Details',         body: ({ d }) => <PageConstruction d={d} /> },
+  { title: 'Construction Detail Sketches', body: ({ d, images }) => <PageSketches d={d} images={images} /> },
   { title: 'Pattern Pieces & Cutting',     body: () => <ComingSoon pageNum={8}  title="Pattern Pieces & Cutting" /> },
   { title: 'Points of Measure',            body: () => <ComingSoon pageNum={9}  title="Points of Measure" /> },
   { title: 'Garment Treatments',           body: () => <ComingSoon pageNum={10} title="Garment Treatments" /> },

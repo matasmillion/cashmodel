@@ -401,8 +401,79 @@ export function StepColor({ data, set, images, onUpload, onRemove }) {
     </div>
   );
 }
-export function StepConstruction()     { return <ComingSoon title="Construction Details" />; }
-export function StepSketches()         { return <ComingSoon title="Construction Detail Sketches" />; }
+export function StepConstruction({ data, set }) {
+  const seams = data.seams && data.seams.length ? data.seams : [{ operation: '', seamType: '', stitchType: '', spiSpcm: '', threadColor: '', threadType: '', notes: '' }];
+  const updS = (i, k, v) => set('seams', seams.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addS = () => set('seams', [...seams, { operation: '', seamType: '', stitchType: '', spiSpcm: '', threadColor: '', threadType: '', notes: '' }]);
+  const rmS  = (i) => set('seams', seams.filter((_, idx) => idx !== i));
+
+  const notes = data.constructionNotesTable && data.constructionNotesTable.length ? data.constructionNotesTable : [{ detail: '', area: '', description: '', reference: '' }];
+  const updN = (i, k, v) => set('constructionNotesTable', notes.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addN = () => set('constructionNotesTable', [...notes, { detail: '', area: '', description: '', reference: '' }]);
+  const rmN  = (i) => set('constructionNotesTable', notes.filter((_, idx) => idx !== i));
+
+  const threadColorRender = (v, onChange) => <FRColorCell value={v} onChange={onChange} />;
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+
+  return (
+    <div>
+      <SectionTitle>Construction Details</SectionTitle>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel}>Seam &amp; Stitch Specification</label>
+        <ArrayTable
+          headers={[
+            { key: 'operation',   label: 'Operation',    placeholder: 'Side seam / Hem / Collar' },
+            { key: 'seamType',    label: 'Seam Type',    placeholder: 'Flatlock / French seam' },
+            { key: 'stitchType',  label: 'Stitch Type',  placeholder: '301 / 401 / 504' },
+            { key: 'spiSpcm',     label: 'SPI / SPCM',   placeholder: '10 SPI' },
+            { key: 'threadColor', label: 'Thread Color', render: threadColorRender },
+            { key: 'threadType',  label: 'Thread Type',  placeholder: 'Tex 40 / Polyester' },
+            { key: 'notes',       label: 'Notes' },
+          ]}
+          rows={seams} onUpdate={updS} onAdd={addS} onRemove={rmS} />
+      </div>
+
+      <div style={{ marginBottom: 10 }}>
+        <label style={sectionLabel}>Construction Notes</label>
+        <ArrayTable
+          headers={[
+            { key: '__idx',       label: 'Detail #',    render: (_v, _onChange, row) => (
+              <span style={{ fontSize: 11, color: FR.stone, padding: '3px 4px' }}>{notes.indexOf(row) + 1}</span>
+            ) },
+            { key: 'area',        label: 'Area',         placeholder: 'Collar / Cuff / Pocket' },
+            { key: 'description', label: 'Description',  placeholder: 'How it is constructed' },
+            { key: 'reference',   label: 'Reference',    placeholder: 'Filename or sketch #' },
+          ]}
+          rows={notes} onUpdate={updN} onAdd={addN} onRemove={rmN} />
+      </div>
+    </div>
+  );
+}
+
+export function StepSketches({ images, onUpload, onRemove }) {
+  const slots = [
+    { key: 'sketch-1', label: 'Detail 1' },
+    { key: 'sketch-2', label: 'Detail 2' },
+    { key: 'sketch-3', label: 'Detail 3' },
+    { key: 'sketch-4', label: 'Detail 4' },
+    { key: 'sketch-5', label: 'Detail 5' },
+    { key: 'sketch-6', label: 'Detail 6' },
+  ];
+  return (
+    <div>
+      <SectionTitle>Construction Detail Sketches</SectionTitle>
+      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 12, fontStyle: 'italic' }}>
+        Detailed construction sketches: seam closeups, pocket assembly, cuff detail, collar build, etc.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+        {slots.map(s => (
+          <PhotoUpload key={s.key} label={s.label} slotKey={s.key} images={images} onUpload={onUpload} onRemove={onRemove} />
+        ))}
+      </div>
+    </div>
+  );
+}
 export function StepPattern()          { return <ComingSoon title="Pattern Pieces & Cutting" />; }
 export function StepPom()              { return <ComingSoon title="Points of Measure" />; }
 export function StepTreatments()       { return <ComingSoon title="Garment Treatments" />; }

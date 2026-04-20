@@ -78,8 +78,9 @@ export const DEFAULT_DATA = {
   colorways: [{ name: '', frColor: '', pantone: '', hex: '', fabricSwatch: '', approvalStatus: 'Pending' }],
   artworkPlacements: [{ placement: '', artworkFile: '', method: '', sizeCm: '', positionFrom: '', color: '', notes: '' }],
   logoFront: '', logoBack: '', logoMethod: '',
-  seams: [{ operation: '', seamType: '', stitchType: '', spiSpcm: '', threadColor: '', notes: '' }],
+  seams: [{ operation: '', seamType: '', stitchType: '', spiSpcm: '', threadColor: '', threadType: '', notes: '' }],
   constructionNotes: '',
+  constructionNotesTable: [{ detail: '', area: '', description: '', reference: '' }],
   patternPieces: [{ name: '', qty: '', fabric: '', grain: '', fusing: '', notes: '' }],
   cuttingNotes: '',
   poms: [
