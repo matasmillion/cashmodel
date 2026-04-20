@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, DEFAULT_DATA, isStepLocked } from './techPackConstants';
 import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, EditableSelect, FRColorCell } from './TechPackPrimitives';
+import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
 
 function LockedBanner({ status }) {
   return (
@@ -670,7 +671,157 @@ export function StepLabels({ data, set, images, onUpload, onRemove }) {
     </div>
   );
 }
-export function StepOrder()            { return <ComingSoon title="Order & Delivery" />; }
+function computeQtyRow(row) {
+  const s = parseFloat(row.s) || 0;
+  const m = parseFloat(row.m) || 0;
+  const l = parseFloat(row.l) || 0;
+  const xl = parseFloat(row.xl) || 0;
+  const totalUnits = s + m + l + xl;
+  const unitCost = parseFloat(row.unitCost) || 0;
+  const totalCost = totalUnits * unitCost;
+  return { totalUnits, totalCost };
+}
+
+export function StepOrder({ data, set, library, saveToLibrary }) {
+  const locked = isStepLocked(11, data.status);
+  const [unitWeightG, setUnitWeightG] = useState(data.unitWeightGrams || '500');
+  const [aiKey, setAiKey] = useState(getStoredKey());
+  const [aiNotes, setAiNotes] = useState('');
+  const [aiRunning, setAiRunning] = useState(false);
+  const [aiError, setAiError] = useState('');
+
+  const quantities = data.quantities && data.quantities.length ? data.quantities : [{ colorway: '', s: '', m: '', l: '', xl: '', unitCost: '' }];
+  const updQ = (i, k, v) => set('quantities', quantities.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addQ = () => set('quantities', [...quantities, { colorway: '', s: '', m: '', l: '', xl: '', unitCost: '' }]);
+  const rmQ  = (i) => set('quantities', quantities.filter((_, idx) => idx !== i));
+
+  const cartons = data.cartons && data.cartons.length ? data.cartons : [{ cartonNum: '', colorway: '', sizeBreakdown: '', qtyPerCarton: '', dims: '', grossWeight: '', netWeight: '' }];
+  const updC = (i, k, v) => set('cartons', cartons.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addC = () => set('cartons', [...cartons, { cartonNum: '', colorway: '', sizeBreakdown: '', qtyPerCarton: '', dims: '', grossWeight: '', netWeight: '' }]);
+  const rmC  = (i) => set('cartons', cartons.filter((_, idx) => idx !== i));
+
+  const cwOptions = (data.colorways || []).filter(c => c && c.name).map(c => c.name);
+  const colorwayRender = (v, onChange) => (
+    <select value={v || ''} onChange={e => onChange(e.target.value)}
+      style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box' }}>
+      <option value="">—</option>
+      {cwOptions.map(n => <option key={n} value={n}>{n}</option>)}
+    </select>
+  );
+  const totalUnitsRender = (_v, _onChange, row) => {
+    const { totalUnits } = computeQtyRow(row);
+    return <span style={{ fontSize: 11, color: FR.stone, padding: '3px 4px' }}>{totalUnits || 0}</span>;
+  };
+  const totalCostRender = (_v, _onChange, row) => {
+    const { totalCost } = computeQtyRow(row);
+    return <span style={{ fontSize: 11, color: FR.slate, padding: '3px 4px' }}>{totalCost > 0 ? `$${totalCost.toFixed(2)}` : '—'}</span>;
+  };
+
+  const orderTotal = quantities.reduce((sum, r) => sum + computeQtyRow(r).totalCost, 0);
+
+  const addLocation = (val) => saveToLibrary && saveToLibrary('locations', val);
+
+  async function runAIPackingList() {
+    setAiRunning(true);
+    setAiError('');
+    try {
+      if (aiKey) saveKey(aiKey);
+      const result = await generatePackingList({
+        apiKey: aiKey,
+        styleName: data.styleName,
+        productCategory: data.productCategory,
+        quantities: data.quantities,
+        unitWeightGrams: parseFloat(unitWeightG) || 500,
+        shipMethod: data.shipMethod,
+        notes: aiNotes,
+      });
+      set('cartons', result);
+      set('unitWeightGrams', unitWeightG);
+    } catch (err) {
+      setAiError(err.message);
+    }
+    setAiRunning(false);
+  }
+
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+
+  return (
+    <div>
+      <SectionTitle>Order &amp; Delivery</SectionTitle>
+      {locked && <LockedBanner status={data.status} />}
+      <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
+
+        <div style={{ marginBottom: 18 }}>
+          <label style={sectionLabel}>Quantity Per Size</label>
+          <ArrayTable
+            headers={[
+              { key: 'colorway',   label: 'Colorway',   render: cwOptions.length > 0 ? colorwayRender : undefined, placeholder: 'Slate Wash' },
+              { key: 's',          label: 'S',          placeholder: '0' },
+              { key: 'm',          label: 'M',          placeholder: '0' },
+              { key: 'l',          label: 'L',          placeholder: '0' },
+              { key: 'xl',         label: 'XL',         placeholder: '0' },
+              { key: '__total',    label: 'Total Units', render: totalUnitsRender },
+              { key: 'unitCost',   label: 'Unit Cost $',placeholder: '0.00' },
+              { key: '__totalCost',label: 'Total Cost', render: totalCostRender },
+            ]}
+            rows={quantities} onUpdate={updQ} onAdd={addQ} onRemove={rmQ} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 12px', marginTop: 4, background: FR.slate, color: FR.salt, borderRadius: 3, fontSize: 12, fontWeight: 600, letterSpacing: 1 }}>
+            ORDER TOTAL: ${orderTotal.toFixed(2)}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 18 }}>
+          <label style={sectionLabel}>Delivery Details</label>
+          <Row>
+            <EditableSelect label="Ship To" value={data.shipTo} onChange={v => set('shipTo', v)}
+              options={(library && library.locations) || []} onAddOption={addLocation} placeholder="New ship-to address…" />
+            <EditableSelect label="Delivery Location / Warehouse" value={data.deliveryLocation} onChange={v => set('deliveryLocation', v)}
+              options={(library && library.locations) || []} onAddOption={addLocation} placeholder="New warehouse…" />
+          </Row>
+          <Row cols="1fr 1fr 1fr">
+            <Select label="Ship Method" value={data.shipMethod} onChange={v => set('shipMethod', v)} options={['Air', 'Sea', 'Express (DHL/FedEx)']} />
+            <Select label="Incoterm" value={data.incoterm} onChange={v => set('incoterm', v)} options={['FOB', 'CIF', 'EXW', 'DDP']} />
+            <Input label="Freight Forwarder" value={data.freightForwarder} onChange={v => set('freightForwarder', v)} />
+          </Row>
+          <Row>
+            <Input label="Target Ship Date" value={data.targetShipDate} onChange={v => set('targetShipDate', v)} placeholder="YYYY-MM-DD" />
+            <Input label="Target Arrival Date" value={data.targetArrivalDate} onChange={v => set('targetArrivalDate', v)} placeholder="YYYY-MM-DD" />
+          </Row>
+          <Input label="Special Instructions" value={data.specialInstructions} onChange={v => set('specialInstructions', v)} multiline />
+        </div>
+
+        <div style={{ marginBottom: 10 }}>
+          <label style={sectionLabel}>Packing List</label>
+
+          <div style={{ padding: 14, background: FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 6, marginBottom: 12 }}>
+            <Row cols="1fr 2fr">
+              <Input label="Unit Weight (grams)" value={unitWeightG} onChange={setUnitWeightG} placeholder="500" />
+              <Input label="AI Notes (optional)" value={aiNotes} onChange={setAiNotes} placeholder="e.g. use 50×30×25cm cartons, single colorway only" />
+            </Row>
+            <Input label="Anthropic API key" value={aiKey} onChange={setAiKey} placeholder="sk-ant-…" />
+            <button onClick={runAIPackingList} disabled={aiRunning || !aiKey}
+              style={{ padding: '7px 16px', background: aiRunning ? FR.stone : FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 11, cursor: aiRunning ? 'wait' : 'pointer', fontWeight: 600 }}>
+              {aiRunning ? 'Generating…' : '✨ Generate with AI'}
+            </button>
+            {aiError && <p style={{ fontSize: 10, color: '#C0392B', marginTop: 8 }}>{aiError}</p>}
+          </div>
+
+          <ArrayTable
+            headers={[
+              { key: 'cartonNum',     label: 'Carton #',            placeholder: '1' },
+              { key: 'colorway',      label: 'Colorway',            render: cwOptions.length > 0 ? colorwayRender : undefined },
+              { key: 'sizeBreakdown', label: 'Size Breakdown',      placeholder: 'S:10 M:20 L:15 XL:5' },
+              { key: 'qtyPerCarton',  label: 'Qty / Carton',        placeholder: '50' },
+              { key: 'dims',          label: 'Carton Dims (cm)',    placeholder: '60×40×30' },
+              { key: 'grossWeight',   label: 'Gross Weight (kg)',   placeholder: '18' },
+              { key: 'netWeight',     label: 'Net Weight (kg)',     placeholder: '15' },
+            ]}
+            rows={cartons} onUpdate={updC} onAdd={addC} onRemove={rmC} />
+        </div>
+      </fieldset>
+    </div>
+  );
+}
 export function StepCompliance()       { return <ComingSoon title="Compliance & Quality" />; }
 export function StepRevision()         { return <ComingSoon title="Revision History & Approval" />; }
 

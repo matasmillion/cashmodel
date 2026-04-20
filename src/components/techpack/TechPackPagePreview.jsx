@@ -694,6 +694,119 @@ function PageLabels({ d, images }) {
   );
 }
 
+// ─── Page 12 — Order & Delivery ──────────────────────────────────────────────
+function PageOrder({ d }) {
+  const qty = (d.quantities || []).filter(r => r.colorway || r.s || r.m || r.l || r.xl || r.unitCost);
+  const cartons = (d.cartons || []).filter(r => r.cartonNum || r.colorway || r.qtyPerCarton);
+
+  const qtyCols = [
+    { key: 'colorway',    label: 'Colorway',    w: 200 },
+    { key: 's',           label: 'S',           w: 70  },
+    { key: 'm',           label: 'M',           w: 70  },
+    { key: 'l',           label: 'L',           w: 70  },
+    { key: 'xl',          label: 'XL',          w: 70  },
+    { key: '__total',     label: 'Total Units', w: 130 },
+    { key: 'unitCost',    label: 'Unit Cost',   w: 130 },
+    { key: '__totalCost', label: 'Total Cost',  w: 303 },
+  ];
+
+  const renderQtyCell = (key, row, x, y, w) => {
+    const toNum = (v) => parseFloat(v) || 0;
+    const totalUnits = toNum(row.s) + toNum(row.m) + toNum(row.l) + toNum(row.xl);
+    const totalCost = totalUnits * toNum(row.unitCost);
+    if (key === '__total') {
+      return <text x={x + 6} y={y + 15} fontSize="9.5" fill={FR.slate}>{totalUnits || '—'}</text>;
+    }
+    if (key === '__totalCost') {
+      return <text x={x + 6} y={y + 15} fontSize="9.5" fill={FR.slate}>{totalCost > 0 ? `$${totalCost.toFixed(2)}` : '—'}</text>;
+    }
+    if (key === 'unitCost') {
+      return <text x={x + 6} y={y + 15} fontSize="9.5" fill={FR.slate}>{row.unitCost ? `$${row.unitCost}` : '—'}</text>;
+    }
+    return null;
+  };
+
+  const orderTotal = qty.reduce((sum, r) => {
+    const toNum = (v) => parseFloat(v) || 0;
+    const totalUnits = toNum(r.s) + toNum(r.m) + toNum(r.l) + toNum(r.xl);
+    return sum + totalUnits * toNum(r.unitCost);
+  }, 0);
+
+  const pkCols = [
+    { key: 'cartonNum',     label: 'Carton #',           w: 80  },
+    { key: 'colorway',      label: 'Colorway',           w: 180 },
+    { key: 'sizeBreakdown', label: 'Size Breakdown',     w: 200 },
+    { key: 'qtyPerCarton',  label: 'Qty / Carton',       w: 110 },
+    { key: 'dims',          label: 'Carton Dims (cm)',   w: 150 },
+    { key: 'grossWeight',   label: 'Gross Weight (kg)',  w: 160 },
+    { key: 'netWeight',     label: 'Net Weight (kg)',    w: 163 },
+  ];
+
+  // Delivery key/value pairs
+  const deliveryRows = [
+    ['Ship To',              d.shipTo],
+    ['Delivery Location',    d.deliveryLocation],
+    ['Ship Method',          d.shipMethod],
+    ['Incoterm',             d.incoterm],
+    ['Freight Forwarder',    d.freightForwarder],
+    ['Target Ship Date',     d.targetShipDate],
+    ['Target Arrival Date',  d.targetArrivalDate],
+    ['Special Instructions', d.specialInstructions],
+  ];
+
+  // Layout
+  const qtyY = 158;
+  const qtyBody = 4;
+  const qtyH = 22 + qtyBody * 22;
+  const totalY = qtyY + 12 + qtyH;
+  const delY = totalY + 42;
+  const delRowH = 22;
+  const packY = delY + 24 + 4 * delRowH * 2;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <SectionHeading x={40} y={qtyY}>Quantity Per Size</SectionHeading>
+      <GridTable x={40} y={qtyY + 12} cols={qtyCols} rows={qty} bodyRows={qtyBody} renderCell={renderQtyCell} />
+
+      {/* Order total row */}
+      <rect x={40} y={totalY} width={PAGE_W - 80} height="28" fill={FR.slate} />
+      <text x={50} y={totalY + 18} fontSize="10" fontWeight="bold" fill={FR.salt} letterSpacing="2">ORDER TOTAL</text>
+      <text x={PAGE_W - 50} y={totalY + 19} textAnchor="end" fontSize="13" fontWeight="bold" fill={FR.salt}>${orderTotal.toFixed(2)}</text>
+
+      <SectionHeading x={40} y={delY}>Delivery Details</SectionHeading>
+      {(() => {
+        const tX = 40;
+        const tY = delY + 12;
+        const tW = PAGE_W - 80;
+        const labelW = 220;
+        return (
+          <g>
+            <rect x={tX} y={tY} width={tW} height={22} fill={FR.slate} />
+            <text x={tX + 8} y={tY + 15} fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="0.5">FIELD</text>
+            <text x={tX + labelW + 8} y={tY + 15} fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="0.5">DETAIL</text>
+            {deliveryRows.map(([label, value], i) => {
+              const ry = tY + 22 + i * delRowH;
+              return (
+                <g key={label}>
+                  {i % 2 === 0 && <rect x={tX} y={ry} width={tW} height={delRowH} fill={FR.salt} />}
+                  <line x1={tX} y1={ry + delRowH} x2={tX + tW} y2={ry + delRowH} stroke={FR.sand} />
+                  <text x={tX + 8} y={ry + 15} fontSize="9.5" fontWeight="bold" fill={FR.soil}>{esc(label.toUpperCase())}</text>
+                  <text x={tX + labelW + 8} y={ry + 15} fontSize="10" fill={FR.slate}>{clampLine(esc(value || '—'), tW - labelW - 20, 6)}</text>
+                </g>
+              );
+            })}
+          </g>
+        );
+      })()}
+
+      <SectionHeading x={40} y={packY}>Packing List</SectionHeading>
+      <GridTable x={40} y={packY + 12} cols={pkCols} rows={cartons} bodyRows={3} />
+    </g>
+  );
+}
+
 // ─── Placeholder for pages 2–14 ─────────────────────────────────────────────
 function ComingSoon({ pageNum, title }) {
   return (
@@ -721,7 +834,7 @@ const PAGE_FNS = [
   { title: 'Points of Measure',            body: ({ d, images }) => <PagePom d={d} images={images} /> },
   { title: 'Garment Treatments',           body: ({ d, images }) => <PageTreatments d={d} images={images} /> },
   { title: 'Labels & Packaging',           body: ({ d, images }) => <PageLabels d={d} images={images} /> },
-  { title: 'Order & Delivery',             body: () => <ComingSoon pageNum={12} title="Order & Delivery" /> },
+  { title: 'Order & Delivery',             body: ({ d }) => <PageOrder d={d} /> },
   { title: 'Compliance & Quality',         body: () => <ComingSoon pageNum={13} title="Compliance & Quality" /> },
   { title: 'Revision History & Approval',  body: () => <ComingSoon pageNum={14} title="Revision History & Approval" /> },
 ];
