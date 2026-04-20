@@ -504,6 +504,92 @@ function PageSketches({ d, images }) {
   );
 }
 
+// ─── Page 8 — Pattern Pieces & Cutting ──────────────────────────────────────
+function PagePattern({ d, images }) {
+  const layout = (images || []).find(i => i.slot === 'pattern-layout');
+  const pieces = (d.patternPieces || []).filter(r => r.pieceName || r.pieceNum || r.fabric);
+
+  const cols = [
+    { key: 'pieceNum',  label: 'Piece #',            w: 90  },
+    { key: 'pieceName', label: 'Piece Name',         w: 220 },
+    { key: 'quantity',  label: 'Qty',                w: 70  },
+    { key: 'fabric',    label: 'Fabric',             w: 160 },
+    { key: 'grain',     label: 'Grain',              w: 130 },
+    { key: 'fusing',    label: 'Fusing/Interlining', w: 180 },
+    { key: 'notes',     label: 'Notes',              w: 193 },
+  ];
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <SectionHeading x={40} y={158}>Pattern Pieces Layout</SectionHeading>
+      <PhotoSlot x={40} y={175} w={PAGE_W - 80} h={200} label="Pattern Layout" image={layout} />
+
+      <SectionHeading x={40} y={420}>Pattern Piece Index</SectionHeading>
+      <GridTable x={40} y={432} cols={cols} rows={pieces} bodyRows={5} />
+
+      <SectionHeading x={40} y={580}>Cutting Instructions</SectionHeading>
+      <foreignObject x="40" y="594" width={PAGE_W - 80} height="160">
+        <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: 11, color: FR.slate, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+          {d.cuttingInstructions || '—'}
+        </div>
+      </foreignObject>
+    </g>
+  );
+}
+
+// ─── Page 9 — Points of Measure ─────────────────────────────────────────────
+function PagePom({ d, images }) {
+  const diagram = (images || []).find(i => i.slot === 'pom-diagram');
+  const poms = (d.poms || []).filter(p => p && (p.name || p.s || p.m || p.l || p.xl));
+
+  const szH = d.sizeType === 'waist'
+    ? [{ k: 's', l: 'W30' }, { k: 'm', l: 'W32' }, { k: 'l', l: 'W34' }, { k: 'xl', l: 'W36' }]
+    : [{ k: 's', l: 'S' }, { k: 'm', l: 'M' }, { k: 'l', l: 'L' }, { k: 'xl', l: 'XL' }];
+
+  const cols = [
+    { key: '#',    label: '#',            w: 36  },
+    { key: 'name', label: 'Measurement',  w: 234 },
+    { key: 'tol',  label: 'Tol ±',        w: 60  },
+    ...szH.map(s => ({ key: s.k, label: s.l, w: 65 })),
+  ];
+
+  // Two-column layout
+  const diagramW = 440;
+  const tableX = 40 + diagramW + 20;
+  const tableW = PAGE_W - 40 - tableX;
+  // Rescale cols to fit right column
+  const scale = tableW / cols.reduce((a, c) => a + c.w, 0);
+  const scaledCols = cols.map(c => ({ ...c, w: Math.floor(c.w * scale) }));
+  // fix rounding
+  const diff = tableW - scaledCols.reduce((a, c) => a + c.w, 0);
+  scaledCols[scaledCols.length - 1].w += diff;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <SectionHeading x={40} y={158}>POM Diagram</SectionHeading>
+      <PhotoSlot x={40} y={175} w={diagramW} h={420} label="Numbered measurement points" image={diagram} />
+
+      <SectionHeading x={tableX} y={158}>Graded Spec Table (cm)</SectionHeading>
+      <GridTable x={tableX} y={170} cols={scaledCols} rows={poms} bodyRows={14} rowH={20} headerH={20} />
+
+      <line x1={40} y1={640} x2={PAGE_W - 40} y2={640} stroke={FR.sand} />
+      <text x={40} y={656} fontSize="10" fill={FR.stone} fontStyle="italic">
+        All measurements in centimetres. Measure flat, relaxed. Tolerance ±1 cm unless otherwise specified.
+      </text>
+      <text x={40} y={678} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">MEASUREMENT METHOD</text>
+      <foreignObject x="40" y="685" width={PAGE_W - 80} height="60">
+        <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: 10, color: FR.slate, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+          {d.measurementMethod || '—'}
+        </div>
+      </foreignObject>
+    </g>
+  );
+}
+
 // ─── Placeholder for pages 2–14 ─────────────────────────────────────────────
 function ComingSoon({ pageNum, title }) {
   return (
@@ -527,8 +613,8 @@ const PAGE_FNS = [
   { title: 'Color & Artwork',              body: ({ d, images }) => <PageColor d={d} images={images} /> },
   { title: 'Construction Details',         body: ({ d }) => <PageConstruction d={d} /> },
   { title: 'Construction Detail Sketches', body: ({ d, images }) => <PageSketches d={d} images={images} /> },
-  { title: 'Pattern Pieces & Cutting',     body: () => <ComingSoon pageNum={8}  title="Pattern Pieces & Cutting" /> },
-  { title: 'Points of Measure',            body: () => <ComingSoon pageNum={9}  title="Points of Measure" /> },
+  { title: 'Pattern Pieces & Cutting',     body: ({ d, images }) => <PagePattern d={d} images={images} /> },
+  { title: 'Points of Measure',            body: ({ d, images }) => <PagePom d={d} images={images} /> },
   { title: 'Garment Treatments',           body: () => <ComingSoon pageNum={10} title="Garment Treatments" /> },
   { title: 'Labels & Packaging',           body: () => <ComingSoon pageNum={11} title="Labels & Packaging" /> },
   { title: 'Order & Delivery',             body: () => <ComingSoon pageNum={12} title="Order & Delivery" /> },

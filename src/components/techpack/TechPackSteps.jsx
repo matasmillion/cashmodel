@@ -474,8 +474,82 @@ export function StepSketches({ images, onUpload, onRemove }) {
     </div>
   );
 }
-export function StepPattern()          { return <ComingSoon title="Pattern Pieces & Cutting" />; }
-export function StepPom()              { return <ComingSoon title="Points of Measure" />; }
+export function StepPattern({ data, set, images, onUpload, onRemove }) {
+  const pieces = data.patternPieces && data.patternPieces.length ? data.patternPieces : [{ pieceNum: '', pieceName: '', quantity: '', fabric: '', grain: '', fusing: '', notes: '' }];
+  const updP = (i, k, v) => set('patternPieces', pieces.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addP = () => set('patternPieces', [...pieces, { pieceNum: '', pieceName: '', quantity: '', fabric: '', grain: '', fusing: '', notes: '' }]);
+  const rmP  = (i) => set('patternPieces', pieces.filter((_, idx) => idx !== i));
+
+  return (
+    <div>
+      <SectionTitle>Pattern Pieces &amp; Cutting</SectionTitle>
+
+      <PhotoUpload label="Pattern Pieces Layout" slotKey="pattern-layout" images={images} onUpload={onUpload} onRemove={onRemove} />
+
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>Pattern Piece Index</label>
+        <ArrayTable
+          headers={[
+            { key: 'pieceNum',  label: 'Piece #',          placeholder: 'P-01' },
+            { key: 'pieceName', label: 'Piece Name',       placeholder: 'Front Body' },
+            { key: 'quantity',  label: 'Quantity',         placeholder: '2' },
+            { key: 'fabric',    label: 'Fabric',           placeholder: 'Shell' },
+            { key: 'grain',     label: 'Grain',            placeholder: 'Lengthwise' },
+            { key: 'fusing',    label: 'Fusing/Interlining', placeholder: 'None' },
+            { key: 'notes',     label: 'Notes' },
+          ]}
+          rows={pieces} onUpdate={updP} onAdd={addP} onRemove={rmP} />
+      </div>
+
+      <Input label="Cutting Instructions" value={data.cuttingInstructions} onChange={v => set('cuttingInstructions', v)} multiline
+        placeholder="Marker plan, nap direction, utilisation target, shrinkage allowance…" />
+    </div>
+  );
+}
+
+export function StepPom({ data, set, images, onUpload, onRemove }) {
+  const poms = data.poms && data.poms.length ? data.poms : [{ name: '', tol: '1', s: '', m: '', l: '', xl: '', method: '' }];
+  const updPom = (i, k, v) => set('poms', poms.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addPom = () => set('poms', [...poms, { name: '', tol: '1', s: '', m: '', l: '', xl: '', method: '' }]);
+  const rmPom  = (i) => set('poms', poms.filter((_, idx) => idx !== i));
+
+  const szH = data.sizeType === 'waist'
+    ? [{ key: 's', label: 'W30' }, { key: 'm', label: 'W32' }, { key: 'l', label: 'W34' }, { key: 'xl', label: 'W36' }]
+    : [{ key: 's', label: 'S' }, { key: 'm', label: 'M' }, { key: 'l', label: 'L' }, { key: 'xl', label: 'XL' }];
+
+  return (
+    <div>
+      <SectionTitle>Points of Measure (cm)</SectionTitle>
+
+      <PhotoUpload label="POM Diagram (numbered measurement points)" slotKey="pom-diagram" images={images} onUpload={onUpload} onRemove={onRemove} />
+
+      <Select label="Size Type" value={data.sizeType} onChange={v => set('sizeType', v)} options={['apparel', 'waist', 'one-size']} />
+
+      {data.sizeType !== 'one-size' && (
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>Graded Spec Table (cm)</label>
+          <ArrayTable
+            headers={[
+              { key: '__idx',  label: '#',            render: (_v, _onChange, row) => (
+                <span style={{ fontSize: 11, color: FR.stone, padding: '3px 4px' }}>{poms.indexOf(row) + 1}</span>
+              ) },
+              { key: 'name',   label: 'Measurement',  placeholder: 'Chest Width' },
+              ...szH,
+              { key: 'method', label: 'Method',       placeholder: 'Lay flat / Tape' },
+            ]}
+            rows={poms} onUpdate={updPom} onAdd={addPom} onRemove={rmPom} />
+        </div>
+      )}
+
+      <Input label="Measurement Method" value={data.measurementMethod} onChange={v => set('measurementMethod', v)} multiline
+        placeholder="Lay garment flat on table. Smooth without stretching. Measure with flexible tape." />
+
+      <p style={{ fontSize: 10, color: FR.stone, marginTop: 8, fontStyle: 'italic' }}>
+        All measurements in centimetres. Measure flat, relaxed. Tolerance ±1 cm unless otherwise specified.
+      </p>
+    </div>
+  );
+}
 export function StepTreatments()       { return <ComingSoon title="Garment Treatments" />; }
 export function StepLabels()           { return <ComingSoon title="Labels & Packaging" />; }
 export function StepOrder()            { return <ComingSoon title="Order & Delivery" />; }
