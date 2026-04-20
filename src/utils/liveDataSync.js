@@ -138,7 +138,10 @@ export async function testShopifyProxy() {
 }
 
 /**
- * Fetches order totals for each of the past 13 weeks via the proxy.
+ * Fetches order totals for each of the past 13 weeks via the proxy. Designed
+ * to match Shopify's "Total sales" report (Analytics → Reports → Total sales):
+ * includes all non-cancelled, non-test orders regardless of financial status,
+ * and sums `current_total_price` so refunds / returns are subtracted.
  * Returns an array of { startDate, endDate, label, revenue, orders } objects.
  */
 export async function syncShopifyActuals(/* creds unused — proxy holds creds */) {
@@ -148,24 +151,31 @@ export async function syncShopifyActuals(/* creds unused — proxy holds creds *
   const data = await callShopifyProxy('orders.json', {
     created_at_min: since,
     status: 'any',
-    financial_status: 'paid,partially_paid',
-    fields: 'total_price,created_at',
+    fields: 'current_total_price,total_price,created_at,cancelled_at,test',
     limit: 250,
   });
 
-  const orders = data.orders || [];
+  // Match Shopify's Total sales: exclude cancelled + test orders, include
+  // everything else regardless of payment state.
+  const orders = (data.orders || []).filter(o => !o.cancelled_at && !o.test);
 
   return weeks.map(week => {
     const weekOrders = orders.filter(o => {
       const d = new Date(o.created_at);
       return d >= new Date(week.startISO) && d <= new Date(week.endISO);
     });
+    const revenue = weekOrders.reduce((s, o) => {
+      // current_total_price is already net of refunds/returns; fall back to total_price if missing.
+      const raw = o.current_total_price ?? o.total_price ?? 0;
+      const v = parseFloat(raw);
+      return s + (Number.isFinite(v) ? v : 0);
+    }, 0);
     return {
       startDate: week.startDate,
       endDate: week.endDate,
       label: week.label,
       isCurrent: week.isCurrent,
-      revenue: Math.round(weekOrders.reduce((s, o) => s + parseFloat(o.total_price || 0), 0) * 100) / 100,
+      revenue: Math.round(revenue * 100) / 100,
       orders: weekOrders.length,
     };
   });

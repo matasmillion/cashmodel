@@ -220,7 +220,7 @@ function ShopifyCard({ creds, onSave, onClear, dispatch }) {
                     </tbody>
                   </table>
                   <p className="mt-2 text-[10px]" style={{ color: FR.stone }}>
-                    Weeks run Monday–Sunday (local time). Revenue uses Shopify's <code>total_price</code> — item price + tax + shipping − discounts — for paid / partially-paid orders. Compare against Shopify → Analytics → Reports → Total sales for the same date range.
+                    Matches Shopify → Analytics → Reports → <strong>Total sales</strong>: all non-cancelled, non-test orders, summed on <code>current_total_price</code> (gross sales − discounts − returns + taxes + shipping). Weeks run Monday–Sunday in local time.
                   </p>
                 </details>
               </div>
