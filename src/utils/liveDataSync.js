@@ -473,11 +473,19 @@ export async function removePlaidItem(itemId) {
 
 /**
  * Refreshes balances across all of this user's Plaid items.
+ *
+ * Default mode (`realTime = false`) hits Plaid's /accounts/get which returns
+ * cached balances — free when you have the Transactions product. Use this for
+ * auto-sync on page load so we don't rack up $0.10/call fees.
+ *
+ * Force a live pull (`realTime = true`) only on explicit user action; that
+ * hits /accounts/balance/get which is $0.10/call per account.
+ *
  * Returns { items: [{ institution_name, accounts: [...] }], totals }
  * totals = { depository: sum of checking+savings, credit: sum of credit card balances }
  */
-export async function syncPlaidActuals() {
-  const data = await callPlaidProxy('accounts/all');
+export async function syncPlaidActuals({ realTime = false } = {}) {
+  const data = await callPlaidProxy('accounts/all', { real_time: realTime });
   const items = data.items || [];
 
   let depositoryTotal = 0;

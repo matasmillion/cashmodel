@@ -5,10 +5,11 @@
 //
 //   1. action: "link-token/create"          → returns link_token for Plaid Link
 //   2. action: "public-token/exchange"      → stores access_token + item metadata
-//   3. action: "accounts/balance"           → refreshes balances for one item
-//   4. action: "accounts/all"               → returns balances across ALL items
-//   5. action: "transactions/get"           → transactions for one item in a window
-//   6. action: "item/remove"                → removes an item from Plaid + our DB
+//   3. action: "accounts/cached"            → cheap, reads Plaid's cached balances (free w/ Transactions product)
+//   4. action: "accounts/balance"           → forced real-time refresh ($0.10/call — user-initiated only)
+//   5. action: "accounts/all"               → returns cached balances across ALL items (auto-sync default)
+//   6. action: "transactions/get"           → transactions for one item in a window
+//   7. action: "item/remove"                → removes an item from Plaid + our DB
 //
 // Secrets (set in Supabase → Edge Functions → plaid-proxy → Secrets):
 //   PLAID_CLIENT_ID      — same across envs
@@ -182,7 +183,7 @@ serve(async (req) => {
     }, 200, origin);
   }
 
-  // ── 3c. Refresh balances for a single item ──────────────────────────────
+  // ── 3c. Force a real-time balance refresh ($0.10 per call — user-initiated) ─
   if (action === 'accounts/balance') {
     if (!body.item_id) return json({ error: 'Missing item_id' }, 400, origin);
     const { data: row, error: rowErr } = await supabase
@@ -201,15 +202,37 @@ serve(async (req) => {
     }, 200, origin);
   }
 
-  // ── 3d. Fetch balances across ALL of this user's items ──────────────────
+  // ── 3d. Cheap cached balances for a single item (free w/ Transactions) ──
+  if (action === 'accounts/cached') {
+    if (!body.item_id) return json({ error: 'Missing item_id' }, 400, origin);
+    const { data: row, error: rowErr } = await supabase
+      .from('user_plaid_items')
+      .select('access_token, institution_name')
+      .eq('item_id', body.item_id)
+      .maybeSingle();
+    if (rowErr || !row) return json({ error: 'Item not found' }, 404, origin);
+
+    const accts = await plaid('/accounts/get', { access_token: row.access_token });
+    if (!accts.ok) return json({ error: 'accounts fetch failed', plaid: accts.data }, accts.status, origin);
+    return json({
+      institution_name: row.institution_name,
+      accounts: accts.data.accounts,
+    }, 200, origin);
+  }
+
+  // ── 3e. Fetch balances across ALL items (default = cached; free w/ Transactions) ─
+  // Pass { real_time: true } to force a live refresh at $0.10/call per account.
   if (action === 'accounts/all') {
+    const realTime = (body as { real_time?: boolean }).real_time === true;
+    const endpoint = realTime ? '/accounts/balance/get' : '/accounts/get';
+
     const { data: rows, error: rowsErr } = await supabase
       .from('user_plaid_items')
       .select('item_id, access_token, institution_name, institution_id');
     if (rowsErr) return json({ error: rowsErr.message }, 500, origin);
 
     const results = await Promise.all((rows || []).map(async (row) => {
-      const bal = await plaid('/accounts/balance/get', { access_token: row.access_token });
+      const bal = await plaid(endpoint, { access_token: row.access_token });
       if (!bal.ok) {
         return {
           item_id: row.item_id,
@@ -227,7 +250,7 @@ serve(async (req) => {
       };
     }));
 
-    return json({ items: results }, 200, origin);
+    return json({ items: results, real_time: realTime }, 200, origin);
   }
 
   // ── 3e. Transactions for a single item ──────────────────────────────────

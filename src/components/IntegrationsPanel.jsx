@@ -724,7 +724,9 @@ function PlaidCard({ dispatch }) {
     setSyncStatus('syncing');
     setSyncErr('');
     try {
-      const { totals, depositoryAccounts, creditAccounts } = await syncPlaidActuals();
+      // Manual click = real-time refresh (hits the bank, costs ~$0.10/account).
+      // Auto-sync on page load uses the cached endpoint (free).
+      const { totals, depositoryAccounts, creditAccounts } = await syncPlaidActuals({ realTime: true });
 
       // Push depository cash into the seed (supplements Mercury if they overlap,
       // so pick whichever feels right — for now Plaid wins if present).
