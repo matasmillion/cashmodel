@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-20T12:17:36.571Z",
+  "lastUpdated": "2026-04-20T12:21:17.375Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "f740519",
+      "date": "2026-04-20T12:18:25+00:00",
+      "message": "Regenerate public/state.json"
+    },
+    {
+      "sha": "af7b8a6",
+      "date": "2026-04-20T12:18:00+00:00",
+      "message": "Wire Shopify + Meta sync into the cash flow model"
+    },
+    {
       "sha": "b3fb264",
       "date": "2026-04-20T08:15:07+00:00",
       "message": "Add liveDataSync utility — Shopify, Meta, Mercury fetch helpers"
@@ -1082,16 +1092,6 @@
       "sha": "b4cc84e",
       "date": "2026-04-20T07:00:37+00:00",
       "message": "Tech Pack Pages 6-7: Construction Details + Detail Sketches"
-    },
-    {
-      "sha": "12d9694",
-      "date": "2026-04-20T06:50:06+00:00",
-      "message": "Tech Pack Page 5: Color & Artwork"
-    },
-    {
-      "sha": "68d083f",
-      "date": "2026-04-20T06:45:34+00:00",
-      "message": "Tech Pack Page 4: Bill of Materials"
     }
   ]
 }

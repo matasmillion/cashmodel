@@ -505,10 +505,22 @@ export default function IntegrationsPanel() {
   const { dispatch } = useApp();
   const [creds, setCreds] = useState(() => loadCredentials());
 
+  // React to background auto-sync — refresh card UI when integrations are updated elsewhere.
+  useEffect(() => {
+    const reload = () => setCreds(loadCredentials());
+    window.addEventListener('integrations-updated', reload);
+    window.addEventListener('storage', reload);
+    return () => {
+      window.removeEventListener('integrations-updated', reload);
+      window.removeEventListener('storage', reload);
+    };
+  }, []);
+
   function update(key, data) {
     const next = data ? { ...creds, [key]: data } : (() => { const c = { ...creds }; delete c[key]; return c; })();
     setCreds(next);
     saveCredentials(next);
+    window.dispatchEvent(new CustomEvent('integrations-updated'));
   }
 
   return (

@@ -1,9 +1,77 @@
 import { createContext, useContext, useReducer, useMemo, useEffect, useRef } from 'react';
 import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, OPEX_WAREHOUSE, CREDIT_CARDS, LOANS, AD_UNIT_TYPES, DEFAULT_EVENTS } from '../data/seedData';
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
+import { syncShopifyActuals, syncMetaActuals } from '../utils/liveDataSync';
 import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
 
 const LOCAL_STORAGE_KEY = 'cashmodel_state';
+const INTEGRATIONS_KEY = 'cashmodel_integrations';
+
+function loadIntegrations() {
+  try { return JSON.parse(localStorage.getItem(INTEGRATIONS_KEY) || '{}'); } catch { return {}; }
+}
+function saveIntegrations(data) {
+  localStorage.setItem(INTEGRATIONS_KEY, JSON.stringify(data));
+  window.dispatchEvent(new CustomEvent('integrations-updated'));
+}
+
+// Pulls current-week actuals from any connected integrations and pushes them
+// into the seed. Runs silently in the background — errors are logged, not shown.
+async function runAutoSync(dispatch) {
+  const creds = loadIntegrations();
+  const now = new Date().toISOString();
+  const updated = { ...creds };
+  let changed = false;
+
+  const tasks = [];
+
+  if (creds.shopify?.connected) {
+    tasks.push(
+      syncShopifyActuals(creds.shopify).then(weeks => {
+        const current = weeks.find(w => w.isCurrent);
+        if (!current) return;
+        dispatch({ type: 'UPDATE_SEED', payload: { revenue: current.revenue, date: current.startDate } });
+        updated.shopify = {
+          ...creds.shopify,
+          syncedAt: now,
+          lastSync: {
+            syncedAt: now,
+            currentWeekRevenue: current.revenue,
+            currentWeekOrders: current.orders,
+            weeks,
+          },
+        };
+        changed = true;
+      }).catch(err => console.warn('[auto-sync] Shopify:', err.message)),
+    );
+  }
+
+  if (creds.meta?.connected) {
+    tasks.push(
+      syncMetaActuals(creds.meta).then(weeks => {
+        const current = weeks.find(w => w.isCurrent);
+        if (!current) return;
+        dispatch({ type: 'UPDATE_SEED', payload: { adSpend: current.adSpend } });
+        updated.meta = {
+          ...creds.meta,
+          syncedAt: now,
+          lastSync: {
+            syncedAt: now,
+            currentWeekSpend: current.adSpend,
+            currentWeekImpressions: current.impressions,
+            currentWeekClicks: current.clicks,
+            weeks,
+          },
+        };
+        changed = true;
+      }).catch(err => console.warn('[auto-sync] Meta:', err.message)),
+    );
+  }
+
+  if (tasks.length === 0) return;
+  await Promise.allSettled(tasks);
+  if (changed) saveIntegrations(updated);
+}
 
 const AppContext = createContext();
 
@@ -188,9 +256,14 @@ export function AppProvider({ children }) {
     };
   }, [state.activeTab]);
 
-  // Listen to Supabase auth state — load cloud data when user signs in
+  // Listen to Supabase auth state — load cloud data when user signs in,
+  // then kick off auto-sync so integration data overrides any stale cloud seed.
   useEffect(() => {
-    if (!IS_SUPABASE_ENABLED) return;
+    if (!IS_SUPABASE_ENABLED) {
+      // No auth flow — just auto-sync once on mount
+      runAutoSync(dispatch);
+      return;
+    }
 
     async function loadCloudState(userId) {
       const { data, error } = await supabase
@@ -203,16 +276,27 @@ export function AppProvider({ children }) {
       }
     }
 
+    async function loadAndSync(userId) {
+      await loadCloudState(userId);
+      await runAutoSync(dispatch);
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         userIdRef.current = session.user.id;
-        loadCloudState(session.user.id);
+        loadAndSync(session.user.id);
+      } else {
+        // Not signed in — still auto-sync from localStorage creds
+        runAutoSync(dispatch);
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       userIdRef.current = session?.user?.id ?? null;
-      if (session?.user) loadCloudState(session.user.id);
+      // SIGNED_IN fires on fresh login; INITIAL_SESSION is handled by getSession above
+      if (event === 'SIGNED_IN' && session?.user) {
+        loadAndSync(session.user.id);
+      }
     });
 
     return () => subscription.unsubscribe();
