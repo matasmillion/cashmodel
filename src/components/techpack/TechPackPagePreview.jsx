@@ -807,6 +807,48 @@ function PageOrder({ d }) {
   );
 }
 
+// ─── Page 13 — Compliance & Quality ──────────────────────────────────────────
+function PageCompliance({ d }) {
+  const shipping = (d.shippingReqs || []).filter(r => r.requirement || r.specification || r.notes);
+  const tests    = (d.testingStandards || []).filter(r => r.test || r.standard || r.requirement);
+  const matrix   = (d.barcodeMatrix || []).filter(r => r.size || r.sku || r.upc || r.colorCode);
+
+  const shipCols = [
+    { key: 'requirement',   label: 'Requirement',   w: 260 },
+    { key: 'specification', label: 'Specification', w: 460 },
+    { key: 'notes',         label: 'Notes',         w: 323 },
+  ];
+  const testCols = [
+    { key: 'test',        label: 'Test',        w: 200 },
+    { key: 'standard',    label: 'Standard',    w: 200 },
+    { key: 'requirement', label: 'Requirement', w: 240 },
+    { key: 'testMethod',  label: 'Test Method', w: 230 },
+    { key: 'passFail',    label: 'Pass-Fail',   w: 173 },
+  ];
+  const matrixCols = [
+    { key: 'size',             label: 'Size',              w: 100 },
+    { key: 'sku',              label: 'SKU',               w: 240 },
+    { key: 'upc',              label: 'UPC or Barcode',    w: 210 },
+    { key: 'colorCode',        label: 'Color Code',        w: 193 },
+    { key: 'shopifyVariantId', label: 'Shopify Variant ID',w: 300 },
+  ];
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <SectionHeading x={40} y={158}>Shipping Requirements</SectionHeading>
+      <GridTable x={40} y={170} cols={shipCols} rows={shipping} bodyRows={3} />
+
+      <SectionHeading x={40} y={290}>Quality &amp; Testing Standards</SectionHeading>
+      <GridTable x={40} y={302} cols={testCols} rows={tests} bodyRows={4} />
+
+      <SectionHeading x={40} y={434}>Barcode &amp; SKU Matrix</SectionHeading>
+      <GridTable x={40} y={446} cols={matrixCols} rows={matrix} bodyRows={10} />
+    </g>
+  );
+}
+
 // ─── Placeholder for pages 2–14 ─────────────────────────────────────────────
 function ComingSoon({ pageNum, title }) {
   return (
@@ -835,7 +877,7 @@ const PAGE_FNS = [
   { title: 'Garment Treatments',           body: ({ d, images }) => <PageTreatments d={d} images={images} /> },
   { title: 'Labels & Packaging',           body: ({ d, images }) => <PageLabels d={d} images={images} /> },
   { title: 'Order & Delivery',             body: ({ d }) => <PageOrder d={d} /> },
-  { title: 'Compliance & Quality',         body: () => <ComingSoon pageNum={13} title="Compliance & Quality" /> },
+  { title: 'Compliance & Quality',         body: ({ d }) => <PageCompliance d={d} /> },
   { title: 'Revision History & Approval',  body: () => <ComingSoon pageNum={14} title="Revision History & Approval" /> },
 ];
 

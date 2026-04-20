@@ -104,6 +104,9 @@ export const DEFAULT_DATA = {
   quantities: [{ colorway: '', s: '', m: '', l: '', xl: '', unitCost: '' }],
   shipTo: '', deliveryLocation: '', shipMethod: '', incoterm: 'FOB', targetShipDate: '', targetArrivalDate: '', freightForwarder: '', specialInstructions: '',
   cartons: [{ cartonNum: '', colorway: '', sizeBreakdown: '', qtyPerCarton: '', dims: '', grossWeight: '', netWeight: '' }],
+  shippingReqs: [{ requirement: '', specification: '', notes: '' }],
+  testingStandards: [{ test: '', standard: '', requirement: '', testMethod: '', passFail: 'Pending' }],
+  barcodeMatrix: [],
   // PLM features
   parentStyleId: null,
   parentStyleName: '',
@@ -135,6 +138,7 @@ export function resizeImage(file, maxW = 1200) {
 export const SAMPLE_TYPES = ['Proto', 'Fit', 'SMS (Salesman)', 'PP (Pre-Production)', 'TOP (Top of Production)'];
 export const SAMPLE_VERDICTS = ['Pending', 'Approved', 'Rejected', 'Revise'];
 export const APPROVAL_STATUSES = ['Pending', 'Approved', 'Rejected', 'Revise'];
+export const PASS_FAIL = ['Pass', 'Fail', 'Pending'];
 
 export function computeBOMCost(data) {
   const bom = data.bom || data.trims || [];

@@ -5,7 +5,7 @@
 // that will be replaced in subsequent prompts.
 
 import { useState } from 'react';
-import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, DEFAULT_DATA, isStepLocked } from './techPackConstants';
+import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, isStepLocked } from './techPackConstants';
 import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, EditableSelect, FRColorCell } from './TechPackPrimitives';
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
 
@@ -822,7 +822,95 @@ export function StepOrder({ data, set, library, saveToLibrary }) {
     </div>
   );
 }
-export function StepCompliance()       { return <ComingSoon title="Compliance & Quality" />; }
+export function StepCompliance({ data, set }) {
+  const locked = isStepLocked(12, data.status);
+
+  const shipping = data.shippingReqs && data.shippingReqs.length ? data.shippingReqs : [{ requirement: '', specification: '', notes: '' }];
+  const updS = (i, k, v) => set('shippingReqs', shipping.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addS = () => set('shippingReqs', [...shipping, { requirement: '', specification: '', notes: '' }]);
+  const rmS  = (i) => set('shippingReqs', shipping.filter((_, idx) => idx !== i));
+
+  const tests = data.testingStandards && data.testingStandards.length ? data.testingStandards : [{ test: '', standard: '', requirement: '', testMethod: '', passFail: 'Pending' }];
+  const updT = (i, k, v) => set('testingStandards', tests.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addT = () => set('testingStandards', [...tests, { test: '', standard: '', requirement: '', testMethod: '', passFail: 'Pending' }]);
+  const rmT  = (i) => set('testingStandards', tests.filter((_, idx) => idx !== i));
+
+  // Auto-seed barcode matrix from colorways × sizeRange on first use
+  const sizes = (data.sizeRange || 'S / M / L / XL').split('/').map(s => s.trim()).filter(Boolean);
+  const colorways = (data.colorways || []).filter(c => c && c.name);
+  const seedMatrix = () => {
+    const rows = [];
+    colorways.forEach(cw => sizes.forEach(sz => rows.push({
+      size: sz, sku: '', upc: '', colorCode: cw.frColor || cw.name || '', shopifyVariantId: '',
+    })));
+    return rows.length ? rows : [{ size: '', sku: '', upc: '', colorCode: '', shopifyVariantId: '' }];
+  };
+  const matrix = data.barcodeMatrix && data.barcodeMatrix.length ? data.barcodeMatrix : seedMatrix();
+  const updM = (i, k, v) => set('barcodeMatrix', matrix.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addM = () => set('barcodeMatrix', [...matrix, { size: '', sku: '', upc: '', colorCode: '', shopifyVariantId: '' }]);
+  const rmM  = (i) => set('barcodeMatrix', matrix.filter((_, idx) => idx !== i));
+  const reseedM = () => set('barcodeMatrix', seedMatrix());
+
+  const passFailRender = (v, onChange) => (
+    <select value={v || 'Pending'} onChange={e => onChange(e.target.value)}
+      style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box' }}>
+      {PASS_FAIL.map(s => <option key={s} value={s}>{s}</option>)}
+    </select>
+  );
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+
+  return (
+    <div>
+      <SectionTitle>Compliance &amp; Quality</SectionTitle>
+      {locked && <LockedBanner status={data.status} />}
+      <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
+
+        <div style={{ marginBottom: 18 }}>
+          <label style={sectionLabel}>Shipping Requirements</label>
+          <ArrayTable
+            headers={[
+              { key: 'requirement',   label: 'Requirement',   placeholder: 'Polybag, hang tag, etc.' },
+              { key: 'specification', label: 'Specification', placeholder: 'Size, thickness, barcode…' },
+              { key: 'notes',         label: 'Notes' },
+            ]}
+            rows={shipping} onUpdate={updS} onAdd={addS} onRemove={rmS} />
+        </div>
+
+        <div style={{ marginBottom: 18 }}>
+          <label style={sectionLabel}>Quality &amp; Testing Standards</label>
+          <ArrayTable
+            headers={[
+              { key: 'test',        label: 'Test',        placeholder: 'Colorfastness / Tensile' },
+              { key: 'standard',    label: 'Standard',    placeholder: 'AATCC 61 / ASTM D5034' },
+              { key: 'requirement', label: 'Requirement', placeholder: 'Grade 4 / ≥ 15N' },
+              { key: 'testMethod',  label: 'Test Method', placeholder: 'ISO 105-C06 / Instron' },
+              { key: 'passFail',    label: 'Pass-Fail',   render: passFailRender },
+            ]}
+            rows={tests} onUpdate={updT} onAdd={addT} onRemove={rmT} />
+        </div>
+
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <label style={sectionLabel}>Barcode &amp; SKU Matrix</label>
+            <button onClick={reseedM}
+              style={{ padding: '4px 10px', background: 'none', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 10, color: FR.soil, cursor: 'pointer' }}>
+              ↻ Reseed from colorways × sizes
+            </button>
+          </div>
+          <ArrayTable
+            headers={[
+              { key: 'size',             label: 'Size',              placeholder: 'S / M / L / XL' },
+              { key: 'sku',              label: 'SKU',               placeholder: 'FR-BB-HD-001-SLT-M' },
+              { key: 'upc',              label: 'UPC or Barcode',    placeholder: '123456789012' },
+              { key: 'colorCode',        label: 'Color Code',        placeholder: 'SLATE / #3A3A3A' },
+              { key: 'shopifyVariantId', label: 'Shopify Variant ID',placeholder: 'gid://…' },
+            ]}
+            rows={matrix} onUpdate={updM} onAdd={addM} onRemove={rmM} />
+        </div>
+      </fieldset>
+    </div>
+  );
+}
 export function StepRevision()         { return <ComingSoon title="Revision History & Approval" />; }
 
 export const STEP_FNS = [
