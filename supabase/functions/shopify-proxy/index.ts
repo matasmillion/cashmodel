@@ -23,7 +23,10 @@ const API_VERSION = Deno.env.get('SHOPIFY_API_VERSION') || '2024-01';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 
-// Only GETs against read-only endpoints — the proxy cannot mutate a store.
+// Only read-only endpoints — the proxy cannot mutate a store.
+// graphql.json is allowed because ShopifyQL (read-only analytics queries)
+// runs through it; mutation GraphQL ops are impossible without a write scope
+// on the token, which we don't request.
 const ALLOWED_PATHS = [
   'shop.json',
   'orders.json',
@@ -35,6 +38,7 @@ const ALLOWED_PATHS = [
   'shopify_payments/payouts.json',
   'shopify_payments/balance.json',
   'customers/count.json',
+  'graphql.json',
 ];
 
 function corsHeaders(origin: string) {
@@ -108,7 +112,12 @@ serve(async (req) => {
   }
 
   // ── 3. Validate request body ────────────────────────────────────────────
-  let body: { path?: string; query?: Record<string, string | number> };
+  let body: {
+    path?: string;
+    query?: Record<string, string | number>;
+    // For graphql.json: full GraphQL request payload { query, variables? }
+    graphql?: { query: string; variables?: Record<string, unknown> };
+  };
   try {
     body = await req.json();
   } catch {
@@ -121,6 +130,41 @@ serve(async (req) => {
     return json({ error: `Path not allowed: ${rawPath}. Allowed: ${ALLOWED_PATHS.join(', ')}` }, 403, origin);
   }
 
+  // ── 4a. GraphQL POST branch ─────────────────────────────────────────────
+  if (rawPath === 'graphql.json') {
+    if (!body.graphql?.query) {
+      return json({ error: 'GraphQL requests require { graphql: { query, variables? } }' }, 400, origin);
+    }
+    // Crude mutation guard — we only want read queries. ShopifyQL runs inside `query`.
+    const firstKeyword = body.graphql.query.trimStart().slice(0, 10).toLowerCase();
+    if (firstKeyword.startsWith('mutation')) {
+      return json({ error: 'Mutations are blocked by this proxy' }, 403, origin);
+    }
+
+    try {
+      const upstream = await fetch(
+        `https://${domain}/admin/api/${API_VERSION}/graphql.json`,
+        {
+          method: 'POST',
+          headers: {
+            'X-Shopify-Access-Token': token,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify(body.graphql),
+        },
+      );
+      const text = await upstream.text();
+      return new Response(text, {
+        status: upstream.status,
+        headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
+      });
+    } catch (err) {
+      return json({ error: `GraphQL fetch failed: ${(err as Error).message}` }, 502, origin);
+    }
+  }
+
+  // ── 4b. REST GET branch ─────────────────────────────────────────────────
   const qs = body.query
     ? '?' + new URLSearchParams(
         Object.entries(body.query).map(([k, v]) => [k, String(v)]),
@@ -129,7 +173,6 @@ serve(async (req) => {
 
   const url = `https://${domain}/admin/api/${API_VERSION}/${rawPath}${qs}`;
 
-  // ── 4. Forward to Shopify ───────────────────────────────────────────────
   try {
     const upstream = await fetch(url, {
       headers: {

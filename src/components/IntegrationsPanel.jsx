@@ -146,7 +146,7 @@ function ShopifyCard({ creds, onSave, onClear, dispatch }) {
             <ol className="mt-2 space-y-1 list-decimal pl-4">
               <li>Shopify admin → Settings → Apps and sales channels → Develop apps</li>
               <li>Create or open a custom app → Configure <strong>Admin API</strong> scopes</li>
-              <li>Enable: <code>read_orders</code>, <code>read_products</code>, <code>read_inventory</code>, <code>read_shopify_payments_payouts</code></li>
+              <li>Enable: <code>read_orders</code>, <code>read_products</code>, <code>read_inventory</code>, <code>read_shopify_payments_payouts</code>, <code>read_reports</code></li>
               <li>Install app → reveal the Admin API access token (starts with <code>shpat_</code>)</li>
               <li>Paste the token above and click Connect</li>
             </ol>
@@ -220,7 +220,7 @@ function ShopifyCard({ creds, onSave, onClear, dispatch }) {
                     </tbody>
                   </table>
                   <p className="mt-2 text-[10px]" style={{ color: FR.stone }}>
-                    Matches Shopify → Analytics → Reports → <strong>Total sales</strong>: all non-cancelled, non-test orders, summed on <code>current_total_price</code> (gross sales − discounts − returns + taxes + shipping). Weeks run Monday–Sunday in local time.
+                    Numbers are pulled directly from Shopify's Reports API (ShopifyQL: <code>FROM sales SHOW total_sales, orders GROUP BY week</code>) — the exact same engine that powers Shopify → Analytics → Reports → <strong>Total sales</strong>. No client-side arithmetic.
                   </p>
                 </details>
               </div>
