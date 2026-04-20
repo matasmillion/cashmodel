@@ -39,10 +39,60 @@ function toISO(d) {
 }
 
 // ─── Shopify (via Supabase Edge Function proxy) ──────────────────────────────
+
 /**
- * Calls the Supabase `shopify-proxy` Edge Function. The function holds the
- * Shopify domain + access token server-side and forwards requests to Shopify's
- * Admin API — avoiding the CORS block on direct browser calls.
+ * Save the signed-in user's Shopify credentials to the user_integrations table.
+ * RLS ensures the row is scoped to the caller; each user only ever writes their own.
+ */
+export async function saveShopifyCredentials({ domain, token }) {
+  if (!IS_SUPABASE_ENABLED || !supabase) throw new Error('Supabase not configured');
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Sign in first');
+
+  const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const { error } = await supabase
+    .from('user_integrations')
+    .upsert(
+      {
+        user_id: user.id,
+        provider: 'shopify',
+        token,
+        metadata: { domain: cleanDomain },
+      },
+      { onConflict: 'user_id,provider' },
+    );
+  if (error) throw new Error(`Failed to save credentials: ${error.message}`);
+}
+
+/**
+ * Returns the Shopify integration row for the signed-in user, or null.
+ */
+export async function loadShopifyIntegration() {
+  if (!IS_SUPABASE_ENABLED || !supabase) return null;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data, error } = await supabase
+    .from('user_integrations')
+    .select('metadata, updated_at')
+    .eq('provider', 'shopify')
+    .maybeSingle();
+  if (error || !data) return null;
+  return { domain: data.metadata?.domain, updatedAt: data.updated_at };
+}
+
+/**
+ * Remove the signed-in user's Shopify credentials.
+ */
+export async function deleteShopifyCredentials() {
+  if (!IS_SUPABASE_ENABLED || !supabase) return;
+  await supabase.from('user_integrations').delete().eq('provider', 'shopify');
+}
+
+/**
+ * Calls the Supabase `shopify-proxy` Edge Function. The function verifies the
+ * caller's JWT, looks up their Shopify credentials from user_integrations,
+ * and forwards the request to their store — avoiding browser CORS on the
+ * Shopify Admin API.
  */
 export async function callShopifyProxy(path, query = null) {
   if (!IS_SUPABASE_ENABLED || !supabase) {

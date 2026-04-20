@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { ShoppingBag, BarChart3, CreditCard, Mail, Truck, CheckCircle, XCircle, Loader, ChevronDown, ChevronUp, ExternalLink, RefreshCw, Copy, Server } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { syncShopifyActuals, syncMetaActuals, testShopifyProxy } from '../utils/liveDataSync';
+import {
+  syncShopifyActuals, syncMetaActuals, testShopifyProxy,
+  saveShopifyCredentials, loadShopifyIntegration, deleteShopifyCredentials,
+} from '../utils/liveDataSync';
 
 const FR = { slate: '#3A3A3A', salt: '#F5F0E8', sand: '#EBE5D5', stone: '#716F70', soil: '#9A816B', sea: '#B5C7D3', sage: '#ADBDA3', sienna: '#D4956A', green: '#4CAF7D', red: '#C0392B' };
 
@@ -23,29 +26,52 @@ function formatSyncedAt(iso) {
   } catch { return ''; }
 }
 
-// ─── Shopify (via Supabase Edge Function proxy) ──────────────────────────────
+// ─── Shopify (credentials in Supabase, calls via edge function proxy) ────────
 function ShopifyCard({ creds, onSave, onClear, dispatch }) {
   const [open, setOpen] = useState(!creds?.connected);
-  const [status, setStatus] = useState(null); // null | 'testing' | 'ok' | 'error'
+  const [domain, setDomain] = useState(creds?.domain || '');
+  const [token, setToken] = useState('');
+  const [status, setStatus] = useState(null); // null | 'saving' | 'ok' | 'error'
   const [stats, setStats] = useState(creds?.stats || null);
   const [errMsg, setErrMsg] = useState('');
   const [syncStatus, setSyncStatus] = useState(null);
   const [syncErrMsg, setSyncErrMsg] = useState('');
 
-  async function handleTest(e) {
-    e?.preventDefault();
-    setStatus('testing');
+  // If DB has a saved integration but localStorage doesn't, hydrate the UI
+  useEffect(() => {
+    if (creds?.connected) return;
+    loadShopifyIntegration().then(row => {
+      if (row?.domain) setDomain(row.domain);
+    }).catch(() => {});
+  }, []);
+
+  async function handleConnect(e) {
+    e.preventDefault();
+    setStatus('saving');
     setErrMsg('');
     try {
+      await saveShopifyCredentials({ domain, token });
+      // Now test the proxy with the just-saved credentials
       const shopStats = await testShopifyProxy();
       setStats(shopStats);
       setStatus('ok');
-      onSave({ connected: true, stats: shopStats, syncedAt: null });
+      onSave({
+        connected: true,
+        domain: domain.replace(/^https?:\/\//, '').replace(/\/$/, ''),
+        stats: shopStats,
+        syncedAt: null,
+      });
+      setToken('');
       setOpen(false);
     } catch (err) {
       setStatus('error');
       setErrMsg(err.message);
     }
+  }
+
+  async function handleDisconnect() {
+    try { await deleteShopifyCredentials(); } catch {}
+    onClear();
   }
 
   async function handleSync() {
@@ -89,61 +115,64 @@ function ShopifyCard({ creds, onSave, onClear, dispatch }) {
       connected={creds?.connected}
       open={open}
       onToggle={() => setOpen(o => !o)}
-      onDisconnect={onClear}
+      onDisconnect={handleDisconnect}
     >
       {!creds?.connected && (
-        <div className="space-y-3 mt-3">
+        <form onSubmit={handleConnect} className="space-y-3 mt-3">
           <div className="p-2 rounded-lg text-xs flex items-start gap-2" style={{ background: FR.salt, border: `1px solid ${FR.sand}` }}>
             <Server size={12} style={{ color: FR.soil, marginTop: 2, flexShrink: 0 }} />
             <span style={{ color: FR.stone }}>
-              Shopify Admin API can't be called from the browser (CORS). This app uses a Supabase Edge Function proxy —
-              your access token stays server-side. Deploy the proxy first, then click Test connection.
+              Your token is saved encrypted in our database, scoped to your account only (Row Level Security). The browser sends requests to a secure proxy that forwards them to Shopify — your token never leaves the server.
             </span>
           </div>
 
+          <div>
+            <label className="block text-xs mb-1" style={{ color: FR.stone }}>Store domain</label>
+            <input value={domain} onChange={e => setDomain(e.target.value)}
+              placeholder="your-store.myshopify.com" required
+              className="w-full text-sm px-3 py-2 rounded-lg border"
+              style={{ background: FR.salt, borderColor: FR.sand, color: FR.slate }} />
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: FR.stone }}>Admin API access token</label>
+            <input value={token} onChange={e => setToken(e.target.value)} type="password"
+              placeholder="shpat_••••••••" required
+              className="w-full text-sm px-3 py-2 rounded-lg border"
+              style={{ background: FR.salt, borderColor: FR.sand, color: FR.slate }} />
+          </div>
+
           <details className="text-xs" style={{ color: FR.stone }}>
-            <summary className="cursor-pointer select-none font-medium" style={{ color: FR.slate }}>Setup instructions (one-time)</summary>
-            <ol className="mt-2 space-y-1.5 list-decimal pl-4">
-              <li>
-                <strong>Get a Shopify Admin API token.</strong> In Shopify admin → Settings → Apps and sales channels → App development → click your existing <strong>Admin API</strong> legacy app (or click <strong>Build apps in Dev Dashboard</strong> for a new one). Rotate / reveal the token. Token starts with <code>shpat_</code>.
-              </li>
-              <li>
-                <strong>Required scopes:</strong> <code>read_orders</code>, <code>read_products</code>, <code>read_inventory</code>, <code>read_shopify_payments_payouts</code>.
-              </li>
-              <li>
-                <strong>Deploy the proxy.</strong> From your terminal in this repo:
-                <pre className="mt-1 p-2 rounded font-mono text-[10px]" style={{ background: FR.salt, color: FR.slate }}>{`supabase login
-supabase link --project-ref <your-project-ref>
-supabase secrets set \\
-  SHOPIFY_DOMAIN=your-store.myshopify.com \\
-  SHOPIFY_TOKEN=shpat_xxxxxxxxxxxxx
-supabase functions deploy shopify-proxy`}</pre>
-              </li>
-              <li>Click Test connection below. On success the model will auto-sync on every page load.</li>
+            <summary className="cursor-pointer select-none font-medium" style={{ color: FR.slate }}>How to get a token</summary>
+            <ol className="mt-2 space-y-1 list-decimal pl-4">
+              <li>Shopify admin → Settings → Apps and sales channels → Develop apps</li>
+              <li>Create or open a custom app → Configure <strong>Admin API</strong> scopes</li>
+              <li>Enable: <code>read_orders</code>, <code>read_products</code>, <code>read_inventory</code>, <code>read_shopify_payments_payouts</code></li>
+              <li>Install app → reveal the Admin API access token (starts with <code>shpat_</code>)</li>
+              <li>Paste the token above and click Connect</li>
             </ol>
           </details>
 
-          <button onClick={handleTest} disabled={status === 'testing'}
+          <button type="submit" disabled={status === 'saving' || status === 'ok'}
             className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm"
             style={{
               background: status === 'ok' ? FR.green : status === 'error' ? FR.red : FR.slate,
-              color: 'white', cursor: status === 'testing' ? 'not-allowed' : 'pointer', border: 'none',
+              color: 'white', cursor: status === 'saving' ? 'not-allowed' : 'pointer', border: 'none',
             }}>
-            {status === 'testing' && <Loader size={13} className="animate-spin" />}
+            {status === 'saving' && <Loader size={13} className="animate-spin" />}
             {status === 'ok' && <CheckCircle size={13} />}
             {status === 'error' && <XCircle size={13} />}
-            {status === 'ok' ? 'Connected' : status === 'testing' ? 'Testing proxy…' : 'Test connection'}
+            {status === 'ok' ? 'Connected' : status === 'saving' ? 'Saving + testing…' : 'Connect Shopify'}
           </button>
           {status === 'error' && errMsg && (
             <p className="text-xs" style={{ color: FR.red }}>{errMsg}</p>
           )}
-        </div>
+        </form>
       )}
 
       {creds?.connected && (
         <div className="space-y-2 mt-3">
           <div className="p-2 rounded-lg text-xs flex items-center justify-between" style={{ background: FR.salt }}>
-            <span>Connected via proxy to <strong>{stats?.name || stats?.domain || 'Shopify'}</strong>{stats?.currency ? ` (${stats.currency})` : ''}</span>
+            <span>Connected to <strong>{stats?.name || creds.domain || 'Shopify'}</strong>{stats?.currency ? ` (${stats.currency})` : ''}</span>
             {creds.syncedAt && (
               <span className="text-[10px]" style={{ color: FR.stone }}>Synced {formatSyncedAt(creds.syncedAt)}</span>
             )}

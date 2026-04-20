@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-20T12:37:50.840Z",
+  "lastUpdated": "2026-04-20T13:12:58.014Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,21 @@
   ],
   "changelog": [
     {
+      "sha": "ee67599",
+      "date": "2026-04-20T13:04:51+00:00",
+      "message": "Lock down shopify-proxy with email allowlist"
+    },
+    {
+      "sha": "455d74d",
+      "date": "2026-04-20T12:38:46+00:00",
+      "message": "Add deploy instructions for shopify-proxy edge function"
+    },
+    {
+      "sha": "000e1dd",
+      "date": "2026-04-20T12:38:12+00:00",
+      "message": "Add Supabase Edge Function proxy for Shopify Admin API"
+    },
+    {
       "sha": "e86dba9",
       "date": "2026-04-20T12:21:35+00:00",
       "message": "Auto-sync Shopify + Meta on page load"
@@ -1077,21 +1092,6 @@
       "sha": "c7aedea",
       "date": "2026-04-20T07:41:22+00:00",
       "message": "Tech Pack Page 12: Order & Delivery"
-    },
-    {
-      "sha": "65ba497",
-      "date": "2026-04-20T07:35:54+00:00",
-      "message": "Tech Pack Page 11: Labels & Packaging"
-    },
-    {
-      "sha": "29b83de",
-      "date": "2026-04-20T07:09:23+00:00",
-      "message": "Tech Pack Page 10: Garment Treatments"
-    },
-    {
-      "sha": "40e9537",
-      "date": "2026-04-20T07:05:15+00:00",
-      "message": "Tech Pack Pages 8-9: Pattern Pieces + Points of Measure"
     }
   ]
 }

@@ -1,30 +1,29 @@
-// Shopify Admin API proxy — forwards authenticated requests from the browser
-// to Shopify, keeping the access token server-side.
+// Multi-tenant Shopify Admin API proxy.
 //
-// Configure secrets:
-//   supabase secrets set SHOPIFY_DOMAIN=your-store.myshopify.com
-//   supabase secrets set SHOPIFY_TOKEN=shpat_...
-//   supabase secrets set ALLOWED_EMAILS=you@foreignresource.com  (comma-separated for multiple)
+// Each authenticated user brings their own Shopify store + access token,
+// stored in the public.user_integrations table (Row Level Security restricts
+// each row to its owner). This function:
+//   1. Validates the caller's Supabase JWT
+//   2. Looks up that user's Shopify credentials from user_integrations
+//   3. Forwards the request to their store's Admin API
+//   4. Returns the response with CORS headers so the browser can read it
+//
+// No tenant-specific secrets in Supabase — the only env vars used are
+// SUPABASE_URL and SUPABASE_ANON_KEY, both provided automatically.
 //
 // Deploy:
 //   supabase functions deploy shopify-proxy
 //
 // Request body: { path: "orders.json", query?: { key: value, ... } }
-// Response: the raw JSON from Shopify, or { error } on failure.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const SHOPIFY_DOMAIN = Deno.env.get('SHOPIFY_DOMAIN');
-const SHOPIFY_TOKEN = Deno.env.get('SHOPIFY_TOKEN');
 const API_VERSION = Deno.env.get('SHOPIFY_API_VERSION') || '2024-01';
-const ALLOWED_EMAILS = (Deno.env.get('ALLOWED_EMAILS') || '')
-  .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 
-// Only allow GETs against read-only endpoints; block anything that could mutate data.
+// Only GETs against read-only endpoints — the proxy cannot mutate a store.
 const ALLOWED_PATHS = [
   'shop.json',
   'orders.json',
@@ -66,47 +65,49 @@ serve(async (req) => {
     return json({ error: 'Method not allowed' }, 405, origin);
   }
 
-  if (!SHOPIFY_DOMAIN || !SHOPIFY_TOKEN) {
-    return json(
-      { error: 'Proxy not configured. Run: supabase secrets set SHOPIFY_DOMAIN=... SHOPIFY_TOKEN=...' },
-      500,
-      origin,
-    );
-  }
-
-  // ── Auth check: verify the caller is an allowlisted user ────────────────
-  if (ALLOWED_EMAILS.length === 0) {
-    return json(
-      { error: 'Proxy has no ALLOWED_EMAILS configured. Set supabase secrets set ALLOWED_EMAILS=you@example.com before exposing this endpoint.' },
-      500,
-      origin,
-    );
-  }
-
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return json({ error: 'Missing Authorization header' }, 401, origin);
-  }
-  const token = authHeader.slice('Bearer '.length);
-
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    return json({ error: 'SUPABASE_URL / SUPABASE_ANON_KEY env not set (these are provided automatically by Supabase — redeploy the function).' }, 500, origin);
+    return json({ error: 'SUPABASE_URL / SUPABASE_ANON_KEY env missing (provided automatically by Supabase — redeploy the function).' }, 500, origin);
   }
+
+  // ── 1. Verify caller session ────────────────────────────────────────────
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return json({ error: 'Missing Authorization header — sign in first' }, 401, origin);
+  }
+  const jwt = authHeader.slice('Bearer '.length);
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
+    global: { headers: { Authorization: `Bearer ${jwt}` } },
   });
-  const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+
+  const { data: userData, error: userErr } = await supabase.auth.getUser(jwt);
   if (userErr || !userData?.user) {
     return json({ error: 'Invalid session token' }, 401, origin);
   }
+  const userId = userData.user.id;
 
-  const userEmail = (userData.user.email || '').toLowerCase();
-  if (!ALLOWED_EMAILS.includes(userEmail)) {
-    return json({ error: `User ${userEmail} is not allowed to call this proxy` }, 403, origin);
+  // ── 2. Look up this user's Shopify credentials ──────────────────────────
+  // RLS ensures the query only returns rows owned by userId.
+  const { data: integration, error: intErr } = await supabase
+    .from('user_integrations')
+    .select('token, metadata')
+    .eq('provider', 'shopify')
+    .maybeSingle();
+
+  if (intErr) {
+    return json({ error: `Credential lookup failed: ${intErr.message}` }, 500, origin);
   }
-  // ────────────────────────────────────────────────────────────────────────
+  if (!integration) {
+    return json({ error: 'Shopify not connected for this account. Save your Shopify domain + token on the Integrations tab first.' }, 404, origin);
+  }
 
+  const token = integration.token as string;
+  const domain = (integration.metadata as { domain?: string })?.domain;
+  if (!token || !domain) {
+    return json({ error: 'Stored Shopify credentials are incomplete (missing domain or token).' }, 400, origin);
+  }
+
+  // ── 3. Validate request body ────────────────────────────────────────────
   let body: { path?: string; query?: Record<string, string | number> };
   try {
     body = await req.json();
@@ -126,12 +127,13 @@ serve(async (req) => {
       ).toString()
     : '';
 
-  const url = `https://${SHOPIFY_DOMAIN}/admin/api/${API_VERSION}/${rawPath}${qs}`;
+  const url = `https://${domain}/admin/api/${API_VERSION}/${rawPath}${qs}`;
 
+  // ── 4. Forward to Shopify ───────────────────────────────────────────────
   try {
     const upstream = await fetch(url, {
       headers: {
-        'X-Shopify-Access-Token': SHOPIFY_TOKEN,
+        'X-Shopify-Access-Token': token,
         'Accept': 'application/json',
       },
     });

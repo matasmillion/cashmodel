@@ -1,92 +1,78 @@
-# Shopify Proxy (Supabase Edge Function)
+# Shopify Proxy (Multi-tenant Edge Function)
 
-Forwards authenticated browser requests to the Shopify Admin API. The access
-token lives in Supabase secrets, never in the browser.
+Each signed-in user connects their own Shopify store through the Integrations
+tab. Credentials are stored per-user in `public.user_integrations` with Row
+Level Security. The proxy validates the caller's session, looks up *their*
+token, and forwards requests to *their* store.
 
-## One-time deploy
+## One-time setup (app owner)
+
+You — the person deploying cashmodel — only have to do this once. Your users
+never touch the terminal.
 
 ```sh
-# 1. Install the Supabase CLI if you don't have it
+# 1. Install the Supabase CLI (if you don't have it)
 #    macOS:   brew install supabase/tap/supabase
 #    npm:     npm install -g supabase
-#    other:   https://supabase.com/docs/guides/cli
 
-# 2. Log in and link the function to your Supabase project
+# 2. Log in and link to your Supabase project
 supabase login
 supabase link --project-ref <your-project-ref>
 
-# 3. Set the Shopify credentials + email allowlist as secrets (never committed)
-supabase secrets set \
-  SHOPIFY_DOMAIN=your-store.myshopify.com \
-  SHOPIFY_TOKEN=shpat_xxxxxxxxxxxxxxxxxx \
-  ALLOWED_EMAILS=you@example.com
+# 3. Apply the migration (creates the user_integrations table with RLS)
+supabase db push
 
-# 4. Deploy
+# 4. Deploy the proxy function
 supabase functions deploy shopify-proxy
 ```
 
+That's it. No per-tenant secrets to manage.
+
+## User flow (everyone else)
+
+1. Sign into the cashmodel web app
+2. Go to **Integrations** → **Shopify**
+3. Paste their Shopify store domain and Admin API access token
+4. Click **Connect Shopify**
+
+The browser writes their credentials to the `user_integrations` table
+(scoped by RLS to their row only) and then hits the proxy to confirm the
+connection works.
+
 ## Security model
 
-- **Token is server-only.** `SHOPIFY_TOKEN` lives in Supabase secrets
-  (encrypted at rest, never in the repo, never in the browser).
-- **Only allowlisted emails can call the proxy.** The function verifies the
-  caller's Supabase JWT, resolves it to a user, and returns 403 if the user's
-  email isn't in `ALLOWED_EMAILS`. Even if someone signs up to your Supabase
-  project, they can't pull data unless you explicitly add their email.
-- **Read-only endpoint allowlist.** Only paths in `ALLOWED_PATHS` are
-  forwarded — all are read-only. The proxy cannot mutate your store.
+- **No token ever enters this repo.** User tokens are written directly from
+  the browser to the Supabase database over HTTPS.
+- **Row Level Security.** Each row in `user_integrations` is tagged with
+  `user_id` and policies restrict SELECT / INSERT / UPDATE / DELETE to
+  `auth.uid() = user_id`. User A can never read User B's credentials.
+- **Proxy uses the caller's JWT.** The edge function authenticates with
+  the user's own session token, so its database reads are filtered by RLS
+  too — it literally can only see the calling user's row.
+- **Read-only path allowlist.** The proxy forwards only to paths in
+  `ALLOWED_PATHS` (orders, products, payouts, etc.). Mutations are blocked
+  before Shopify is ever called.
 
-## Adding/removing users
+## Adding paths
 
-```sh
-# Single user
-supabase secrets set ALLOWED_EMAILS=you@example.com
-
-# Multiple users (comma-separated, no spaces)
-supabase secrets set ALLOWED_EMAILS=you@example.com,partner@example.com
-```
-
-## Rotating the Shopify token
+Edit `ALLOWED_PATHS` in `index.ts` and redeploy:
 
 ```sh
-supabase secrets set SHOPIFY_TOKEN=shpat_new_token_here
-# No redeploy needed — secrets take effect immediately.
+supabase functions deploy shopify-proxy
 ```
 
-## Required Shopify scopes
+## Path B (later) — upgrade to OAuth
 
-- `read_orders`
-- `read_products`
-- `read_inventory`
-- `read_shopify_payments_payouts`
-
-## What the proxy does
-
-- Accepts `POST` with JSON body `{ path, query? }`
-- Verifies the Authorization JWT and resolves it to an allowlisted user
-- Validates `path` against an allowlist of read-only Shopify endpoints
-- Forwards to `https://{SHOPIFY_DOMAIN}/admin/api/2024-01/{path}?{query}` with the
-  `X-Shopify-Access-Token` header
-- Returns the raw JSON response with CORS headers
-
-## Allowed paths
-
-See `ALLOWED_PATHS` in `index.ts`. Currently: `shop.json`, `orders.json`,
-`orders/count.json`, `products.json`, `products/count.json`,
-`inventory_levels.json`, `locations.json`, `shopify_payments/payouts.json`,
-`shopify_payments/balance.json`, `customers/count.json`.
-
-Add new paths to the array and redeploy to extend.
+When you want one-click Shopify connections for users (no token hunting),
+build a Shopify Public App and add an OAuth callback function that writes
+the resulting access token into `user_integrations` for the caller. The
+schema and proxy don't need to change — only the on-boarding flow.
 
 ## Local testing
 
 ```sh
-supabase functions serve shopify-proxy --env-file ./supabase/.env.local
+supabase functions serve shopify-proxy
 ```
 
-Where `.env.local` contains:
-
-```
-SHOPIFY_DOMAIN=your-store.myshopify.com
-SHOPIFY_TOKEN=shpat_xxx
-```
+The function reads `SUPABASE_URL` / `SUPABASE_ANON_KEY` automatically.
+Point the local client at `http://localhost:54321/functions/v1/shopify-proxy`.
