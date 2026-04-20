@@ -112,6 +112,11 @@ export const DEFAULT_DATA = {
   parentStyleName: '',
   revisions: [],
   samples: [],
+  finalApproval: {
+    designer:   { name: '', signature: '', date: '' },
+    brandOwner: { name: '', signature: '', date: '' },
+    factory:    { name: '', signature: '', dateChop: '' },
+  },
 };
 
 export const IMG_STEPS = new Set([3, 4, 5, 6, 7, 8, 9, 10, 11]);

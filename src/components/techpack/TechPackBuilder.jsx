@@ -206,9 +206,16 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     const revisions = data.revisions || [];
     const version = revisions.length + 1;
     const note = prompt(`Revision v${version} note (optional):`) || '';
+    const today = new Date().toISOString().slice(0, 10);
     const snapshot = {
+      rev: `V${version}.0`,
+      date: today,
+      changedBy: '',
+      section: '',
+      description: note || `Snapshot at ${data.status || 'Design'}`,
+      approvedBy: '',
+      // keep snapshot metadata for PLM audit trail
       version,
-      date: new Date().toISOString(),
       status: data.status,
       note,
       dataSnapshot: JSON.parse(JSON.stringify(data)),
@@ -261,6 +268,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     onSubmit: handleSubmit, submitting, submitResult,
     bomCost, costVariance,
     existingSuppliers,
+    onCreateRevision: createRevision,
   };
 
   return (

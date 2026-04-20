@@ -849,6 +849,66 @@ function PageCompliance({ d }) {
   );
 }
 
+// ─── Page 14 — Revision History & Approval ──────────────────────────────────
+function ApprovalPreviewCard({ x, y, w, h, title, name, signature, date, dateLabel = 'Date:' }) {
+  const lineY = (row) => y + 58 + row * 42;
+  const Line = ({ row, label, value }) => (
+    <g>
+      <text x={x + 14} y={lineY(row)} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">{esc(label)}</text>
+      {value
+        ? <text x={x + 68} y={lineY(row)} fontSize="11" fill={FR.slate}>{clampLine(esc(value), w - 82, 6.2)}</text>
+        : <line x1={x + 68} y1={lineY(row) + 2} x2={x + w - 14} y2={lineY(row) + 2} stroke={FR.sand} />}
+    </g>
+  );
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} fill={FR.white} stroke={FR.sand} />
+      <rect x={x} y={y} width={w} height={28} fill={FR.salt} />
+      <text x={x + 14} y={y + 18} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="1.8">{esc(title.toUpperCase())}</text>
+      <Line row={0} label="NAME:"      value={name} />
+      <Line row={1} label="SIG:"       value={signature} />
+      <Line row={2} label={dateLabel.toUpperCase()} value={date} />
+    </g>
+  );
+}
+
+function PageRevision({ d }) {
+  const revisions = (d.revisions || []).filter(r => r.rev || r.date || r.changedBy || r.description);
+
+  const revCols = [
+    { key: 'rev',         label: 'Rev #',                 w: 80  },
+    { key: 'date',        label: 'Date',                  w: 110 },
+    { key: 'changedBy',   label: 'Changed By',            w: 160 },
+    { key: 'section',     label: 'Section',               w: 150 },
+    { key: 'description', label: 'Description of Change', w: 383 },
+    { key: 'approvedBy',  label: 'Approved By',           w: 160 },
+  ];
+
+  const fa = d.finalApproval || {};
+  const designer = fa.designer || {};
+  const brand    = fa.brandOwner || {};
+  const factory  = fa.factory || {};
+
+  const cardY = 500;
+  const cardH = 240;
+  const cardGap = 20;
+  const cardW = (PAGE_W - 80 - cardGap * 2) / 3;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <SectionHeading x={40} y={158}>Revision History</SectionHeading>
+      <GridTable x={40} y={170} cols={revCols} rows={revisions} bodyRows={10} />
+
+      <SectionHeading x={40} y={478}>Final Approval</SectionHeading>
+      <ApprovalPreviewCard x={40}                              y={cardY} w={cardW} h={cardH} title="Designer"    name={designer.name} signature={designer.signature} date={designer.date} />
+      <ApprovalPreviewCard x={40 + cardW + cardGap}            y={cardY} w={cardW} h={cardH} title="Brand Owner" name={brand.name}    signature={brand.signature}    date={brand.date} />
+      <ApprovalPreviewCard x={40 + (cardW + cardGap) * 2}      y={cardY} w={cardW} h={cardH} title="Factory"     name={factory.name}  signature={factory.signature}  date={factory.dateChop} dateLabel="Date / Chop:" />
+    </g>
+  );
+}
+
 // ─── Placeholder for pages 2–14 ─────────────────────────────────────────────
 function ComingSoon({ pageNum, title }) {
   return (
@@ -878,7 +938,7 @@ const PAGE_FNS = [
   { title: 'Labels & Packaging',           body: ({ d, images }) => <PageLabels d={d} images={images} /> },
   { title: 'Order & Delivery',             body: ({ d }) => <PageOrder d={d} /> },
   { title: 'Compliance & Quality',         body: ({ d }) => <PageCompliance d={d} /> },
-  { title: 'Revision History & Approval',  body: () => <ComingSoon pageNum={14} title="Revision History & Approval" /> },
+  { title: 'Revision History & Approval',  body: ({ d }) => <PageRevision d={d} /> },
 ];
 
 export default function TechPackPagePreview({ data, images, step }) {

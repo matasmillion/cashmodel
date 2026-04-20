@@ -911,7 +911,89 @@ export function StepCompliance({ data, set }) {
     </div>
   );
 }
-export function StepRevision()         { return <ComingSoon title="Revision History & Approval" />; }
+function ApprovalCard({ title, value, onChange, dateLabel = 'Date' }) {
+  const v = value || { name: '', signature: '', date: '', dateChop: '' };
+  const dateKey = dateLabel === 'Date / Chop' ? 'dateChop' : 'date';
+  const update = (k, val) => onChange({ ...v, [k]: val });
+  return (
+    <div style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white }}>
+      <div style={{ fontSize: 10, color: FR.soil, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 }}>{title}</div>
+      <Input label="Name" value={v.name} onChange={val => update('name', val)} />
+      <Input label="Signature" value={v.signature} onChange={val => update('signature', val)} placeholder="Typed signature" />
+      <div style={{ marginBottom: 4 }}>
+        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' }}>{dateLabel}</label>
+        <input type="date" value={v[dateKey] || ''} onChange={e => update(dateKey, e.target.value)}
+          style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.slate, background: FR.white, outline: 'none', boxSizing: 'border-box' }} />
+      </div>
+    </div>
+  );
+}
+
+export function StepRevision({ data, set, onSubmit, submitting, submitResult, onCreateRevision }) {
+  const seedRevision = () => ({ rev: data.revision || 'V1.0', date: data.dateCreated || '', changedBy: '', section: '', description: 'Initial release', approvedBy: '' });
+  const revisions = data.revisions && data.revisions.length ? data.revisions : [seedRevision()];
+  const updR = (i, k, v) => set('revisions', revisions.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addR = () => set('revisions', [...revisions, { rev: '', date: '', changedBy: '', section: '', description: '', approvedBy: '' }]);
+  const rmR  = (i) => set('revisions', revisions.filter((_, idx) => idx !== i));
+
+  const fa = data.finalApproval || { designer: {}, brandOwner: {}, factory: {} };
+  const setFA = (key, val) => set('finalApproval', { ...fa, [key]: val });
+
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+
+  return (
+    <div>
+      <SectionTitle>Revision History &amp; Approval</SectionTitle>
+
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <label style={sectionLabel}>Revision History</label>
+          {onCreateRevision && (
+            <button onClick={onCreateRevision}
+              style={{ padding: '4px 10px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 10, cursor: 'pointer' }}>
+              + Snapshot
+            </button>
+          )}
+        </div>
+        <ArrayTable
+          headers={[
+            { key: 'rev',         label: 'Rev #',                 placeholder: 'V1.0' },
+            { key: 'date',        label: 'Date',                  placeholder: 'YYYY-MM-DD' },
+            { key: 'changedBy',   label: 'Changed By',            placeholder: 'Name' },
+            { key: 'section',     label: 'Section',               placeholder: 'Cover / BOM / POM…' },
+            { key: 'description', label: 'Description of Change', placeholder: 'Initial release' },
+            { key: 'approvedBy',  label: 'Approved By',           placeholder: 'Name' },
+          ]}
+          rows={revisions} onUpdate={updR} onAdd={addR} onRemove={rmR} />
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel}>Final Approval</label>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+          <ApprovalCard title="Designer"    value={fa.designer}   onChange={v => setFA('designer', v)} />
+          <ApprovalCard title="Brand Owner" value={fa.brandOwner} onChange={v => setFA('brandOwner', v)} />
+          <ApprovalCard title="Factory"     value={fa.factory}    onChange={v => setFA('factory', v)} dateLabel="Date / Chop" />
+        </div>
+      </div>
+
+      <div style={{ marginTop: 20, padding: 16, border: `2px solid ${FR.soil}`, borderRadius: 6, background: FR.white }}>
+        <div style={{ fontSize: 13, color: FR.slate, fontWeight: 600, marginBottom: 6 }}>Generate &amp; Download</div>
+        <div style={{ fontSize: 11, color: FR.stone, lineHeight: 1.6, marginBottom: 12 }}>
+          Creates a 14-page PDF and an editable SVG containing all the data above. Both files download to your device.
+        </div>
+        <button onClick={onSubmit} disabled={submitting}
+          style={{ padding: '10px 24px', background: submitting ? FR.stone : FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 12, fontWeight: 600, cursor: submitting ? 'wait' : 'pointer', letterSpacing: 0.5 }}>
+          {submitting ? 'Generating…' : 'Generate & Download'}
+        </button>
+        {submitResult && (
+          <div style={{ marginTop: 10, fontSize: 11, color: submitResult.error ? '#C0392B' : FR.sage }}>
+            {submitResult.error ? `Error: ${submitResult.error}` : `✓ Downloaded: ${submitResult.filename}.pdf and .svg`}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export const STEP_FNS = [
   StepCover,
