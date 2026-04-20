@@ -111,6 +111,175 @@ function PageCover({ d, images }) {
   );
 }
 
+// ─── Shared info strip (pages 2+) ───────────────────────────────────────────
+function InfoStripCell({ x, y, w, label, value }) {
+  return (
+    <g>
+      <text x={x + 10} y={y + 14} fontSize="7.5" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">{esc((label || '').toUpperCase())}</text>
+      <text x={x + 10} y={y + 30} fontSize="10.5" fill={FR.slate}>{clampLine(esc(value || '—'), w - 20, 6)}</text>
+    </g>
+  );
+}
+
+function InfoStrip({ d }) {
+  const y = 90;
+  const h = 44;
+  const cells = [
+    { label: 'Style #',     value: d.styleNumber },
+    { label: 'Style Name',  value: d.styleName },
+    { label: 'Season',      value: d.season },
+    { label: 'Date',        value: d.dateCreated },
+    { label: 'Colorway',    value: ((d.colorways || []).find(c => c && c.name) || {}).name || '—' },
+    { label: 'Size Range',  value: d.sizeRange },
+  ];
+  const cellW = (PAGE_W - 80) / cells.length;
+  return (
+    <g>
+      <rect x={40} y={y} width={PAGE_W - 80} height={h} fill={FR.salt} stroke={FR.sand} />
+      {cells.map((c, i) => (
+        <InfoStripCell key={i} x={40 + i * cellW} y={y} w={cellW} label={c.label} value={c.value} />
+      ))}
+    </g>
+  );
+}
+
+function SectionHeading({ x, y, children }) {
+  return (
+    <g>
+      <text x={x} y={y} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="17" fill={FR.slate}>{children}</text>
+      <rect x={x} y={y + 4} width="54" height="2" fill={FR.soil} />
+    </g>
+  );
+}
+
+function PhotoSlot({ x, y, w, h, label, image, placeholder }) {
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} fill={FR.white} stroke={FR.soil} strokeDasharray="5 4" />
+      {image
+        ? <image href={image.data} x={x + 4} y={y + 4} width={w - 8} height={h - 8} preserveAspectRatio="xMidYMid meet" />
+        : (
+          <text x={x + w / 2} y={y + h / 2 + 4} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
+            {placeholder || `Drop ${label.toLowerCase()} here`}
+          </text>
+        )}
+      <rect x={x} y={y + h} width={w} height={22} fill={FR.salt} stroke={FR.sand} />
+      <text x={x + w / 2} y={y + h + 15} textAnchor="middle" fontSize="9" fontWeight="bold" fill={FR.slate} letterSpacing="1.5">
+        {esc((label || '').toUpperCase())}
+      </text>
+    </g>
+  );
+}
+
+// ─── Page 2 — Design Overview ───────────────────────────────────────────────
+function PageDesignOverview({ d, images }) {
+  const imgs = images || [];
+  const front = imgs.find(i => i.slot === 'design-front');
+  const back  = imgs.find(i => i.slot === 'design-back');
+  const side  = imgs.find(i => i.slot === 'design-side');
+
+  const notes = (d.keyDesignNotes || []).filter(n => n.detail || n.description || n.reference);
+
+  // Info row: Factory / Contact / Fabric Type
+  const infoY = 155;
+  // Photo slots
+  const drawY = 210;
+  const drawH = 250;
+  const drawGap = 16;
+  const drawW = (PAGE_W - 80 - drawGap * 2) / 3;
+  // Table
+  const tableY = 520;
+  const tableW = PAGE_W - 80;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      {/* Factory row */}
+      <MetaRow x={40}                          y={infoY} label="Factory"         value={d.factory}        w={(PAGE_W - 80 - 20) / 3} />
+      <MetaRow x={40 + (PAGE_W - 80) / 3}      y={infoY} label="Factory Contact" value={d.factoryContact} w={(PAGE_W - 80 - 20) / 3} />
+      <MetaRow x={40 + (PAGE_W - 80) * 2 / 3}  y={infoY} label="Fabric Type"     value={d.fabricType}     w={(PAGE_W - 80 - 20) / 3} />
+
+      {/* Three photo slots */}
+      <PhotoSlot x={40}                         y={drawY} w={drawW} h={drawH} label="Front View" image={front} />
+      <PhotoSlot x={40 + drawW + drawGap}       y={drawY} w={drawW} h={drawH} label="Back View"  image={back} />
+      <PhotoSlot x={40 + (drawW + drawGap) * 2} y={drawY} w={drawW} h={drawH} label="Side View"  image={side} />
+
+      {/* Key Design Notes table */}
+      <SectionHeading x={40} y={tableY}>Key Design Notes</SectionHeading>
+      {(() => {
+        const cols = [
+          { key: '#',           label: '#',            w: 40 },
+          { key: 'detail',      label: 'Detail',       w: 200 },
+          { key: 'description', label: 'Description',  w: 533 },
+          { key: 'reference',   label: 'Reference',    w: 270 },
+        ];
+        const headerY = tableY + 12;
+        const rowH = 22;
+        const tableW2 = cols.reduce((a, c) => a + c.w, 0);
+        let cx = 40;
+        const colX = cols.map(c => { const x = cx; cx += c.w; return x; });
+        return (
+          <g>
+            <rect x={40} y={headerY} width={tableW2} height={rowH} fill={FR.slate} />
+            {cols.map((c, i) => (
+              <text key={c.key} x={colX[i] + 8} y={headerY + 15} fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="0.5">{esc(c.label.toUpperCase())}</text>
+            ))}
+            {Array.from({ length: 5 }).map((_, ri) => {
+              const ry = headerY + rowH + ri * rowH;
+              const row = notes[ri];
+              return (
+                <g key={ri}>
+                  {ri % 2 === 0 && <rect x={40} y={ry} width={tableW2} height={rowH} fill={FR.salt} />}
+                  <line x1={40} y1={ry + rowH} x2={40 + tableW2} y2={ry + rowH} stroke={FR.sand} />
+                  <text x={colX[0] + 8} y={ry + 15} fontSize="10" fill={FR.stone}>{ri + 1}</text>
+                  {row && (
+                    <>
+                      <text x={colX[1] + 8} y={ry + 15} fontSize="10" fill={FR.slate}>{clampLine(esc(row.detail || ''),      cols[1].w - 16, 5.8)}</text>
+                      <text x={colX[2] + 8} y={ry + 15} fontSize="10" fill={FR.slate}>{clampLine(esc(row.description || ''), cols[2].w - 16, 5.8)}</text>
+                      <text x={colX[3] + 8} y={ry + 15} fontSize="10" fill={FR.slate}>{clampLine(esc(row.reference || ''),   cols[3].w - 16, 5.8)}</text>
+                    </>
+                  )}
+                </g>
+              );
+            })}
+          </g>
+        );
+      })()}
+    </g>
+  );
+}
+
+// ─── Page 3 — Technical Flat Lay Diagrams ────────────────────────────────────
+function PageFlatlays({ d, images }) {
+  const imgs = images || [];
+  const tl = imgs.find(i => i.slot === 'flatlay-tl');
+  const tr = imgs.find(i => i.slot === 'flatlay-tr');
+  const bl = imgs.find(i => i.slot === 'flatlay-bl');
+  const br = imgs.find(i => i.slot === 'flatlay-br');
+
+  // Grid layout
+  const gridY = 170;
+  const gridGap = 18;
+  const cellW = (PAGE_W - 80 - gridGap) / 2;
+  const cellH = (PAGE_H - gridY - 90 - gridGap) / 2;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <text x={PAGE_W / 2} y={152} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
+        Place annotated flat lay diagrams below. Front, back, and detail views.
+      </text>
+
+      <PhotoSlot x={40}                  y={gridY}                    w={cellW} h={cellH} label="Top Left"     image={tl} />
+      <PhotoSlot x={40 + cellW + gridGap} y={gridY}                    w={cellW} h={cellH} label="Top Right"    image={tr} />
+      <PhotoSlot x={40}                  y={gridY + cellH + gridGap}  w={cellW} h={cellH} label="Bottom Left"  image={bl} />
+      <PhotoSlot x={40 + cellW + gridGap} y={gridY + cellH + gridGap}  w={cellW} h={cellH} label="Bottom Right" image={br} />
+    </g>
+  );
+}
+
 // ─── Placeholder for pages 2–14 ─────────────────────────────────────────────
 function ComingSoon({ pageNum, title }) {
   return (
@@ -128,8 +297,8 @@ function ComingSoon({ pageNum, title }) {
 
 const PAGE_FNS = [
   { title: 'Cover & Identity',             body: ({ d, images }) => <PageCover d={d} images={images} /> },
-  { title: 'Design Overview',              body: () => <ComingSoon pageNum={2}  title="Design Overview" /> },
-  { title: 'Technical Flat Lay Diagrams',  body: () => <ComingSoon pageNum={3}  title="Technical Flat Lay Diagrams" /> },
+  { title: 'Design Overview',              body: ({ d, images }) => <PageDesignOverview d={d} images={images} /> },
+  { title: 'Technical Flat Lay Diagrams',  body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
   { title: 'Bill of Materials',            body: () => <ComingSoon pageNum={4}  title="Bill of Materials" /> },
   { title: 'Color & Artwork',              body: () => <ComingSoon pageNum={5}  title="Color & Artwork" /> },
   { title: 'Construction Details',         body: () => <ComingSoon pageNum={6}  title="Construction Details" /> },

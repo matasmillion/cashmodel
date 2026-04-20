@@ -5,7 +5,7 @@
 // that will be replaced in subsequent prompts.
 
 import { FR, STATUSES, DEFAULT_DATA } from './techPackConstants';
-import { Input, Select, Row, SectionTitle, CoverPhoto } from './TechPackPrimitives';
+import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable } from './TechPackPrimitives';
 
 function ComingSoon({ title }) {
   return (
@@ -114,8 +114,62 @@ export function StepCover({ data, set, images, onUpload, onRemove }) {
   );
 }
 
-export function StepDesignOverview()   { return <ComingSoon title="Design Overview" />; }
-export function StepFlatlays()         { return <ComingSoon title="Technical Flat Lay Diagrams" />; }
+export function StepDesignOverview({ data, set, images, onUpload, onRemove }) {
+  const notes = data.keyDesignNotes && data.keyDesignNotes.length ? data.keyDesignNotes : [{ detail: '', description: '', reference: '' }];
+  const updateNote = (i, k, v) => set('keyDesignNotes', notes.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addNote = () => set('keyDesignNotes', [...notes, { detail: '', description: '', reference: '' }]);
+  const removeNote = (i) => set('keyDesignNotes', notes.filter((_, idx) => idx !== i));
+
+  return (
+    <div>
+      <SectionTitle>Design Overview</SectionTitle>
+
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>Garment Views</label>
+        <Row cols="1fr 1fr 1fr">
+          <PhotoUpload label="Front View" slotKey="design-front" images={images} onUpload={onUpload} onRemove={onRemove} />
+          <PhotoUpload label="Back View"  slotKey="design-back"  images={images} onUpload={onUpload} onRemove={onRemove} />
+          <PhotoUpload label="Side View"  slotKey="design-side"  images={images} onUpload={onUpload} onRemove={onRemove} />
+        </Row>
+      </div>
+
+      <Row>
+        <Input label="Factory Contact" value={data.factoryContact} onChange={v => set('factoryContact', v)} placeholder="Name / WeChat / Email" />
+        <Select label="Fabric Type" value={data.fabricType} onChange={v => set('fabricType', v)}
+          options={['Cotton Jersey', 'Denim', 'Twill Cotton', 'Waxed Canvas', 'Other']} />
+      </Row>
+
+      <div style={{ marginTop: 10 }}>
+        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>Key Design Notes</label>
+        <ArrayTable
+          headers={[
+            { key: '__idx',       label: '#',           render: (_v, _onChange, row) => (
+              <span style={{ fontSize: 11, color: FR.stone, padding: '3px 4px' }}>{notes.indexOf(row) + 1}</span>
+            ) },
+            { key: 'detail',      label: 'Detail',      placeholder: 'e.g. Crossover hood' },
+            { key: 'description', label: 'Description', placeholder: 'How it is constructed, the intent…' },
+            { key: 'reference',   label: 'Reference',   placeholder: 'Filename or URL' },
+          ]}
+          rows={notes} onUpdate={updateNote} onAdd={addNote} onRemove={removeNote} />
+      </div>
+    </div>
+  );
+}
+
+export function StepFlatlays({ data, set, images, onUpload, onRemove }) {
+  return (
+    <div>
+      <SectionTitle>Technical Flat Lay Diagrams</SectionTitle>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+        <PhotoUpload label="Top Left"     slotKey="flatlay-tl" images={images} onUpload={onUpload} onRemove={onRemove} />
+        <PhotoUpload label="Top Right"    slotKey="flatlay-tr" images={images} onUpload={onUpload} onRemove={onRemove} />
+        <PhotoUpload label="Bottom Left"  slotKey="flatlay-bl" images={images} onUpload={onUpload} onRemove={onRemove} />
+        <PhotoUpload label="Bottom Right" slotKey="flatlay-br" images={images} onUpload={onUpload} onRemove={onRemove} />
+      </div>
+      <Input label="Flat Lay Notes" value={data.flatLayNotes} onChange={v => set('flatLayNotes', v)} multiline placeholder="Callouts, annotations, measurement notes…" />
+    </div>
+  );
+}
 export function StepBOM()              { return <ComingSoon title="Bill of Materials" />; }
 export function StepColor()            { return <ComingSoon title="Color & Artwork" />; }
 export function StepConstruction()     { return <ComingSoon title="Construction Details" />; }

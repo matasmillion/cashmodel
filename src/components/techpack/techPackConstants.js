@@ -70,6 +70,7 @@ export const DEFAULT_DATA = {
   // Page 2+
   factory: '', factoryContact: '', fabricType: '',
   designNotes: '', fit: '', keyFeatures: '', flatLayNotes: '',
+  keyDesignNotes: [{ detail: '', description: '', reference: '' }],
   bom: [{ component: '', type: '', material: '', color: '', weight: '', supplier: '', supplierContact: '', costPerUnit: '', notes: '' }],
   colorways: [{ name: '', frColor: '', pantone: '', hex: '' }],
   logoFront: '', logoBack: '', logoMethod: '',
