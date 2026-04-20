@@ -75,7 +75,8 @@ export const DEFAULT_DATA = {
   trimsAccessories: [{ component: '', type: '', material: '', color: '', sizeSpec: '', supplier: '', qtyPerGarment: '' }],
   labelsBranding: [{ labelType: '', material: '', size: '', placement: '', artworkRef: '', notes: '' }],
   bom: [{ component: '', type: '', material: '', color: '', weight: '', supplier: '', supplierContact: '', costPerUnit: '', notes: '' }],
-  colorways: [{ name: '', frColor: '', pantone: '', hex: '' }],
+  colorways: [{ name: '', frColor: '', pantone: '', hex: '', fabricSwatch: '', approvalStatus: 'Pending' }],
+  artworkPlacements: [{ placement: '', artworkFile: '', method: '', sizeCm: '', positionFrom: '', color: '', notes: '' }],
   logoFront: '', logoBack: '', logoMethod: '',
   seams: [{ operation: '', seamType: '', stitchType: '', spiSpcm: '', threadColor: '', notes: '' }],
   constructionNotes: '',
@@ -129,6 +130,7 @@ export function resizeImage(file, maxW = 1200) {
 
 export const SAMPLE_TYPES = ['Proto', 'Fit', 'SMS (Salesman)', 'PP (Pre-Production)', 'TOP (Top of Production)'];
 export const SAMPLE_VERDICTS = ['Pending', 'Approved', 'Rejected', 'Revise'];
+export const APPROVAL_STATUSES = ['Pending', 'Approved', 'Rejected', 'Revise'];
 
 export function computeBOMCost(data) {
   const bom = data.bom || data.trims || [];

@@ -281,7 +281,7 @@ function PageFlatlays({ d, images }) {
 }
 
 // ─── Generic table for rendering ArrayTables on preview pages ───────────────
-function GridTable({ x, y, cols, rows, bodyRows = 4, rowH = 22, headerH = 22 }) {
+function GridTable({ x, y, cols, rows, bodyRows = 4, rowH = 22, headerH = 22, renderCell }) {
   const tableW = cols.reduce((a, c) => a + c.w, 0);
   let cx = x;
   const colX = cols.map(c => { const xx = cx; cx += c.w; return xx; });
@@ -301,6 +301,8 @@ function GridTable({ x, y, cols, rows, bodyRows = 4, rowH = 22, headerH = 22 }) 
             {ri % 2 === 0 && <rect x={x} y={ry} width={tableW} height={rowH} fill={FR.salt} />}
             <line x1={x} y1={ry + rowH} x2={x + tableW} y2={ry + rowH} stroke={FR.sand} />
             {row && cols.map((c, ci) => {
+              const custom = renderCell && renderCell(c.key, row, colX[ci], ry, c.w);
+              if (custom) return <g key={c.key}>{custom}</g>;
               const val = c.key === '#' ? String(ri + 1) : (row[c.key] ?? '');
               return (
                 <text key={c.key} x={colX[ci] + 6} y={ry + 15} fontSize="9.5" fill={c.key === '#' ? FR.stone : FR.slate}>
@@ -367,6 +369,70 @@ function PageBOM({ d }) {
   );
 }
 
+// ─── Page 5 — Color & Artwork ────────────────────────────────────────────────
+function PageColor({ d, images }) {
+  const imgs = images || [];
+  const front = imgs.find(i => i.slot === 'artwork-front');
+  const back  = imgs.find(i => i.slot === 'artwork-back');
+
+  const colorways = (d.colorways || []).filter(c => c && (c.name || c.frColor || c.pantone || c.hex));
+  const placements = (d.artworkPlacements || []).filter(r => r.placement || r.artworkFile || r.method || r.sizeCm || r.positionFrom || r.color);
+
+  const cwCols = [
+    { key: 'name',           label: 'Colorway Name',   w: 180 },
+    { key: 'frColor',        label: 'FR Color',        w: 140 },
+    { key: 'pantone',        label: 'Pantone Ref',     w: 150 },
+    { key: 'hex',            label: 'Hex',             w: 120 },
+    { key: 'fabricSwatch',   label: 'Fabric Swatch',   w: 293 },
+    { key: 'approvalStatus', label: 'Approval',        w: 160 },
+  ];
+
+  const plCols = [
+    { key: 'placement',    label: 'Placement',     w: 150 },
+    { key: 'artworkFile',  label: 'Artwork File',  w: 160 },
+    { key: 'method',       label: 'Method',        w: 150 },
+    { key: 'sizeCm',       label: 'Size (cm)',     w: 110 },
+    { key: 'positionFrom', label: 'Position From', w: 170 },
+    { key: 'color',        label: 'Color',         w: 130 },
+    { key: 'notes',        label: 'Notes',         w: 173 },
+  ];
+
+  const renderCWCell = (key, row, x, y, w) => {
+    if (key === 'fabricSwatch') {
+      const hex = row.hex || '#EBE5D5';
+      return (
+        <>
+          <rect x={x + 6} y={y + 4} width="18" height="14" fill={hex} stroke={FR.sand} />
+          <text x={x + 30} y={y + 15} fontSize="9.5" fill={FR.slate}>{clampLine(esc(row.fabricSwatch || row.hex || ''), w - 36, 5.8)}</text>
+        </>
+      );
+    }
+    return null;
+  };
+
+  // Layout
+  const cwY = 158;
+  const artY = 315;
+  const artH = 170;
+  const plY = 540;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <SectionHeading x={40} y={cwY}>Colorway Specification</SectionHeading>
+      <GridTable x={40} y={cwY + 12} cols={cwCols} rows={colorways} bodyRows={4} renderCell={renderCWCell} />
+
+      <SectionHeading x={40} y={artY}>Artwork &amp; Logo Placement</SectionHeading>
+      <PhotoSlot x={40}                                 y={artY + 20} w={(PAGE_W - 80 - 16) / 2} h={artH} label="Front Artwork" image={front} />
+      <PhotoSlot x={40 + (PAGE_W - 80 - 16) / 2 + 16}  y={artY + 20} w={(PAGE_W - 80 - 16) / 2} h={artH} label="Back Artwork"  image={back} />
+
+      <SectionHeading x={40} y={plY}>Placement</SectionHeading>
+      <GridTable x={40} y={plY + 12} cols={plCols} rows={placements} bodyRows={5} />
+    </g>
+  );
+}
+
 // ─── Placeholder for pages 2–14 ─────────────────────────────────────────────
 function ComingSoon({ pageNum, title }) {
   return (
@@ -387,7 +453,7 @@ const PAGE_FNS = [
   { title: 'Design Overview',              body: ({ d, images }) => <PageDesignOverview d={d} images={images} /> },
   { title: 'Technical Flat Lay Diagrams',  body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
   { title: 'Bill of Materials',            body: ({ d }) => <PageBOM d={d} /> },
-  { title: 'Color & Artwork',              body: () => <ComingSoon pageNum={5}  title="Color & Artwork" /> },
+  { title: 'Color & Artwork',              body: ({ d, images }) => <PageColor d={d} images={images} /> },
   { title: 'Construction Details',         body: () => <ComingSoon pageNum={6}  title="Construction Details" /> },
   { title: 'Construction Detail Sketches', body: () => <ComingSoon pageNum={7}  title="Construction Detail Sketches" /> },
   { title: 'Pattern Pieces & Cutting',     body: () => <ComingSoon pageNum={8}  title="Pattern Pieces & Cutting" /> },

@@ -5,7 +5,7 @@
 // that will be replaced in subsequent prompts.
 
 import { useState } from 'react';
-import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, DEFAULT_DATA } from './techPackConstants';
+import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, DEFAULT_DATA } from './techPackConstants';
 import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, EditableSelect, FRColorCell } from './TechPackPrimitives';
 
 function ComingSoon({ title }) {
@@ -319,7 +319,88 @@ export function StepBOM({ data, set, existingSuppliers = [] }) {
     </div>
   );
 }
-export function StepColor()            { return <ComingSoon title="Color & Artwork" />; }
+export function StepColor({ data, set, images, onUpload, onRemove }) {
+  const colorways = data.colorways && data.colorways.length ? data.colorways : [{ name: '', frColor: '', pantone: '', hex: '', fabricSwatch: '', approvalStatus: 'Pending' }];
+  const updateCW = (i, k, v) => {
+    set('colorways', colorways.map((r, idx) => {
+      if (idx !== i) return r;
+      if (k === 'frColor') {
+        const match = FR_COLOR_OPTIONS.find(c => c.name === v);
+        return { ...r, frColor: v, hex: match ? match.hex : r.hex };
+      }
+      return { ...r, [k]: v };
+    }));
+  };
+  const addCW = () => set('colorways', [...colorways, { name: '', frColor: '', pantone: '', hex: '', fabricSwatch: '', approvalStatus: 'Pending' }]);
+  const rmCW = (i) => set('colorways', colorways.filter((_, idx) => idx !== i));
+
+  const placements = data.artworkPlacements && data.artworkPlacements.length ? data.artworkPlacements : [{ placement: '', artworkFile: '', method: '', sizeCm: '', positionFrom: '', color: '', notes: '' }];
+  const updateAP = (i, k, v) => set('artworkPlacements', placements.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addAP = () => set('artworkPlacements', [...placements, { placement: '', artworkFile: '', method: '', sizeCm: '', positionFrom: '', color: '', notes: '' }]);
+  const rmAP = (i) => set('artworkPlacements', placements.filter((_, idx) => idx !== i));
+
+  const frColorRender = (v, onChange) => <FRColorCell value={v} onChange={onChange} />;
+  const approvalRender = (v, onChange) => (
+    <select value={v || 'Pending'} onChange={e => onChange(e.target.value)}
+      style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box' }}>
+      {APPROVAL_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+    </select>
+  );
+
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+
+  return (
+    <div>
+      <SectionTitle>Color & Artwork</SectionTitle>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        {FR_COLOR_OPTIONS.map(c => (
+          <div key={c.name} style={{ textAlign: 'center' }}>
+            <div style={{ width: 40, height: 40, borderRadius: 4, background: c.hex, border: c.name === 'Salt' ? `1px solid ${FR.sand}` : 'none' }} />
+            <div style={{ fontSize: 8, color: FR.stone, marginTop: 2 }}>{c.name}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel}>Colorway Specification</label>
+        <ArrayTable
+          headers={[
+            { key: 'name',           label: 'Colorway Name', placeholder: 'Slate Wash' },
+            { key: 'frColor',        label: 'FR Color',      render: frColorRender },
+            { key: 'pantone',        label: 'Pantone Ref',   placeholder: '19-4305' },
+            { key: 'hex',            label: 'Hex',           placeholder: '#3A3A3A' },
+            { key: 'fabricSwatch',   label: 'Fabric Swatch', placeholder: 'Filename / code' },
+            { key: 'approvalStatus', label: 'Approval',      render: approvalRender },
+          ]}
+          rows={colorways} onUpdate={updateCW} onAdd={addCW} onRemove={rmCW} />
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel}>Artwork & Logo Placement</label>
+        <Row>
+          <PhotoUpload label="Front Artwork — Position, Size, Method" slotKey="artwork-front" images={images} onUpload={onUpload} onRemove={onRemove} />
+          <PhotoUpload label="Back Artwork — Position, Size, Method"  slotKey="artwork-back"  images={images} onUpload={onUpload} onRemove={onRemove} />
+        </Row>
+      </div>
+
+      <div style={{ marginBottom: 10 }}>
+        <label style={sectionLabel}>Placement</label>
+        <ArrayTable
+          headers={[
+            { key: 'placement',    label: 'Placement',    placeholder: 'Center chest / Back yoke' },
+            { key: 'artworkFile',  label: 'Artwork File', placeholder: 'logo-v1.ai' },
+            { key: 'method',       label: 'Method',       placeholder: 'Embroidery / Screen Print' },
+            { key: 'sizeCm',       label: 'Size (cm)',    placeholder: '8 × 2' },
+            { key: 'positionFrom', label: 'Position From',placeholder: '12 cm below HPS' },
+            { key: 'color',        label: 'Color',        render: frColorRender },
+            { key: 'notes',        label: 'Notes' },
+          ]}
+          rows={placements} onUpdate={updateAP} onAdd={addAP} onRemove={rmAP} />
+      </div>
+    </div>
+  );
+}
 export function StepConstruction()     { return <ComingSoon title="Construction Details" />; }
 export function StepSketches()         { return <ComingSoon title="Construction Detail Sketches" />; }
 export function StepPattern()          { return <ComingSoon title="Pattern Pieces & Cutting" />; }
