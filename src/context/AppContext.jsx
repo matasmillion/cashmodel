@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useMemo, useEffect, useRef } from 'react';
+import { createContext, useContext, useReducer, useMemo, useEffect, useRef, useState } from 'react';
 import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, OPEX_WAREHOUSE, CREDIT_CARDS, LOANS, AD_UNIT_TYPES, DEFAULT_EVENTS } from '../data/seedData';
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
 import { syncShopifyActuals, syncMetaActuals } from '../utils/liveDataSync';
@@ -16,16 +16,19 @@ function saveIntegrations(data) {
 }
 
 // Pulls current-week actuals from any connected integrations and pushes them
-// into the seed. Runs silently in the background — errors are logged, not shown.
+// into the seed. Returns a summary so the UI can show sync state.
 async function runAutoSync(dispatch) {
   const creds = loadIntegrations();
   const now = new Date().toISOString();
   const updated = { ...creds };
   let changed = false;
+  const errors = {};
+  const sources = [];
 
   const tasks = [];
 
   if (creds.shopify?.connected) {
+    sources.push('shopify');
     tasks.push(
       syncShopifyActuals().then(weeks => {
         const current = weeks.find(w => w.isCurrent);
@@ -42,11 +45,15 @@ async function runAutoSync(dispatch) {
           },
         };
         changed = true;
-      }).catch(err => console.warn('[auto-sync] Shopify:', err.message)),
+      }).catch(err => {
+        errors.shopify = err.message;
+        console.warn('[auto-sync] Shopify:', err.message);
+      }),
     );
   }
 
   if (creds.meta?.connected) {
+    sources.push('meta');
     tasks.push(
       syncMetaActuals(creds.meta).then(weeks => {
         const current = weeks.find(w => w.isCurrent);
@@ -64,13 +71,17 @@ async function runAutoSync(dispatch) {
           },
         };
         changed = true;
-      }).catch(err => console.warn('[auto-sync] Meta:', err.message)),
+      }).catch(err => {
+        errors.meta = err.message;
+        console.warn('[auto-sync] Meta:', err.message);
+      }),
     );
   }
 
-  if (tasks.length === 0) return;
+  if (tasks.length === 0) return { sources: [], errors: {}, syncedAt: null };
   await Promise.allSettled(tasks);
   if (changed) saveIntegrations(updated);
+  return { sources, errors, syncedAt: now };
 }
 
 const AppContext = createContext();
@@ -228,8 +239,35 @@ function reducer(state, action) {
 
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, undefined, loadInitialState);
+  const [autoSyncState, setAutoSyncState] = useState({
+    status: 'idle', // 'idle' | 'syncing' | 'ok' | 'error' | 'partial'
+    sources: [],
+    errors: {},
+    syncedAt: null,
+  });
   const saveTimerRef = useRef(null);
   const userIdRef = useRef(null);
+
+  // Wrap runAutoSync so we can track status in React state.
+  async function triggerAutoSync() {
+    setAutoSyncState(s => ({ ...s, status: 'syncing', errors: {} }));
+    try {
+      const result = await runAutoSync(dispatch);
+      if (!result || result.sources.length === 0) {
+        setAutoSyncState({ status: 'idle', sources: [], errors: {}, syncedAt: null });
+        return;
+      }
+      const errorCount = Object.keys(result.errors).length;
+      setAutoSyncState({
+        status: errorCount === 0 ? 'ok' : errorCount === result.sources.length ? 'error' : 'partial',
+        sources: result.sources,
+        errors: result.errors,
+        syncedAt: result.syncedAt,
+      });
+    } catch (err) {
+      setAutoSyncState({ status: 'error', sources: [], errors: { _: err.message }, syncedAt: null });
+    }
+  }
 
   // Sync activeTab with URL hash. Only touches the first segment, so nested
   // routing inside a tab (e.g. #product/styles/abc/5) is preserved when the
@@ -260,8 +298,7 @@ export function AppProvider({ children }) {
   // then kick off auto-sync so integration data overrides any stale cloud seed.
   useEffect(() => {
     if (!IS_SUPABASE_ENABLED) {
-      // No auth flow — just auto-sync once on mount
-      runAutoSync(dispatch);
+      triggerAutoSync();
       return;
     }
 
@@ -278,7 +315,7 @@ export function AppProvider({ children }) {
 
     async function loadAndSync(userId) {
       await loadCloudState(userId);
-      await runAutoSync(dispatch);
+      await triggerAutoSync();
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -286,14 +323,12 @@ export function AppProvider({ children }) {
         userIdRef.current = session.user.id;
         loadAndSync(session.user.id);
       } else {
-        // Not signed in — still auto-sync from localStorage creds
-        runAutoSync(dispatch);
+        triggerAutoSync();
       }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       userIdRef.current = session?.user?.id ?? null;
-      // SIGNED_IN fires on fresh login; INITIAL_SESSION is handled by getSession above
       if (event === 'SIGNED_IN' && session?.user) {
         loadAndSync(session.user.id);
       }
@@ -344,7 +379,7 @@ export function AppProvider({ children }) {
   }, [state.subscriptions, state.warehouse]);
 
   return (
-    <AppContext.Provider value={{ state, dispatch, projections, autoPOs, totalMonthlyOpex }}>
+    <AppContext.Provider value={{ state, dispatch, projections, autoPOs, totalMonthlyOpex, autoSyncState, triggerAutoSync }}>
       {children}
     </AppContext.Provider>
   );

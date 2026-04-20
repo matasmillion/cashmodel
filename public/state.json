@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-20T13:44:48.007Z",
+  "lastUpdated": "2026-04-20T13:50:07.335Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "fa08422",
+      "date": "2026-04-20T13:44:50+00:00",
+      "message": "Match Shopify's Total sales definition for revenue"
+    },
+    {
       "sha": "f3ae85e",
       "date": "2026-04-20T13:41:46+00:00",
       "message": "Show date ranges + 13-week breakdown in Shopify card"
@@ -1087,11 +1092,6 @@
       "sha": "b3fb264",
       "date": "2026-04-20T08:15:07+00:00",
       "message": "Add liveDataSync utility — Shopify, Meta, Mercury fetch helpers"
-    },
-    {
-      "sha": "40a62b2",
-      "date": "2026-04-20T07:51:04+00:00",
-      "message": "Tech Pack Page 14: Revision History & Approval"
     }
   ]
 }

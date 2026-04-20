@@ -15,7 +15,7 @@ import RateCardManager from './components/RateCardManager';
 import PLMView from './components/techpack/PLMView';
 import AuthGate from './auth/AuthGate';
 import { supabase, IS_SUPABASE_ENABLED } from './lib/supabase';
-import { LayoutDashboard, Table2, Calculator, Package, Receipt, Sliders, Plug, TrendingUp, Film, CalendarRange, Truck, LogOut, Shirt } from 'lucide-react';
+import { LayoutDashboard, Table2, Calculator, Package, Receipt, Sliders, Plug, TrendingUp, Film, CalendarRange, Truck, LogOut, Shirt, RefreshCw, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 
 const tabs = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -31,6 +31,50 @@ const tabs = [
   { id: 'scenarios', label: 'Scenarios', icon: Sliders },
   { id: 'integrations', label: 'Integrations', icon: Plug },
 ];
+
+function SyncIndicator() {
+  const { autoSyncState, triggerAutoSync } = useApp();
+  const { status, sources, errors, syncedAt } = autoSyncState;
+
+  if (status === 'idle' && sources.length === 0 && !syncedAt) return null;
+
+  const timeAgo = syncedAt ? (() => {
+    const secs = Math.floor((Date.now() - new Date(syncedAt).getTime()) / 1000);
+    if (secs < 60) return 'just now';
+    const mins = Math.floor(secs / 60);
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    return `${hours}h ago`;
+  })() : '';
+
+  const cfg = {
+    syncing: { icon: Loader, label: 'Syncing…', color: '#716F70', spin: true },
+    ok:      { icon: CheckCircle, label: `Synced ${timeAgo}`, color: '#4CAF7D' },
+    partial: { icon: AlertCircle, label: `Partial sync ${timeAgo}`, color: '#D97706' },
+    error:   { icon: AlertCircle, label: 'Sync failed', color: '#C0392B' },
+    idle:    { icon: RefreshCw, label: 'Sync', color: '#716F70' },
+  }[status] || {};
+
+  const Icon = cfg.icon;
+  const tooltip = Object.keys(errors || {}).length
+    ? Object.entries(errors).map(([k, v]) => `${k}: ${v}`).join(' · ')
+    : `Sources: ${sources.join(', ') || 'none connected'}`;
+
+  return (
+    <button
+      onClick={triggerAutoSync}
+      disabled={status === 'syncing'}
+      title={tooltip}
+      className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px]"
+      style={{ background: 'transparent', border: `1px solid #EBE5D5`, color: cfg.color, cursor: status === 'syncing' ? 'wait' : 'pointer' }}
+      onMouseEnter={e => { e.currentTarget.style.background = '#EBE5D5'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+    >
+      <Icon size={12} className={cfg.spin ? 'animate-spin' : ''} />
+      <span>{cfg.label}</span>
+    </button>
+  );
+}
 
 function Dashboard() {
   const { state, dispatch } = useApp();
@@ -49,6 +93,7 @@ function Dashboard() {
                   Growth Model & Operating Dashboard
                 </p>
               </div>
+              <SyncIndicator />
               {IS_SUPABASE_ENABLED && (
                 <button
                   onClick={() => supabase.auth.signOut()}

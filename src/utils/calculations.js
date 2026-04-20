@@ -38,10 +38,18 @@ export function generateWeeklyProjections(assumptions, seed, pos, adUnits, event
     const isH2 = new Date(date + 'T00:00:00').getMonth() >= 6;
 
     // ---- ACQUISITION LAYER ----
+    // Seed values (from live Shopify / Meta sync, when available) anchor week 0.
+    // Future weeks project forward from that anchor using the growth assumption.
     const growthMultiplier = Math.pow(1 + a.weeklyGrowthRate, i);
-    const dailyAdSpend = a.startingDailyAdSpend * growthMultiplier;
-    const weeklyAdSpend = Math.round(dailyAdSpend * 7);
-    const revenue = Math.round(weeklyAdSpend / a.targetMER);
+
+    const hasSeedAdSpend = typeof seed.adSpend === 'number' && seed.adSpend > 0;
+    const baseWeeklyAdSpend = hasSeedAdSpend ? seed.adSpend : a.startingDailyAdSpend * 7;
+    const weeklyAdSpend = Math.round(baseWeeklyAdSpend * growthMultiplier);
+    const dailyAdSpend = weeklyAdSpend / 7;
+
+    const hasSeedRevenue = typeof seed.revenue === 'number' && seed.revenue > 0;
+    const baseWeeklyRevenue = hasSeedRevenue ? seed.revenue : (baseWeeklyAdSpend / a.targetMER);
+    const revenue = Math.round(baseWeeklyRevenue * growthMultiplier);
     const orders = Math.round(revenue / a.aov);
     const unitsSold = Math.round(orders * a.unitsPerOrder);
 
