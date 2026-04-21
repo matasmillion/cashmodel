@@ -378,6 +378,11 @@ export async function callMercuryProxy(path, query = null) {
 
 /**
  * Test the proxy + credentials by listing accounts. Returns a summary.
+ *
+ * We use `availableBalance` (what you can actually spend right now) rather
+ * than `currentBalance` (ledger balance including pending deposits).
+ * Pending items shouldn't count as cash on hand for the cash model — they
+ * haven't cleared yet.
  */
 export async function testMercuryProxy() {
   const data = await callMercuryProxy('accounts');
@@ -385,7 +390,7 @@ export async function testMercuryProxy() {
   const active = accounts.filter(a => a.status === 'active');
   const totalBalance = active
     .filter(a => ['checking', 'savings'].includes(a.kind))
-    .reduce((s, a) => s + (a.currentBalance || 0), 0);
+    .reduce((s, a) => s + (a.availableBalance ?? a.currentBalance ?? 0), 0);
   return {
     accountCount: active.length,
     totalBalance: Math.round(totalBalance * 100) / 100,
@@ -395,15 +400,16 @@ export async function testMercuryProxy() {
 
 /**
  * Pulls account balances from Mercury via the proxy.
- * Returns { accounts, primaryBalance } — primaryBalance is sum of active
- * checking + savings balances, which is what maps to cash-on-hand in the model.
+ * Returns { accounts, primaryBalance } — primaryBalance is the sum of active
+ * checking + savings *available* balances. Uses availableBalance (spendable)
+ * not currentBalance (ledger) so pending deposits don't inflate cash-on-hand.
  */
 export async function syncMercuryActuals(/* creds unused — proxy holds creds */) {
   const data = await callMercuryProxy('accounts');
   const accounts = data.accounts || [];
   const primaryBalance = accounts
     .filter(a => a.status === 'active' && ['checking', 'savings'].includes(a.kind))
-    .reduce((sum, a) => sum + (a.currentBalance || 0), 0);
+    .reduce((sum, a) => sum + (a.availableBalance ?? a.currentBalance ?? 0), 0);
   return { accounts, primaryBalance };
 }
 
