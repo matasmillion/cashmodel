@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-22T10:04:38.673Z",
+  "lastUpdated": "2026-04-22T10:26:03.733Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "04ba08a",
+      "date": "2026-04-22T10:06:49+00:00",
+      "message": "Regenerate public/state.json"
+    },
+    {
+      "sha": "aeb7cdf",
+      "date": "2026-04-22T10:06:05+00:00",
+      "message": "PLM: rework trim pack overview, versioning, shared directory"
+    },
+    {
       "sha": "8376dfc",
       "date": "2026-04-21T13:29:36+00:00",
       "message": "Mercury: use availableBalance instead of currentBalance"
@@ -1082,16 +1092,6 @@
       "sha": "6300ec0",
       "date": "2026-04-20T13:50:27+00:00",
       "message": "Plumb actuals into projections + visible sync indicator"
-    },
-    {
-      "sha": "fa08422",
-      "date": "2026-04-20T13:44:50+00:00",
-      "message": "Match Shopify's Total sales definition for revenue"
-    },
-    {
-      "sha": "f3ae85e",
-      "date": "2026-04-20T13:41:46+00:00",
-      "message": "Show date ranges + 13-week breakdown in Shopify card"
     }
   ]
 }
