@@ -97,51 +97,87 @@ function PageCover({ d, images }) {
   const manager  = fa.manager  || {};
   const factory  = fa.factory  || {};
 
-  const cardY = 595;
+  // Vertical layout budget (PAGE_H = 794, footer at 775):
+  //   70                        header bar
+  //   90–270                    title block + 2:3 trim photo top-right (160×240)
+  //   280                       divider rule
+  //   298                       "OVERVIEW" subheading
+  //   316–400                   identity grid (4 rows × 22px, two columns)
+  //   420                       Revision History heading
+  //   436–516                   revision grid (header 22 + 3 body rows × 22)
+  //   534                       Samples heading
+  //   550–580                   sample strip pills (30)
+  //   598                       Final Approval heading
+  //   614–764                   three approval cards (150 tall)
+  //   775                       footer
+
+  const photoW = 160;
+  const photoH = Math.round(photoW * 3 / 2); // 2:3 portrait
+  const photoX = PAGE_W - photoW - 40;
+  const photoY = 90;
+
+  const idY = 316;
+  const idRowGap = 22;
+
+  const cardY = 614;
   const cardH = 150;
-  const cardGap = 16;
+  const cardGap = 14;
   const cardW = (PAGE_W - 80 - cardGap * 2) / 3;
 
   return (
     <g>
       {/* Title block */}
-      <text x={40} y={110} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="34" fill={FR.slate}>Trim Specification</text>
-      <rect x={40} y={120} width="70" height="2" fill={FR.soil} />
-      <text x={40} y={148} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="20" fill={FR.slate}>
-        {clampLine(d.componentName || 'New Trim', 740, 11)}
+      <text x={40} y={122} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="34" fill={FR.slate}>Trim Specification</text>
+      <rect x={40} y={132} width="70" height="2" fill={FR.soil} />
+      <text x={40} y={162} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="20" fill={FR.slate}>
+        {clampLine(d.componentName || 'New Trim', 760, 11)}
       </text>
-      <text x={40} y={170} fontSize="9" fill={FR.stone} letterSpacing="1.5">STATUS · {esc((d.status || '—').toUpperCase())}</text>
+      <text x={40} y={184} fontSize="9" fill={FR.stone} letterSpacing="1.5">
+        STATUS · {esc((d.status || '—').toUpperCase())}
+      </text>
 
-      {/* Trim photo — 2:3 portrait, anchored to the top-right of the title band. */}
+      {/* Trim photo — 2:3 portrait, top-right. Sits entirely above the OVERVIEW divider. */}
       {cover
-        ? <image href={cover.data} x={PAGE_W - 170 - 40} y={85} width="170" height="255" preserveAspectRatio="xMidYMid slice" />
+        ? <image href={cover.data} x={photoX} y={photoY} width={photoW} height={photoH} preserveAspectRatio="xMidYMid slice" />
         : (
           <g>
-            <rect x={PAGE_W - 170 - 40} y={85} width="170" height="255" fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" />
-            <text x={PAGE_W - 85 - 40} y={210} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">Trim photo (2:3)</text>
+            <rect x={photoX} y={photoY} width={photoW} height={photoH} fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" />
+            <text x={photoX + photoW / 2} y={photoY + photoH / 2 + 4} textAnchor="middle" fontSize="10" fill={FR.stone} fontStyle="italic">Trim photo · 2:3</text>
           </g>
         )}
 
-      {/* Identity grid — tight 4×2 */}
-      <rect x="40" y="258" width={PAGE_W - 80} height="1" fill={FR.sand} />
-      <text x={40} y={276} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="2">OVERVIEW</text>
-      {leftCol.map((f, i) => (
-        <Field key={`L${i}`} x={40}  y={292 + i * 24} label={f.label} value={f.value} w={500} />
-      ))}
-      {rightCol.map((f, i) => (
-        <Field key={`R${i}`} x={580} y={292 + i * 24} label={f.label} value={f.value} w={500} />
-      ))}
+      {/* Identity grid — tight 4×2 with under-line separators */}
+      <rect x="40" y="280" width={PAGE_W - 80} height="1" fill={FR.sand} />
+      <text x={40} y={300} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="2">OVERVIEW</text>
+      {leftCol.map((f, i) => {
+        const y = idY + i * idRowGap;
+        return (
+          <g key={`L${i}`}>
+            <Field x={40} y={y} label={f.label} value={f.value} w={500} />
+            <line x1={40} y1={y + 20} x2={540} y2={y + 20} stroke={FR.sand} />
+          </g>
+        );
+      })}
+      {rightCol.map((f, i) => {
+        const y = idY + i * idRowGap;
+        return (
+          <g key={`R${i}`}>
+            <Field x={580} y={y} label={f.label} value={f.value} w={500} />
+            <line x1={580} y1={y + 20} x2={PAGE_W - 40} y2={y + 20} stroke={FR.sand} />
+          </g>
+        );
+      })}
 
       {/* Revision history strip */}
-      <SectionHeading x={40} y={410}>Revision History</SectionHeading>
-      <GridTable x={40} y={424} cols={revCols} rows={revRows} bodyRows={3} rowH={20} headerH={20} />
+      <SectionHeading x={40} y={420}>Revision History</SectionHeading>
+      <GridTable x={40} y={436} cols={revCols} rows={revRows} bodyRows={3} rowH={22} headerH={22} />
 
-      {/* Samples — compact row of the 3 stages */}
-      <SectionHeading x={40} y={530}>Samples</SectionHeading>
-      <SampleStrip d={d} x={40} y={544} w={PAGE_W - 80} />
+      {/* Samples — 3 stages */}
+      <SectionHeading x={40} y={534}>Samples</SectionHeading>
+      <SampleStrip d={d} x={40} y={548} w={PAGE_W - 80} />
 
-      {/* Final approval — compact 3-row cards */}
-      <SectionHeading x={40} y={590}>Final Approval</SectionHeading>
+      {/* Final approval — 3 compact cards */}
+      <SectionHeading x={40} y={598}>Final Approval</SectionHeading>
       <CompactApprovalCard x={40}                         y={cardY} w={cardW} h={cardH} title="Designer" name={designer.name} signature={designer.signature} date={designer.date} />
       <CompactApprovalCard x={40 + cardW + cardGap}       y={cardY} w={cardW} h={cardH} title="Manager"  name={manager.name}  signature={manager.signature}  date={manager.date} />
       <CompactApprovalCard x={40 + (cardW + cardGap) * 2} y={cardY} w={cardW} h={cardH} title="Factory"  name={factory.name}  signature={factory.signature}  date={factory.dateChop} dateLabel="Date / Chop" />

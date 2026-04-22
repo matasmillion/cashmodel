@@ -152,6 +152,31 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
       next = { ...next, samples: migratedSamples };
     }
 
+    // (4) Sanitise revision descriptions. Early snapshot code accidentally
+    // wrote an object into `description`, which rendered as "[object Object]"
+    // in the revision history. Coerce anything non-string back to a readable
+    // string so old rows render cleanly.
+    if (Array.isArray(next.revisions) && next.revisions.length) {
+      const sanitised = next.revisions.map(r => {
+        if (r == null) return r;
+        const fix = (v) => typeof v === 'string' ? v : (v == null ? '' : String(v));
+        const description = typeof r.description === 'string'
+          ? r.description
+          : (typeof r.note === 'string' && r.note)
+            ? r.note
+            : `Snapshot at ${r.status || 'Design'}`;
+        return {
+          ...r,
+          rev: fix(r.rev),
+          date: fix(r.date),
+          changedBy: fix(r.changedBy),
+          approvedBy: fix(r.approvedBy),
+          description,
+        };
+      });
+      next = { ...next, revisions: sanitised };
+    }
+
     return next;
   });
   const [images, setImages] = useState(pack.images || []);
