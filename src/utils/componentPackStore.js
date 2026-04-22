@@ -28,13 +28,23 @@ function extractCover(images) {
 
 // See listTechPacks comment — avoid pulling the images JSONB column from
 // Supabase because it's the source of heavy lag when components have photos.
+// A dedicated cover_image text column gives us thumbnails without that cost.
 export async function listComponentPacks() {
   if (IS_SUPABASE_ENABLED) {
     const { data, error } = await supabase
       .from('component_packs')
-      .select('id, component_name, component_category, status, supplier, cost_per_unit, currency, updated_at, created_at')
+      .select('id, component_name, component_category, status, supplier, cost_per_unit, currency, cover_image, updated_at, created_at')
       .order('updated_at', { ascending: false });
-    if (!error && data) return data.map(r => ({ ...r, cover_image: null }));
+    if (!error && data) {
+      // Until every row has had its cover_image backfilled (pre-migration
+      // rows are null), lean on the dual-written local copy for thumbnails.
+      const local = readLocal();
+      return data.map(r => {
+        if (r.cover_image) return r;
+        const mirror = local.find(l => l.id === r.id);
+        return { ...r, cover_image: extractCover(mirror?.images) };
+      });
+    }
   }
   return readLocal()
     .map(p => ({
@@ -55,7 +65,20 @@ export async function listComponentPacks() {
 export async function getComponentPack(id) {
   if (IS_SUPABASE_ENABLED) {
     const { data, error } = await supabase.from('component_packs').select('*').eq('id', id).maybeSingle();
-    if (!error && data) return data;
+    if (!error && data) {
+      // Lazy backfill: older rows predate the cover_image column; populate it
+      // the first time they're opened so subsequent list views show the
+      // thumbnail without another edit.
+      if (!data.cover_image) {
+        const cover = extractCover(data.images);
+        if (cover) {
+          supabase.from('component_packs').update({ cover_image: cover }).eq('id', id)
+            .then(({ error: upErr }) => { if (upErr) console.error('cover_image backfill:', upErr); });
+          return { ...data, cover_image: cover };
+        }
+      }
+      return data;
+    }
   }
   return readLocal().find(p => p.id === id) || null;
 }
@@ -91,12 +114,19 @@ export async function createComponentPack(defaultData) {
 
 export async function saveComponentPack(id, updates) {
   const now = new Date().toISOString();
+  // Refresh the denormalised cover_image whenever images are part of the
+  // update, so the list view thumbnail stays in sync with the cover slot.
+  const patch = { ...updates, updated_at: now };
+  if (updates.images !== undefined) {
+    patch.cover_image = extractCover(updates.images);
+  }
+
   const rows = readLocal();
   const idx = rows.findIndex(p => p.id === id);
-  if (idx >= 0) { rows[idx] = { ...rows[idx], ...updates, updated_at: now }; writeLocal(rows); }
+  if (idx >= 0) { rows[idx] = { ...rows[idx], ...patch }; writeLocal(rows); }
 
   if (IS_SUPABASE_ENABLED) {
-    const { error } = await supabase.from('component_packs').update({ ...updates, updated_at: now }).eq('id', id);
+    const { error } = await supabase.from('component_packs').update(patch).eq('id', id);
     if (error) console.error('saveComponentPack:', error);
   }
 }
@@ -118,6 +148,7 @@ export async function duplicateComponentPack(id) {
     ...source, id: newId,
     component_name: (source.component_name || source.data?.componentName || '') + ' (Copy)',
     data: { ...source.data, componentName: (source.data?.componentName || '') + ' (Copy)' },
+    cover_image: extractCover(source.images),
     created_at: now, updated_at: now,
   };
   delete copy.user_id;

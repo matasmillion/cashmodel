@@ -6,6 +6,7 @@ import TechPackBuilder from './TechPackBuilder';
 import { listTechPacks, createTechPack, getTechPack, deleteTechPack, duplicateTechPack, saveTechPack } from '../../utils/techPackStore';
 import { listComponentPacks } from '../../utils/componentPackStore';
 import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
+import { listAllSuppliers } from '../../utils/plmDirectory';
 
 function formatDate(iso) {
   if (!iso) return '';
@@ -127,9 +128,12 @@ export default function TechPackList() {
 
   const refresh = async () => {
     setLoading(true);
-    const [rows, comps] = await Promise.all([listTechPacks(), listComponentPacks()]);
+    // listComponentPacks still runs so the dual-write mirrors are warm, but
+    // the supplier dropdown pulls from the unified PLM directory that merges
+    // tech packs + trim packs + manually-added entries.
+    const [rows] = await Promise.all([listTechPacks(), listComponentPacks()]);
     setPacks(rows || []);
-    setExistingSuppliers([...new Set((comps || []).map(c => (c.supplier || '').trim()).filter(Boolean))].sort());
+    setExistingSuppliers(listAllSuppliers());
     setLoading(false);
   };
 

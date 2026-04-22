@@ -21,7 +21,7 @@ function PageFrame({ title, pageNum, componentInfo, children }) {
     <g>
       <rect x="0" y="0" width={PAGE_W} height={PAGE_H} fill={FR.white} />
       <rect x="0" y="0" width={PAGE_W} height={70} fill={FR.slate} />
-      <text x="40" y="28" fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="3">FR · COMPONENT PACK</text>
+      <text x="40" y="28" fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="3">FR · TRIM PACK</text>
       <text x="40" y="55" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="22" fill={FR.salt}>{title}</text>
       <rect x="0" y="70" width={PAGE_W} height={2} fill={FR.soil} />
       <text x="40" y="775" fontSize="9" fill={FR.stone}>{componentInfo}</text>
@@ -61,43 +61,41 @@ function SignatureCard({ x, y, w, h, title, name, date }) {
 function PageCover({ d, images }) {
   const cover = (images || []).find(img => img.slot === 'component-cover');
 
-  // Two-column identity grid (6 rows × 2 columns)
+  // Two-column overview grid (4 rows × 2 columns)
   const leftX = 40;
   const rightX = 580;
   const colW = 480;
   const rowStartY = 350;
-  const rowGap = 48;
+  const rowGap = 52;
+  const derivedRevision = `V${(d.revisions || []).length + 1}.0`;
   const leftCol = [
-    { label: 'Style #',             value: d.styleNumber },
-    { label: 'Component Type',      value: d.componentType },
+    { label: 'Trim Type',           value: d.componentType },
     { label: 'Supplier',            value: d.supplier },
     { label: 'Season',              value: d.season },
     { label: 'Date Created',        value: d.dateCreated },
-    { label: 'Revision',            value: d.revision },
   ];
   const rightCol = [
-    { label: 'Parent Styles',       value: d.parentStyles },
+    { label: 'Revision',            value: d.revision || derivedRevision },
     { label: 'Colorways',           value: d.colorways },
-    { label: 'Dimensions',          value: d.dimensions },
     { label: 'Target Unit Cost ($)', value: d.targetUnitCost },
     { label: 'MOQ',                 value: d.moq },
-    { label: 'Status',              value: d.status },
   ];
 
-  // Signature cards along the bottom
-  const sigY = 640;
-  const sigH = 130;
-  const sigGap = 20;
-  const sigW = (PAGE_W - 80 - sigGap * 2) / 3;
+  // Signature cards along the bottom — two up (Designed By / Approved By)
+  const sigY = 610;
+  const sigH = 140;
+  const sigGap = 24;
+  const sigW = (PAGE_W - 80 - sigGap) / 2;
 
   return (
     <g>
       {/* Title block */}
-      <text x={40} y={120} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="42" fill={FR.slate}>Component Spec</text>
+      <text x={40} y={120} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="42" fill={FR.slate}>Trim Specification</text>
       <rect x={40} y={132} width="80" height="2" fill={FR.soil} />
       <text x={40} y={168} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="26" fill={FR.slate}>
-        {clampLine(d.componentName || 'New Component', 900, 14)}
+        {clampLine(d.componentName || 'New Trim', 900, 14)}
       </text>
+      <text x={40} y={196} fontSize="10" fill={FR.stone} letterSpacing="1.5">STATUS · {esc((d.status || '—').toUpperCase())}</text>
 
       {/* Cover photo */}
       {cover
@@ -105,13 +103,13 @@ function PageCover({ d, images }) {
         : (
           <g>
             <rect x={PAGE_W - 320 - 40} y={100} width="320" height="200" fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" />
-            <text x={PAGE_W - 160 - 40} y={205} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">Component photo goes here</text>
+            <text x={PAGE_W - 160 - 40} y={205} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">Trim photo goes here</text>
           </g>
         )}
 
       {/* Section divider */}
       <rect x="40" y="320" width={PAGE_W - 80} height="1" fill={FR.sand} />
-      <text x={40} y={340} fontSize="10" fontWeight="bold" fill={FR.soil} letterSpacing="2">IDENTITY</text>
+      <text x={40} y={340} fontSize="10" fontWeight="bold" fill={FR.soil} letterSpacing="2">OVERVIEW</text>
 
       {/* Two-column grid */}
       {leftCol.map((f, i) => (
@@ -122,9 +120,8 @@ function PageCover({ d, images }) {
       ))}
 
       {/* Signature cards */}
-      <SignatureCard x={40}                         y={sigY} w={sigW} h={sigH} title="Designed By"        name={d.designedBy?.name}        date={d.designedBy?.date} />
-      <SignatureCard x={40 + sigW + sigGap}         y={sigY} w={sigW} h={sigH} title="Approved By"        name={d.approvedBy?.name}        date={d.approvedBy?.date} />
-      <SignatureCard x={40 + (sigW + sigGap) * 2}   y={sigY} w={sigW} h={sigH} title="Supplier Confirmed" name={d.supplierConfirmed?.name} date={d.supplierConfirmed?.date} />
+      <SignatureCard x={40}                   y={sigY} w={sigW} h={sigH} title="Designed By" name={d.designedBy?.name} date={d.designedBy?.date} />
+      <SignatureCard x={40 + sigW + sigGap}   y={sigY} w={sigW} h={sigH} title="Approved By" name={d.approvedBy?.name} date={d.approvedBy?.date} />
     </g>
   );
 }
@@ -213,13 +210,13 @@ function PageSpec({ d, images }) {
     <g>
       {/* Info strip */}
       <rect x={40} y={stripY} width={PAGE_W - 80} height={stripH} fill={FR.salt} stroke={FR.sand} />
-      <InfoStripCell x={40 + cellW * 0} y={stripY} w={cellW} label="Style #"        value={d.styleNumber} />
-      <InfoStripCell x={40 + cellW * 1} y={stripY} w={cellW} label="Component Name" value={d.componentName} />
-      <InfoStripCell x={40 + cellW * 2} y={stripY} w={cellW} label="Supplier"       value={d.supplier} />
-      <InfoStripCell x={40 + cellW * 3} y={stripY} w={cellW} label="Date"           value={d.dateCreated} />
+      <InfoStripCell x={40 + cellW * 0} y={stripY} w={cellW} label="Trim Name"  value={d.componentName} />
+      <InfoStripCell x={40 + cellW * 1} y={stripY} w={cellW} label="Trim Type"  value={d.componentType} />
+      <InfoStripCell x={40 + cellW * 2} y={stripY} w={cellW} label="Supplier"   value={d.supplier} />
+      <InfoStripCell x={40 + cellW * 3} y={stripY} w={cellW} label="Date"       value={d.dateCreated} />
 
-      {/* Component Drawing section heading */}
-      <text x={40} y={160} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="18" fill={FR.slate}>Component Drawing</text>
+      {/* Trim Drawing section heading */}
+      <text x={40} y={160} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="18" fill={FR.slate}>Trim Drawing</text>
       <rect x={40} y={164} width="60" height="2" fill={FR.soil} />
 
       {/* Three drawing slots */}
@@ -288,10 +285,10 @@ function InfoStrip({ d }) {
   return (
     <g>
       <rect x={40} y={stripY} width={PAGE_W - 80} height={stripH} fill={FR.salt} stroke={FR.sand} />
-      <InfoStripCell x={40 + cellW * 0} y={stripY} w={cellW} label="Style #"        value={d.styleNumber} />
-      <InfoStripCell x={40 + cellW * 1} y={stripY} w={cellW} label="Component Name" value={d.componentName} />
-      <InfoStripCell x={40 + cellW * 2} y={stripY} w={cellW} label="Supplier"       value={d.supplier} />
-      <InfoStripCell x={40 + cellW * 3} y={stripY} w={cellW} label="Date"           value={d.dateCreated} />
+      <InfoStripCell x={40 + cellW * 0} y={stripY} w={cellW} label="Trim Name"  value={d.componentName} />
+      <InfoStripCell x={40 + cellW * 1} y={stripY} w={cellW} label="Trim Type"  value={d.componentType} />
+      <InfoStripCell x={40 + cellW * 2} y={stripY} w={cellW} label="Supplier"   value={d.supplier} />
+      <InfoStripCell x={40 + cellW * 3} y={stripY} w={cellW} label="Date"       value={d.dateCreated} />
     </g>
   );
 }
@@ -528,7 +525,7 @@ function PageQC({ d }) {
 }
 
 const PAGE_FNS = [
-  { title: 'Cover & Identity',              body: ({ d, images }) => <PageCover d={d} images={images} /> },
+  { title: 'Overview',                      body: ({ d, images }) => <PageCover d={d} images={images} /> },
   { title: 'Specification & Artwork',       body: ({ d, images }) => <PageSpec d={d} images={images} /> },
   { title: 'Bill of Materials & Color',     body: ({ d, images }) => <PageBOMColor d={d} images={images} /> },
   { title: 'Construction, QC & Approval',   body: ({ d }) => <PageQC d={d} /> },
@@ -536,7 +533,7 @@ const PAGE_FNS = [
 
 export default function ComponentPackPagePreview({ data, images, step }) {
   const d = data || {};
-  const componentInfo = `${d.componentName || 'Untitled'} · ${d.styleNumber || ''}`;
+  const componentInfo = `${d.componentName || 'Untitled'} · ${d.componentType || ''}`;
   const pageNum = Math.min(Math.max(step + 1, 1), TOTAL_PAGES);
   const current = PAGE_FNS[step] || PAGE_FNS[0];
   const Body = current.body;

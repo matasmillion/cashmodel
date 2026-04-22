@@ -6,76 +6,89 @@
 
 import { STATUSES, COMPONENT_TYPES, POM_UNITS, APPROVAL_STATUSES, PASS_FAIL } from './componentPackConstants';
 import { FR, FR_COLOR_OPTIONS } from './techPackConstants';
-import { Input, Select, Row, SectionTitle, CoverPhoto, EditableSelect, PhotoUpload, ArrayTable, FRColorCell } from './TechPackPrimitives';
+import { Input, Select, Row, SectionTitle, CoverPhoto, EditableSelect, PhotoUpload, ArrayTable, FRColorCell, labelStyle, inputBase } from './TechPackPrimitives';
+import { addSupplier } from '../../utils/plmDirectory';
 
-function Signature({ label, value, onNameChange, onDateChange }) {
+function PersonSignature({ label, value, onNameChange, onDateChange, people = [], onAddPerson }) {
   const v = value || { name: '', date: '' };
   return (
     <Row>
-      <Input label={`${label} — Name`} value={v.name} onChange={onNameChange} />
-      <Input label={`${label} — Date`} value={v.date} onChange={onDateChange} placeholder="YYYY-MM-DD" />
+      <EditableSelect
+        label={`${label} — Name`}
+        value={v.name}
+        onChange={onNameChange}
+        options={people}
+        onAddOption={onAddPerson}
+        placeholder="Add a new person…" />
+      <div style={{ marginBottom: 10 }}>
+        <label style={labelStyle}>{`${label} — Date`}</label>
+        <input type="date" value={v.date || ''} onChange={e => onDateChange(e.target.value)} style={inputBase} />
+      </div>
     </Row>
   );
 }
 
-export function StepCover({ data, set, images, onUpload, onRemove, existingSuppliers = [] }) {
+export function StepCover({ data, set, images, onUpload, onRemove, existingSuppliers = [], existingPeople = [], onAddPerson }) {
   const setSig = (field, key, value) => set(field, { ...(data[field] || { name: '', date: '' }), [key]: value });
+  const revisionCount = (data.revisions || []).length;
+  const derivedRevision = `V${revisionCount + 1}.0`;
 
   return (
     <div>
-      <SectionTitle>Cover & Identity</SectionTitle>
+      <SectionTitle>Overview</SectionTitle>
 
-      <CoverPhoto label="Component Photo" slotKey="component-cover" images={images} onUpload={onUpload} onRemove={onRemove} />
+      <CoverPhoto label="Trim Photo" slotKey="component-cover" images={images} onUpload={onUpload} onRemove={onRemove} />
 
-      <Row>
-        <Input label="Component Name" value={data.componentName} onChange={v => set('componentName', v)} placeholder="e.g. Main Label — Woven" />
-        <Input label="Style #" value={data.styleNumber} onChange={v => set('styleNumber', v)} placeholder="e.g. FR-CMP-001" />
+      <Row cols="1fr 1fr 1fr">
+        <Input label="Trim Name" value={data.componentName} onChange={v => set('componentName', v)} placeholder="e.g. Main Label — Woven" />
+        <Select label="Trim Type" value={data.componentType} onChange={v => set('componentType', v)} options={COMPONENT_TYPES} />
+        <Input label="Season" value={data.season} onChange={v => set('season', v)} placeholder="SS26 / FW26 / Core" />
       </Row>
 
       <Row cols="1fr 1fr 1fr">
-        <Select label="Component Type" value={data.componentType} onChange={v => set('componentType', v)} options={COMPONENT_TYPES} />
         <EditableSelect
           label="Supplier"
           value={data.supplier}
           onChange={v => set('supplier', v)}
           options={existingSuppliers}
+          onAddOption={addSupplier}
           placeholder="Add a new supplier…" />
-        <Input label="Season" value={data.season} onChange={v => set('season', v)} placeholder="SS26 / FW26 / Core" />
+        <div style={{ marginBottom: 10 }}>
+          <label style={labelStyle}>Date Created</label>
+          <input type="date" value={data.dateCreated || ''} onChange={e => set('dateCreated', e.target.value)} style={inputBase} />
+        </div>
+        <div style={{ marginBottom: 10 }}>
+          <label style={labelStyle}>Revision (auto)</label>
+          <input value={derivedRevision} readOnly style={{ ...inputBase, background: FR.salt, color: FR.stone, cursor: 'not-allowed' }} />
+        </div>
       </Row>
 
       <Row cols="1fr 1fr 1fr">
-        <Input label="Date Created" value={data.dateCreated} onChange={v => set('dateCreated', v)} placeholder="YYYY-MM-DD" />
-        <Input label="Revision" value={data.revision} onChange={v => set('revision', v)} placeholder="V1.0" />
-        <Select label="Status" value={data.status} onChange={v => set('status', v)} options={STATUSES} />
-      </Row>
-
-      <Row>
-        <Input label="Parent Styles" value={data.parentStyles} onChange={v => set('parentStyles', v)} placeholder="Comma-separated style numbers" />
         <Input label="Colorways" value={data.colorways} onChange={v => set('colorways', v)} placeholder="e.g. Black, Natural, Slate" />
-      </Row>
-
-      <Row cols="1fr 1fr 1fr">
-        <Input label="Dimensions" value={data.dimensions} onChange={v => set('dimensions', v)} placeholder='e.g. 40 × 15 mm' />
         <Input label="Target Unit Cost ($)" value={data.targetUnitCost} onChange={v => set('targetUnitCost', v)} placeholder="0.85" />
         <Input label="MOQ" value={data.moq} onChange={v => set('moq', v)} placeholder="1000" />
       </Row>
 
+      <Row>
+        <Select label="Status" value={data.status} onChange={v => set('status', v)} options={STATUSES} />
+        <div />
+      </Row>
+
       <SectionTitle>Approvals</SectionTitle>
-      <Signature
+      <PersonSignature
         label="Designed By"
         value={data.designedBy}
         onNameChange={v => setSig('designedBy', 'name', v)}
-        onDateChange={v => setSig('designedBy', 'date', v)} />
-      <Signature
+        onDateChange={v => setSig('designedBy', 'date', v)}
+        people={existingPeople}
+        onAddPerson={onAddPerson} />
+      <PersonSignature
         label="Approved By"
         value={data.approvedBy}
         onNameChange={v => setSig('approvedBy', 'name', v)}
-        onDateChange={v => setSig('approvedBy', 'date', v)} />
-      <Signature
-        label="Supplier Confirmed"
-        value={data.supplierConfirmed}
-        onNameChange={v => setSig('supplierConfirmed', 'name', v)}
-        onDateChange={v => setSig('supplierConfirmed', 'date', v)} />
+        onDateChange={v => setSig('approvedBy', 'date', v)}
+        people={existingPeople}
+        onAddPerson={onAddPerson} />
     </div>
   );
 }
@@ -105,7 +118,7 @@ export function StepSpec({ data, set, images, onUpload, onRemove }) {
       <SectionTitle>Specification & Artwork</SectionTitle>
 
       <div style={{ marginBottom: 16 }}>
-        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>Component Drawing</label>
+        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>Trim Drawing</label>
         <Row cols="1fr 1fr 1fr">
           <PhotoUpload label="Front / Top View"        slotKey="component-front" images={images} onUpload={onUpload} onRemove={onRemove} />
           <PhotoUpload label="Back / Bottom View"      slotKey="component-back"  images={images} onUpload={onUpload} onRemove={onRemove} />
@@ -178,12 +191,12 @@ export function StepBOMColor({ data, set, images, onUpload, onRemove, existingSu
         <label style={sectionLabel()}>Materials</label>
         <ArrayTable
           headers={[
-            { key: 'component',       label: 'Component',        placeholder: 'Shell / Trim / Thread' },
+            { key: 'component',       label: 'Trim Part',        placeholder: 'Shell / Trim / Thread' },
             { key: 'typeDescription', label: 'Type / Description', placeholder: 'Twill, YKK #5, etc.' },
             { key: 'composition',     label: 'Composition',      placeholder: '100% Cotton' },
             { key: 'weightGauge',     label: 'Weight / Gauge',   placeholder: '400 GSM / 6mm' },
             { key: 'supplier',        label: 'Supplier',         render: (v, onChange) => (
-              <EditableSelect value={v} onChange={onChange} options={existingSuppliers} placeholder="Add new…" />
+              <EditableSelect value={v} onChange={onChange} options={existingSuppliers} onAddOption={addSupplier} placeholder="Add new…" />
             ) },
             { key: 'notes',           label: 'Notes',            placeholder: 'Optional' },
           ]}

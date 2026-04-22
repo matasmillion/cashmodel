@@ -1,8 +1,8 @@
-// Component Library — a simple, categorised list of reusable BOM components
-// (fabrics, zippers, aglets, trims, labels, etc.) that tech pack BOMs pull
-// from. Not a PLM pipeline — there's no kanban / status flow on this side.
-// Groups are collapsible rows by component category; each group shows image
-// cards for fast visual browsing.
+// Trim Library — a simple, categorised list of reusable BOM trims (fabrics,
+// zippers, aglets, labels, etc.) that tech pack BOMs pull from. Not a PLM
+// pipeline — there's no kanban / status flow on this side. Groups are
+// collapsible rows by trim category; each group shows image cards for fast
+// visual browsing.
 
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Boxes, Copy, Trash2, Search, ChevronDown, ChevronRight, Package } from 'lucide-react';
@@ -10,6 +10,7 @@ import { FR, DEFAULT_COMPONENT_DATA, BOM_COMPONENT_OPTIONS } from './componentPa
 import ComponentPackBuilder from './ComponentPackBuilder';
 import { listComponentPacks, createComponentPack, getComponentPack, deleteComponentPack, duplicateComponentPack } from '../../utils/componentPackStore';
 import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
+import { listAllSuppliers, listAllPeople } from '../../utils/plmDirectory';
 
 function formatDate(iso) {
   if (!iso) return '';
@@ -19,7 +20,7 @@ function formatDate(iso) {
 
 function Thumb({ pack }) {
   if (pack.cover_image) {
-    return <img src={pack.cover_image} alt={pack.component_name || 'Component'}
+    return <img src={pack.cover_image} alt={pack.component_name || 'Trim'}
       style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
   }
   return (
@@ -150,7 +151,7 @@ export default function ComponentPackList() {
   };
 
   const onDuplicate = async (id) => { await duplicateComponentPack(id); refresh(); };
-  const onDelete = async (id) => { if (!confirm('Delete this component?')) return; await deleteComponentPack(id); refresh(); };
+  const onDelete = async (id) => { if (!confirm('Delete this trim?')) return; await deleteComponentPack(id); refresh(); };
   const closeBuilder = async () => {
     setActivePack(null);
     setPLMHash({ section: 'components' });
@@ -181,8 +182,9 @@ export default function ComponentPackList() {
   }, [filtered]);
 
   if (activePack) {
-    const existingSuppliers = [...new Set(packs.map(p => (p.supplier || '').trim()).filter(Boolean))].sort();
-    return <ComponentPackBuilder pack={activePack} onBack={closeBuilder} existingSuppliers={existingSuppliers} />;
+    const existingSuppliers = listAllSuppliers();
+    const existingPeople = listAllPeople();
+    return <ComponentPackBuilder pack={activePack} onBack={closeBuilder} existingSuppliers={existingSuppliers} existingPeople={existingPeople} />;
   }
 
   const toggleCategory = (name) =>
@@ -196,13 +198,13 @@ export default function ComponentPackList() {
     <div>
       <div className="flex justify-between items-center mb-4">
         <div>
-          <h3 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 20, margin: 0 }}>Component Library</h3>
+          <h3 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 20, margin: 0 }}>Trim Library</h3>
           <p className="text-sm mt-1" style={{ color: FR.stone }}>Reusable fabrics, zippers, trims, and labels. Pull these into tech pack BOMs.</p>
         </div>
         <button onClick={createNew}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs"
           style={{ background: FR.slate, color: FR.salt, border: 'none', cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
-          <Plus size={14} /> New Component
+          <Plus size={14} /> New Trim
         </button>
       </div>
 
@@ -211,7 +213,7 @@ export default function ComponentPackList() {
           <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
             <Search size={13} style={{ position: 'absolute', left: 8, top: 8, color: FR.stone }} />
             <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search components, suppliers, categories…"
+              placeholder="Search trims, suppliers, categories…"
               style={{ width: '100%', padding: '6px 8px 6px 28px', border: `1px solid ${FR.sand}`, borderRadius: 6, fontSize: 12, color: FR.slate, background: 'white', outline: 'none', boxSizing: 'border-box' }} />
           </div>
           <span style={{ fontSize: 10, color: FR.stone }}>{filtered.length} of {packs.length}</span>
@@ -223,10 +225,10 @@ export default function ComponentPackList() {
       {!loading && packs.length === 0 && (
         <div style={{ padding: 40, textAlign: 'center', background: 'white', border: `1px dashed ${FR.sand}`, borderRadius: 12 }}>
           <Boxes size={32} style={{ color: FR.stone, margin: '0 auto 12px', display: 'block' }} />
-          <h3 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 20, margin: 0, marginBottom: 8 }}>No components yet</h3>
+          <h3 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 20, margin: 0, marginBottom: 8 }}>No trims yet</h3>
           <p style={{ color: FR.stone, fontSize: 13, marginBottom: 16 }}>Create spec sheets for fabrics, zippers, and trims you use across multiple products.</p>
           <button onClick={createNew} style={{ padding: '8px 20px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>
-            + New Component
+            + New Trim
           </button>
         </div>
       )}

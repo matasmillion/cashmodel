@@ -54,7 +54,7 @@ export default function PLMView() {
           <Shirt size={13} /> Styles
         </button>
         <button onClick={() => switchView('components')} style={tabStyle(view === 'components')}>
-          <Boxes size={13} /> Components
+          <Boxes size={13} /> Trims
         </button>
       </div>
 
