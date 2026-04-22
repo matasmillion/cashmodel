@@ -61,12 +61,15 @@ function SignatureCard({ x, y, w, h, title, name, date }) {
 function PageCover({ d, images }) {
   const cover = (images || []).find(img => img.slot === 'component-cover');
 
-  // Compact identity grid — 4 rows × 2 columns
-  const leftX = 40;
-  const rightX = 580;
-  const colW = 480;
-  const idRowStartY = 330;
-  const idRowGap = 26;
+  // ── Layout budget (PAGE_H = 794, footer at 775) ────────────────────────────
+  //   header bar  ..................... 0–70
+  //   title + photo  .................. 90–250
+  //   identity grid  .................. 270–390
+  //   revision history  ............... 410–510
+  //   samples strip  .................. 530–575
+  //   final approval cards  ........... 595–745
+  //   footer stripe  .................. 775
+
   const derivedRevision = `V${(d.revisions || []).length + 1}.0`;
   const leftCol = [
     { label: 'Trim Type',           value: d.componentType },
@@ -81,85 +84,105 @@ function PageCover({ d, images }) {
     { label: 'MOQ',                 value: d.moq },
   ];
 
-  // Revision history strip
   const revCols = [
-    { key: 'rev',         label: 'Rev #',                 w: 70 },
-    { key: 'date',        label: 'Date',                  w: 100 },
-    { key: 'changedBy',   label: 'Changed By',            w: 180 },
-    { key: 'description', label: 'Description of Change', w: 513 },
-    { key: 'approvedBy',  label: 'Approved By',           w: 180 },
+    { key: 'rev',         label: 'Rev #',                 w: 60 },
+    { key: 'date',        label: 'Date',                  w: 90 },
+    { key: 'changedBy',   label: 'Changed By',            w: 170 },
+    { key: 'description', label: 'Description of Change', w: 553 },
+    { key: 'approvedBy',  label: 'Approved By',           w: 170 },
   ];
   const revRows = (d.revisions || []).filter(r => r.rev || r.date || r.changedBy || r.description || r.approvedBy);
 
-  // Sample strip — five sample types shown as small pill cells
   const fa = d.finalApproval || {};
   const designer = fa.designer || {};
   const manager  = fa.manager  || {};
   const factory  = fa.factory  || {};
 
-  // Approval cards at the bottom
-  const cardY = 640;
-  const cardH = 110;
+  const cardY = 595;
+  const cardH = 150;
   const cardGap = 16;
   const cardW = (PAGE_W - 80 - cardGap * 2) / 3;
 
   return (
     <g>
       {/* Title block */}
-      <text x={40} y={120} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="38" fill={FR.slate}>Trim Specification</text>
-      <rect x={40} y={130} width="80" height="2" fill={FR.soil} />
-      <text x={40} y={160} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="22" fill={FR.slate}>
-        {clampLine(d.componentName || 'New Trim', 900, 12)}
+      <text x={40} y={110} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="34" fill={FR.slate}>Trim Specification</text>
+      <rect x={40} y={120} width="70" height="2" fill={FR.soil} />
+      <text x={40} y={148} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="20" fill={FR.slate}>
+        {clampLine(d.componentName || 'New Trim', 740, 11)}
       </text>
-      <text x={40} y={184} fontSize="9" fill={FR.stone} letterSpacing="1.5">STATUS · {esc((d.status || '—').toUpperCase())}</text>
+      <text x={40} y={170} fontSize="9" fill={FR.stone} letterSpacing="1.5">STATUS · {esc((d.status || '—').toUpperCase())}</text>
 
-      {/* Cover photo */}
+      {/* Cover photo — sized to fit within the title band */}
       {cover
-        ? <image href={cover.data} x={PAGE_W - 320 - 40} y={90} width="320" height="180" preserveAspectRatio="xMidYMid meet" />
+        ? <image href={cover.data} x={PAGE_W - 280 - 40} y={85} width="280" height="160" preserveAspectRatio="xMidYMid meet" />
         : (
           <g>
-            <rect x={PAGE_W - 320 - 40} y={90} width="320" height="180" fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" />
-            <text x={PAGE_W - 160 - 40} y={185} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">Trim photo goes here</text>
+            <rect x={PAGE_W - 280 - 40} y={85} width="280" height="160" fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" />
+            <text x={PAGE_W - 140 - 40} y={170} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">Trim photo goes here</text>
           </g>
         )}
 
-      {/* Section divider + overview identity */}
-      <rect x="40" y="300" width={PAGE_W - 80} height="1" fill={FR.sand} />
-      <text x={40} y={320} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="2">OVERVIEW</text>
+      {/* Identity grid — tight 4×2 */}
+      <rect x="40" y="258" width={PAGE_W - 80} height="1" fill={FR.sand} />
+      <text x={40} y={276} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="2">OVERVIEW</text>
       {leftCol.map((f, i) => (
-        <Field key={`L${i}`} x={leftX} y={idRowStartY + i * idRowGap} label={f.label} value={f.value} w={colW} />
+        <Field key={`L${i}`} x={40}  y={292 + i * 24} label={f.label} value={f.value} w={500} />
       ))}
       {rightCol.map((f, i) => (
-        <Field key={`R${i}`} x={rightX} y={idRowStartY + i * idRowGap} label={f.label} value={f.value} w={colW} />
+        <Field key={`R${i}`} x={580} y={292 + i * 24} label={f.label} value={f.value} w={500} />
       ))}
 
       {/* Revision history strip */}
-      <SectionHeading x={40} y={460}>Revision History</SectionHeading>
-      <GridTable x={40} y={476} cols={revCols} rows={revRows} bodyRows={3} rowH={22} headerH={22} />
+      <SectionHeading x={40} y={410}>Revision History</SectionHeading>
+      <GridTable x={40} y={424} cols={revCols} rows={revRows} bodyRows={3} rowH={20} headerH={20} />
 
-      {/* Samples — compact row of the 5 sample types */}
-      <SectionHeading x={40} y={576}>Samples</SectionHeading>
-      <SampleStrip d={d} x={40} y={590} w={PAGE_W - 80} />
+      {/* Samples — compact row of the 3 stages */}
+      <SectionHeading x={40} y={530}>Samples</SectionHeading>
+      <SampleStrip d={d} x={40} y={544} w={PAGE_W - 80} />
 
-      {/* Final Approval — 3 compact cards */}
-      <SectionHeading x={40} y={628}>Final Approval</SectionHeading>
-      <ApprovalPreviewCard x={40}                           y={cardY} w={cardW} h={cardH} title="Designer" name={designer.name} signature={designer.signature} date={designer.date} />
-      <ApprovalPreviewCard x={40 + cardW + cardGap}         y={cardY} w={cardW} h={cardH} title="Manager"  name={manager.name}  signature={manager.signature}  date={manager.date} />
-      <ApprovalPreviewCard x={40 + (cardW + cardGap) * 2}   y={cardY} w={cardW} h={cardH} title="Factory"  name={factory.name}  signature={factory.signature}  date={factory.dateChop} dateLabel="Date / Chop:" />
+      {/* Final approval — compact 3-row cards */}
+      <SectionHeading x={40} y={590}>Final Approval</SectionHeading>
+      <CompactApprovalCard x={40}                         y={cardY} w={cardW} h={cardH} title="Designer" name={designer.name} signature={designer.signature} date={designer.date} />
+      <CompactApprovalCard x={40 + cardW + cardGap}       y={cardY} w={cardW} h={cardH} title="Manager"  name={manager.name}  signature={manager.signature}  date={manager.date} />
+      <CompactApprovalCard x={40 + (cardW + cardGap) * 2} y={cardY} w={cardW} h={cardH} title="Factory"  name={factory.name}  signature={factory.signature}  date={factory.dateChop} dateLabel="Date / Chop" />
     </g>
   );
 }
 
-// Small horizontal strip showing each sample type's most recent verdict.
-// Maps over the data.samples array, groups by type, and renders a colored
-// pill per type so the reader can scan proto/fit/PP/TOP status at a glance.
-function SampleStrip({ d, x, y, w }) {
-  const SAMPLE_LABELS = ['Proto', 'Fit', 'SMS (Salesman)', 'PP (Pre-Production)', 'TOP (Top of Production)'];
-  const SHORT = { 'Proto': 'Proto', 'Fit': 'Fit', 'SMS (Salesman)': 'SMS', 'PP (Pre-Production)': 'PP', 'TOP (Top of Production)': 'TOP' };
-  const samples = d.samples || [];
-  const cellW = (w - 10 * 4) / 5;
+// Compact sign-off card used on the Overview preview — 3 stacked label+value
+// rows in 150px. The original ApprovalPreviewCard assumes ~220px of height
+// and overflows when squeezed. This variant hard-codes tight spacing.
+function CompactApprovalCard({ x, y, w, h, title, name, signature, date, dateLabel = 'Date' }) {
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} fill={FR.white} stroke={FR.sand} />
+      <rect x={x} y={y} width={w} height={22} fill={FR.salt} />
+      <text x={x + 10} y={y + 15} fontSize="8.5" fontWeight="bold" fill={FR.soil} letterSpacing="1.5">{esc(title.toUpperCase())}</text>
 
-  // Latest sample of each type wins
+      <text x={x + 10} y={y + 40} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">NAME</text>
+      <text x={x + 10} y={y + 55} fontSize="10" fill={FR.slate}>{clampLine(esc(name || '—'), w - 20, 5.8)}</text>
+      <line x1={x + 10} y1={y + 59} x2={x + w - 10} y2={y + 59} stroke={FR.sand} />
+
+      <text x={x + 10} y={y + 78} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">SIGNATURE</text>
+      <text x={x + 10} y={y + 93} fontSize="10" fill={FR.slate}>{clampLine(esc(signature || '—'), w - 20, 5.8)}</text>
+      <line x1={x + 10} y1={y + 97} x2={x + w - 10} y2={y + 97} stroke={FR.sand} />
+
+      <text x={x + 10} y={y + 116} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">{esc(dateLabel.toUpperCase())}</text>
+      <text x={x + 10} y={y + 131} fontSize="10" fill={FR.slate}>{clampLine(esc(date || '—'), w - 20, 5.8)}</text>
+      <line x1={x + 10} y1={y + 135} x2={x + w - 10} y2={y + 135} stroke={FR.sand} />
+    </g>
+  );
+}
+
+// Horizontal strip: one pill per trim sample stage (Design / Sample /
+// Production-Ready). Each pill shows the latest verdict dot + date for
+// that stage so the reader can scan progress at a glance.
+function SampleStrip({ d, x, y, w }) {
+  const STAGES = ['Design', 'Sample', 'Production-Ready'];
+  const samples = d.samples || [];
+  const cellW = (w - 10 * (STAGES.length - 1)) / STAGES.length;
+
   const latestByType = {};
   samples.forEach(s => { latestByType[s.type] = s; });
 
@@ -172,21 +195,21 @@ function SampleStrip({ d, x, y, w }) {
 
   return (
     <g>
-      {SAMPLE_LABELS.map((t, i) => {
+      {STAGES.map((t, i) => {
         const cx = x + i * (cellW + 10);
         const s = latestByType[t];
         return (
           <g key={t}>
-            <rect x={cx} y={y} width={cellW} height={32} fill={FR.white} stroke={FR.sand} rx="3" />
-            <text x={cx + 10} y={y + 13} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.6">{esc(SHORT[t].toUpperCase())}</text>
+            <rect x={cx} y={y} width={cellW} height={30} fill={FR.white} stroke={FR.sand} rx="3" />
+            <text x={cx + 12} y={y + 12} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.8">{esc(t.toUpperCase())}</text>
             {s
               ? (
                 <>
-                  <circle cx={cx + cellW - 14} cy={y + 12} r="4" fill={verdictColor(s.verdict)} />
-                  <text x={cx + 10} y={y + 27} fontSize="9" fill={FR.slate}>{clampLine(esc(`${s.verdict || 'Pending'} · ${s.date || ''}`), cellW - 20, 5.5)}</text>
+                  <circle cx={cx + cellW - 16} cy={y + 11} r="4" fill={verdictColor(s.verdict)} />
+                  <text x={cx + 12} y={y + 25} fontSize="9" fill={FR.slate}>{clampLine(esc(`${s.verdict || 'Pending'} · ${s.date || ''}`), cellW - 24, 5.5)}</text>
                 </>
               )
-              : <text x={cx + 10} y={y + 27} fontSize="9" fill={FR.sand}>—</text>}
+              : <text x={cx + 12} y={y + 25} fontSize="9" fill={FR.sand}>No sample logged yet</text>}
           </g>
         );
       })}

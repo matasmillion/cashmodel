@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ArrowLeft, History, Printer, X } from 'lucide-react';
-import { FR, DEFAULT_COMPONENT_DATA, COMPONENT_STEPS } from './componentPackConstants';
+import { FR, DEFAULT_COMPONENT_DATA, COMPONENT_STEPS, LEGACY_STATUS_MIGRATION, LEGACY_SAMPLE_TYPE_MIGRATION } from './componentPackConstants';
 import { FR_COLOR_OPTIONS } from './techPackConstants';
 import { COMPONENT_STEP_FNS } from './ComponentPackSteps';
 import ComponentPackPagePreview from './ComponentPackPagePreview';
@@ -115,23 +115,44 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     const { packId, step } = parsePLMHash();
     return packId === pack.id ? Math.min(step, COMPONENT_STEPS.length - 1) : 0;
   });
-  // One-time migration for legacy packs: the final-approval slot used to be
-  // called brandOwner. Fold any legacy data into the new `manager` slot on
-  // first open so the refactored Overview renders correctly.
+  // One-time migrations for legacy packs run on first open:
+  //   1. finalApproval.brandOwner → finalApproval.manager
+  //   2. status: Sampling/Testing/Pre-Production/Production/Released →
+  //      the new 3-stage set (Design / Sample / Production-Ready).
+  //   3. samples[].type: Proto/Fit/SMS/PP/TOP → new Design/Sample/
+  //      Production-Ready set.
   const [data, setData] = useState(() => {
-    const initial = pack.data || DEFAULT_COMPONENT_DATA;
-    const fa = initial.finalApproval || {};
-    const hasManagerData = fa.manager && (fa.manager.name || fa.manager.signature || fa.manager.date);
-    const hasBrandOwnerData = fa.brandOwner && (fa.brandOwner.name || fa.brandOwner.signature || fa.brandOwner.date);
-    if (hasBrandOwnerData && !hasManagerData) {
-      const { brandOwner, ...rest } = fa;
-      return { ...initial, finalApproval: { ...rest, manager: brandOwner } };
-    }
+    let next = pack.data || DEFAULT_COMPONENT_DATA;
+
+    // (1) brandOwner → manager
+    const fa = next.finalApproval || {};
     if (fa.brandOwner) {
+      const hasManagerData = fa.manager && (fa.manager.name || fa.manager.signature || fa.manager.date);
+      const hasBrandOwnerData = fa.brandOwner && (fa.brandOwner.name || fa.brandOwner.signature || fa.brandOwner.date);
       const { brandOwner, ...rest } = fa;
-      return { ...initial, finalApproval: rest };
+      next = {
+        ...next,
+        finalApproval: (hasBrandOwnerData && !hasManagerData)
+          ? { ...rest, manager: brandOwner }
+          : rest,
+      };
     }
-    return initial;
+
+    // (2) Status migration
+    if (next.status && LEGACY_STATUS_MIGRATION[next.status]) {
+      next = { ...next, status: LEGACY_STATUS_MIGRATION[next.status] };
+    }
+
+    // (3) Sample type migration
+    if (Array.isArray(next.samples) && next.samples.length) {
+      const migratedSamples = next.samples.map(s => {
+        const mapped = LEGACY_SAMPLE_TYPE_MIGRATION[s?.type];
+        return mapped ? { ...s, type: mapped } : s;
+      });
+      next = { ...next, samples: migratedSamples };
+    }
+
+    return next;
   });
   const [images, setImages] = useState(pack.images || []);
   const [saving, setSaving] = useState(false);

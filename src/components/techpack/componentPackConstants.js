@@ -2,9 +2,35 @@
 // (fabrics, zippers, aglets, trims, labels, etc.) that feed into tech pack BOMs.
 // Scoped to the 4-page FR_TechPack_Component_Blank_2.svg template.
 
-import { FR, STATUSES, BOM_COMPONENT_OPTIONS, SAMPLE_TYPES, SAMPLE_VERDICTS } from './techPackConstants';
+import { FR, BOM_COMPONENT_OPTIONS, SAMPLE_VERDICTS } from './techPackConstants';
 
-export { FR, STATUSES, BOM_COMPONENT_OPTIONS, SAMPLE_TYPES, SAMPLE_VERDICTS };
+export { FR, BOM_COMPONENT_OPTIONS, SAMPLE_VERDICTS };
+
+// Trim packs have a simpler 3-stage lifecycle than tech packs. This replaces
+// the tech pack's 6-stage STATUSES (Design/Sampling/Testing/Pre-Production/
+// Production/Released) with the three stages the brand actually tracks.
+export const STATUSES = ['Design', 'Sample', 'Production-Ready'];
+
+// Same three stages are used as the "type" for each sample log entry — a
+// sample delivered during the Sample stage, a final bulk-approved sample in
+// Production-Ready, etc. Replaces the tech pack's Proto/Fit/SMS/PP/TOP set.
+export const SAMPLE_TYPES = ['Design', 'Sample', 'Production-Ready'];
+
+// Legacy → new maps for one-time migration of existing trim pack data.
+export const LEGACY_STATUS_MIGRATION = {
+  'Sampling': 'Sample',
+  'Testing': 'Sample',
+  'Pre-Production': 'Production-Ready',
+  'Production': 'Production-Ready',
+  'Released': 'Production-Ready',
+};
+export const LEGACY_SAMPLE_TYPE_MIGRATION = {
+  'Proto': 'Sample',
+  'Fit': 'Sample',
+  'SMS (Salesman)': 'Sample',
+  'PP (Pre-Production)': 'Production-Ready',
+  'TOP (Top of Production)': 'Production-Ready',
+};
 
 export const CURRENCIES = ['USD', 'CNY', 'EUR', 'GBP', 'JPY'];
 export const DYE_METHODS = ['Stock Color', 'PFD (Prepared for Dye)', 'Dye-to-match (DTM)', 'Reactive Dye', 'Pigment Dye', 'Yarn Dye', 'N/A'];
