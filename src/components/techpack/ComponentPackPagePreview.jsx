@@ -72,7 +72,7 @@ function PageCover({ d, images }) {
     { label: 'Trim Type',           value: d.componentType },
     { label: 'Factory',             value: d.supplier },
     { label: 'Season',              value: d.season },
-    { label: 'Date Created',        value: d.dateCreated },
+    { label: 'Date Last Updated',   value: d.dateCreated },
   ];
   const rightCol = [
     { label: 'Revision',            value: d.revision || derivedRevision },

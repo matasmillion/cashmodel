@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-22T10:54:10.319Z",
+  "lastUpdated": "2026-04-22T11:02:32.250Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "e5220e4",
+      "date": "2026-04-22T10:54:24+00:00",
+      "message": "PLM: make trim autosave survive missing cover_image column"
+    },
+    {
       "sha": "1b50901",
       "date": "2026-04-22T10:49:48+00:00",
       "message": "PLM: make factory/people directory cloud-aware"
@@ -1087,11 +1092,6 @@
       "sha": "22d75e4",
       "date": "2026-04-20T18:14:01+00:00",
       "message": "Reduce Plaid costs: auto-sync uses cached /accounts/get (free)"
-    },
-    {
-      "sha": "c093f22",
-      "date": "2026-04-20T18:02:00+00:00",
-      "message": "Add Plaid integration for Chase, AMEX, and any bank/card"
     }
   ]
 }

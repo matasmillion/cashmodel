@@ -54,8 +54,9 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
           onAddOption={addSupplier}
           placeholder="Add a new factory…" />
         <div style={{ marginBottom: 10 }}>
-          <label style={labelStyle}>Date Created</label>
-          <input type="date" value={data.dateCreated || ''} onChange={e => set('dateCreated', e.target.value)} style={inputBase} />
+          <label style={labelStyle}>Date Last Updated</label>
+          <input readOnly value={data.dateCreated || ''}
+            style={{ ...inputBase, background: FR.salt, color: FR.stone, cursor: 'not-allowed' }} />
         </div>
         <div style={{ marginBottom: 10 }}>
           <label style={labelStyle}>Revision (auto)</label>

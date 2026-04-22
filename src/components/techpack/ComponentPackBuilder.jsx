@@ -171,10 +171,18 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   }, [data, images, pack.id]);
 
-  const set = useCallback((k, v) => setData(p => ({ ...p, [k]: v })), []);
+  // Every mutation stamps dateCreated with today's date — the UI renders
+  // this as "Date Last Updated" and the field is read-only so the only way
+  // it moves is through an actual edit.
+  const todayStamp = () => new Date().toISOString().slice(0, 10);
+  const stampDate = useCallback((p) => ({ ...p, dateCreated: todayStamp() }), []);
 
-  const handleImgUpload = useCallback((slot, b64, name) =>
-    setImages(p => [...p, { slot, data: b64, name }]), []);
+  const set = useCallback((k, v) => setData(p => stampDate({ ...p, [k]: v })), [stampDate]);
+
+  const handleImgUpload = useCallback((slot, b64, name) => {
+    setImages(p => [...p, { slot, data: b64, name }]);
+    setData(stampDate);
+  }, [stampDate]);
   const handleImgRemove = useCallback((slot, idx) => {
     setImages(p => {
       let c = 0;
@@ -183,7 +191,8 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
         return true;
       });
     });
-  }, []);
+    setData(stampDate);
+  }, [stampDate]);
 
   // Auto-fill hex from FR color
   const pickFRColor = useCallback((colorName) => {
@@ -221,6 +230,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
         ...prev,
         revision: `V${nextVersion + 1}.0`,
         revisions: [...existing, snapshot],
+        dateCreated: todayStamp(),
       };
     });
   }, [images]);
