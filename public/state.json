@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-22T18:14:49.693Z",
+  "lastUpdated": "2026-04-22T18:31:47.668Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "d649ee6",
+      "date": "2026-04-22T18:15:11+00:00",
+      "message": "Trim pack: split QC method/pass + add PDF/SVG download"
+    },
+    {
       "sha": "7a5e4a8",
       "date": "2026-04-22T17:39:25+00:00",
       "message": "Trim pack embellishments: colorway cards, shared FR color library, 3 artwork tiles"
@@ -1087,11 +1092,6 @@
       "sha": "e5220e4",
       "date": "2026-04-22T10:54:24+00:00",
       "message": "PLM: make trim autosave survive missing cover_image column"
-    },
-    {
-      "sha": "1b50901",
-      "date": "2026-04-22T10:49:48+00:00",
-      "message": "PLM: make factory/people directory cloud-aware"
     }
   ]
 }
