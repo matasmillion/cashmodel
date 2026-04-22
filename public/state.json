@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-22T17:38:59.919Z",
+  "lastUpdated": "2026-04-22T18:14:49.693Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "7a5e4a8",
+      "date": "2026-04-22T17:39:25+00:00",
+      "message": "Trim pack embellishments: colorway cards, shared FR color library, 3 artwork tiles"
+    },
+    {
       "sha": "6267dc3",
       "date": "2026-04-22T17:03:08+00:00",
       "message": "Trim pack overview: tighten layout + fix legacy revision rendering"
@@ -1087,11 +1092,6 @@
       "sha": "1b50901",
       "date": "2026-04-22T10:49:48+00:00",
       "message": "PLM: make factory/people directory cloud-aware"
-    },
-    {
-      "sha": "0601d45",
-      "date": "2026-04-22T10:41:54+00:00",
-      "message": "PLM: unify user-facing labels on Factory (drop 'Supplier')"
     }
   ]
 }

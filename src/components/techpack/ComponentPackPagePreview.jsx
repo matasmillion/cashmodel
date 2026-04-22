@@ -759,10 +759,18 @@ function PageQC({ d, images }) {
             <text x={cx + 14} y={cardY + 38 + imgH + 42} fontSize="11" fill={FR.slate}>{clampLine(esc(q.focus || '—'), cardW - 28, 6.2)}</text>
             <line x1={cx + 14} y1={cardY + 38 + imgH + 46} x2={cx + cardW - 14} y2={cardY + 38 + imgH + 46} stroke={FR.sand} />
 
-            <text x={cx + 14} y={cardY + 38 + imgH + 66} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">METHOD / PASS</text>
-            <foreignObject x={cx + 14} y={cardY + 38 + imgH + 72} width={cardW - 28} height={cardH - (38 + imgH + 80)}>
+            <text x={cx + 14} y={cardY + 38 + imgH + 66} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">METHOD</text>
+            <foreignObject x={cx + 14} y={cardY + 38 + imgH + 72} width={cardW - 28} height={50}>
               <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: 10, color: FR.slate, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
                 {q.method || '—'}
+              </div>
+            </foreignObject>
+            <line x1={cx + 14} y1={cardY + 38 + imgH + 124} x2={cx + cardW - 14} y2={cardY + 38 + imgH + 124} stroke={FR.sand} />
+
+            <text x={cx + 14} y={cardY + 38 + imgH + 142} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">PASS</text>
+            <foreignObject x={cx + 14} y={cardY + 38 + imgH + 148} width={cardW - 28} height={cardH - (38 + imgH + 156)}>
+              <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: 10, color: FR.slate, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
+                {q.pass || '—'}
               </div>
             </foreignObject>
           </g>

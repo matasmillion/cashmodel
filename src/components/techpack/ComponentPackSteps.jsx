@@ -780,7 +780,8 @@ export function StepQC({ data, set, images, onUpload, onRemove }) {
             <span style={{ fontSize: 9, color: FR.soil, fontWeight: 700, letterSpacing: 1.5 }}>QC FOCUS {i + 1}</span>
             <AspectPhoto slotKey={`qc-${i}`} aspect={ASPECTS.TWO_THIRDS} images={images} onUpload={onUpload} onRemove={onRemove} />
             <Input label="Focus" value={q.focus} onChange={v => update(i, 'focus', v)} placeholder="e.g. Pull strength" />
-            <Input label="Method / Pass" value={q.method} onChange={v => update(i, 'method', v)} placeholder="Test method + pass criterion" multiline />
+            <Input label="Method" value={q.method} onChange={v => update(i, 'method', v)} placeholder="Test method (e.g. ISO 13935 seam strength)" multiline />
+            <Input label="Pass" value={q.pass} onChange={v => update(i, 'pass', v)} placeholder="Pass criterion (e.g. ≥ 15 N, no fraying)" multiline />
           </div>
         ))}
       </div>

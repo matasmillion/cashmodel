@@ -60,7 +60,7 @@ const todayISO = () => {
 const emptyMaterial  = () => ({ name: '', composition: '', weightGauge: '', factory: '' });
 const emptyCallout   = () => ({ label: '', detail: '' });
 const emptyTreatment = () => ({ name: '', description: '' });
-const emptyQCPoint   = () => ({ focus: '', method: '' });
+const emptyQCPoint   = () => ({ focus: '', method: '', pass: '' });
 
 export const DEFAULT_COMPONENT_DATA = {
   // Page 1 — Overview

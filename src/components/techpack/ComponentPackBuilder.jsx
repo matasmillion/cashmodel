@@ -4,7 +4,7 @@
 // landscape page of the component pack.
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowLeft, History, Printer, X } from 'lucide-react';
+import { ArrowLeft, History, Printer, X, Download } from 'lucide-react';
 import { FR, DEFAULT_COMPONENT_DATA, COMPONENT_STEPS, LEGACY_STATUS_MIGRATION, LEGACY_SAMPLE_TYPE_MIGRATION } from './componentPackConstants';
 import { FR_COLOR_OPTIONS } from './techPackConstants';
 import { COMPONENT_STEP_FNS } from './ComponentPackSteps';
@@ -12,6 +12,21 @@ import ComponentPackPagePreview from './ComponentPackPagePreview';
 import { saveComponentPack } from '../../utils/componentPackStore';
 import { parsePLMHash, replacePLMHash } from '../../utils/plmRouting';
 import { addPerson } from '../../utils/plmDirectory';
+import { generateComponentPackPDF, generateComponentPackSVG, svgToBlob } from '../../utils/componentPackExport';
+
+function sanitizeFilename(s) {
+  return (s || 'trimpack').replace(/[^\w\-]+/g, '_').slice(0, 60);
+}
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 500);
+}
 
 // Sidebar panel that lists every snapshot made on this trim. Click a row to
 // open the full 4-page rendering of that version in a modal — this is the
@@ -183,7 +198,43 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [viewingVersionIdx, setViewingVersionIdx] = useState(null);
+  const [exporting, setExporting] = useState(null); // 'pdf' | 'svg' | null
+  const [exportError, setExportError] = useState(null);
   const saveTimerRef = useRef(null);
+
+  // Build a filename stem from the trim name + current revision so repeated
+  // exports across iterations don't overwrite each other in the browser.
+  const exportFilename = useCallback(() => {
+    const stem = sanitizeFilename(data.componentName || 'trimpack');
+    const rev = (data.revisions || []).length + 1;
+    return `${stem}_V${rev}`;
+  }, [data.componentName, data.revisions]);
+
+  const handleDownloadPDF = useCallback(async () => {
+    setExporting('pdf');
+    setExportError(null);
+    try {
+      const blob = await generateComponentPackPDF(data, images);
+      downloadBlob(blob, `${exportFilename()}.pdf`);
+    } catch (err) {
+      console.error('PDF export failed:', err);
+      setExportError(err?.message || 'PDF export failed');
+    }
+    setExporting(null);
+  }, [data, images, exportFilename]);
+
+  const handleDownloadSVG = useCallback(() => {
+    setExporting('svg');
+    setExportError(null);
+    try {
+      const svg = generateComponentPackSVG(data, images);
+      downloadBlob(svgToBlob(svg), `${exportFilename()}.svg`);
+    } catch (err) {
+      console.error('SVG export failed:', err);
+      setExportError(err?.message || 'SVG export failed');
+    }
+    setExporting(null);
+  }, [data, images, exportFilename]);
 
   // Push step into URL on every change so refresh keeps you on the same step.
   useEffect(() => {
@@ -381,6 +432,21 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
               ⚠︎ Cloud save failed — edits kept locally
             </span>
           )}
+          {exportError && (
+            <span title={exportError} style={{ fontSize: 10, color: '#D4956A', background: 'rgba(212,149,106,0.12)', padding: '2px 8px', borderRadius: 3 }}>
+              ⚠︎ Export failed
+            </span>
+          )}
+          <button onClick={handleDownloadPDF} disabled={!!exporting}
+            title="Download all 7 pages as an A4 landscape PDF"
+            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', background: FR.salt, color: FR.slate, border: 'none', borderRadius: 3, fontSize: 10, fontWeight: 600, cursor: exporting ? 'wait' : 'pointer' }}>
+            <Download size={11} /> {exporting === 'pdf' ? 'Exporting…' : 'PDF'}
+          </button>
+          <button onClick={handleDownloadSVG} disabled={!!exporting}
+            title="Download all 7 pages as a single editable SVG"
+            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', background: 'rgba(255,255,255,0.1)', color: FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 10, fontWeight: 600, cursor: exporting ? 'wait' : 'pointer' }}>
+            <Download size={11} /> {exporting === 'svg' ? 'Exporting…' : 'SVG'}
+          </button>
           <span style={{ fontSize: 9, color: FR.stone }}>{data.componentCategory || '—'}</span>
           <span style={{ fontSize: 9, color: FR.stone }}>v{(data.revisions || []).length}</span>
         </div>
