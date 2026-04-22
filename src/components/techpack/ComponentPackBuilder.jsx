@@ -118,6 +118,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
   const [data, setData] = useState(pack.data || DEFAULT_COMPONENT_DATA);
   const [images, setImages] = useState(pack.images || []);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const [viewingVersionIdx, setViewingVersionIdx] = useState(null);
   const saveTimerRef = useRef(null);
 
@@ -147,7 +148,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     saveTimerRef.current = setTimeout(async () => {
       setSaving(true);
       try {
-        await saveComponentPack(pack.id, {
+        const result = await saveComponentPack(pack.id, {
           data, images,
           component_name: data.componentName || '',
           component_category: data.componentCategory || '',
@@ -156,7 +157,15 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
           cost_per_unit: data.costPerUnit || '',
           currency: data.currency || 'USD',
         });
-      } catch (err) { console.error(err); }
+        if (result && result.ok === false) {
+          setSaveError(result.error?.message || 'Cloud save failed');
+        } else {
+          setSaveError(null);
+        }
+      } catch (err) {
+        console.error(err);
+        setSaveError(err?.message || String(err));
+      }
       setTimeout(() => setSaving(false), 300);
     }, 600);
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
@@ -242,6 +251,11 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {saving && <span style={{ fontSize: 10, color: FR.sage }}>Saving…</span>}
+          {saveError && (
+            <span title={saveError} style={{ fontSize: 10, color: '#D4956A', background: 'rgba(212,149,106,0.12)', padding: '2px 8px', borderRadius: 3 }}>
+              ⚠︎ Cloud save failed — edits kept locally
+            </span>
+          )}
           <span style={{ fontSize: 9, color: FR.stone }}>{data.componentCategory || '—'}</span>
           <span style={{ fontSize: 9, color: FR.stone }}>v{(data.revisions || []).length}</span>
         </div>

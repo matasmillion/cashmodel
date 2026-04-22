@@ -114,21 +114,36 @@ export async function createComponentPack(defaultData) {
 
 export async function saveComponentPack(id, updates) {
   const now = new Date().toISOString();
-  // Refresh the denormalised cover_image whenever images are part of the
-  // update, so the list view thumbnail stays in sync with the cover slot.
-  const patch = { ...updates, updated_at: now };
-  if (updates.images !== undefined) {
-    patch.cover_image = extractCover(updates.images);
-  }
+  const cover = updates.images !== undefined ? extractCover(updates.images) : undefined;
+  // cover_image is kept separate from the core patch: the Supabase migration
+  // that adds the column may not have been applied yet, and mixing them in
+  // one UPDATE would fail the entire save on a missing-column error.
+  const corePatch = { ...updates, updated_at: now };
+  const localPatch = cover !== undefined ? { ...corePatch, cover_image: cover } : corePatch;
 
   const rows = readLocal();
   const idx = rows.findIndex(p => p.id === id);
-  if (idx >= 0) { rows[idx] = { ...rows[idx], ...patch }; writeLocal(rows); }
+  if (idx >= 0) { rows[idx] = { ...rows[idx], ...localPatch }; writeLocal(rows); }
 
-  if (IS_SUPABASE_ENABLED) {
-    const { error } = await supabase.from('component_packs').update(patch).eq('id', id);
-    if (error) console.error('saveComponentPack:', error);
+  if (!IS_SUPABASE_ENABLED) return { ok: true };
+
+  const { error } = await supabase.from('component_packs').update(corePatch).eq('id', id);
+  if (error) {
+    console.error('saveComponentPack:', error);
+    return { ok: false, error };
   }
+
+  // Best-effort cover_image write — tolerates pre-migration schemas.
+  if (cover !== undefined) {
+    const { error: coverErr } = await supabase
+      .from('component_packs')
+      .update({ cover_image: cover })
+      .eq('id', id);
+    if (coverErr && !/column .* does not exist|could not find.*column/i.test(coverErr.message || '')) {
+      console.error('saveComponentPack cover:', coverErr);
+    }
+  }
+  return { ok: true };
 }
 
 export async function deleteComponentPack(id) {
