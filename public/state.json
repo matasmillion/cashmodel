@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-22T10:41:50.597Z",
+  "lastUpdated": "2026-04-22T10:49:33.509Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "0601d45",
+      "date": "2026-04-22T10:41:54+00:00",
+      "message": "PLM: unify user-facing labels on Factory (drop 'Supplier')"
+    },
+    {
       "sha": "6bbc207",
       "date": "2026-04-22T10:38:10+00:00",
       "message": "PLM: include tech pack data.factory in unified supplier list"
@@ -1087,11 +1092,6 @@
       "sha": "e14e829",
       "date": "2026-04-20T17:15:37+00:00",
       "message": "Add Mercury integration via BYO-token proxy"
-    },
-    {
-      "sha": "30f8efa",
-      "date": "2026-04-20T14:27:56+00:00",
-      "message": "Attribute refunds to refund-date week, match Shopify Total sales exactly"
     }
   ]
 }

@@ -1,10 +1,14 @@
-// Unified lookup for suppliers and people across the PLM.
-// Scans dual-written localStorage for both tech_packs and component_packs so
-// every supplier dropdown (on tech packs, trim packs, BOM rows) sees the same
-// aggregate list, and every person dropdown (Designed By / Approved By / final
-// approval names) shares one pool. New entries added through EditableSelect
-// are persisted to dedicated local keys so they survive even before a pack is
-// saved with that supplier/person.
+// Unified lookup for factories and people across the PLM.
+// Aggregates from:
+//   1. localStorage mirrors of tech_packs + component_packs (fast path)
+//   2. Supabase JSONB projections of data.factory / data.supplier / approval
+//      names (covers rows that live in cloud but haven't been opened on this
+//      device, so their full data isn't in localStorage yet)
+//   3. custom persisted lists of manually-onboarded factories / people
+// New entries added through EditableSelect are written to the custom lists so
+// they show up immediately, even before the pack is saved.
+
+import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
 
 const TECHPACKS_KEY = 'cashmodel_techpacks';
 const COMPONENT_PACKS_KEY = 'cashmodel_component_packs';
@@ -25,12 +29,13 @@ function addNormalized(set, value) {
   if (trimmed) set.add(trimmed);
 }
 
-// ── Suppliers ──────────────────────────────────────────────────────────────
-// Pulls suppliers from:
+// ── Factories ──────────────────────────────────────────────────────────────
+// Pulls factories from:
 //   • trim (component) packs — data.supplier + data.materials[].supplier
-//   • tech packs — data.{bom,fabrics,trimsAccessories,labelsBranding}[].supplier
+//   • tech packs — data.factory + data.{bom,fabrics,trimsAccessories,labelsBranding}[].supplier
+//   • Supabase projection so rows not mirrored locally still count
 //   • custom persisted list (manually added)
-export function listAllSuppliers() {
+export async function listAllSuppliers() {
   const suppliers = new Set();
 
   readJSON(COMPONENT_PACKS_KEY, []).forEach(p => {
@@ -41,13 +46,27 @@ export function listAllSuppliers() {
   const techPackSupplierKeys = ['bom', 'fabrics', 'trimsAccessories', 'labelsBranding'];
   readJSON(TECHPACKS_KEY, []).forEach(p => {
     const d = p?.data || {};
-    // data.factory is the tech pack's top-level Cover & Identity supplier —
-    // same pool as BOM/fabric/trim row suppliers.
     addNormalized(suppliers, d.factory);
     techPackSupplierKeys.forEach(k => (d[k] || []).forEach(row => addNormalized(suppliers, row?.supplier)));
   });
 
   readJSON(CUSTOM_SUPPLIERS_KEY, []).forEach(s => addNormalized(suppliers, s));
+
+  // Cloud fallback: covers packs that exist in Supabase but haven't been
+  // fetched in full on this device yet. Projections keep the payload small —
+  // just the factory/supplier strings we need, not the whole JSONB blob.
+  if (IS_SUPABASE_ENABLED) {
+    try {
+      const [techRes, compRes] = await Promise.all([
+        supabase.from('tech_packs').select('factory:data->>factory'),
+        supabase.from('component_packs').select('supplier'),
+      ]);
+      (techRes.data || []).forEach(r => addNormalized(suppliers, r.factory));
+      (compRes.data || []).forEach(r => addNormalized(suppliers, r.supplier));
+    } catch (err) {
+      console.error('listAllSuppliers supabase:', err);
+    }
+  }
 
   return [...suppliers].sort((a, b) => a.localeCompare(b));
 }
@@ -64,8 +83,10 @@ export function addSupplier(name) {
 
 // ── People ────────────────────────────────────────────────────────────────
 // Designers and approvers used across the PLM. Sourced from both pack
-// families' approval name fields, plus an explicit onboarded list.
-export function listAllPeople() {
+// families' approval name fields, plus an explicit onboarded list. Uses the
+// same local-plus-cloud aggregation as listAllSuppliers so people added in
+// cloud-only packs still appear in the dropdown on a fresh device.
+export async function listAllPeople() {
   const people = new Set();
 
   readJSON(COMPONENT_PACKS_KEY, []).forEach(p => {
@@ -90,6 +111,30 @@ export function listAllPeople() {
   });
 
   readJSON(CUSTOM_PEOPLE_KEY, []).forEach(s => addNormalized(people, s));
+
+  if (IS_SUPABASE_ENABLED) {
+    try {
+      const [techRes, compRes] = await Promise.all([
+        supabase.from('tech_packs').select(
+          'designedByName:data->designedBy->>name, approvedByName:data->approvedBy->>name, factoryConfirmedName:data->factoryConfirmed->>name'
+        ),
+        supabase.from('component_packs').select(
+          'designedByName:data->designedBy->>name, approvedByName:data->approvedBy->>name'
+        ),
+      ]);
+      (techRes.data || []).forEach(r => {
+        addNormalized(people, r.designedByName);
+        addNormalized(people, r.approvedByName);
+        addNormalized(people, r.factoryConfirmedName);
+      });
+      (compRes.data || []).forEach(r => {
+        addNormalized(people, r.designedByName);
+        addNormalized(people, r.approvedByName);
+      });
+    } catch (err) {
+      console.error('listAllPeople supabase:', err);
+    }
+  }
 
   return [...people].sort((a, b) => a.localeCompare(b));
 }

@@ -130,10 +130,14 @@ export default function TechPackList() {
     setLoading(true);
     // listComponentPacks still runs so the dual-write mirrors are warm, but
     // the supplier dropdown pulls from the unified PLM directory that merges
-    // tech packs + trim packs + manually-added entries.
-    const [rows] = await Promise.all([listTechPacks(), listComponentPacks()]);
+    // tech packs + trim packs + Supabase projections + manually-added entries.
+    const [rows, , suppliers] = await Promise.all([
+      listTechPacks(),
+      listComponentPacks(),
+      listAllSuppliers(),
+    ]);
     setPacks(rows || []);
-    setExistingSuppliers(listAllSuppliers());
+    setExistingSuppliers(suppliers);
     setLoading(false);
   };
 

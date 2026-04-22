@@ -97,11 +97,19 @@ export default function ComponentPackList() {
   const [activePack, setActivePack] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [openCategories, setOpenCategories] = useState({}); // { [name]: bool }
+  const [existingSuppliers, setExistingSuppliers] = useState([]);
+  const [existingPeople, setExistingPeople] = useState([]);
 
   const refresh = async () => {
     setLoading(true);
-    const rows = await listComponentPacks();
+    const [rows, suppliers, people] = await Promise.all([
+      listComponentPacks(),
+      listAllSuppliers(),
+      listAllPeople(),
+    ]);
     setPacks(rows || []);
+    setExistingSuppliers(suppliers);
+    setExistingPeople(people);
     setLoading(false);
   };
 
@@ -182,8 +190,6 @@ export default function ComponentPackList() {
   }, [filtered]);
 
   if (activePack) {
-    const existingSuppliers = listAllSuppliers();
-    const existingPeople = listAllPeople();
     return <ComponentPackBuilder pack={activePack} onBack={closeBuilder} existingSuppliers={existingSuppliers} existingPeople={existingPeople} />;
   }
 
