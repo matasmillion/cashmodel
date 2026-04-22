@@ -1,10 +1,11 @@
-// Trim Pack wizard step panels. 6 pages total:
+// Trim Pack wizard step panels. 7 pages total:
 //   1. Overview        — lifecycle (revisions, samples, final approval)
-//   2. Materials       — 3 material cards
-//   3. Construction    — 16:9 measurement diagram + 3 callouts
-//   4. Embellishments  — colorways, artwork, file attachments
-//   5. Treatment       — 3 finish cards (image + text)
-//   6. Quality Control — 3 QC focus cards (image + text)
+//   2. Design          — 9:16 sketch + reference + render
+//   3. Materials       — 3 material cards
+//   4. Construction    — 16:9 measurement diagram + 3 callouts
+//   5. Embellishments  — colorways, artwork, file attachments
+//   6. Treatment       — 3 finish cards (image + text)
+//   7. Quality Control — 3 QC focus cards (image + text)
 
 import { STATUSES, COMPONENT_TYPES, APPROVAL_STATUSES, SAMPLE_TYPES, SAMPLE_VERDICTS } from './componentPackConstants';
 import { FR, FR_COLOR_OPTIONS } from './techPackConstants';
@@ -294,7 +295,41 @@ export function StepCover({
 // ── Shared subtitle helper ──────────────────────────────────────────────────
 const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
 
-// ── Page 2: Materials ───────────────────────────────────────────────────────
+// ── Page 2: Design ──────────────────────────────────────────────────────────
+// One 9:16 sketch at top + two equally-sized reference/render images below.
+// Pure visual page — no text fields. Lets the factory see the intent before
+// wading into materials / construction specs.
+export function StepDesign({ images, onUpload, onRemove }) {
+  return (
+    <div>
+      <SectionTitle>Design</SectionTitle>
+
+      <p style={{ fontSize: 11, color: FR.stone, marginTop: -10, marginBottom: 16 }}>
+        Sketch, reference, render — the three visuals that communicate the design.
+      </p>
+
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+        <div style={{ width: 320 }}>
+          <label style={sectionLabel}>Sketch (9:16)</label>
+          <CoverPhoto label="" slotKey="design-sketch" images={images} onUpload={onUpload} onRemove={onRemove} height={500} autoCropOnUpload={false} />
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div>
+          <label style={sectionLabel}>Reference</label>
+          <CoverPhoto label="" slotKey="design-reference" images={images} onUpload={onUpload} onRemove={onRemove} height={240} autoCropOnUpload={false} />
+        </div>
+        <div>
+          <label style={sectionLabel}>Render</label>
+          <CoverPhoto label="" slotKey="design-render" images={images} onUpload={onUpload} onRemove={onRemove} height={240} autoCropOnUpload={false} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Page 3: Materials ───────────────────────────────────────────────────────
 // Three material cards side by side. Card = photo + name + composition +
 // weight/gauge + factory. Users can add more with an explicit button; the
 // rule-of-three ceiling is a default, not a cap.
@@ -611,4 +646,4 @@ export function StepQC({ data, set, images, onUpload, onRemove }) {
   );
 }
 
-export const COMPONENT_STEP_FNS = [StepCover, StepMaterials, StepConstruction, StepEmbellishments, StepTreatment, StepQC];
+export const COMPONENT_STEP_FNS = [StepCover, StepDesign, StepMaterials, StepConstruction, StepEmbellishments, StepTreatment, StepQC];

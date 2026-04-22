@@ -1,12 +1,12 @@
 // Live A4-landscape page preview for the Trim Pack wizard.
-// 6 pages total: Overview, Materials, Construction, Embellishments,
+// 7 pages total: Overview, Design, Materials, Construction, Embellishments,
 // Treatment, Quality Control.
 
 import { FR } from './techPackConstants';
 
 const PAGE_W = 1123;
 const PAGE_H = 794;
-const TOTAL_PAGES = 6;
+const TOTAL_PAGES = 7;
 
 function esc(s) { return String(s ?? ''); }
 function clampLine(s, maxW, charW = 6.5) {
@@ -256,7 +256,44 @@ function PhotoSlot({ x, y, w, h, image, placeholder }) {
   );
 }
 
-// ── Page 2: Materials ──────────────────────────────────────────────────────
+// ── Page 2: Design ─────────────────────────────────────────────────────────
+// Left half: 9:16 sketch (portrait). Right half: reference + render stacked
+// landscape so both visuals read cleanly on an A4 horizontal page.
+function PageDesign({ d, images }) {
+  const imgs = images || [];
+  const sketch = imgs.find(x => x.slot === 'design-sketch');
+  const reference = imgs.find(x => x.slot === 'design-reference');
+  const render = imgs.find(x => x.slot === 'design-render');
+
+  // Sketch: 9:16 portrait. Max height 570 → width = 570 × 9/16 ≈ 320.
+  const sketchH = 570;
+  const sketchW = Math.round(sketchH * 9 / 16);
+  const sketchX = 40;
+  const sketchY = 160;
+
+  // Reference + render stacked to the right of the sketch.
+  const stackX = sketchX + sketchW + 30;
+  const stackW = PAGE_W - stackX - 40;
+  const stackH = (sketchH - 20) / 2;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+      <SectionHeading x={40} y={148}>Design</SectionHeading>
+
+      <PhotoSlot x={sketchX} y={sketchY} w={sketchW} h={sketchH} image={sketch} placeholder="Sketch (9:16)" />
+      <text x={sketchX + 10} y={sketchY + sketchH - 10} fontSize="9" fontWeight="bold" fill={FR.white} letterSpacing="1.5">SKETCH</text>
+
+      <PhotoSlot x={stackX} y={sketchY}                w={stackW} h={stackH} image={reference} placeholder="Reference image" />
+      <text x={stackX + 10} y={sketchY + stackH - 10} fontSize="9" fontWeight="bold" fill={FR.white} letterSpacing="1.5">REFERENCE</text>
+
+      <PhotoSlot x={stackX} y={sketchY + stackH + 20} w={stackW} h={stackH} image={render} placeholder="Render image" />
+      <text x={stackX + 10} y={sketchY + stackH + 20 + stackH - 10} fontSize="9" fontWeight="bold" fill={FR.white} letterSpacing="1.5">RENDER</text>
+    </g>
+  );
+}
+
+// ── Page 3: Materials ──────────────────────────────────────────────────────
 // Up to 3 material cards rendered side by side. Each card: photo slot +
 // name + composition + weight/gauge + factory.
 function PageMaterials({ d, images }) {
@@ -614,6 +651,7 @@ function PageQC({ d, images }) {
 
 const PAGE_FNS = [
   { title: 'Overview',         body: ({ d, images }) => <PageCover d={d} images={images} /> },
+  { title: 'Design',           body: ({ d, images }) => <PageDesign d={d} images={images} /> },
   { title: 'Materials',        body: ({ d, images }) => <PageMaterials d={d} images={images} /> },
   { title: 'Construction',     body: ({ d, images }) => <PageConstruction d={d} images={images} /> },
   { title: 'Embellishments',   body: ({ d, images }) => <PageEmbellishments d={d} images={images} /> },

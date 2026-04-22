@@ -39,16 +39,17 @@ export const CERTIFICATIONS = ['OEKO-TEX Standard 100', 'GOTS', 'GRS', 'bluesign
 // High-level trim classification that mirrors the SVG template dropdown.
 export const COMPONENT_TYPES = ['Label', 'Zipper', 'Fabric', 'Hardware', 'Packaging'];
 
-// 6-step wizard: Overview + 5 content pages. Everything after Overview uses
-// a rule-of-3 layout — three cards, three callouts, three QC focuses.
-// Intentional: keeps the tech pack readable at a glance without tables.
+// 7-step wizard: Overview + Design + 5 content pages. Design sits between
+// Overview and Materials so the factory sees the visual intent before the
+// spec data. Everything after Overview follows a rule-of-three layout.
 export const COMPONENT_STEPS = [
   { id: 'cover',          title: 'Overview',          icon: '01' },
-  { id: 'materials',      title: 'Materials',         icon: '02' },
-  { id: 'construction',   title: 'Construction',      icon: '03' },
-  { id: 'embellishments', title: 'Embellishments',    icon: '04' },
-  { id: 'treatment',      title: 'Treatment',         icon: '05' },
-  { id: 'qc',             title: 'Quality Control',   icon: '06' },
+  { id: 'design',         title: 'Design',            icon: '02' },
+  { id: 'materials',      title: 'Materials',         icon: '03' },
+  { id: 'construction',   title: 'Construction',      icon: '04' },
+  { id: 'embellishments', title: 'Embellishments',    icon: '05' },
+  { id: 'treatment',      title: 'Treatment',         icon: '06' },
+  { id: 'qc',             title: 'Quality Control',   icon: '07' },
 ];
 
 const todayISO = () => {
