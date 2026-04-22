@@ -1,14 +1,16 @@
-// Component Pack wizard step panels. Scoped to the 4-page template:
-//   1. Cover & Identity (fully built)
-//   2. Specification & Artwork  (fully built)
-//   3. BOM & Color               — placeholder
-//   4. Construction, QC & Approval — placeholder
+// Trim Pack wizard step panels. 6 pages total:
+//   1. Overview        — lifecycle (revisions, samples, final approval)
+//   2. Materials       — 3 material cards
+//   3. Construction    — 16:9 measurement diagram + 3 callouts
+//   4. Embellishments  — colorways, artwork, file attachments
+//   5. Treatment       — 3 finish cards (image + text)
+//   6. Quality Control — 3 QC focus cards (image + text)
 
-import { STATUSES, COMPONENT_TYPES, POM_UNITS, APPROVAL_STATUSES, PASS_FAIL, SAMPLE_TYPES, SAMPLE_VERDICTS } from './componentPackConstants';
+import { STATUSES, COMPONENT_TYPES, APPROVAL_STATUSES, SAMPLE_TYPES, SAMPLE_VERDICTS } from './componentPackConstants';
 import { FR, FR_COLOR_OPTIONS } from './techPackConstants';
-import { Input, Select, Row, SectionTitle, CoverPhoto, EditableSelect, PhotoUpload, ArrayTable, FRColorCell, labelStyle, inputBase } from './TechPackPrimitives';
+import { Input, Select, Row, SectionTitle, CoverPhoto, EditableSelect, ArrayTable, FRColorCell, labelStyle, inputBase } from './TechPackPrimitives';
 import { addSupplier } from '../../utils/plmDirectory';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { CheckCircle, XCircle, Clock, Plus } from 'lucide-react';
 
 // ── Approval sign-off card ──────────────────────────────────────────────────
@@ -289,75 +291,114 @@ export function StepCover({
   );
 }
 
-function ComingSoon({ title }) {
-  return (
-    <div>
-      <SectionTitle>{title}</SectionTitle>
-      <div style={{ padding: '40px 20px', textAlign: 'center', color: '#716F70', fontSize: 13, fontStyle: 'italic', border: '1px dashed #EBE5D5', borderRadius: 6, background: '#F5F0E8' }}>
-        Coming in the next session
-      </div>
-    </div>
-  );
-}
+// ── Shared subtitle helper ──────────────────────────────────────────────────
+const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
 
-export function StepSpec({ data, set, images, onUpload, onRemove }) {
-  const poms = data.poms && data.poms.length ? data.poms : [{ measurement: '', spec: '', unit: 'mm', tolerance: '', method: '' }];
-  const updatePom = (i, k, v) => {
-    const next = poms.map((row, idx) => (idx === i ? { ...row, [k]: v } : row));
-    set('poms', next);
+// ── Page 2: Materials ───────────────────────────────────────────────────────
+// Three material cards side by side. Card = photo + name + composition +
+// weight/gauge + factory. Users can add more with an explicit button; the
+// rule-of-three ceiling is a default, not a cap.
+export function StepMaterials({ data, set, images, onUpload, onRemove, existingSuppliers = [] }) {
+  const materials = data.materials && data.materials.length
+    ? data.materials
+    : [{}, {}, {}];
+
+  const updateMat = (i, k, v) =>
+    set('materials', materials.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addMat = () =>
+    set('materials', [...materials, { name: '', composition: '', weightGauge: '', factory: '' }]);
+  const removeMat = (i) => {
+    if (materials.length <= 1) return;
+    set('materials', materials.filter((_, idx) => idx !== i));
   };
-  const addPom = () => set('poms', [...poms, { measurement: '', spec: '', unit: 'mm', tolerance: '', method: '' }]);
-  const removePom = (i) => set('poms', poms.filter((_, idx) => idx !== i));
 
   return (
     <div>
-      <SectionTitle>Specification & Artwork</SectionTitle>
+      <SectionTitle>Materials</SectionTitle>
 
-      <div style={{ marginBottom: 16 }}>
-        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>Trim Drawing</label>
-        <Row cols="1fr 1fr 1fr">
-          <PhotoUpload label="Front / Top View"        slotKey="component-front" images={images} onUpload={onUpload} onRemove={onRemove} />
-          <PhotoUpload label="Back / Bottom View"      slotKey="component-back"  images={images} onUpload={onUpload} onRemove={onRemove} />
-          <PhotoUpload label="Side / Cross-Section"    slotKey="component-side"  images={images} onUpload={onUpload} onRemove={onRemove} />
-        </Row>
+      <p style={{ fontSize: 11, color: FR.stone, marginTop: -10, marginBottom: 16 }}>
+        Three core materials by default. Add more only if the trim genuinely needs them.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(materials.length, 3)}, 1fr)`, gap: 14 }}>
+        {materials.map((m, i) => (
+          <div key={i} style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 9, color: FR.soil, fontWeight: 700, letterSpacing: 1.5 }}>MATERIAL {i + 1}</span>
+              {materials.length > 1 && (
+                <button onClick={() => removeMat(i)}
+                  style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 14, padding: 0 }}>×</button>
+              )}
+            </div>
+            <CoverPhoto label="" slotKey={`material-${i}`} images={images} onUpload={onUpload} onRemove={onRemove} height={150} autoCropOnUpload={false} />
+            <Input label="Name" value={m.name} onChange={v => updateMat(i, 'name', v)} placeholder="e.g. Cotton Twill" />
+            <Input label="Composition" value={m.composition} onChange={v => updateMat(i, 'composition', v)} placeholder="100% Cotton" />
+            <Input label="Weight / Gauge" value={m.weightGauge} onChange={v => updateMat(i, 'weightGauge', v)} placeholder="400 GSM" />
+            <EditableSelect
+              label="Factory"
+              value={m.factory}
+              onChange={v => updateMat(i, 'factory', v)}
+              options={existingSuppliers}
+              onAddOption={addSupplier}
+              placeholder="Add a new factory…" />
+          </div>
+        ))}
       </div>
 
-      <div style={{ marginBottom: 10 }}>
-        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>Dimensions / Points of Measure</label>
-        <ArrayTable
-          headers={[
-            { key: 'measurement', label: 'Measurement', placeholder: 'e.g. Overall length' },
-            { key: 'spec',        label: 'Spec',        placeholder: '40.0' },
-            { key: 'unit',        label: 'Unit',        render: (v, onChange) => (
-              <select value={v || 'mm'} onChange={e => onChange(e.target.value)}
-                style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box' }}>
-                {POM_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
-            ) },
-            { key: 'tolerance',   label: 'Tolerance',   placeholder: '±0.5' },
-            { key: 'method',      label: 'Method',      placeholder: 'Ruler / Caliper / Template' },
-          ]}
-          rows={poms} onUpdate={updatePom} onAdd={addPom} onRemove={removePom} />
-      </div>
-
-      <Input
-        label="Measurement Method Note"
-        value={data.pomMethod}
-        onChange={v => set('pomMethod', v)}
-        multiline
-        placeholder="Specify instrument, conditions, lay-flat vs relaxed, etc." />
+      {materials.length < 6 && (
+        <button onClick={addMat}
+          style={{ marginTop: 14, padding: '6px 14px', background: 'none', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 11, color: FR.soil, cursor: 'pointer' }}>
+          + Add material
+        </button>
+      )}
     </div>
   );
 }
-export function StepBOMColor({ data, set, images, onUpload, onRemove, existingSuppliers = [] }) {
-  // Materials
-  const materials = data.materials && data.materials.length ? data.materials : [{ component: '', typeDescription: '', composition: '', weightGauge: '', supplier: '', notes: '' }];
-  const updateMat = (i, k, v) => set('materials', materials.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
-  const addMat = () => set('materials', [...materials, { component: '', typeDescription: '', composition: '', weightGauge: '', supplier: '', notes: '' }]);
-  const removeMat = (i) => set('materials', materials.filter((_, idx) => idx !== i));
 
-  // Colorways
-  const colorways = data.colorwaysList && data.colorwaysList.length ? data.colorwaysList : [{ name: '', frColor: '', pantone: '', hex: '', swatch: '', approvalStatus: 'Pending' }];
+// ── Page 3: Construction ────────────────────────────────────────────────────
+// One 16:9 measurement diagram hero + three construction callouts below.
+export function StepConstruction({ data, set, images, onUpload, onRemove }) {
+  const callouts = data.constructionCallouts && data.constructionCallouts.length
+    ? data.constructionCallouts
+    : [{}, {}, {}];
+
+  const updateCallout = (i, k, v) =>
+    set('constructionCallouts', callouts.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+
+  return (
+    <div>
+      <SectionTitle>Construction</SectionTitle>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel}>Measurement Diagram (16:9)</label>
+        <CoverPhoto label="" slotKey="construction-diagram" images={images} onUpload={onUpload} onRemove={onRemove} height={360} autoCropOnUpload={false} />
+      </div>
+
+      <label style={sectionLabel}>Callouts — the three rules the factory must follow</label>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+        {callouts.slice(0, 3).map((c, i) => (
+          <div key={i} style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span style={{ fontSize: 9, color: FR.soil, fontWeight: 700, letterSpacing: 1.5 }}>CALLOUT {i + 1}</span>
+            <Input label="Label" value={c.label} onChange={v => updateCallout(i, 'label', v)} placeholder="e.g. Seam type" />
+            <Input label="Detail" value={c.detail} onChange={v => updateCallout(i, 'detail', v)} placeholder="Spec, tolerance, notes…" multiline />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Page 4: Embellishments ──────────────────────────────────────────────────
+// Colorways + front/back artwork images + file attachments for SVG / AI /
+// PDF source art. Attachments are stored inline as base64 data URIs inside
+// data.attachments, so they persist with the pack and can be downloaded
+// later. Download links also show up in the exported PDF and will flow
+// into the factory portal + email automation when those phases land.
+export function StepEmbellishments({ data, set, images, onUpload, onRemove }) {
+  const colorways = data.colorwaysList && data.colorwaysList.length
+    ? data.colorwaysList
+    : [{ name: '', frColor: '', pantone: '', hex: '', swatch: '', approvalStatus: 'Pending' }];
+
   const updateCW = (i, k, v) => {
     set('colorwaysList', colorways.map((r, idx) => {
       if (idx !== i) return r;
@@ -371,43 +412,18 @@ export function StepBOMColor({ data, set, images, onUpload, onRemove, existingSu
   const addCW = () => set('colorwaysList', [...colorways, { name: '', frColor: '', pantone: '', hex: '', swatch: '', approvalStatus: 'Pending' }]);
   const removeCW = (i) => set('colorwaysList', colorways.filter((_, idx) => idx !== i));
 
-  // Artwork placements
-  const placements = data.artworkPlacements && data.artworkPlacements.length ? data.artworkPlacements : [{ placement: '', artworkFile: '', method: '', size: '', position: '', color: '', notes: '' }];
-  const updateAP = (i, k, v) => set('artworkPlacements', placements.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
-  const addAP = () => set('artworkPlacements', [...placements, { placement: '', artworkFile: '', method: '', size: '', position: '', color: '', notes: '' }]);
-  const removeAP = (i) => set('artworkPlacements', placements.filter((_, idx) => idx !== i));
-
-  const sectionLabel = (text) => ({ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' });
-
   return (
     <div>
-      <SectionTitle>BOM & Color</SectionTitle>
+      <SectionTitle>Embellishments</SectionTitle>
 
-      <div style={{ marginBottom: 18 }}>
-        <label style={sectionLabel()}>Materials</label>
-        <ArrayTable
-          headers={[
-            { key: 'component',       label: 'Trim Part',        placeholder: 'Shell / Trim / Thread' },
-            { key: 'typeDescription', label: 'Type / Description', placeholder: 'Twill, YKK #5, etc.' },
-            { key: 'composition',     label: 'Composition',      placeholder: '100% Cotton' },
-            { key: 'weightGauge',     label: 'Weight / Gauge',   placeholder: '400 GSM / 6mm' },
-            { key: 'supplier',        label: 'Factory',          render: (v, onChange) => (
-              <EditableSelect value={v} onChange={onChange} options={existingSuppliers} onAddOption={addSupplier} placeholder="Add new…" />
-            ) },
-            { key: 'notes',           label: 'Notes',            placeholder: 'Optional' },
-          ]}
-          rows={materials} onUpdate={updateMat} onAdd={addMat} onRemove={removeMat} />
-      </div>
-
-      <div style={{ marginBottom: 18 }}>
-        <label style={sectionLabel()}>Colorway Specification</label>
+      <div style={{ marginBottom: 20 }}>
+        <label style={sectionLabel}>Colorways</label>
         <ArrayTable
           headers={[
             { key: 'name',           label: 'Name',           placeholder: 'Natural / Black' },
             { key: 'frColor',        label: 'FR Color',       render: (v, onChange) => <FRColorCell value={v} onChange={onChange} /> },
             { key: 'pantone',        label: 'Pantone',        placeholder: '19-4305' },
             { key: 'hex',            label: 'Hex',            placeholder: '#3A3A3A' },
-            { key: 'swatch',         label: 'Swatch',         placeholder: 'Physical ref #' },
             { key: 'approvalStatus', label: 'Approval',       render: (v, onChange) => (
               <select value={v || 'Pending'} onChange={e => onChange(e.target.value)}
                 style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box' }}>
@@ -418,84 +434,181 @@ export function StepBOMColor({ data, set, images, onUpload, onRemove, existingSu
           rows={colorways} onUpdate={updateCW} onAdd={addCW} onRemove={removeCW} />
       </div>
 
-      <div style={{ marginBottom: 18 }}>
-        <label style={sectionLabel()}>Artwork / Marking Placement</label>
+      <div style={{ marginBottom: 20 }}>
+        <label style={sectionLabel}>Artwork</label>
         <Row>
-          <PhotoUpload label="Face — Position, Size, Method" slotKey="component-artwork-face" images={images} onUpload={onUpload} onRemove={onRemove} />
-          <PhotoUpload label="Back — Position, Size, Method" slotKey="component-artwork-back" images={images} onUpload={onUpload} onRemove={onRemove} />
+          <CoverPhoto label="Front" slotKey="embellishment-artwork-front" images={images} onUpload={onUpload} onRemove={onRemove} height={200} autoCropOnUpload={false} />
+          <CoverPhoto label="Back"  slotKey="embellishment-artwork-back"  images={images} onUpload={onUpload} onRemove={onRemove} height={200} autoCropOnUpload={false} />
         </Row>
       </div>
 
-      <div style={{ marginBottom: 10 }}>
-        <label style={sectionLabel()}>Placement</label>
-        <ArrayTable
-          headers={[
-            { key: 'placement',   label: 'Placement',    placeholder: 'Face / Back / Side' },
-            { key: 'artworkFile', label: 'Artwork File', placeholder: 'logo-v1.ai' },
-            { key: 'method',      label: 'Method',       placeholder: 'Embroidery / Print / Emboss' },
-            { key: 'size',        label: 'Size',         placeholder: '40 × 15 mm' },
-            { key: 'position',    label: 'Position',     placeholder: '20 mm from top' },
-            { key: 'color',       label: 'Color',        placeholder: 'Black / Pantone ref' },
-            { key: 'notes',       label: 'Notes',        placeholder: 'Optional' },
-          ]}
-          rows={placements} onUpdate={updateAP} onAdd={addAP} onRemove={removeAP} />
+      <div>
+        <label style={sectionLabel}>Attachments — SVG / AI / PDF source files</label>
+        <AttachmentZone attachments={data.attachments || []} onChange={v => set('attachments', v)} />
+        <p style={{ fontSize: 10, color: FR.stone, marginTop: 6 }}>
+          Files persist with the pack. They'll live-link on the exported PDF and attach to the factory email / portal once those phases ship.
+        </p>
       </div>
     </div>
   );
 }
-export function StepQC({ data, set }) {
-  // Process spec
-  const procRows = data.processSpec && data.processSpec.length ? data.processSpec : [{ operation: '', type: '', specification: '', notes: '' }];
-  const updateProc = (i, k, v) => set('processSpec', procRows.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
-  const addProc = () => set('processSpec', [...procRows, { operation: '', type: '', specification: '', notes: '' }]);
-  const removeProc = (i) => set('processSpec', procRows.filter((_, idx) => idx !== i));
 
-  // Testing
-  const testRows = data.testingStandards && data.testingStandards.length ? data.testingStandards : [{ test: '', standardRequirement: '', testMethod: '', passFail: 'Pending' }];
-  const updateTest = (i, k, v) => set('testingStandards', testRows.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
-  const addTest = () => set('testingStandards', [...testRows, { test: '', standardRequirement: '', testMethod: '', passFail: 'Pending' }]);
-  const removeTest = (i) => set('testingStandards', testRows.filter((_, idx) => idx !== i));
+// Inline base64 file uploader. Matches the image upload pattern but doesn't
+// resize or re-encode — SVG / AI / PDF blobs are stored as-is. Individual
+// files are capped at 10 MB to keep the pack row size manageable.
+const ATTACHMENT_SIZE_LIMIT = 10 * 1024 * 1024;
 
-  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+function AttachmentZone({ attachments, onChange }) {
+  const fileRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
+  const [error, setError] = useState(null);
+
+  const readAsDataURL = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const handleFiles = async (files) => {
+    setError(null);
+    const next = [...attachments];
+    for (const f of files) {
+      if (f.size > ATTACHMENT_SIZE_LIMIT) {
+        setError(`${f.name} is ${(f.size / 1024 / 1024).toFixed(1)} MB — over the 10 MB limit.`);
+        continue;
+      }
+      try {
+        const dataUri = await readAsDataURL(f);
+        next.push({
+          id: `${Date.now()}-${f.name}`,
+          name: f.name,
+          size: f.size,
+          type: f.type || 'application/octet-stream',
+          dataUri,
+        });
+      } catch (err) {
+        console.error(err);
+        setError(`Couldn't read ${f.name}.`);
+      }
+    }
+    onChange(next);
+  };
+
+  const removeFile = (id) => onChange(attachments.filter(a => a.id !== id));
+
+  const formatSize = (bytes) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} kB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  };
 
   return (
     <div>
-      <SectionTitle>Construction & QC</SectionTitle>
-
-      <div style={{ marginBottom: 18 }}>
-        <label style={sectionLabel}>Construction / Process Specification</label>
-        <ArrayTable
-          headers={[
-            { key: 'operation',     label: 'Operation',     placeholder: 'Weaving / Cutting / Assembly' },
-            { key: 'type',          label: 'Type',          placeholder: 'Damask / Laser / Ultrasonic' },
-            { key: 'specification', label: 'Specification', placeholder: 'Stitch count, tension, etc.' },
-            { key: 'notes',         label: 'Notes',         placeholder: 'Optional' },
-          ]}
-          rows={procRows} onUpdate={updateProc} onAdd={addProc} onRemove={removeProc} />
+      <div onClick={() => fileRef.current?.click()}
+        onDrop={e => { e.preventDefault(); setDragging(false); handleFiles(Array.from(e.dataTransfer.files)); }}
+        onDragOver={e => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        style={{ border: `2px dashed ${dragging ? FR.soil : FR.sand}`, borderRadius: 6, padding: attachments.length ? 14 : 28, textAlign: 'center', cursor: 'pointer', background: dragging ? FR.sand : FR.salt, transition: 'all 0.2s' }}>
+        <input ref={fileRef} type="file" multiple
+          accept=".svg,.ai,.pdf,image/svg+xml,application/pdf,application/illustrator,application/postscript"
+          onChange={e => { if (e.target.files.length) handleFiles(Array.from(e.target.files)); e.target.value = ''; }}
+          style={{ display: 'none' }} />
+        {attachments.length === 0
+          ? (
+            <>
+              <div style={{ fontSize: 22, color: FR.sand, lineHeight: 1 }}>＋</div>
+              <div style={{ fontSize: 12, color: FR.stone, marginTop: 6 }}>Drop files here or click to upload</div>
+              <div style={{ fontSize: 10, color: FR.sand, marginTop: 3 }}>SVG · AI · PDF · up to 10 MB each</div>
+            </>
+          )
+          : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'flex-start' }}>
+              {attachments.map(a => (
+                <div key={a.id} style={{ position: 'relative', width: 180, padding: 10, background: FR.white, border: `1px solid ${FR.sand}`, borderRadius: 4, textAlign: 'left' }}>
+                  <div style={{ fontSize: 11, color: FR.slate, fontWeight: 600, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📄 {a.name}</div>
+                  <div style={{ fontSize: 10, color: FR.stone, marginBottom: 8 }}>{formatSize(a.size)}</div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <a href={a.dataUri} download={a.name} onClick={e => e.stopPropagation()}
+                      style={{ flex: 1, padding: '4px 8px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 10, cursor: 'pointer', textAlign: 'center', textDecoration: 'none', fontWeight: 600 }}>
+                      ⇩ Download
+                    </a>
+                    <button onClick={e => { e.stopPropagation(); removeFile(a.id); }}
+                      style={{ padding: '4px 8px', background: 'none', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 10, color: FR.stone, cursor: 'pointer' }}>×</button>
+                  </div>
+                </div>
+              ))}
+              <div style={{ width: 180, height: 74, border: `2px dashed ${FR.sand}`, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', color: FR.stone, fontSize: 20 }}>＋</div>
+            </div>
+          )}
       </div>
+      {error && <div style={{ marginTop: 6, fontSize: 11, color: '#C0392B' }}>{error}</div>}
+    </div>
+  );
+}
 
-      <div style={{ marginBottom: 18 }}>
-        <label style={sectionLabel}>Quality & Testing Standards</label>
-        <ArrayTable
-          headers={[
-            { key: 'test',                 label: 'Test',                   placeholder: 'Colorfastness / Pull strength' },
-            { key: 'standardRequirement',  label: 'Standard or Requirement',placeholder: 'AATCC 61 / ≥ 15N' },
-            { key: 'testMethod',           label: 'Test Method',            placeholder: 'ISO 105-C06 / Instron' },
-            { key: 'passFail',             label: 'Pass / Fail',            render: (v, onChange) => (
-              <select value={v || 'Pending'} onChange={e => onChange(e.target.value)}
-                style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box' }}>
-                {PASS_FAIL.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            ) },
-          ]}
-          rows={testRows} onUpdate={updateTest} onAdd={addTest} onRemove={removeTest} />
-      </div>
+// ── Page 5: Treatment ───────────────────────────────────────────────────────
+// Three finish cards. Each = 2:3 photo + name + description textarea.
+export function StepTreatment({ data, set, images, onUpload, onRemove }) {
+  const treatments = data.treatments && data.treatments.length
+    ? data.treatments
+    : [{}, {}, {}];
 
-      <div style={{ padding: 10, border: `1px dashed ${FR.sand}`, borderRadius: 6, background: FR.salt, fontSize: 11, color: FR.stone, fontStyle: 'italic' }}>
-        Revision History and Final Approval moved to the Overview page so the review workflow is visible up front.
+  const update = (i, k, v) =>
+    set('treatments', treatments.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+
+  return (
+    <div>
+      <SectionTitle>Treatment</SectionTitle>
+
+      <p style={{ fontSize: 11, color: FR.stone, marginTop: -10, marginBottom: 16 }}>
+        Up to three finishes applied to this trim — wash, coating, distress, print, etc.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+        {treatments.slice(0, 3).map((t, i) => (
+          <div key={i} style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span style={{ fontSize: 9, color: FR.soil, fontWeight: 700, letterSpacing: 1.5 }}>FINISH {i + 1}</span>
+            <CoverPhoto label="" slotKey={`treatment-${i}`} images={images} onUpload={onUpload} onRemove={onRemove} height={220} autoCropOnUpload={false} />
+            <Input label="Name" value={t.name} onChange={v => update(i, 'name', v)} placeholder="e.g. Garment wash" />
+            <Input label="Description" value={t.description} onChange={v => update(i, 'description', v)} placeholder="Temperature, duration, chemicals…" multiline />
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-export const COMPONENT_STEP_FNS = [StepCover, StepSpec, StepBOMColor, StepQC];
+// ── Page 6: Quality Control ─────────────────────────────────────────────────
+// Same 3-card grid as Treatment. Each = 2:3 reference photo + focus + method.
+export function StepQC({ data, set, images, onUpload, onRemove }) {
+  const qcPoints = data.qcPoints && data.qcPoints.length
+    ? data.qcPoints
+    : [{}, {}, {}];
+
+  const update = (i, k, v) =>
+    set('qcPoints', qcPoints.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+
+  return (
+    <div>
+      <SectionTitle>Quality Control</SectionTitle>
+
+      <p style={{ fontSize: 11, color: FR.stone, marginTop: -10, marginBottom: 16 }}>
+        The three things the factory must verify before bulk.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+        {qcPoints.slice(0, 3).map((q, i) => (
+          <div key={i} style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span style={{ fontSize: 9, color: FR.soil, fontWeight: 700, letterSpacing: 1.5 }}>QC FOCUS {i + 1}</span>
+            <CoverPhoto label="" slotKey={`qc-${i}`} images={images} onUpload={onUpload} onRemove={onRemove} height={220} autoCropOnUpload={false} />
+            <Input label="Focus" value={q.focus} onChange={v => update(i, 'focus', v)} placeholder="e.g. Pull strength" />
+            <Input label="Method / Pass" value={q.method} onChange={v => update(i, 'method', v)} placeholder="Test method + pass criterion" multiline />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export const COMPONENT_STEP_FNS = [StepCover, StepMaterials, StepConstruction, StepEmbellishments, StepTreatment, StepQC];

@@ -39,18 +39,27 @@ export const CERTIFICATIONS = ['OEKO-TEX Standard 100', 'GOTS', 'GRS', 'bluesign
 // High-level trim classification that mirrors the SVG template dropdown.
 export const COMPONENT_TYPES = ['Label', 'Zipper', 'Fabric', 'Hardware', 'Packaging'];
 
-// 4-step wizard. Page 1 is the trim overview; remaining pages are spec/BOM/QC.
+// 6-step wizard: Overview + 5 content pages. Everything after Overview uses
+// a rule-of-3 layout — three cards, three callouts, three QC focuses.
+// Intentional: keeps the tech pack readable at a glance without tables.
 export const COMPONENT_STEPS = [
-  { id: 'cover',        title: 'Overview',                      icon: '01' },
-  { id: 'spec',         title: 'Specification & Artwork',       icon: '02' },
-  { id: 'bom',          title: 'BOM & Color',                   icon: '03' },
-  { id: 'qc',           title: 'Construction, QC & Approval',   icon: '04' },
+  { id: 'cover',          title: 'Overview',          icon: '01' },
+  { id: 'materials',      title: 'Materials',         icon: '02' },
+  { id: 'construction',   title: 'Construction',      icon: '03' },
+  { id: 'embellishments', title: 'Embellishments',    icon: '04' },
+  { id: 'treatment',      title: 'Treatment',         icon: '05' },
+  { id: 'qc',             title: 'Quality Control',   icon: '06' },
 ];
 
 const todayISO = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+
+const emptyMaterial  = () => ({ name: '', composition: '', weightGauge: '', factory: '' });
+const emptyCallout   = () => ({ label: '', detail: '' });
+const emptyTreatment = () => ({ name: '', description: '' });
+const emptyQCPoint   = () => ({ focus: '', method: '' });
 
 export const DEFAULT_COMPONENT_DATA = {
   // Page 1 — Overview
@@ -65,22 +74,28 @@ export const DEFAULT_COMPONENT_DATA = {
   moq: '',
   status: 'Design',
 
-  // Lifecycle log — surfaced on the Overview page. Sample shape mirrors the
-  // Tech Pack's SamplePanel so the trim + style flows stay in lockstep.
+  // Lifecycle log surfaced on the Overview page.
   samples: [],
 
-  // Page 2 — Specification & Artwork
-  pomMethod: 'As appropriate for component type. Specify instrument and conditions.',
-  poms: [{ measurement: '', spec: '', unit: 'mm', tolerance: '', method: '' }],
+  // Page 2 — Materials: 3 material cards by default (rule of three).
+  materials: [emptyMaterial(), emptyMaterial(), emptyMaterial()],
 
-  // Page 3 — BOM & Color
-  materials: [{ component: '', typeDescription: '', composition: '', weightGauge: '', supplier: '', notes: '' }],
+  // Page 3 — Construction: single 16:9 measurement diagram (image slot
+  // `construction-diagram`) + exactly 3 callouts.
+  constructionCallouts: [emptyCallout(), emptyCallout(), emptyCallout()],
+
+  // Page 4 — Embellishments: colorways + front/back artwork photos
+  // + file attachments (SVG / AI / PDF) stored inline as base64 data URIs.
   colorwaysList: [{ name: '', frColor: '', pantone: '', hex: '', swatch: '', approvalStatus: 'Pending' }],
-  artworkPlacements: [{ placement: '', artworkFile: '', method: '', size: '', position: '', color: '', notes: '' }],
+  attachments: [], // { id, name, size, type, dataUri }
 
-  // Page 4 — Construction, QC & Approval
-  processSpec: [{ operation: '', type: '', specification: '', notes: '' }],
-  testingStandards: [{ test: '', standardRequirement: '', testMethod: '', passFail: 'Pending' }],
+  // Page 5 — Treatment: 3 finish cards (image slot `treatment-N`).
+  treatments: [emptyTreatment(), emptyTreatment(), emptyTreatment()],
+
+  // Page 6 — Quality Control: 3 QC focus cards (image slot `qc-N`).
+  qcPoints: [emptyQCPoint(), emptyQCPoint(), emptyQCPoint()],
+
+  // Lifecycle — edited from Overview, persisted on the pack.
   revisions: [],
   finalApproval: {
     designer: { name: '', signature: '', date: '' },

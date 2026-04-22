@@ -1,13 +1,12 @@
-// Live A4-landscape page preview for the Component Pack wizard.
-// Matches the 4-page FR_TechPack_Component_Blank_2.svg template:
-//   Page 1 — Cover & Identity (fully rendered)
-//   Pages 2–4 — placeholders ("coming soon") until the next session.
+// Live A4-landscape page preview for the Trim Pack wizard.
+// 6 pages total: Overview, Materials, Construction, Embellishments,
+// Treatment, Quality Control.
 
 import { FR } from './techPackConstants';
 
 const PAGE_W = 1123;
 const PAGE_H = 794;
-const TOTAL_PAGES = 4;
+const TOTAL_PAGES = 6;
 
 function esc(s) { return String(s ?? ''); }
 function clampLine(s, maxW, charW = 6.5) {
@@ -240,131 +239,235 @@ function InfoStripCell({ x, y, w, label, value }) {
   );
 }
 
-function DrawingSlot({ x, y, w, h, label, image }) {
+// Reusable image slot renderer used on Materials/Treatment/QC cards. Renders
+// the uploaded image (letter-boxed inside a box) or a dashed placeholder.
+function PhotoSlot({ x, y, w, h, image, placeholder }) {
   return (
     <g>
       <rect x={x} y={y} width={w} height={h} fill={FR.white} stroke={FR.soil} strokeDasharray="5 4" />
       {image
         ? <image href={image.data} x={x + 4} y={y + 4} width={w - 8} height={h - 8} preserveAspectRatio="xMidYMid meet" />
         : (
-          <text x={x + w / 2} y={y + h / 2 + 4} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
-            Drop {label.toLowerCase()} here
+          <text x={x + w / 2} y={y + h / 2 + 4} textAnchor="middle" fontSize="10" fill={FR.stone} fontStyle="italic">
+            {placeholder || 'Drop image here'}
           </text>
         )}
-      <rect x={x} y={y + h} width={w} height={22} fill={FR.salt} stroke={FR.sand} />
-      <text x={x + w / 2} y={y + h + 15} textAnchor="middle" fontSize="9" fontWeight="bold" fill={FR.slate} letterSpacing="1">
-        {esc(label.toUpperCase())}
-      </text>
     </g>
   );
 }
 
-function PageSpec({ d, images }) {
+// ── Page 2: Materials ──────────────────────────────────────────────────────
+// Up to 3 material cards rendered side by side. Each card: photo slot +
+// name + composition + weight/gauge + factory.
+function PageMaterials({ d, images }) {
   const imgs = images || [];
-  const front = imgs.find(img => img.slot === 'component-front');
-  const back  = imgs.find(img => img.slot === 'component-back');
-  const side  = imgs.find(img => img.slot === 'component-side');
+  const materials = (d.materials || []).slice(0, 3);
+  while (materials.length < 3) materials.push({});
 
-  // Info strip
-  const stripY = 90;
-  const stripH = 46;
-  const cellW = (PAGE_W - 80) / 4;
-
-  // Drawing row
-  const drawY = 170;
-  const drawH = 210;
-  const drawGap = 16;
-  const drawW = (PAGE_W - 80 - drawGap * 2) / 3;
-
-  // POM table
-  const tableX = 40;
-  const tableTop = 470;
-  const rowH = 24;
-  const headerH = 26;
-  const widths = [40, 320, 130, 90, 130, 273]; // sum = 983 = PAGE_W - 80 - 60? Need PAGE_W - 80 = 1043
-  // Recalc to exactly fill: 1043 total. Use 40, 340, 130, 100, 140, 293.
-  const cols = [
-    { key: '#',           w: 40 },
-    { key: 'Measurement', w: 340 },
-    { key: 'Spec',        w: 140 },
-    { key: 'Unit',        w: 90 },
-    { key: 'Tolerance',   w: 140 },
-    { key: 'Method',      w: 293 },
-  ];
-  const rows = (d.poms || []).filter(p => p.measurement || p.spec || p.tolerance || p.method).slice(0, 8);
-
-  let runningX = tableX;
-  const colX = cols.map(c => { const x = runningX; runningX += c.w; return x; });
-  const tableW = cols.reduce((a, c) => a + c.w, 0);
+  const cardGap = 16;
+  const cardW = (PAGE_W - 80 - cardGap * 2) / 3;
+  const cardY = 170;
+  const cardH = 560;
+  const imgH = 220;
 
   return (
     <g>
-      {/* Info strip */}
-      <rect x={40} y={stripY} width={PAGE_W - 80} height={stripH} fill={FR.salt} stroke={FR.sand} />
-      <InfoStripCell x={40 + cellW * 0} y={stripY} w={cellW} label="Trim Name"  value={d.componentName} />
-      <InfoStripCell x={40 + cellW * 1} y={stripY} w={cellW} label="Trim Type"  value={d.componentType} />
-      <InfoStripCell x={40 + cellW * 2} y={stripY} w={cellW} label="Factory"    value={d.supplier} />
-      <InfoStripCell x={40 + cellW * 3} y={stripY} w={cellW} label="Date"       value={d.dateCreated} />
+      <InfoStrip d={d} />
+      <SectionHeading x={40} y={158}>Materials</SectionHeading>
 
-      {/* Trim Drawing section heading */}
-      <text x={40} y={160} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="18" fill={FR.slate}>Trim Drawing</text>
-      <rect x={40} y={164} width="60" height="2" fill={FR.soil} />
-
-      {/* Three drawing slots */}
-      <DrawingSlot x={40}                              y={drawY} w={drawW} h={drawH} label="Front / Top"       image={front} />
-      <DrawingSlot x={40 + drawW + drawGap}            y={drawY} w={drawW} h={drawH} label="Back / Bottom"     image={back} />
-      <DrawingSlot x={40 + (drawW + drawGap) * 2}      y={drawY} w={drawW} h={drawH} label="Side / Cross-Section" image={side} />
-
-      {/* Caption */}
-      <text x={PAGE_W / 2} y={drawY + drawH + 48} textAnchor="middle" fontSize="10" fill={FR.stone} fontStyle="italic">
-        Place annotated diagrams with dimensions, callouts, and tolerances above.
-      </text>
-
-      {/* Dimensions / POM heading */}
-      <text x={40} y={tableTop - 18} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="18" fill={FR.slate}>Dimensions / Points of Measure</text>
-      <rect x={40} y={tableTop - 14} width="60" height="2" fill={FR.soil} />
-
-      {/* Table header */}
-      <rect x={tableX} y={tableTop} width={tableW} height={headerH} fill={FR.slate} />
-      {cols.map((c, i) => (
-        <text key={c.key} x={colX[i] + 8} y={tableTop + 17} fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="0.5">
-          {esc(c.key.toUpperCase())}
-        </text>
-      ))}
-
-      {/* Body rows (always render 6 rows for visual consistency) */}
-      {Array.from({ length: 6 }).map((_, ri) => {
-        const ry = tableTop + headerH + ri * rowH;
-        const row = rows[ri];
+      {materials.map((m, i) => {
+        const cx = 40 + i * (cardW + cardGap);
+        const img = imgs.find(x => x.slot === `material-${i}`);
         return (
-          <g key={ri}>
-            {ri % 2 === 0 && <rect x={tableX} y={ry} width={tableW} height={rowH} fill={FR.salt} />}
-            <line x1={tableX} y1={ry + rowH} x2={tableX + tableW} y2={ry + rowH} stroke={FR.sand} />
-            {row ? (
-              <>
-                <text x={colX[0] + 8} y={ry + 16} fontSize="10" fill={FR.stone}>{ri + 1}</text>
-                <text x={colX[1] + 8} y={ry + 16} fontSize="10" fill={FR.slate}>{clampLine(esc(row.measurement || ''), cols[1].w - 16)}</text>
-                <text x={colX[2] + 8} y={ry + 16} fontSize="10" fill={FR.slate}>{clampLine(esc(row.spec || ''), cols[2].w - 16)}</text>
-                <text x={colX[3] + 8} y={ry + 16} fontSize="10" fill={FR.slate}>{clampLine(esc(row.unit || ''), cols[3].w - 16)}</text>
-                <text x={colX[4] + 8} y={ry + 16} fontSize="10" fill={FR.slate}>{clampLine(esc(row.tolerance || ''), cols[4].w - 16)}</text>
-                <text x={colX[5] + 8} y={ry + 16} fontSize="10" fill={FR.slate}>{clampLine(esc(row.method || ''), cols[5].w - 16)}</text>
-              </>
-            ) : (
-              <text x={colX[0] + 8} y={ry + 16} fontSize="10" fill={FR.sand}>{ri + 1}</text>
-            )}
+          <g key={i}>
+            <rect x={cx} y={cardY} width={cardW} height={cardH} fill={FR.white} stroke={FR.sand} />
+            <rect x={cx} y={cardY} width={cardW} height={24} fill={FR.salt} />
+            <text x={cx + 12} y={cardY + 16} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="1.5">
+              MATERIAL {i + 1}
+            </text>
+
+            <PhotoSlot x={cx + 14} y={cardY + 38} w={cardW - 28} h={imgH} image={img} placeholder="Swatch photo" />
+
+            <text x={cx + 14} y={cardY + 38 + imgH + 26} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">NAME</text>
+            <text x={cx + 14} y={cardY + 38 + imgH + 42} fontSize="11" fill={FR.slate}>{clampLine(esc(m.name || '—'), cardW - 28, 6.2)}</text>
+            <line x1={cx + 14} y1={cardY + 38 + imgH + 46} x2={cx + cardW - 14} y2={cardY + 38 + imgH + 46} stroke={FR.sand} />
+
+            <text x={cx + 14} y={cardY + 38 + imgH + 66} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">COMPOSITION</text>
+            <text x={cx + 14} y={cardY + 38 + imgH + 82} fontSize="11" fill={FR.slate}>{clampLine(esc(m.composition || '—'), cardW - 28, 6.2)}</text>
+            <line x1={cx + 14} y1={cardY + 38 + imgH + 86} x2={cx + cardW - 14} y2={cardY + 38 + imgH + 86} stroke={FR.sand} />
+
+            <text x={cx + 14} y={cardY + 38 + imgH + 106} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">WEIGHT / GAUGE</text>
+            <text x={cx + 14} y={cardY + 38 + imgH + 122} fontSize="11" fill={FR.slate}>{clampLine(esc(m.weightGauge || '—'), cardW - 28, 6.2)}</text>
+            <line x1={cx + 14} y1={cardY + 38 + imgH + 126} x2={cx + cardW - 14} y2={cardY + 38 + imgH + 126} stroke={FR.sand} />
+
+            <text x={cx + 14} y={cardY + 38 + imgH + 146} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">FACTORY</text>
+            <text x={cx + 14} y={cardY + 38 + imgH + 162} fontSize="11" fill={FR.slate}>{clampLine(esc(m.factory || '—'), cardW - 28, 6.2)}</text>
+            <line x1={cx + 14} y1={cardY + 38 + imgH + 166} x2={cx + cardW - 14} y2={cardY + 38 + imgH + 166} stroke={FR.sand} />
           </g>
         );
       })}
+    </g>
+  );
+}
 
-      {/* POM method note */}
-      <text x={40} y={tableTop + headerH + 6 * rowH + 28} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">
-        MEASUREMENT METHOD
-      </text>
-      <foreignObject x="40" y={tableTop + headerH + 6 * rowH + 34} width={PAGE_W - 80} height="48">
-        <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: 10, color: FR.stone, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
-          {d.pomMethod || 'As appropriate for component type. Specify instrument and conditions.'}
-        </div>
-      </foreignObject>
+// ── Page 3: Construction ───────────────────────────────────────────────────
+// 16:9 hero diagram (left 2/3 of page) + 3 stacked callout blocks (right 1/3).
+function PageConstruction({ d, images }) {
+  const imgs = images || [];
+  const diagram = imgs.find(x => x.slot === 'construction-diagram');
+  const callouts = (d.constructionCallouts || []).slice(0, 3);
+  while (callouts.length < 3) callouts.push({});
+
+  // 16:9 hero on top.
+  const heroX = 40;
+  const heroY = 170;
+  const heroW = PAGE_W - 80;
+  const heroH = heroW * 9 / 16; // ≈ 586 — fills landscape nicely
+
+  // Callouts below.
+  const calloutY = heroY + heroH + 28;
+  const calloutH = PAGE_H - calloutY - 50;
+  const calloutGap = 14;
+  const calloutW = (PAGE_W - 80 - calloutGap * 2) / 3;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+      <SectionHeading x={40} y={158}>Construction</SectionHeading>
+
+      <PhotoSlot x={heroX} y={heroY} w={heroW} h={heroH} image={diagram} placeholder="16:9 measurement diagram" />
+
+      {callouts.map((c, i) => {
+        const cx = 40 + i * (calloutW + calloutGap);
+        return (
+          <g key={i}>
+            <rect x={cx} y={calloutY} width={calloutW} height={calloutH} fill={FR.white} stroke={FR.sand} />
+            <rect x={cx} y={calloutY} width={calloutW} height={22} fill={FR.salt} />
+            <text x={cx + 12} y={calloutY + 15} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="1.5">
+              CALLOUT {i + 1}
+            </text>
+            <text x={cx + 12} y={calloutY + 40} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">LABEL</text>
+            <text x={cx + 12} y={calloutY + 56} fontSize="11" fill={FR.slate}>{clampLine(esc(c.label || '—'), calloutW - 24, 6.2)}</text>
+            <text x={cx + 12} y={calloutY + 78} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">DETAIL</text>
+            <foreignObject x={cx + 12} y={calloutY + 86} width={calloutW - 24} height={calloutH - 96}>
+              <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: 10, color: FR.slate, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
+                {c.detail || '—'}
+              </div>
+            </foreignObject>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+// ── Page 4: Embellishments ─────────────────────────────────────────────────
+// Colorways table + front/back artwork + attachments list.
+function PageEmbellishments({ d, images }) {
+  const imgs = images || [];
+  const frontArt = imgs.find(x => x.slot === 'embellishment-artwork-front');
+  const backArt  = imgs.find(x => x.slot === 'embellishment-artwork-back');
+
+  const cwCols = [
+    { key: 'name',           label: 'Name',           w: 220 },
+    { key: 'frColor',        label: 'FR Color',       w: 180 },
+    { key: 'pantone',        label: 'Pantone',        w: 180 },
+    { key: 'hex',            label: 'Hex',            w: 150 },
+    { key: 'approvalStatus', label: 'Approval',       w: 313 },
+  ];
+  const colorways = (d.colorwaysList || []).filter(r => r.name || r.frColor || r.pantone || r.hex);
+
+  // Artwork slots
+  const artY = 330;
+  const artH = 190;
+  const artGap = 16;
+  const artW = (PAGE_W - 80 - artGap) / 2;
+
+  // Attachments row
+  const attY = artY + artH + 38;
+  const attachments = d.attachments || [];
+  const attGap = 12;
+  const maxAttPerRow = 5;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+      <SectionHeading x={40} y={158}>Colorways</SectionHeading>
+      <GridTable x={40} y={170} cols={cwCols} rows={colorways} bodyRows={4} />
+
+      <SectionHeading x={40} y={318}>Artwork</SectionHeading>
+      <PhotoSlot x={40}                   y={artY} w={artW} h={artH} image={frontArt} placeholder="Front artwork" />
+      <text x={40 + 8} y={artY + artH - 8} fontSize="9" fontWeight="bold" fill={FR.white} letterSpacing="1">FRONT</text>
+      <PhotoSlot x={40 + artW + artGap}   y={artY} w={artW} h={artH} image={backArt}  placeholder="Back artwork" />
+      <text x={40 + artW + artGap + 8} y={artY + artH - 8} fontSize="9" fontWeight="bold" fill={FR.white} letterSpacing="1">BACK</text>
+
+      <SectionHeading x={40} y={attY - 12}>Attachments</SectionHeading>
+      {attachments.length === 0
+        ? <text x={40} y={attY + 18} fontSize="10" fill={FR.stone} fontStyle="italic">No source files attached — SVG / AI / PDF go here.</text>
+        : attachments.slice(0, maxAttPerRow).map((a, i) => {
+            const pillW = (PAGE_W - 80 - attGap * (maxAttPerRow - 1)) / maxAttPerRow;
+            const px = 40 + i * (pillW + attGap);
+            return (
+              <g key={a.id}>
+                <rect x={px} y={attY} width={pillW} height={56} fill={FR.white} stroke={FR.sand} rx="3" />
+                <text x={px + 10} y={attY + 20} fontSize="10" fontWeight="bold" fill={FR.slate}>📄 {clampLine(esc(a.name), pillW - 22, 5.8)}</text>
+                <text x={px + 10} y={attY + 36} fontSize="9" fill={FR.stone}>{(a.size / 1024).toFixed(0)} kB</text>
+                <text x={px + 10} y={attY + 50} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">CLICK TO DOWNLOAD</text>
+              </g>
+            );
+          })}
+      {attachments.length > maxAttPerRow && (
+        <text x={40} y={attY + 76} fontSize="9" fill={FR.stone} fontStyle="italic">+ {attachments.length - maxAttPerRow} more file(s)</text>
+      )}
+    </g>
+  );
+}
+
+// ── Page 5: Treatment ──────────────────────────────────────────────────────
+// Three finish cards: 2:3 photo + name + description. Preview layout mirrors
+// the form.
+function PageTreatment({ d, images }) {
+  const imgs = images || [];
+  const treatments = (d.treatments || []).slice(0, 3);
+  while (treatments.length < 3) treatments.push({});
+
+  const cardGap = 16;
+  const cardW = (PAGE_W - 80 - cardGap * 2) / 3;
+  const cardY = 170;
+  const cardH = 560;
+  const imgH = 320;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+      <SectionHeading x={40} y={158}>Treatment</SectionHeading>
+
+      {treatments.map((t, i) => {
+        const cx = 40 + i * (cardW + cardGap);
+        const img = imgs.find(x => x.slot === `treatment-${i}`);
+        return (
+          <g key={i}>
+            <rect x={cx} y={cardY} width={cardW} height={cardH} fill={FR.white} stroke={FR.sand} />
+            <rect x={cx} y={cardY} width={cardW} height={24} fill={FR.salt} />
+            <text x={cx + 12} y={cardY + 16} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="1.5">
+              FINISH {i + 1}
+            </text>
+
+            <PhotoSlot x={cx + 14} y={cardY + 38} w={cardW - 28} h={imgH} image={img} placeholder="Finish reference" />
+
+            <text x={cx + 14} y={cardY + 38 + imgH + 26} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">NAME</text>
+            <text x={cx + 14} y={cardY + 38 + imgH + 42} fontSize="11" fill={FR.slate}>{clampLine(esc(t.name || '—'), cardW - 28, 6.2)}</text>
+            <line x1={cx + 14} y1={cardY + 38 + imgH + 46} x2={cx + cardW - 14} y2={cardY + 38 + imgH + 46} stroke={FR.sand} />
+
+            <text x={cx + 14} y={cardY + 38 + imgH + 66} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">DESCRIPTION</text>
+            <foreignObject x={cx + 14} y={cardY + 38 + imgH + 72} width={cardW - 28} height={cardH - (38 + imgH + 80)}>
+              <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: 10, color: FR.slate, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
+                {t.description || '—'}
+              </div>
+            </foreignObject>
+          </g>
+        );
+      })}
     </g>
   );
 }
@@ -436,98 +539,7 @@ function GridTable({ x, y, cols, rows, bodyRows = 4, rowH = 22, headerH = 22, re
   );
 }
 
-function ArtworkSlot({ x, y, w, h, label, image }) {
-  return (
-    <g>
-      <rect x={x} y={y} width={w} height={h} fill={FR.white} stroke={FR.soil} strokeDasharray="5 4" />
-      {image
-        ? <image href={image.data} x={x + 4} y={y + 4} width={w - 8} height={h - 8} preserveAspectRatio="xMidYMid meet" />
-        : (
-          <text x={x + w / 2} y={y + h / 2 + 4} textAnchor="middle" fontSize="10" fill={FR.stone} fontStyle="italic">
-            Drop {label.toLowerCase()} artwork here
-          </text>
-        )}
-      <text x={x + 6} y={y - 4} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="1">
-        {esc(label.toUpperCase())}
-      </text>
-    </g>
-  );
-}
-
-function PageBOMColor({ d, images }) {
-  const imgs = images || [];
-  const faceImg = imgs.find(img => img.slot === 'component-artwork-face');
-  const backImg = imgs.find(img => img.slot === 'component-artwork-back');
-
-  const matCols = [
-    { key: '#',               label: '#',               w: 30  },
-    { key: 'component',       label: 'Component',       w: 150 },
-    { key: 'typeDescription', label: 'Type/Description',w: 220 },
-    { key: 'composition',     label: 'Composition',     w: 190 },
-    { key: 'weightGauge',     label: 'Weight/Gauge',    w: 130 },
-    { key: 'supplier',        label: 'Factory',         w: 160 },
-    { key: 'notes',           label: 'Notes',           w: 163 },
-  ];
-  const materials = (d.materials || []).filter(r => r.component || r.typeDescription || r.composition);
-
-  const cwCols = [
-    { key: 'name',           label: 'Colorway Name',   w: 200 },
-    { key: 'frColor',        label: 'FR Color Code',   w: 170 },
-    { key: 'pantone',        label: 'Pantone Ref',     w: 170 },
-    { key: 'hex',            label: 'Hex',             w: 130 },
-    { key: 'swatch',         label: 'Swatch',          w: 213 },
-    { key: 'approvalStatus', label: 'Approval',        w: 160 },
-  ];
-  const colorways = (d.colorwaysList || []).filter(r => r.name || r.frColor || r.pantone || r.hex);
-
-  const plCols = [
-    { key: '#',           label: '#',             w: 30  },
-    { key: 'placement',   label: 'Placement',     w: 130 },
-    { key: 'artworkFile', label: 'Artwork File',  w: 180 },
-    { key: 'method',      label: 'Method',        w: 160 },
-    { key: 'size',        label: 'Size',          w: 120 },
-    { key: 'position',    label: 'Position',      w: 140 },
-    { key: 'color',       label: 'Color',         w: 130 },
-    { key: 'notes',       label: 'Notes',         w: 153 },
-  ];
-  const placements = (d.artworkPlacements || []).filter(r => r.placement || r.artworkFile || r.method || r.size || r.position || r.color);
-
-  // Swatch cell renderer — small filled rect with hex label.
-  const renderCWCell = (key, row, x, y, w) => {
-    if (key === 'swatch') {
-      const hex = row.hex || '#EBE5D5';
-      return (
-        <>
-          <rect x={x + 6} y={y + 4} width="18" height="14" fill={hex} stroke={FR.sand} />
-          <text x={x + 30} y={y + 15} fontSize="9.5" fill={FR.slate}>{clampLine(esc(row.swatch || row.hex || ''), w - 36, 5.8)}</text>
-        </>
-      );
-    }
-    return null;
-  };
-
-  return (
-    <g>
-      <InfoStrip d={d} />
-
-      {/* Materials */}
-      <SectionHeading x={40} y={158}>Materials</SectionHeading>
-      <GridTable x={40} y={170} cols={matCols} rows={materials} bodyRows={4} />
-
-      {/* Colorway Specification */}
-      <SectionHeading x={40} y={302}>Colorway Specification</SectionHeading>
-      <GridTable x={40} y={314} cols={cwCols} rows={colorways} bodyRows={4} renderCell={renderCWCell} />
-
-      {/* Artwork / Marking Placement */}
-      <SectionHeading x={40} y={446}>Artwork / Marking Placement</SectionHeading>
-      <ArtworkSlot x={40}                             y={465} w={(PAGE_W - 80 - 16) / 2} h={110} label="Face" image={faceImg} />
-      <ArtworkSlot x={40 + (PAGE_W - 80 - 16) / 2 + 16} y={465} w={(PAGE_W - 80 - 16) / 2} h={110} label="Back" image={backImg} />
-
-      {/* Placement table */}
-      <GridTable x={40} y={600} cols={plCols} rows={placements} bodyRows={4} />
-    </g>
-  );
-}
+// (ArtworkSlot + PageBOMColor removed — replaced by PageEmbellishments above.)
 
 function ApprovalPreviewCard({ x, y, w, h, title, name, signature, date, dateLabel = 'Date:' }) {
   const lineY = (row) => y + 60 + row * 40;
@@ -551,49 +563,62 @@ function ApprovalPreviewCard({ x, y, w, h, title, name, signature, date, dateLab
   );
 }
 
-function PageQC({ d }) {
-  const procCols = [
-    { key: '#',             label: '#',              w: 30  },
-    { key: 'operation',     label: 'Operation',      w: 240 },
-    { key: 'type',          label: 'Type',           w: 230 },
-    { key: 'specification', label: 'Specification',  w: 400 },
-    { key: 'notes',         label: 'Notes',          w: 143 },
-  ];
-  const testCols = [
-    { key: '#',                    label: '#',                       w: 30  },
-    { key: 'test',                 label: 'Test',                    w: 240 },
-    { key: 'standardRequirement',  label: 'Standard or Requirement', w: 310 },
-    { key: 'testMethod',           label: 'Test Method',             w: 300 },
-    { key: 'passFail',             label: 'Pass / Fail',             w: 163 },
-  ];
+// ── Page 6: Quality Control ────────────────────────────────────────────────
+// Identical card grid to Treatment — photo + focus + method. Intentional
+// repetition: user learns one card shape, applies to both pages.
+function PageQC({ d, images }) {
+  const imgs = images || [];
+  const qcPoints = (d.qcPoints || []).slice(0, 3);
+  while (qcPoints.length < 3) qcPoints.push({});
 
-  const procRows = (d.processSpec || []).filter(r => r.operation || r.type || r.specification || r.notes);
-  const testRows = (d.testingStandards || []).filter(r => r.test || r.standardRequirement || r.testMethod);
+  const cardGap = 16;
+  const cardW = (PAGE_W - 80 - cardGap * 2) / 3;
+  const cardY = 170;
+  const cardH = 560;
+  const imgH = 320;
 
   return (
     <g>
       <InfoStrip d={d} />
+      <SectionHeading x={40} y={158}>Quality Control</SectionHeading>
 
-      {/* Construction / Process Specification */}
-      <SectionHeading x={40} y={168}>Construction / Process Specification</SectionHeading>
-      <GridTable x={40} y={184} cols={procCols} rows={procRows} bodyRows={6} rowH={26} />
+      {qcPoints.map((q, i) => {
+        const cx = 40 + i * (cardW + cardGap);
+        const img = imgs.find(x => x.slot === `qc-${i}`);
+        return (
+          <g key={i}>
+            <rect x={cx} y={cardY} width={cardW} height={cardH} fill={FR.white} stroke={FR.sand} />
+            <rect x={cx} y={cardY} width={cardW} height={24} fill={FR.salt} />
+            <text x={cx + 12} y={cardY + 16} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="1.5">
+              QC FOCUS {i + 1}
+            </text>
 
-      {/* Quality & Testing Standards */}
-      <SectionHeading x={40} y={400}>Quality & Testing Standards</SectionHeading>
-      <GridTable x={40} y={416} cols={testCols} rows={testRows} bodyRows={6} rowH={26} />
+            <PhotoSlot x={cx + 14} y={cardY + 38} w={cardW - 28} h={imgH} image={img} placeholder="Reference photo" />
 
-      <text x={PAGE_W / 2} y={720} textAnchor="middle" fontSize="10" fill={FR.stone} fontStyle="italic">
-        Revision history and final approval now live on the Overview page.
-      </text>
+            <text x={cx + 14} y={cardY + 38 + imgH + 26} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">FOCUS</text>
+            <text x={cx + 14} y={cardY + 38 + imgH + 42} fontSize="11" fill={FR.slate}>{clampLine(esc(q.focus || '—'), cardW - 28, 6.2)}</text>
+            <line x1={cx + 14} y1={cardY + 38 + imgH + 46} x2={cx + cardW - 14} y2={cardY + 38 + imgH + 46} stroke={FR.sand} />
+
+            <text x={cx + 14} y={cardY + 38 + imgH + 66} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">METHOD / PASS</text>
+            <foreignObject x={cx + 14} y={cardY + 38 + imgH + 72} width={cardW - 28} height={cardH - (38 + imgH + 80)}>
+              <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: 10, color: FR.slate, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
+                {q.method || '—'}
+              </div>
+            </foreignObject>
+          </g>
+        );
+      })}
     </g>
   );
 }
 
 const PAGE_FNS = [
-  { title: 'Overview',                      body: ({ d, images }) => <PageCover d={d} images={images} /> },
-  { title: 'Specification & Artwork',       body: ({ d, images }) => <PageSpec d={d} images={images} /> },
-  { title: 'Bill of Materials & Color',     body: ({ d, images }) => <PageBOMColor d={d} images={images} /> },
-  { title: 'Construction, QC & Approval',   body: ({ d }) => <PageQC d={d} /> },
+  { title: 'Overview',         body: ({ d, images }) => <PageCover d={d} images={images} /> },
+  { title: 'Materials',        body: ({ d, images }) => <PageMaterials d={d} images={images} /> },
+  { title: 'Construction',     body: ({ d, images }) => <PageConstruction d={d} images={images} /> },
+  { title: 'Embellishments',   body: ({ d, images }) => <PageEmbellishments d={d} images={images} /> },
+  { title: 'Treatment',        body: ({ d, images }) => <PageTreatment d={d} images={images} /> },
+  { title: 'Quality Control',  body: ({ d, images }) => <PageQC d={d} images={images} /> },
 ];
 
 export default function ComponentPackPagePreview({ data, images, step }) {
