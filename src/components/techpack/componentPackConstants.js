@@ -2,9 +2,9 @@
 // (fabrics, zippers, aglets, trims, labels, etc.) that feed into tech pack BOMs.
 // Scoped to the 4-page FR_TechPack_Component_Blank_2.svg template.
 
-import { FR, STATUSES, BOM_COMPONENT_OPTIONS } from './techPackConstants';
+import { FR, STATUSES, BOM_COMPONENT_OPTIONS, SAMPLE_TYPES, SAMPLE_VERDICTS } from './techPackConstants';
 
-export { FR, STATUSES, BOM_COMPONENT_OPTIONS };
+export { FR, STATUSES, BOM_COMPONENT_OPTIONS, SAMPLE_TYPES, SAMPLE_VERDICTS };
 
 export const CURRENCIES = ['USD', 'CNY', 'EUR', 'GBP', 'JPY'];
 export const DYE_METHODS = ['Stock Color', 'PFD (Prepared for Dye)', 'Dye-to-match (DTM)', 'Reactive Dye', 'Pigment Dye', 'Yarn Dye', 'N/A'];
@@ -39,9 +39,9 @@ export const DEFAULT_COMPONENT_DATA = {
   moq: '',
   status: 'Design',
 
-  // Signatures
-  designedBy: { name: '', date: '' },
-  approvedBy: { name: '', date: '' },
+  // Lifecycle log — surfaced on the Overview page. Sample shape mirrors the
+  // Tech Pack's SamplePanel so the trim + style flows stay in lockstep.
+  samples: [],
 
   // Page 2 — Specification & Artwork
   pomMethod: 'As appropriate for component type. Specify instrument and conditions.',
@@ -57,9 +57,9 @@ export const DEFAULT_COMPONENT_DATA = {
   testingStandards: [{ test: '', standardRequirement: '', testMethod: '', passFail: 'Pending' }],
   revisions: [],
   finalApproval: {
-    designer:   { name: '', signature: '', date: '' },
-    brandOwner: { name: '', signature: '', date: '' },
-    factory:    { name: '', signature: '', dateChop: '' },
+    designer: { name: '', signature: '', date: '' },
+    manager:  { name: '', signature: '', date: '' },
+    factory:  { name: '', signature: '', dateChop: '' },
   },
 };
 

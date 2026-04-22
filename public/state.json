@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-22T11:02:32.250Z",
+  "lastUpdated": "2026-04-22T11:19:40.905Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "b6eb30e",
+      "date": "2026-04-22T11:02:46+00:00",
+      "message": "Trim pack: replace Date Created with auto-stamped Date Last Updated"
+    },
+    {
       "sha": "e5220e4",
       "date": "2026-04-22T10:54:24+00:00",
       "message": "PLM: make trim autosave survive missing cover_image column"
@@ -1087,11 +1092,6 @@
       "sha": "8376dfc",
       "date": "2026-04-21T13:29:36+00:00",
       "message": "Mercury: use availableBalance instead of currentBalance"
-    },
-    {
-      "sha": "22d75e4",
-      "date": "2026-04-20T18:14:01+00:00",
-      "message": "Reduce Plaid costs: auto-sync uses cached /accounts/get (free)"
     }
   ]
 }

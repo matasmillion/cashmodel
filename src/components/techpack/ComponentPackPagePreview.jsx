@@ -61,12 +61,12 @@ function SignatureCard({ x, y, w, h, title, name, date }) {
 function PageCover({ d, images }) {
   const cover = (images || []).find(img => img.slot === 'component-cover');
 
-  // Two-column overview grid (4 rows × 2 columns)
+  // Compact identity grid — 4 rows × 2 columns
   const leftX = 40;
   const rightX = 580;
   const colW = 480;
-  const rowStartY = 350;
-  const rowGap = 52;
+  const idRowStartY = 330;
+  const idRowGap = 26;
   const derivedRevision = `V${(d.revisions || []).length + 1}.0`;
   const leftCol = [
     { label: 'Trim Type',           value: d.componentType },
@@ -81,47 +81,115 @@ function PageCover({ d, images }) {
     { label: 'MOQ',                 value: d.moq },
   ];
 
-  // Signature cards along the bottom — two up (Designed By / Approved By)
-  const sigY = 610;
-  const sigH = 140;
-  const sigGap = 24;
-  const sigW = (PAGE_W - 80 - sigGap) / 2;
+  // Revision history strip
+  const revCols = [
+    { key: 'rev',         label: 'Rev #',                 w: 70 },
+    { key: 'date',        label: 'Date',                  w: 100 },
+    { key: 'changedBy',   label: 'Changed By',            w: 180 },
+    { key: 'description', label: 'Description of Change', w: 513 },
+    { key: 'approvedBy',  label: 'Approved By',           w: 180 },
+  ];
+  const revRows = (d.revisions || []).filter(r => r.rev || r.date || r.changedBy || r.description || r.approvedBy);
+
+  // Sample strip — five sample types shown as small pill cells
+  const fa = d.finalApproval || {};
+  const designer = fa.designer || {};
+  const manager  = fa.manager  || {};
+  const factory  = fa.factory  || {};
+
+  // Approval cards at the bottom
+  const cardY = 640;
+  const cardH = 110;
+  const cardGap = 16;
+  const cardW = (PAGE_W - 80 - cardGap * 2) / 3;
 
   return (
     <g>
       {/* Title block */}
-      <text x={40} y={120} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="42" fill={FR.slate}>Trim Specification</text>
-      <rect x={40} y={132} width="80" height="2" fill={FR.soil} />
-      <text x={40} y={168} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="26" fill={FR.slate}>
-        {clampLine(d.componentName || 'New Trim', 900, 14)}
+      <text x={40} y={120} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="38" fill={FR.slate}>Trim Specification</text>
+      <rect x={40} y={130} width="80" height="2" fill={FR.soil} />
+      <text x={40} y={160} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="22" fill={FR.slate}>
+        {clampLine(d.componentName || 'New Trim', 900, 12)}
       </text>
-      <text x={40} y={196} fontSize="10" fill={FR.stone} letterSpacing="1.5">STATUS · {esc((d.status || '—').toUpperCase())}</text>
+      <text x={40} y={184} fontSize="9" fill={FR.stone} letterSpacing="1.5">STATUS · {esc((d.status || '—').toUpperCase())}</text>
 
       {/* Cover photo */}
       {cover
-        ? <image href={cover.data} x={PAGE_W - 320 - 40} y={100} width="320" height="200" preserveAspectRatio="xMidYMid meet" />
+        ? <image href={cover.data} x={PAGE_W - 320 - 40} y={90} width="320" height="180" preserveAspectRatio="xMidYMid meet" />
         : (
           <g>
-            <rect x={PAGE_W - 320 - 40} y={100} width="320" height="200" fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" />
-            <text x={PAGE_W - 160 - 40} y={205} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">Trim photo goes here</text>
+            <rect x={PAGE_W - 320 - 40} y={90} width="320" height="180" fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" />
+            <text x={PAGE_W - 160 - 40} y={185} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">Trim photo goes here</text>
           </g>
         )}
 
-      {/* Section divider */}
-      <rect x="40" y="320" width={PAGE_W - 80} height="1" fill={FR.sand} />
-      <text x={40} y={340} fontSize="10" fontWeight="bold" fill={FR.soil} letterSpacing="2">OVERVIEW</text>
-
-      {/* Two-column grid */}
+      {/* Section divider + overview identity */}
+      <rect x="40" y="300" width={PAGE_W - 80} height="1" fill={FR.sand} />
+      <text x={40} y={320} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="2">OVERVIEW</text>
       {leftCol.map((f, i) => (
-        <Field key={`L${i}`} x={leftX} y={rowStartY + i * rowGap} label={f.label} value={f.value} w={colW} />
+        <Field key={`L${i}`} x={leftX} y={idRowStartY + i * idRowGap} label={f.label} value={f.value} w={colW} />
       ))}
       {rightCol.map((f, i) => (
-        <Field key={`R${i}`} x={rightX} y={rowStartY + i * rowGap} label={f.label} value={f.value} w={colW} />
+        <Field key={`R${i}`} x={rightX} y={idRowStartY + i * idRowGap} label={f.label} value={f.value} w={colW} />
       ))}
 
-      {/* Signature cards */}
-      <SignatureCard x={40}                   y={sigY} w={sigW} h={sigH} title="Designed By" name={d.designedBy?.name} date={d.designedBy?.date} />
-      <SignatureCard x={40 + sigW + sigGap}   y={sigY} w={sigW} h={sigH} title="Approved By" name={d.approvedBy?.name} date={d.approvedBy?.date} />
+      {/* Revision history strip */}
+      <SectionHeading x={40} y={460}>Revision History</SectionHeading>
+      <GridTable x={40} y={476} cols={revCols} rows={revRows} bodyRows={3} rowH={22} headerH={22} />
+
+      {/* Samples — compact row of the 5 sample types */}
+      <SectionHeading x={40} y={576}>Samples</SectionHeading>
+      <SampleStrip d={d} x={40} y={590} w={PAGE_W - 80} />
+
+      {/* Final Approval — 3 compact cards */}
+      <SectionHeading x={40} y={628}>Final Approval</SectionHeading>
+      <ApprovalPreviewCard x={40}                           y={cardY} w={cardW} h={cardH} title="Designer" name={designer.name} signature={designer.signature} date={designer.date} />
+      <ApprovalPreviewCard x={40 + cardW + cardGap}         y={cardY} w={cardW} h={cardH} title="Manager"  name={manager.name}  signature={manager.signature}  date={manager.date} />
+      <ApprovalPreviewCard x={40 + (cardW + cardGap) * 2}   y={cardY} w={cardW} h={cardH} title="Factory"  name={factory.name}  signature={factory.signature}  date={factory.dateChop} dateLabel="Date / Chop:" />
+    </g>
+  );
+}
+
+// Small horizontal strip showing each sample type's most recent verdict.
+// Maps over the data.samples array, groups by type, and renders a colored
+// pill per type so the reader can scan proto/fit/PP/TOP status at a glance.
+function SampleStrip({ d, x, y, w }) {
+  const SAMPLE_LABELS = ['Proto', 'Fit', 'SMS (Salesman)', 'PP (Pre-Production)', 'TOP (Top of Production)'];
+  const SHORT = { 'Proto': 'Proto', 'Fit': 'Fit', 'SMS (Salesman)': 'SMS', 'PP (Pre-Production)': 'PP', 'TOP (Top of Production)': 'TOP' };
+  const samples = d.samples || [];
+  const cellW = (w - 10 * 4) / 5;
+
+  // Latest sample of each type wins
+  const latestByType = {};
+  samples.forEach(s => { latestByType[s.type] = s; });
+
+  const verdictColor = (verdict) => {
+    if (verdict === 'Approved') return '#4CAF7D';
+    if (verdict === 'Rejected') return '#C0392B';
+    if (verdict === 'Revise')   return '#D4956A';
+    return FR.stone;
+  };
+
+  return (
+    <g>
+      {SAMPLE_LABELS.map((t, i) => {
+        const cx = x + i * (cellW + 10);
+        const s = latestByType[t];
+        return (
+          <g key={t}>
+            <rect x={cx} y={y} width={cellW} height={32} fill={FR.white} stroke={FR.sand} rx="3" />
+            <text x={cx + 10} y={y + 13} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.6">{esc(SHORT[t].toUpperCase())}</text>
+            {s
+              ? (
+                <>
+                  <circle cx={cx + cellW - 14} cy={y + 12} r="4" fill={verdictColor(s.verdict)} />
+                  <text x={cx + 10} y={y + 27} fontSize="9" fill={FR.slate}>{clampLine(esc(`${s.verdict || 'Pending'} · ${s.date || ''}`), cellW - 20, 5.5)}</text>
+                </>
+              )
+              : <text x={cx + 10} y={y + 27} fontSize="9" fill={FR.sand}>—</text>}
+          </g>
+        );
+      })}
     </g>
   );
 }
@@ -461,65 +529,39 @@ function ApprovalPreviewCard({ x, y, w, h, title, name, signature, date, dateLab
 }
 
 function PageQC({ d }) {
-  // Table column specs (tableW = 1043)
   const procCols = [
     { key: '#',             label: '#',              w: 30  },
-    { key: 'operation',     label: 'Operation',      w: 200 },
-    { key: 'type',          label: 'Type',           w: 200 },
-    { key: 'specification', label: 'Specification',  w: 370 },
-    { key: 'notes',         label: 'Notes',          w: 243 },
+    { key: 'operation',     label: 'Operation',      w: 240 },
+    { key: 'type',          label: 'Type',           w: 230 },
+    { key: 'specification', label: 'Specification',  w: 400 },
+    { key: 'notes',         label: 'Notes',          w: 143 },
   ];
   const testCols = [
     { key: '#',                    label: '#',                       w: 30  },
-    { key: 'test',                 label: 'Test',                    w: 220 },
-    { key: 'standardRequirement',  label: 'Standard or Requirement', w: 280 },
-    { key: 'testMethod',           label: 'Test Method',             w: 260 },
-    { key: 'passFail',             label: 'Pass / Fail',             w: 253 },
-  ];
-  const revCols = [
-    { key: 'rev',         label: 'Rev #',                   w: 70  },
-    { key: 'date',        label: 'Date',                    w: 110 },
-    { key: 'changedBy',   label: 'Changed By',              w: 180 },
-    { key: 'description', label: 'Description of Change',   w: 503 },
-    { key: 'approvedBy',  label: 'Approved By',             w: 180 },
+    { key: 'test',                 label: 'Test',                    w: 240 },
+    { key: 'standardRequirement',  label: 'Standard or Requirement', w: 310 },
+    { key: 'testMethod',           label: 'Test Method',             w: 300 },
+    { key: 'passFail',             label: 'Pass / Fail',             w: 163 },
   ];
 
   const procRows = (d.processSpec || []).filter(r => r.operation || r.type || r.specification || r.notes);
   const testRows = (d.testingStandards || []).filter(r => r.test || r.standardRequirement || r.testMethod);
-  const revRows  = (d.revisions || []).filter(r => r.rev || r.date || r.changedBy || r.description || r.approvedBy);
-
-  const fa = d.finalApproval || {};
-  const designer = fa.designer || {};
-  const brand    = fa.brandOwner || {};
-  const factory  = fa.factory || {};
-
-  // Approval cards
-  const cardY = 530;
-  const cardH = 220;
-  const cardGap = 16;
-  const cardW = (PAGE_W - 80 - cardGap * 2) / 3;
 
   return (
     <g>
       <InfoStrip d={d} />
 
       {/* Construction / Process Specification */}
-      <SectionHeading x={40} y={158}>Construction / Process Specification</SectionHeading>
-      <GridTable x={40} y={170} cols={procCols} rows={procRows} bodyRows={3} />
+      <SectionHeading x={40} y={168}>Construction / Process Specification</SectionHeading>
+      <GridTable x={40} y={184} cols={procCols} rows={procRows} bodyRows={6} rowH={26} />
 
       {/* Quality & Testing Standards */}
-      <SectionHeading x={40} y={280}>Quality & Testing Standards</SectionHeading>
-      <GridTable x={40} y={292} cols={testCols} rows={testRows} bodyRows={3} />
+      <SectionHeading x={40} y={400}>Quality & Testing Standards</SectionHeading>
+      <GridTable x={40} y={416} cols={testCols} rows={testRows} bodyRows={6} rowH={26} />
 
-      {/* Revision History */}
-      <SectionHeading x={40} y={402}>Revision History</SectionHeading>
-      <GridTable x={40} y={414} cols={revCols} rows={revRows} bodyRows={3} />
-
-      {/* Final Approval */}
-      <SectionHeading x={40} y={515}>Final Approval</SectionHeading>
-      <ApprovalPreviewCard x={40}                              y={cardY} w={cardW} h={cardH} title="Designer"           name={designer.name} signature={designer.signature} date={designer.date} />
-      <ApprovalPreviewCard x={40 + cardW + cardGap}            y={cardY} w={cardW} h={cardH} title="Brand Owner"        name={brand.name}    signature={brand.signature}    date={brand.date} />
-      <ApprovalPreviewCard x={40 + (cardW + cardGap) * 2}      y={cardY} w={cardW} h={cardH} title="Factory"            name={factory.name}  signature={factory.signature}  date={factory.dateChop} dateLabel="Date / Chop:" />
+      <text x={PAGE_W / 2} y={720} textAnchor="middle" fontSize="10" fill={FR.stone} fontStyle="italic">
+        Revision history and final approval now live on the Overview page.
+      </text>
     </g>
   );
 }

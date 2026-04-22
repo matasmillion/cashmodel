@@ -115,7 +115,24 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     const { packId, step } = parsePLMHash();
     return packId === pack.id ? Math.min(step, COMPONENT_STEPS.length - 1) : 0;
   });
-  const [data, setData] = useState(pack.data || DEFAULT_COMPONENT_DATA);
+  // One-time migration for legacy packs: the final-approval slot used to be
+  // called brandOwner. Fold any legacy data into the new `manager` slot on
+  // first open so the refactored Overview renders correctly.
+  const [data, setData] = useState(() => {
+    const initial = pack.data || DEFAULT_COMPONENT_DATA;
+    const fa = initial.finalApproval || {};
+    const hasManagerData = fa.manager && (fa.manager.name || fa.manager.signature || fa.manager.date);
+    const hasBrandOwnerData = fa.brandOwner && (fa.brandOwner.name || fa.brandOwner.signature || fa.brandOwner.date);
+    if (hasBrandOwnerData && !hasManagerData) {
+      const { brandOwner, ...rest } = fa;
+      return { ...initial, finalApproval: { ...rest, manager: brandOwner } };
+    }
+    if (fa.brandOwner) {
+      const { brandOwner, ...rest } = fa;
+      return { ...initial, finalApproval: rest };
+    }
+    return initial;
+  });
   const [images, setImages] = useState(pack.images || []);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -207,13 +224,17 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
 
   // Take a frozen snapshot of the current trim pack — data + images + derived
   // revision number. The snapshot becomes the contents of "V{n}.0" when you
-  // re-open that version in the viewer.
-  const createSnapshot = useCallback(() => {
+  // re-open that version in the viewer. When a `presetNote` is supplied (e.g.
+  // from the Overview workflow buttons), skip the prompt and use it directly.
+  const createSnapshot = useCallback((presetNote) => {
     setData(prev => {
       const existing = prev.revisions || [];
       const nextVersion = existing.length + 1;
-      const note = (prompt(`Snapshot note for V${nextVersion}.0 (optional):`) ?? '').trim();
+      const note = presetNote !== undefined
+        ? String(presetNote || '').trim()
+        : (prompt(`Snapshot note for V${nextVersion}.0 (optional):`) ?? '').trim();
       const today = new Date().toISOString().slice(0, 10);
+      const fa = prev.finalApproval || {};
       const snapshot = {
         rev: `V${nextVersion}.0`,
         date: today,
@@ -221,8 +242,8 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
         status: prev.status,
         note,
         description: note || `Snapshot at ${prev.status || 'Design'}`,
-        changedBy: prev.designedBy?.name || '',
-        approvedBy: prev.approvedBy?.name || '',
+        changedBy: fa.designer?.name || '',
+        approvedBy: fa.manager?.name || '',
         dataSnapshot: JSON.parse(JSON.stringify(prev)),
         imagesSnapshot: JSON.parse(JSON.stringify(images)),
       };
@@ -235,8 +256,56 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     });
   }, [images]);
 
+  // Stamp the clicked approval role with today's date. Factory uses a
+  // separate dateChop key (per traditional factory "chop" sign-off convention).
+  const confirmRole = useCallback((role) => {
+    const dateKey = role === 'factory' ? 'dateChop' : 'date';
+    setData(prev => {
+      const fa = prev.finalApproval || {};
+      const slot = fa[role] || {};
+      return stampDate({
+        ...prev,
+        finalApproval: {
+          ...fa,
+          [role]: { ...slot, [dateKey]: todayStamp() },
+        },
+      });
+    });
+  }, [stampDate]);
+
+  const unconfirmRole = useCallback((role) => {
+    const dateKey = role === 'factory' ? 'dateChop' : 'date';
+    setData(prev => {
+      const fa = prev.finalApproval || {};
+      const slot = fa[role] || {};
+      return stampDate({
+        ...prev,
+        finalApproval: {
+          ...fa,
+          [role]: { ...slot, [dateKey]: '' },
+        },
+      });
+    });
+  }, [stampDate]);
+
+  // Samples on the trim pack — mirrors the Tech Pack panel wiring.
+  const addSample = useCallback((sample) => {
+    setData(prev => stampDate({ ...prev, samples: [...(prev.samples || []), sample] }));
+  }, [stampDate]);
+  const updateSample = useCallback((idx, updated) => {
+    setData(prev => stampDate({ ...prev, samples: (prev.samples || []).map((s, i) => i === idx ? updated : s) }));
+  }, [stampDate]);
+  const removeSample = useCallback((idx) => {
+    setData(prev => stampDate({ ...prev, samples: (prev.samples || []).filter((_, i) => i !== idx) }));
+  }, [stampDate]);
+
   const Comp = COMPONENT_STEP_FNS[step];
-  const stepProps = { data, set, images, onUpload: handleImgUpload, onRemove: handleImgRemove, pickFRColor, existingSuppliers, existingPeople, onAddPerson: handleAddPerson };
+  const stepProps = {
+    data, set, images, onUpload: handleImgUpload, onRemove: handleImgRemove,
+    pickFRColor, existingSuppliers, existingPeople, onAddPerson: handleAddPerson,
+    createSnapshot, confirmRole, unconfirmRole,
+    addSample, updateSample, removeSample,
+  };
   const viewingRevision = viewingVersionIdx != null ? (data.revisions || [])[viewingVersionIdx] : null;
 
   return (
