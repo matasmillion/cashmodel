@@ -41,6 +41,9 @@ export function listAllSuppliers() {
   const techPackSupplierKeys = ['bom', 'fabrics', 'trimsAccessories', 'labelsBranding'];
   readJSON(TECHPACKS_KEY, []).forEach(p => {
     const d = p?.data || {};
+    // data.factory is the tech pack's top-level Cover & Identity supplier —
+    // same pool as BOM/fabric/trim row suppliers.
+    addNormalized(suppliers, d.factory);
     techPackSupplierKeys.forEach(k => (d[k] || []).forEach(row => addNormalized(suppliers, row?.supplier)));
   });
 
