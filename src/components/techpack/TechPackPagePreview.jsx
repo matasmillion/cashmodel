@@ -330,7 +330,7 @@ function PageBOM({ d }) {
     { key: 'composition',  label: 'Composition',  w: 170 },
     { key: 'weightGsm',    label: 'Weight (GSM)', w: 110 },
     { key: 'colorPantone', label: 'Color / Pantone', w: 150 },
-    { key: 'supplier',     label: 'Supplier',     w: 170 },
+    { key: 'supplier',     label: 'Factory',      w: 170 },
     { key: 'notes',        label: 'Notes',        w: 183 },
   ];
 
@@ -340,7 +340,7 @@ function PageBOM({ d }) {
     { key: 'material',      label: 'Material',    w: 150 },
     { key: 'color',         label: 'Color',       w: 120 },
     { key: 'sizeSpec',      label: 'Size / Spec', w: 130 },
-    { key: 'supplier',      label: 'Supplier',    w: 180 },
+    { key: 'supplier',      label: 'Factory',     w: 180 },
     { key: 'qtyPerGarment', label: 'Qty/Garment', w: 163 },
   ];
 

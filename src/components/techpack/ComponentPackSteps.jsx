@@ -47,12 +47,12 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
 
       <Row cols="1fr 1fr 1fr">
         <EditableSelect
-          label="Supplier"
+          label="Factory"
           value={data.supplier}
           onChange={v => set('supplier', v)}
           options={existingSuppliers}
           onAddOption={addSupplier}
-          placeholder="Add a new supplier…" />
+          placeholder="Add a new factory…" />
         <div style={{ marginBottom: 10 }}>
           <label style={labelStyle}>Date Created</label>
           <input type="date" value={data.dateCreated || ''} onChange={e => set('dateCreated', e.target.value)} style={inputBase} />
@@ -195,7 +195,7 @@ export function StepBOMColor({ data, set, images, onUpload, onRemove, existingSu
             { key: 'typeDescription', label: 'Type / Description', placeholder: 'Twill, YKK #5, etc.' },
             { key: 'composition',     label: 'Composition',      placeholder: '100% Cotton' },
             { key: 'weightGauge',     label: 'Weight / Gauge',   placeholder: '400 GSM / 6mm' },
-            { key: 'supplier',        label: 'Supplier',         render: (v, onChange) => (
+            { key: 'supplier',        label: 'Factory',          render: (v, onChange) => (
               <EditableSelect value={v} onChange={onChange} options={existingSuppliers} onAddOption={addSupplier} placeholder="Add new…" />
             ) },
             { key: 'notes',           label: 'Notes',            placeholder: 'Optional' },
@@ -342,7 +342,7 @@ export function StepQC({ data, set }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
           <ApprovalCard title="Designer"         value={fa.designer}   onChange={v => setFA('designer', v)} />
           <ApprovalCard title="Brand Owner"      value={fa.brandOwner} onChange={v => setFA('brandOwner', v)} />
-          <ApprovalCard title="Factory / Supplier" value={fa.factory}    onChange={v => setFA('factory', v)} dateLabel="Date / Chop" />
+          <ApprovalCard title="Factory"           value={fa.factory}    onChange={v => setFA('factory', v)} dateLabel="Date / Chop" />
         </div>
       </div>
     </div>

@@ -81,11 +81,11 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
           <input readOnly value={data.revision || 'V1.0'}
             style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.stone, background: FR.salt, outline: 'none', boxSizing: 'border-box' }} />
         </div>
-        <EditableSelect label="Factory / Supplier" value={data.factory}
+        <EditableSelect label="Factory" value={data.factory}
           onChange={v => set('factory', v)}
           options={existingSuppliers}
           onAddOption={addSupplier}
-          placeholder="Add a new supplier…" />
+          placeholder="Add a new factory…" />
       </Row>
 
       <div style={{ marginBottom: 10 }}>
@@ -298,7 +298,7 @@ export function StepBOM({ data, set, existingSuppliers = [] }) {
             { key: 'composition',  label: 'Composition',  placeholder: '100% Cotton' },
             { key: 'weightGsm',    label: 'Weight (GSM)', placeholder: '400' },
             { key: 'colorPantone', label: 'Color / Pantone', placeholder: 'Pantone 19-4305' },
-            { key: 'supplier',     label: 'Supplier',     render: supplierRender },
+            { key: 'supplier',     label: 'Factory',      render: supplierRender },
             { key: 'notes',        label: 'Notes' },
           ]}
           rows={fabrics} onUpdate={updF} onAdd={addF} onRemove={rmF} />
@@ -313,7 +313,7 @@ export function StepBOM({ data, set, existingSuppliers = [] }) {
             { key: 'material',      label: 'Material',      placeholder: 'Metal / Nylon' },
             { key: 'color',         label: 'Color',         render: colorRender },
             { key: 'sizeSpec',      label: 'Size / Spec',   placeholder: '15mm' },
-            { key: 'supplier',      label: 'Supplier',      render: supplierRender },
+            { key: 'supplier',      label: 'Factory',       render: supplierRender },
             { key: 'qtyPerGarment', label: 'Qty/Garment',   placeholder: '2' },
           ]}
           rows={trims} onUpdate={updT} onAdd={addT} onRemove={rmT} />

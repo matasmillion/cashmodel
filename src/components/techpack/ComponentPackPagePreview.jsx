@@ -70,7 +70,7 @@ function PageCover({ d, images }) {
   const derivedRevision = `V${(d.revisions || []).length + 1}.0`;
   const leftCol = [
     { label: 'Trim Type',           value: d.componentType },
-    { label: 'Supplier',            value: d.supplier },
+    { label: 'Factory',             value: d.supplier },
     { label: 'Season',              value: d.season },
     { label: 'Date Created',        value: d.dateCreated },
   ];
@@ -212,7 +212,7 @@ function PageSpec({ d, images }) {
       <rect x={40} y={stripY} width={PAGE_W - 80} height={stripH} fill={FR.salt} stroke={FR.sand} />
       <InfoStripCell x={40 + cellW * 0} y={stripY} w={cellW} label="Trim Name"  value={d.componentName} />
       <InfoStripCell x={40 + cellW * 1} y={stripY} w={cellW} label="Trim Type"  value={d.componentType} />
-      <InfoStripCell x={40 + cellW * 2} y={stripY} w={cellW} label="Supplier"   value={d.supplier} />
+      <InfoStripCell x={40 + cellW * 2} y={stripY} w={cellW} label="Factory"    value={d.supplier} />
       <InfoStripCell x={40 + cellW * 3} y={stripY} w={cellW} label="Date"       value={d.dateCreated} />
 
       {/* Trim Drawing section heading */}
@@ -287,7 +287,7 @@ function InfoStrip({ d }) {
       <rect x={40} y={stripY} width={PAGE_W - 80} height={stripH} fill={FR.salt} stroke={FR.sand} />
       <InfoStripCell x={40 + cellW * 0} y={stripY} w={cellW} label="Trim Name"  value={d.componentName} />
       <InfoStripCell x={40 + cellW * 1} y={stripY} w={cellW} label="Trim Type"  value={d.componentType} />
-      <InfoStripCell x={40 + cellW * 2} y={stripY} w={cellW} label="Supplier"   value={d.supplier} />
+      <InfoStripCell x={40 + cellW * 2} y={stripY} w={cellW} label="Factory"    value={d.supplier} />
       <InfoStripCell x={40 + cellW * 3} y={stripY} w={cellW} label="Date"       value={d.dateCreated} />
     </g>
   );
@@ -374,7 +374,7 @@ function PageBOMColor({ d, images }) {
     { key: 'typeDescription', label: 'Type/Description',w: 220 },
     { key: 'composition',     label: 'Composition',     w: 190 },
     { key: 'weightGauge',     label: 'Weight/Gauge',    w: 130 },
-    { key: 'supplier',        label: 'Supplier',        w: 160 },
+    { key: 'supplier',        label: 'Factory',         w: 160 },
     { key: 'notes',           label: 'Notes',           w: 163 },
   ];
   const materials = (d.materials || []).filter(r => r.component || r.typeDescription || r.composition);
@@ -519,7 +519,7 @@ function PageQC({ d }) {
       <SectionHeading x={40} y={515}>Final Approval</SectionHeading>
       <ApprovalPreviewCard x={40}                              y={cardY} w={cardW} h={cardH} title="Designer"           name={designer.name} signature={designer.signature} date={designer.date} />
       <ApprovalPreviewCard x={40 + cardW + cardGap}            y={cardY} w={cardW} h={cardH} title="Brand Owner"        name={brand.name}    signature={brand.signature}    date={brand.date} />
-      <ApprovalPreviewCard x={40 + (cardW + cardGap) * 2}      y={cardY} w={cardW} h={cardH} title="Factory / Supplier" name={factory.name}  signature={factory.signature}  date={factory.dateChop} dateLabel="Date / Chop:" />
+      <ApprovalPreviewCard x={40 + (cardW + cardGap) * 2}      y={cardY} w={cardW} h={cardH} title="Factory"            name={factory.name}  signature={factory.signature}  date={factory.dateChop} dateLabel="Date / Chop:" />
     </g>
   );
 }
