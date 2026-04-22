@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, isStepLocked } from './techPackConstants';
 import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, EditableSelect, FRColorCell } from './TechPackPrimitives';
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
+import { addSupplier } from '../../utils/plmDirectory';
 
 function LockedBanner({ status }) {
   return (
@@ -46,7 +47,7 @@ function SignatureBlock({ label, value, onNameChange, onDateChange }) {
   );
 }
 
-export function StepCover({ data, set, images, onUpload, onRemove }) {
+export function StepCover({ data, set, images, onUpload, onRemove, existingSuppliers = [] }) {
   const colorways = data.colorways && data.colorways.length ? data.colorways : [{ name: '', frColor: '', pantone: '', hex: '' }];
   const updateCWName = (i, v) => set('colorways', colorways.map((r, idx) => idx === i ? { ...r, name: v } : r));
   const addCW = () => set('colorways', [...colorways, { name: '', frColor: '', pantone: '', hex: '' }]);
@@ -80,8 +81,11 @@ export function StepCover({ data, set, images, onUpload, onRemove }) {
           <input readOnly value={data.revision || 'V1.0'}
             style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.stone, background: FR.salt, outline: 'none', boxSizing: 'border-box' }} />
         </div>
-        <Select label="Factory" value={data.factory} onChange={v => set('factory', v)}
-          options={['Dongguan Shengde Clothing Co., Ltd. (圣德)', 'Guangzhou Yuanfuyuan Leather Co., Ltd.', 'Other']} />
+        <EditableSelect label="Factory / Supplier" value={data.factory}
+          onChange={v => set('factory', v)}
+          options={existingSuppliers}
+          onAddOption={addSupplier}
+          placeholder="Add a new supplier…" />
       </Row>
 
       <div style={{ marginBottom: 10 }}>
@@ -244,7 +248,7 @@ export function StepBOM({ data, set, existingSuppliers = [] }) {
   };
 
   const supplierRender = (val, onChange) => (
-    <EditableSelect value={val} onChange={onChange} options={existingSuppliers} placeholder="Add new…" />
+    <EditableSelect value={val} onChange={onChange} options={existingSuppliers} onAddOption={addSupplier} placeholder="Add new…" />
   );
   const colorRender = (val, onChange) => <FRColorCell value={val} onChange={onChange} />;
   const componentRender = (val, onChange) => (
