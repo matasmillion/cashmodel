@@ -11,7 +11,9 @@ import { STATUSES, COMPONENT_TYPES, APPROVAL_STATUSES, SAMPLE_TYPES, SAMPLE_VERD
 import { FR, FR_COLOR_OPTIONS } from './techPackConstants';
 import { Input, Select, Row, SectionTitle, AspectPhoto, ASPECTS, EditableSelect, ArrayTable, FRColorCell, labelStyle, inputBase } from './TechPackPrimitives';
 import { addSupplier } from '../../utils/plmDirectory';
-import { useState, useRef } from 'react';
+import { getFRColor, updateFRColor, clearFRColorField } from '../../utils/colorLibrary';
+import { fileToDataUrl } from '../../utils/cropImage';
+import { useState, useRef, useEffect } from 'react';
 import { CheckCircle, XCircle, Clock, Plus } from 'lucide-react';
 
 // ── Approval sign-off card ──────────────────────────────────────────────────
@@ -429,52 +431,192 @@ export function StepConstruction({ data, set, images, onUpload, onRemove }) {
 // data.attachments, so they persist with the pack and can be downloaded
 // later. Download links also show up in the exported PDF and will flow
 // into the factory portal + email automation when those phases land.
-export function StepEmbellishments({ data, set, images, onUpload, onRemove }) {
-  const colorways = data.colorwaysList && data.colorwaysList.length
-    ? data.colorwaysList
-    : [{ name: '', frColor: '', pantone: '', hex: '', swatch: '', approvalStatus: 'Pending' }];
+const COLORWAY_CAP = 4;
+const emptyColorway = () => ({ name: '', usage: '', frColor: '', pantoneTCX: '', pantoneTPG: '', pantoneC: '', hex: '', rgb: '' });
 
-  const updateCW = (i, k, v) => {
-    set('colorwaysList', colorways.map((r, idx) => {
-      if (idx !== i) return r;
-      if (k === 'frColor') {
-        const match = FR_COLOR_OPTIONS.find(c => c.name === v);
-        return { ...r, frColor: v, hex: match ? match.hex : r.hex };
+// One colorway card. Name, usage, FR color anchor, Pantone codes, hex, RGB,
+// and an inline Pantone TCX card photo slot. Whenever the FR color is set,
+// the Pantone / hex / RGB edits AND the TCX card image are written back to
+// the shared color library (src/utils/colorLibrary.js) so other packs
+// referencing the same color see the update.
+function ColorwayCard({ index, value, onChange, onRemove, canRemove }) {
+  const c = value || emptyColorway();
+  const fileRef = useRef(null);
+  // Library snapshot for the selected FR color (Pantone TCX card image comes
+  // from here). Re-reads whenever frColor changes so a fresh card image
+  // saved from another colorway/pack shows up.
+  const [library, setLibrary] = useState(() => (c.frColor ? getFRColor(c.frColor) : null));
+  useEffect(() => {
+    setLibrary(c.frColor ? getFRColor(c.frColor) : null);
+  }, [c.frColor]);
+
+  // Update a field locally AND sync shared fields back to the library when
+  // this card is anchored to a named FR color.
+  const patch = (k, v) => {
+    const next = { ...c, [k]: v };
+
+    // Auto-fill from library when the user picks an FR color.
+    if (k === 'frColor') {
+      const entry = getFRColor(v);
+      if (entry) {
+        if (entry.hex)        next.hex        = entry.hex;
+        if (entry.rgb)        next.rgb        = entry.rgb;
+        if (entry.pantoneTCX) next.pantoneTCX = entry.pantoneTCX;
+        if (entry.pantoneTPG) next.pantoneTPG = entry.pantoneTPG;
+        if (entry.pantoneC)   next.pantoneC   = entry.pantoneC;
       }
-      return { ...r, [k]: v };
-    }));
+      setLibrary(entry);
+    }
+
+    // Push shared codes back to the library.
+    if (next.frColor && ['pantoneTCX', 'pantoneTPG', 'pantoneC', 'hex', 'rgb'].includes(k)) {
+      updateFRColor(next.frColor, { [k]: v });
+      setLibrary(getFRColor(next.frColor));
+    }
+
+    onChange(next);
   };
-  const addCW = () => set('colorwaysList', [...colorways, { name: '', frColor: '', pantone: '', hex: '', swatch: '', approvalStatus: 'Pending' }]);
+
+  const uploadCard = async (file) => {
+    if (!file || !file.type.startsWith('image/') || !c.frColor) return;
+    const dataUri = await fileToDataUrl(file);
+    updateFRColor(c.frColor, { cardImage: dataUri });
+    setLibrary(getFRColor(c.frColor));
+  };
+
+  const removeCard = () => {
+    if (!c.frColor) return;
+    clearFRColorField(c.frColor, 'cardImage');
+    setLibrary(getFRColor(c.frColor));
+  };
+
+  const cardImage = library?.cardImage;
+
+  return (
+    <div style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 9, color: FR.soil, fontWeight: 700, letterSpacing: 1.5 }}>COLORWAY {index + 1}</span>
+        {canRemove && (
+          <button onClick={onRemove}
+            style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 14, padding: 0 }}>×</button>
+        )}
+      </div>
+
+      {/* Preview swatch chip — fills with the hex value so the user sees the
+          color they've specified. */}
+      <div style={{ width: '100%', height: 60, background: c.hex || FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 4 }} />
+
+      <Input label="Name" value={c.name} onChange={v => patch('name', v)} placeholder="Natural / Black" />
+      <Input label="Used For" value={c.usage} onChange={v => patch('usage', v)} placeholder="Logo / Base fabric / Thread" />
+
+      <div>
+        <label style={labelStyle}>FR Color</label>
+        <FRColorCell value={c.frColor} onChange={v => patch('frColor', v)} />
+      </div>
+
+      <Input label="Pantone TCX" value={c.pantoneTCX} onChange={v => patch('pantoneTCX', v)} placeholder="e.g. 19-4305 TCX" />
+      <Input label="Pantone TPG" value={c.pantoneTPG} onChange={v => patch('pantoneTPG', v)} placeholder="e.g. 19-4305 TPG" />
+      <Input label="Pantone C"   value={c.pantoneC}   onChange={v => patch('pantoneC',   v)} placeholder="e.g. 19-4305 C" />
+      <Input label="Hex"         value={c.hex}        onChange={v => patch('hex',        v)} placeholder="#3A3A3A" />
+      <Input label="RGB"         value={c.rgb}        onChange={v => patch('rgb',        v)} placeholder="58, 58, 58" />
+
+      {/* Pantone TCX card image — lives in the shared color library, not in
+          the pack's images array. Uploading here saves it for every colorway
+          (in any pack) that references the same FR color. */}
+      <div style={{ marginTop: 4 }}>
+        <label style={labelStyle}>Pantone TCX Card</label>
+        {!c.frColor ? (
+          <div style={{ padding: 10, border: `1px dashed ${FR.sand}`, borderRadius: 4, background: FR.salt, fontSize: 10, color: FR.stone, fontStyle: 'italic', textAlign: 'center' }}>
+            Pick an FR color first to save a TCX card.
+          </div>
+        ) : (
+          <div onClick={() => fileRef.current?.click()}
+            style={{ position: 'relative', width: '100%', aspectRatio: '2 / 3', border: `1px dashed ${FR.sand}`, borderRadius: 4, background: cardImage ? 'transparent' : FR.salt, cursor: 'pointer', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <input ref={fileRef} type="file" accept="image/*"
+              onChange={e => { if (e.target.files?.[0]) uploadCard(e.target.files[0]); e.target.value = ''; }}
+              style={{ display: 'none' }} />
+            {cardImage ? (
+              <>
+                <img src={cardImage} alt={`${c.frColor} TCX card`}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                <button onClick={e => { e.stopPropagation(); removeCard(); }}
+                  style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: 10, background: FR.slate, color: FR.salt, border: 'none', fontSize: 11, cursor: 'pointer' }}>×</button>
+              </>
+            ) : (
+              <div style={{ textAlign: 'center', fontSize: 10, color: FR.stone, padding: 8 }}>
+                <div style={{ fontSize: 20, color: FR.sand, lineHeight: 1 }}>＋</div>
+                <div style={{ marginTop: 4 }}>Upload TCX card for <strong>{c.frColor}</strong></div>
+                <div style={{ fontSize: 9, color: FR.sand, marginTop: 2 }}>Shared with every pack</div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function StepEmbellishments({ data, set, images, onUpload, onRemove }) {
+  // Coerce legacy / missing colorway rows into the new shape. Older packs
+  // stored {name, frColor, pantone, hex, swatch, approvalStatus}; map into
+  // the new shape while preserving anything useful.
+  const raw = (data.colorwaysList && data.colorwaysList.length) ? data.colorwaysList : [emptyColorway()];
+  const colorways = raw.slice(0, COLORWAY_CAP).map(r => ({
+    name: r.name || '',
+    usage: r.usage || '',
+    frColor: r.frColor || '',
+    pantoneTCX: r.pantoneTCX || r.pantone || '',
+    pantoneTPG: r.pantoneTPG || '',
+    pantoneC: r.pantoneC || '',
+    hex: r.hex || '',
+    rgb: r.rgb || '',
+  }));
+
+  const updateCW = (i, next) => set('colorwaysList', colorways.map((r, idx) => (idx === i ? next : r)));
+  const addCW = () => {
+    if (colorways.length >= COLORWAY_CAP) return;
+    set('colorwaysList', [...colorways, emptyColorway()]);
+  };
   const removeCW = (i) => set('colorwaysList', colorways.filter((_, idx) => idx !== i));
+
+  // Display the colorway row as a grid that matches the number of cards,
+  // capped at 4. Keeps each card comfortably wide on desktop and wraps on
+  // narrower viewports.
+  const cwCols = Math.min(Math.max(colorways.length, 1), COLORWAY_CAP);
 
   return (
     <div>
       <SectionTitle>Embellishments</SectionTitle>
 
-      <div style={{ marginBottom: 20 }}>
-        <label style={sectionLabel}>Colorways</label>
-        <ArrayTable
-          headers={[
-            { key: 'name',           label: 'Name',           placeholder: 'Natural / Black' },
-            { key: 'frColor',        label: 'FR Color',       render: (v, onChange) => <FRColorCell value={v} onChange={onChange} /> },
-            { key: 'pantone',        label: 'Pantone',        placeholder: '19-4305' },
-            { key: 'hex',            label: 'Hex',            placeholder: '#3A3A3A' },
-            { key: 'approvalStatus', label: 'Approval',       render: (v, onChange) => (
-              <select value={v || 'Pending'} onChange={e => onChange(e.target.value)}
-                style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box' }}>
-                {APPROVAL_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            ) },
-          ]}
-          rows={colorways} onUpdate={updateCW} onAdd={addCW} onRemove={removeCW} />
+      <div style={{ marginBottom: 22 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+          <label style={sectionLabel}>Colorways</label>
+          <span style={{ fontSize: 10, color: FR.stone }}>{colorways.length} / {COLORWAY_CAP}</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cwCols}, 1fr)`, gap: 14 }}>
+          {colorways.map((cw, i) => (
+            <ColorwayCard key={i}
+              index={i} value={cw}
+              onChange={next => updateCW(i, next)}
+              onRemove={() => removeCW(i)}
+              canRemove={colorways.length > 1} />
+          ))}
+        </div>
+        {colorways.length < COLORWAY_CAP && (
+          <button onClick={addCW}
+            style={{ marginTop: 12, padding: '6px 14px', background: 'none', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 11, color: FR.soil, cursor: 'pointer' }}>
+            + Add colorway
+          </button>
+        )}
       </div>
 
-      <div style={{ marginBottom: 20 }}>
-        <label style={sectionLabel}>Artwork</label>
-        <Row>
-          <AspectPhoto label="Front (A4 landscape)" slotKey="embellishment-artwork-front" aspect={ASPECTS.A4_LANDSCAPE} images={images} onUpload={onUpload} onRemove={onRemove} />
-          <AspectPhoto label="Back (A4 landscape)"  slotKey="embellishment-artwork-back"  aspect={ASPECTS.A4_LANDSCAPE} images={images} onUpload={onUpload} onRemove={onRemove} />
-        </Row>
+      <div style={{ marginBottom: 22 }}>
+        <label style={sectionLabel}>Artwork — up to three A4 landscape tiles</label>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+          <AspectPhoto label="Artwork 1" slotKey="embellishment-artwork-1" aspect={ASPECTS.A4_LANDSCAPE} images={images} onUpload={onUpload} onRemove={onRemove} />
+          <AspectPhoto label="Artwork 2" slotKey="embellishment-artwork-2" aspect={ASPECTS.A4_LANDSCAPE} images={images} onUpload={onUpload} onRemove={onRemove} />
+          <AspectPhoto label="Artwork 3" slotKey="embellishment-artwork-3" aspect={ASPECTS.A4_LANDSCAPE} images={images} onUpload={onUpload} onRemove={onRemove} />
+        </div>
       </div>
 
       <div>

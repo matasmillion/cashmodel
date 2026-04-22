@@ -3,6 +3,7 @@
 // Treatment, Quality Control.
 
 import { FR } from './techPackConstants';
+import { getFRColor } from '../../utils/colorLibrary';
 
 const PAGE_W = 1123;
 const PAGE_H = 794;
@@ -446,50 +447,114 @@ function PageConstruction({ d, images }) {
 }
 
 // ── Page 4: Embellishments ─────────────────────────────────────────────────
-// Colorways table + front/back artwork + attachments list.
+// Row of up to 4 colorway cards (swatch chip + TCX card thumb + codes + usage)
+// + 3 A4-landscape artwork tiles + attachments strip. Pantone TCX card
+// images are pulled from the shared color library keyed on FR color name.
 function PageEmbellishments({ d, images }) {
   const imgs = images || [];
-  const frontArt = imgs.find(x => x.slot === 'embellishment-artwork-front');
-  const backArt  = imgs.find(x => x.slot === 'embellishment-artwork-back');
+  const artworkImgs = [1, 2, 3].map(n => imgs.find(x => x.slot === `embellishment-artwork-${n}`));
 
-  const cwCols = [
-    { key: 'name',           label: 'Name',           w: 220 },
-    { key: 'frColor',        label: 'FR Color',       w: 180 },
-    { key: 'pantone',        label: 'Pantone',        w: 180 },
-    { key: 'hex',            label: 'Hex',            w: 150 },
-    { key: 'approvalStatus', label: 'Approval',       w: 313 },
-  ];
-  const colorways = (d.colorwaysList || []).filter(r => r.name || r.frColor || r.pantone || r.hex);
+  const colorways = (d.colorwaysList || []).slice(0, 4);
+  while (colorways.length < 4) colorways.push(null);
+  const libraryByColor = (() => {
+    const out = {};
+    colorways.forEach(cw => {
+      if (cw?.frColor && !out[cw.frColor]) {
+        out[cw.frColor] = getFRColor(cw.frColor);
+      }
+    });
+    return out;
+  })();
 
-  // Artwork slots: A4 landscape. Shrunk to 400px wide so both fit side by
-  // side without filling the vertical height reserved for the attachments
-  // row below.
-  const artY = 320;
-  const artW = 400;
+  // Colorway row — four equal cards.
+  const cwRowY = 170;
+  const cwRowH = 210;
+  const cwGap = 14;
+  const cwW = (PAGE_W - 80 - cwGap * 3) / 4;
+
+  // Artwork row — three A4 landscape tiles centered.
+  const artY = cwRowY + cwRowH + 28;
+  const artW = 320;
   const artH = Math.round(artW * 210 / 297);
-  const artGap = 16;
-  const artRowTotalW = artW * 2 + artGap;
-  const artStartX = Math.round((PAGE_W - artRowTotalW) / 2);
+  const artGap = 12;
+  const artTotal = artW * 3 + artGap * 2;
+  const artStartX = Math.round((PAGE_W - artTotal) / 2);
 
-  // Attachments row
-  const attY = artY + artH + 34;
+  // Attachments strip along the bottom.
+  const attY = artY + artH + 26;
   const attachments = d.attachments || [];
-  const attGap = 12;
   const maxAttPerRow = 5;
+  const attGap = 12;
 
   return (
     <g>
       <InfoStrip d={d} />
       <SectionHeading x={40} y={158}>Colorways</SectionHeading>
-      <GridTable x={40} y={170} cols={cwCols} rows={colorways} bodyRows={4} />
 
-      <SectionHeading x={40} y={308}>Artwork</SectionHeading>
-      <PhotoSlot x={artStartX} y={artY} w={artW} h={artH} image={frontArt} placeholder="Front artwork · A4 landscape" />
-      <rect x={artStartX} y={artY + artH - 22} width={64} height={22} fill={FR.slate} />
-      <text x={artStartX + 10} y={artY + artH - 7} fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="1.5">FRONT</text>
-      <PhotoSlot x={artStartX + artW + artGap} y={artY} w={artW} h={artH} image={backArt}  placeholder="Back artwork · A4 landscape" />
-      <rect x={artStartX + artW + artGap} y={artY + artH - 22} width={56} height={22} fill={FR.slate} />
-      <text x={artStartX + artW + artGap + 10} y={artY + artH - 7} fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="1.5">BACK</text>
+      {colorways.map((cw, i) => {
+        const cx = 40 + i * (cwW + cwGap);
+        if (!cw) {
+          return (
+            <g key={i}>
+              <rect x={cx} y={cwRowY} width={cwW} height={cwRowH} fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" rx="3" />
+              <text x={cx + cwW / 2} y={cwRowY + cwRowH / 2 + 4} textAnchor="middle" fontSize="10" fill={FR.stone} fontStyle="italic">Empty slot</text>
+            </g>
+          );
+        }
+        const entry = cw.frColor ? libraryByColor[cw.frColor] : null;
+        const cardImage = entry?.cardImage;
+        // Layout inside the card
+        const swatchH = 38;
+        const cardThumbW = 50;
+        const cardThumbH = Math.round(cardThumbW * 3 / 2);
+        const tcxX = cx + cwW - cardThumbW - 10;
+        return (
+          <g key={i}>
+            <rect x={cx} y={cwRowY} width={cwW} height={cwRowH} fill={FR.white} stroke={FR.sand} rx="3" />
+            {/* Swatch chip */}
+            <rect x={cx} y={cwRowY} width={cwW} height={swatchH} fill={cw.hex || FR.salt} />
+            <text x={cx + 10} y={cwRowY + 14} fontSize="8" fontWeight="bold" fill={FR.salt} letterSpacing="1">
+              {esc((cw.name || `COLORWAY ${i + 1}`).toUpperCase())}
+            </text>
+            <text x={cx + 10} y={cwRowY + 30} fontSize="9" fill={FR.salt}>
+              {clampLine(esc(cw.usage || 'Usage —'), cwW - 20, 5.8)}
+            </text>
+
+            {/* Body: FR color, codes */}
+            <text x={cx + 10} y={cwRowY + swatchH + 18} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">FR COLOR</text>
+            <text x={cx + 10} y={cwRowY + swatchH + 32} fontSize="10" fill={FR.slate}>{clampLine(esc(cw.frColor || '—'), cwW - 20, 5.8)}</text>
+
+            <text x={cx + 10} y={cwRowY + swatchH + 52} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">PANTONE TCX</text>
+            <text x={cx + 10} y={cwRowY + swatchH + 66} fontSize="10" fill={FR.slate}>{clampLine(esc(cw.pantoneTCX || '—'), cwW - 20, 5.8)}</text>
+
+            <text x={cx + 10} y={cwRowY + swatchH + 86} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">PANTONE TPG</text>
+            <text x={cx + 10} y={cwRowY + swatchH + 100} fontSize="10" fill={FR.slate}>{clampLine(esc(cw.pantoneTPG || '—'), cwW - 20, 5.8)}</text>
+
+            <text x={cx + 10} y={cwRowY + swatchH + 120} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">HEX · RGB</text>
+            <text x={cx + 10} y={cwRowY + swatchH + 134} fontSize="10" fill={FR.slate}>{clampLine(esc(`${cw.hex || '—'} · ${cw.rgb || '—'}`), cwW - 20, 5.8)}</text>
+
+            {/* Pantone TCX card thumbnail (if library has one for the FR color). */}
+            {cardImage && (
+              <g>
+                <image href={cardImage} x={tcxX} y={cwRowY + swatchH + 52} width={cardThumbW} height={cardThumbH} preserveAspectRatio="xMidYMid slice" />
+                <rect x={tcxX} y={cwRowY + swatchH + 52} width={cardThumbW} height={cardThumbH} fill="none" stroke={FR.sand} />
+              </g>
+            )}
+          </g>
+        );
+      })}
+
+      <SectionHeading x={40} y={artY - 12}>Artwork</SectionHeading>
+      {artworkImgs.map((img, i) => {
+        const ax = artStartX + i * (artW + artGap);
+        return (
+          <g key={i}>
+            <PhotoSlot x={ax} y={artY} w={artW} h={artH} image={img} placeholder={`Artwork ${i + 1} · A4 landscape`} />
+            <rect x={ax} y={artY + artH - 22} width={68} height={22} fill={FR.slate} />
+            <text x={ax + 10} y={artY + artH - 7} fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="1.5">ARTWORK {i + 1}</text>
+          </g>
+        );
+      })}
 
       <SectionHeading x={40} y={attY - 12}>Attachments</SectionHeading>
       {attachments.length === 0
@@ -499,15 +564,14 @@ function PageEmbellishments({ d, images }) {
             const px = 40 + i * (pillW + attGap);
             return (
               <g key={a.id}>
-                <rect x={px} y={attY} width={pillW} height={56} fill={FR.white} stroke={FR.sand} rx="3" />
-                <text x={px + 10} y={attY + 20} fontSize="10" fontWeight="bold" fill={FR.slate}>📄 {clampLine(esc(a.name), pillW - 22, 5.8)}</text>
-                <text x={px + 10} y={attY + 36} fontSize="9" fill={FR.stone}>{(a.size / 1024).toFixed(0)} kB</text>
-                <text x={px + 10} y={attY + 50} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">CLICK TO DOWNLOAD</text>
+                <rect x={px} y={attY} width={pillW} height={46} fill={FR.white} stroke={FR.sand} rx="3" />
+                <text x={px + 10} y={attY + 18} fontSize="10" fontWeight="bold" fill={FR.slate}>📄 {clampLine(esc(a.name), pillW - 22, 5.8)}</text>
+                <text x={px + 10} y={attY + 32} fontSize="9" fill={FR.stone}>{(a.size / 1024).toFixed(0)} kB · click to download</text>
               </g>
             );
           })}
       {attachments.length > maxAttPerRow && (
-        <text x={40} y={attY + 76} fontSize="9" fill={FR.stone} fontStyle="italic">+ {attachments.length - maxAttPerRow} more file(s)</text>
+        <text x={40} y={attY + 62} fontSize="9" fill={FR.stone} fontStyle="italic">+ {attachments.length - maxAttPerRow} more file(s)</text>
       )}
     </g>
   );

@@ -85,9 +85,15 @@ export const DEFAULT_COMPONENT_DATA = {
   // `construction-diagram`) + exactly 3 callouts.
   constructionCallouts: [emptyCallout(), emptyCallout(), emptyCallout()],
 
-  // Page 4 — Embellishments: colorways + front/back artwork photos
-  // + file attachments (SVG / AI / PDF) stored inline as base64 data URIs.
-  colorwaysList: [{ name: '', frColor: '', pantone: '', hex: '', swatch: '', approvalStatus: 'Pending' }],
+  // Page 4 — Embellishments: up to 4 colorways + 3 artwork slots
+  // + file attachments. Each colorway card captures where it's used
+  // (Logo / Base fabric / Thread / etc.), the FR color anchor, and the
+  // Pantone TCX/TPG/C codes + hex + RGB. Pantone TCX card photos and
+  // shared codes are synced through the colorLibrary util so edits made
+  // here propagate to every pack referencing the same FR color.
+  colorwaysList: [
+    { name: '', usage: '', frColor: '', pantoneTCX: '', pantoneTPG: '', pantoneC: '', hex: '', rgb: '' },
+  ],
   attachments: [], // { id, name, size, type, dataUri }
 
   // Page 5 — Treatment: 3 finish cards (image slot `treatment-N`).

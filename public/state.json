@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-22T17:03:02.341Z",
+  "lastUpdated": "2026-04-22T17:38:59.919Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "6267dc3",
+      "date": "2026-04-22T17:03:08+00:00",
+      "message": "Trim pack overview: tighten layout + fix legacy revision rendering"
+    },
+    {
       "sha": "429354b",
       "date": "2026-04-22T13:41:17+00:00",
       "message": "Trim pack: interactive crop + consistent A4 / 2:3 aspect ratios"
@@ -1087,11 +1092,6 @@
       "sha": "0601d45",
       "date": "2026-04-22T10:41:54+00:00",
       "message": "PLM: unify user-facing labels on Factory (drop 'Supplier')"
-    },
-    {
-      "sha": "6bbc207",
-      "date": "2026-04-22T10:38:10+00:00",
-      "message": "PLM: include tech pack data.factory in unified supplier list"
     }
   ]
 }
