@@ -112,13 +112,13 @@ function PageCover({ d, images }) {
       </text>
       <text x={40} y={170} fontSize="9" fill={FR.stone} letterSpacing="1.5">STATUS · {esc((d.status || '—').toUpperCase())}</text>
 
-      {/* Cover photo — sized to fit within the title band */}
+      {/* Trim photo — 2:3 portrait, anchored to the top-right of the title band. */}
       {cover
-        ? <image href={cover.data} x={PAGE_W - 280 - 40} y={85} width="280" height="160" preserveAspectRatio="xMidYMid meet" />
+        ? <image href={cover.data} x={PAGE_W - 170 - 40} y={85} width="170" height="255" preserveAspectRatio="xMidYMid slice" />
         : (
           <g>
-            <rect x={PAGE_W - 280 - 40} y={85} width="280" height="160" fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" />
-            <text x={PAGE_W - 140 - 40} y={170} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">Trim photo goes here</text>
+            <rect x={PAGE_W - 170 - 40} y={85} width="170" height="255" fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" />
+            <text x={PAGE_W - 85 - 40} y={210} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">Trim photo (2:3)</text>
           </g>
         )}
 
@@ -265,30 +265,35 @@ function PageDesign({ d, images }) {
   const reference = imgs.find(x => x.slot === 'design-reference');
   const render = imgs.find(x => x.slot === 'design-render');
 
-  // Sketch: 9:16 portrait. Max height 570 → width = 570 × 9/16 ≈ 320.
-  const sketchH = 570;
-  const sketchW = Math.round(sketchH * 9 / 16);
+  // Sketch: A4 landscape (297/210 ≈ 1.414 w/h). 700 × 495 at top-left.
   const sketchX = 40;
-  const sketchY = 160;
+  const sketchY = 170;
+  const sketchW = 700;
+  const sketchH = Math.round(sketchW * 210 / 297);
 
-  // Reference + render stacked to the right of the sketch.
-  const stackX = sketchX + sketchW + 30;
-  const stackW = PAGE_W - stackX - 40;
-  const stackH = (sketchH - 20) / 2;
+  // Reference + render: 2:3 portrait, stacked on the right aligned to sketch.
+  const stackColX = sketchX + sketchW + 30;
+  const stackColW = PAGE_W - stackColX - 40;
+  const refH = Math.round((sketchH - 15) / 2);
+  const refW = Math.round(refH * 2 / 3);
+  const refX = stackColX + Math.round((stackColW - refW) / 2);
 
   return (
     <g>
       <InfoStrip d={d} />
-      <SectionHeading x={40} y={148}>Design</SectionHeading>
+      <SectionHeading x={40} y={158}>Design</SectionHeading>
 
-      <PhotoSlot x={sketchX} y={sketchY} w={sketchW} h={sketchH} image={sketch} placeholder="Sketch (9:16)" />
-      <text x={sketchX + 10} y={sketchY + sketchH - 10} fontSize="9" fontWeight="bold" fill={FR.white} letterSpacing="1.5">SKETCH</text>
+      <PhotoSlot x={sketchX} y={sketchY} w={sketchW} h={sketchH} image={sketch} placeholder="Sketch · A4 landscape (297 × 210 mm)" />
+      <rect x={sketchX} y={sketchY + sketchH - 22} width={70} height={22} fill={FR.slate} />
+      <text x={sketchX + 10} y={sketchY + sketchH - 7} fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="1.5">SKETCH</text>
 
-      <PhotoSlot x={stackX} y={sketchY}                w={stackW} h={stackH} image={reference} placeholder="Reference image" />
-      <text x={stackX + 10} y={sketchY + stackH - 10} fontSize="9" fontWeight="bold" fill={FR.white} letterSpacing="1.5">REFERENCE</text>
+      <PhotoSlot x={refX} y={sketchY}                  w={refW} h={refH} image={reference} placeholder="Reference · 2:3 portrait" />
+      <rect x={refX} y={sketchY + refH - 22} width={80} height={22} fill={FR.slate} />
+      <text x={refX + 10} y={sketchY + refH - 7} fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="1.5">REFERENCE</text>
 
-      <PhotoSlot x={stackX} y={sketchY + stackH + 20} w={stackW} h={stackH} image={render} placeholder="Render image" />
-      <text x={stackX + 10} y={sketchY + stackH + 20 + stackH - 10} fontSize="9" fontWeight="bold" fill={FR.white} letterSpacing="1.5">RENDER</text>
+      <PhotoSlot x={refX} y={sketchY + refH + 15}     w={refW} h={refH} image={render}    placeholder="Render · 2:3 portrait" />
+      <rect x={refX} y={sketchY + refH + 15 + refH - 22} width={60} height={22} fill={FR.slate} />
+      <text x={refX + 10} y={sketchY + refH + 15 + refH - 7} fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="1.5">RENDER</text>
     </g>
   );
 }
@@ -305,7 +310,9 @@ function PageMaterials({ d, images }) {
   const cardW = (PAGE_W - 80 - cardGap * 2) / 3;
   const cardY = 170;
   const cardH = 560;
-  const imgH = 220;
+  // Swatch photo: 2:3 portrait, centered in the card.
+  const imgW = 200;
+  const imgH = Math.round(imgW * 3 / 2);
 
   return (
     <g>
@@ -315,6 +322,7 @@ function PageMaterials({ d, images }) {
       {materials.map((m, i) => {
         const cx = 40 + i * (cardW + cardGap);
         const img = imgs.find(x => x.slot === `material-${i}`);
+        const imgX = cx + Math.round((cardW - imgW) / 2);
         return (
           <g key={i}>
             <rect x={cx} y={cardY} width={cardW} height={cardH} fill={FR.white} stroke={FR.sand} />
@@ -323,7 +331,7 @@ function PageMaterials({ d, images }) {
               MATERIAL {i + 1}
             </text>
 
-            <PhotoSlot x={cx + 14} y={cardY + 38} w={cardW - 28} h={imgH} image={img} placeholder="Swatch photo" />
+            <PhotoSlot x={imgX} y={cardY + 38} w={imgW} h={imgH} image={img} placeholder="Swatch · 2:3" />
 
             <text x={cx + 14} y={cardY + 38 + imgH + 26} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">NAME</text>
             <text x={cx + 14} y={cardY + 38 + imgH + 42} fontSize="11" fill={FR.slate}>{clampLine(esc(m.name || '—'), cardW - 28, 6.2)}</text>
@@ -355,38 +363,41 @@ function PageConstruction({ d, images }) {
   const callouts = (d.constructionCallouts || []).slice(0, 3);
   while (callouts.length < 3) callouts.push({});
 
-  // 16:9 hero on top.
+  // A4 landscape diagram on the left (≈600 × 424). Callouts stacked on the
+  // right to fill the remaining horizontal space without the previous
+  // overflow problem the old 16:9 hero caused.
   const heroX = 40;
   const heroY = 170;
-  const heroW = PAGE_W - 80;
-  const heroH = heroW * 9 / 16; // ≈ 586 — fills landscape nicely
+  const heroW = 600;
+  const heroH = Math.round(heroW * 210 / 297); // A4 landscape
 
-  // Callouts below.
-  const calloutY = heroY + heroH + 28;
-  const calloutH = PAGE_H - calloutY - 50;
-  const calloutGap = 14;
-  const calloutW = (PAGE_W - 80 - calloutGap * 2) / 3;
+  const coColX = heroX + heroW + 30;
+  const coColW = PAGE_W - coColX - 40;
+  const coGap = 10;
+  const coH = Math.round((heroH - coGap * 2) / 3);
 
   return (
     <g>
       <InfoStrip d={d} />
       <SectionHeading x={40} y={158}>Construction</SectionHeading>
 
-      <PhotoSlot x={heroX} y={heroY} w={heroW} h={heroH} image={diagram} placeholder="16:9 measurement diagram" />
+      <PhotoSlot x={heroX} y={heroY} w={heroW} h={heroH} image={diagram} placeholder="Measurement diagram · A4 landscape" />
+      <rect x={heroX} y={heroY + heroH - 22} width={140} height={22} fill={FR.slate} />
+      <text x={heroX + 10} y={heroY + heroH - 7} fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="1.5">MEASUREMENT DIAGRAM</text>
 
       {callouts.map((c, i) => {
-        const cx = 40 + i * (calloutW + calloutGap);
+        const cy = heroY + i * (coH + coGap);
         return (
           <g key={i}>
-            <rect x={cx} y={calloutY} width={calloutW} height={calloutH} fill={FR.white} stroke={FR.sand} />
-            <rect x={cx} y={calloutY} width={calloutW} height={22} fill={FR.salt} />
-            <text x={cx + 12} y={calloutY + 15} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="1.5">
+            <rect x={coColX} y={cy} width={coColW} height={coH} fill={FR.white} stroke={FR.sand} />
+            <rect x={coColX} y={cy} width={coColW} height={22} fill={FR.salt} />
+            <text x={coColX + 12} y={cy + 15} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="1.5">
               CALLOUT {i + 1}
             </text>
-            <text x={cx + 12} y={calloutY + 40} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">LABEL</text>
-            <text x={cx + 12} y={calloutY + 56} fontSize="11" fill={FR.slate}>{clampLine(esc(c.label || '—'), calloutW - 24, 6.2)}</text>
-            <text x={cx + 12} y={calloutY + 78} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">DETAIL</text>
-            <foreignObject x={cx + 12} y={calloutY + 86} width={calloutW - 24} height={calloutH - 96}>
+            <text x={coColX + 12} y={cy + 38} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">LABEL</text>
+            <text x={coColX + 12} y={cy + 54} fontSize="11" fill={FR.slate}>{clampLine(esc(c.label || '—'), coColW - 24, 6.2)}</text>
+            <text x={coColX + 12} y={cy + 74} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">DETAIL</text>
+            <foreignObject x={coColX + 12} y={cy + 80} width={coColW - 24} height={coH - 88}>
               <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: 10, color: FR.slate, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
                 {c.detail || '—'}
               </div>
@@ -414,14 +425,18 @@ function PageEmbellishments({ d, images }) {
   ];
   const colorways = (d.colorwaysList || []).filter(r => r.name || r.frColor || r.pantone || r.hex);
 
-  // Artwork slots
-  const artY = 330;
-  const artH = 190;
+  // Artwork slots: A4 landscape. Shrunk to 400px wide so both fit side by
+  // side without filling the vertical height reserved for the attachments
+  // row below.
+  const artY = 320;
+  const artW = 400;
+  const artH = Math.round(artW * 210 / 297);
   const artGap = 16;
-  const artW = (PAGE_W - 80 - artGap) / 2;
+  const artRowTotalW = artW * 2 + artGap;
+  const artStartX = Math.round((PAGE_W - artRowTotalW) / 2);
 
   // Attachments row
-  const attY = artY + artH + 38;
+  const attY = artY + artH + 34;
   const attachments = d.attachments || [];
   const attGap = 12;
   const maxAttPerRow = 5;
@@ -432,11 +447,13 @@ function PageEmbellishments({ d, images }) {
       <SectionHeading x={40} y={158}>Colorways</SectionHeading>
       <GridTable x={40} y={170} cols={cwCols} rows={colorways} bodyRows={4} />
 
-      <SectionHeading x={40} y={318}>Artwork</SectionHeading>
-      <PhotoSlot x={40}                   y={artY} w={artW} h={artH} image={frontArt} placeholder="Front artwork" />
-      <text x={40 + 8} y={artY + artH - 8} fontSize="9" fontWeight="bold" fill={FR.white} letterSpacing="1">FRONT</text>
-      <PhotoSlot x={40 + artW + artGap}   y={artY} w={artW} h={artH} image={backArt}  placeholder="Back artwork" />
-      <text x={40 + artW + artGap + 8} y={artY + artH - 8} fontSize="9" fontWeight="bold" fill={FR.white} letterSpacing="1">BACK</text>
+      <SectionHeading x={40} y={308}>Artwork</SectionHeading>
+      <PhotoSlot x={artStartX} y={artY} w={artW} h={artH} image={frontArt} placeholder="Front artwork · A4 landscape" />
+      <rect x={artStartX} y={artY + artH - 22} width={64} height={22} fill={FR.slate} />
+      <text x={artStartX + 10} y={artY + artH - 7} fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="1.5">FRONT</text>
+      <PhotoSlot x={artStartX + artW + artGap} y={artY} w={artW} h={artH} image={backArt}  placeholder="Back artwork · A4 landscape" />
+      <rect x={artStartX + artW + artGap} y={artY + artH - 22} width={56} height={22} fill={FR.slate} />
+      <text x={artStartX + artW + artGap + 10} y={artY + artH - 7} fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="1.5">BACK</text>
 
       <SectionHeading x={40} y={attY - 12}>Attachments</SectionHeading>
       {attachments.length === 0
@@ -472,7 +489,9 @@ function PageTreatment({ d, images }) {
   const cardW = (PAGE_W - 80 - cardGap * 2) / 3;
   const cardY = 170;
   const cardH = 560;
-  const imgH = 320;
+  // 2:3 portrait photo, centered in each card.
+  const imgW = 240;
+  const imgH = Math.round(imgW * 3 / 2);
 
   return (
     <g>
@@ -482,6 +501,7 @@ function PageTreatment({ d, images }) {
       {treatments.map((t, i) => {
         const cx = 40 + i * (cardW + cardGap);
         const img = imgs.find(x => x.slot === `treatment-${i}`);
+        const imgX = cx + Math.round((cardW - imgW) / 2);
         return (
           <g key={i}>
             <rect x={cx} y={cardY} width={cardW} height={cardH} fill={FR.white} stroke={FR.sand} />
@@ -490,7 +510,7 @@ function PageTreatment({ d, images }) {
               FINISH {i + 1}
             </text>
 
-            <PhotoSlot x={cx + 14} y={cardY + 38} w={cardW - 28} h={imgH} image={img} placeholder="Finish reference" />
+            <PhotoSlot x={imgX} y={cardY + 38} w={imgW} h={imgH} image={img} placeholder="Finish · 2:3" />
 
             <text x={cx + 14} y={cardY + 38 + imgH + 26} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">NAME</text>
             <text x={cx + 14} y={cardY + 38 + imgH + 42} fontSize="11" fill={FR.slate}>{clampLine(esc(t.name || '—'), cardW - 28, 6.2)}</text>
@@ -612,7 +632,9 @@ function PageQC({ d, images }) {
   const cardW = (PAGE_W - 80 - cardGap * 2) / 3;
   const cardY = 170;
   const cardH = 560;
-  const imgH = 320;
+  // 2:3 portrait reference photo, centered in each card.
+  const imgW = 240;
+  const imgH = Math.round(imgW * 3 / 2);
 
   return (
     <g>
@@ -622,6 +644,7 @@ function PageQC({ d, images }) {
       {qcPoints.map((q, i) => {
         const cx = 40 + i * (cardW + cardGap);
         const img = imgs.find(x => x.slot === `qc-${i}`);
+        const imgX = cx + Math.round((cardW - imgW) / 2);
         return (
           <g key={i}>
             <rect x={cx} y={cardY} width={cardW} height={cardH} fill={FR.white} stroke={FR.sand} />
@@ -630,7 +653,7 @@ function PageQC({ d, images }) {
               QC FOCUS {i + 1}
             </text>
 
-            <PhotoSlot x={cx + 14} y={cardY + 38} w={cardW - 28} h={imgH} image={img} placeholder="Reference photo" />
+            <PhotoSlot x={imgX} y={cardY + 38} w={imgW} h={imgH} image={img} placeholder="Reference · 2:3" />
 
             <text x={cx + 14} y={cardY + 38 + imgH + 26} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">FOCUS</text>
             <text x={cx + 14} y={cardY + 38 + imgH + 42} fontSize="11" fill={FR.slate}>{clampLine(esc(q.focus || '—'), cardW - 28, 6.2)}</text>

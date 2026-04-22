@@ -2,6 +2,16 @@
 import { useState, useRef } from 'react';
 import { FR, FR_COLOR_OPTIONS, resizeImage } from './techPackConstants';
 import { autoCropDataUrl } from '../../utils/autoCrop';
+import { fileToDataUrl } from '../../utils/cropImage';
+import CropModal from './CropModal';
+
+// Aspect-ratio presets for the trim pack. Ratio is width/height.
+//   A4 landscape → technical drawings that will be exported from Illustrator.
+//   2:3 portrait → photos (product shots, swatches, references, renders).
+export const ASPECTS = {
+  A4_LANDSCAPE: { ratio: 297 / 210, label: 'A4 · 297 × 210 mm',  shortLabel: 'A4 landscape' },
+  TWO_THIRDS:   { ratio: 2 / 3,     label: '2:3 · portrait photo', shortLabel: '2:3 portrait' },
+};
 
 export const labelStyle = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' };
 export const inputBase = { width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.slate, background: FR.white, outline: 'none', boxSizing: 'border-box' };
@@ -209,6 +219,107 @@ export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height 
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// AspectPhoto — image upload slot locked to an exact aspect ratio. On
+// upload, the raw image is shown in a full-screen crop modal so the user
+// can drag + zoom to position. The saved crop matches the slot's aspect
+// exactly; re-clicking "Recrop" reopens the modal with the stored image.
+//
+// `aspect` is an entry from ASPECTS (with .ratio and .label). Container
+// width × (1 / ratio) gives the slot height so the drop zone matches the
+// output proportion exactly.
+export function AspectPhoto({ slotKey, aspect = ASPECTS.A4_LANDSCAPE, images, onUpload, onRemove, label }) {
+  const fileRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
+  const [cropSrc, setCropSrc] = useState(null);
+  const slotImages = (images || []).filter(img => img.slot === slotKey);
+  const current = slotImages[0];
+
+  const openCropFor = async (file) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    const rawUrl = await fileToDataUrl(file);
+    setCropSrc(rawUrl);
+  };
+
+  const recropCurrent = () => {
+    if (current) setCropSrc(current.data);
+  };
+
+  const saveCropped = (dataUrl) => {
+    if (current) onRemove(slotKey, 0);
+    onUpload(slotKey, dataUrl, current?.name || 'cropped.jpg');
+    setCropSrc(null);
+  };
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      {label && <label style={labelStyle}>{label}</label>}
+      <div
+        onClick={() => fileRef.current?.click()}
+        onDrop={e => { e.preventDefault(); setDragging(false); openCropFor(e.dataTransfer.files?.[0]); }}
+        onDragOver={e => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        style={{
+          position: 'relative',
+          width: '100%',
+          aspectRatio: String(aspect.ratio),
+          border: `2px dashed ${dragging ? FR.soil : FR.sand}`,
+          borderRadius: 6,
+          cursor: 'pointer',
+          background: current ? FR.white : (dragging ? FR.sand : FR.salt),
+          overflow: 'hidden',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'all 0.2s',
+        }}>
+        <input ref={fileRef} type="file" accept="image/*"
+          onChange={e => { if (e.target.files?.[0]) openCropFor(e.target.files[0]); e.target.value = ''; }}
+          style={{ display: 'none' }} />
+
+        {current ? (
+          <>
+            <img src={current.data} alt={current.name || slotKey}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
+              <button onClick={e => { e.stopPropagation(); recropCurrent(); }}
+                title="Recrop"
+                style={{ padding: '4px 10px', borderRadius: 12, background: FR.soil, color: FR.salt, border: 'none', fontSize: 10, cursor: 'pointer', fontWeight: 600, letterSpacing: 0.3 }}>
+                Recrop
+              </button>
+              <button onClick={e => { e.stopPropagation(); onRemove(slotKey, 0); }}
+                title="Remove"
+                style={{ width: 24, height: 24, borderRadius: 12, background: FR.slate, color: FR.salt, border: 'none', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+            </div>
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(58,58,58,0.7)', padding: '4px 10px', fontSize: 10, color: FR.salt, display: 'flex', justifyContent: 'space-between' }}>
+              <span>{current.name || 'Cropped image'}</span>
+              <span>{aspect.shortLabel}</span>
+            </div>
+          </>
+        ) : (
+          <div style={{ textAlign: 'center', padding: 16 }}>
+            <div style={{ fontSize: 28, color: FR.sand, lineHeight: 1 }}>＋</div>
+            <div style={{ fontSize: 12, color: FR.stone, marginTop: 8 }}>
+              Drop {aspect.shortLabel} image here
+            </div>
+            <div style={{ fontSize: 10, color: FR.sand, marginTop: 4 }}>
+              {aspect.label}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {cropSrc && (
+        <CropModal
+          src={cropSrc}
+          aspect={aspect.ratio}
+          label={`${aspect.shortLabel} · drag to position · scroll or slider to zoom`}
+          onCancel={() => setCropSrc(null)}
+          onConfirm={saveCropped} />
+      )}
     </div>
   );
 }

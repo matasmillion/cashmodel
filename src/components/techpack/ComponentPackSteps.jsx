@@ -9,7 +9,7 @@
 
 import { STATUSES, COMPONENT_TYPES, APPROVAL_STATUSES, SAMPLE_TYPES, SAMPLE_VERDICTS } from './componentPackConstants';
 import { FR, FR_COLOR_OPTIONS } from './techPackConstants';
-import { Input, Select, Row, SectionTitle, CoverPhoto, EditableSelect, ArrayTable, FRColorCell, labelStyle, inputBase } from './TechPackPrimitives';
+import { Input, Select, Row, SectionTitle, AspectPhoto, ASPECTS, EditableSelect, ArrayTable, FRColorCell, labelStyle, inputBase } from './TechPackPrimitives';
 import { addSupplier } from '../../utils/plmDirectory';
 import { useState, useRef } from 'react';
 import { CheckCircle, XCircle, Clock, Plus } from 'lucide-react';
@@ -189,7 +189,9 @@ export function StepCover({
     <div>
       <SectionTitle>Overview</SectionTitle>
 
-      <CoverPhoto label="Trim Photo" slotKey="component-cover" images={images} onUpload={onUpload} onRemove={onRemove} />
+      <div style={{ maxWidth: 320, marginBottom: 4 }}>
+        <AspectPhoto label="Trim Photo" slotKey="component-cover" aspect={ASPECTS.TWO_THIRDS} images={images} onUpload={onUpload} onRemove={onRemove} />
+      </div>
 
       <Row cols="1fr 1fr 1fr">
         <Input label="Trim Name" value={data.componentName} onChange={v => set('componentName', v)} placeholder="e.g. Main Label — Woven" />
@@ -308,21 +310,19 @@ export function StepDesign({ images, onUpload, onRemove }) {
         Sketch, reference, render — the three visuals that communicate the design.
       </p>
 
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-        <div style={{ width: 320 }}>
-          <label style={sectionLabel}>Sketch (9:16)</label>
-          <CoverPhoto label="" slotKey="design-sketch" images={images} onUpload={onUpload} onRemove={onRemove} height={500} autoCropOnUpload={false} />
-        </div>
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel}>Sketch (A4 landscape)</label>
+        <AspectPhoto slotKey="design-sketch" aspect={ASPECTS.A4_LANDSCAPE} images={images} onUpload={onUpload} onRemove={onRemove} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <div>
-          <label style={sectionLabel}>Reference</label>
-          <CoverPhoto label="" slotKey="design-reference" images={images} onUpload={onUpload} onRemove={onRemove} height={240} autoCropOnUpload={false} />
+          <label style={sectionLabel}>Reference (2:3 portrait)</label>
+          <AspectPhoto slotKey="design-reference" aspect={ASPECTS.TWO_THIRDS} images={images} onUpload={onUpload} onRemove={onRemove} />
         </div>
         <div>
-          <label style={sectionLabel}>Render</label>
-          <CoverPhoto label="" slotKey="design-render" images={images} onUpload={onUpload} onRemove={onRemove} height={240} autoCropOnUpload={false} />
+          <label style={sectionLabel}>Render (2:3 portrait)</label>
+          <AspectPhoto slotKey="design-render" aspect={ASPECTS.TWO_THIRDS} images={images} onUpload={onUpload} onRemove={onRemove} />
         </div>
       </div>
     </div>
@@ -365,7 +365,7 @@ export function StepMaterials({ data, set, images, onUpload, onRemove, existingS
                   style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 14, padding: 0 }}>×</button>
               )}
             </div>
-            <CoverPhoto label="" slotKey={`material-${i}`} images={images} onUpload={onUpload} onRemove={onRemove} height={150} autoCropOnUpload={false} />
+            <AspectPhoto slotKey={`material-${i}`} aspect={ASPECTS.TWO_THIRDS} images={images} onUpload={onUpload} onRemove={onRemove} />
             <Input label="Name" value={m.name} onChange={v => updateMat(i, 'name', v)} placeholder="e.g. Cotton Twill" />
             <Input label="Composition" value={m.composition} onChange={v => updateMat(i, 'composition', v)} placeholder="100% Cotton" />
             <Input label="Weight / Gauge" value={m.weightGauge} onChange={v => updateMat(i, 'weightGauge', v)} placeholder="400 GSM" />
@@ -405,8 +405,8 @@ export function StepConstruction({ data, set, images, onUpload, onRemove }) {
       <SectionTitle>Construction</SectionTitle>
 
       <div style={{ marginBottom: 18 }}>
-        <label style={sectionLabel}>Measurement Diagram (16:9)</label>
-        <CoverPhoto label="" slotKey="construction-diagram" images={images} onUpload={onUpload} onRemove={onRemove} height={360} autoCropOnUpload={false} />
+        <label style={sectionLabel}>Measurement Diagram (A4 landscape)</label>
+        <AspectPhoto slotKey="construction-diagram" aspect={ASPECTS.A4_LANDSCAPE} images={images} onUpload={onUpload} onRemove={onRemove} />
       </div>
 
       <label style={sectionLabel}>Callouts — the three rules the factory must follow</label>
@@ -472,8 +472,8 @@ export function StepEmbellishments({ data, set, images, onUpload, onRemove }) {
       <div style={{ marginBottom: 20 }}>
         <label style={sectionLabel}>Artwork</label>
         <Row>
-          <CoverPhoto label="Front" slotKey="embellishment-artwork-front" images={images} onUpload={onUpload} onRemove={onRemove} height={200} autoCropOnUpload={false} />
-          <CoverPhoto label="Back"  slotKey="embellishment-artwork-back"  images={images} onUpload={onUpload} onRemove={onRemove} height={200} autoCropOnUpload={false} />
+          <AspectPhoto label="Front (A4 landscape)" slotKey="embellishment-artwork-front" aspect={ASPECTS.A4_LANDSCAPE} images={images} onUpload={onUpload} onRemove={onRemove} />
+          <AspectPhoto label="Back (A4 landscape)"  slotKey="embellishment-artwork-back"  aspect={ASPECTS.A4_LANDSCAPE} images={images} onUpload={onUpload} onRemove={onRemove} />
         </Row>
       </div>
 
@@ -604,7 +604,7 @@ export function StepTreatment({ data, set, images, onUpload, onRemove }) {
         {treatments.slice(0, 3).map((t, i) => (
           <div key={i} style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span style={{ fontSize: 9, color: FR.soil, fontWeight: 700, letterSpacing: 1.5 }}>FINISH {i + 1}</span>
-            <CoverPhoto label="" slotKey={`treatment-${i}`} images={images} onUpload={onUpload} onRemove={onRemove} height={220} autoCropOnUpload={false} />
+            <AspectPhoto slotKey={`treatment-${i}`} aspect={ASPECTS.TWO_THIRDS} images={images} onUpload={onUpload} onRemove={onRemove} />
             <Input label="Name" value={t.name} onChange={v => update(i, 'name', v)} placeholder="e.g. Garment wash" />
             <Input label="Description" value={t.description} onChange={v => update(i, 'description', v)} placeholder="Temperature, duration, chemicals…" multiline />
           </div>
@@ -636,7 +636,7 @@ export function StepQC({ data, set, images, onUpload, onRemove }) {
         {qcPoints.slice(0, 3).map((q, i) => (
           <div key={i} style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span style={{ fontSize: 9, color: FR.soil, fontWeight: 700, letterSpacing: 1.5 }}>QC FOCUS {i + 1}</span>
-            <CoverPhoto label="" slotKey={`qc-${i}`} images={images} onUpload={onUpload} onRemove={onRemove} height={220} autoCropOnUpload={false} />
+            <AspectPhoto slotKey={`qc-${i}`} aspect={ASPECTS.TWO_THIRDS} images={images} onUpload={onUpload} onRemove={onRemove} />
             <Input label="Focus" value={q.focus} onChange={v => update(i, 'focus', v)} placeholder="e.g. Pull strength" />
             <Input label="Method / Pass" value={q.method} onChange={v => update(i, 'method', v)} placeholder="Test method + pass criterion" multiline />
           </div>
