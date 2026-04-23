@@ -7,7 +7,7 @@
 //   6. Treatment       — 3 finish cards (image + text)
 //   7. Quality Control — 3 QC focus cards (image + text)
 
-import { STATUSES, COMPONENT_TYPES, APPROVAL_STATUSES, SAMPLE_TYPES, SAMPLE_VERDICTS } from './componentPackConstants';
+import { STATUSES, COMPONENT_TYPES, APPROVAL_STATUSES, SAMPLE_TYPES, SAMPLE_VERDICTS, MATERIAL_COLORS, MATERIAL_FINISHES } from './componentPackConstants';
 import { FR, FR_COLOR_OPTIONS } from './techPackConstants';
 import { Input, Select, Row, SectionTitle, AspectPhoto, ASPECTS, EditableSelect, ArrayTable, FRColorCell, labelStyle, inputBase } from './TechPackPrimitives';
 import { addSupplier } from '../../utils/plmDirectory';
@@ -343,7 +343,7 @@ export function StepMaterials({ data, set, images, onUpload, onRemove, existingS
   const updateMat = (i, k, v) =>
     set('materials', materials.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
   const addMat = () =>
-    set('materials', [...materials, { name: '', composition: '', weightGauge: '', factory: '' }]);
+    set('materials', [...materials, { name: '', composition: '', weightGauge: '', factory: '', color: '', finish: '' }]);
   const removeMat = (i) => {
     if (materials.length <= 1) return;
     set('materials', materials.filter((_, idx) => idx !== i));
@@ -371,6 +371,10 @@ export function StepMaterials({ data, set, images, onUpload, onRemove, existingS
             <Input label="Name" value={m.name} onChange={v => updateMat(i, 'name', v)} placeholder="e.g. Cotton Twill" />
             <Input label="Composition" value={m.composition} onChange={v => updateMat(i, 'composition', v)} placeholder="100% Cotton" />
             <Input label="Weight / Gauge" value={m.weightGauge} onChange={v => updateMat(i, 'weightGauge', v)} placeholder="400 GSM" />
+            <Row>
+              <Select label="Color" value={m.color || ''} onChange={v => updateMat(i, 'color', v)} options={MATERIAL_COLORS} />
+              <Select label="Finish" value={m.finish || ''} onChange={v => updateMat(i, 'finish', v)} options={MATERIAL_FINISHES} />
+            </Row>
             <EditableSelect
               label="Factory"
               value={m.factory}

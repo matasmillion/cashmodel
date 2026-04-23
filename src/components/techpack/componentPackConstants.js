@@ -57,7 +57,17 @@ const todayISO = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-const emptyMaterial  = () => ({ name: '', composition: '', weightGauge: '', factory: '' });
+const emptyMaterial  = () => ({ name: '', composition: '', weightGauge: '', factory: '', color: '', finish: '' });
+
+export const MATERIAL_COLORS = [
+  'Natural', 'White', 'Off-White', 'Black', 'Slate', 'Stone', 'Sand',
+  'Navy', 'Olive', 'Brown', 'Tan', 'Red', 'Custom',
+];
+
+export const MATERIAL_FINISHES = [
+  'N/A', 'Matte', 'Glossy', 'Satin', 'Brushed', 'Washed',
+  'Stone Wash', 'Enzyme Wash', 'Pigment Dyed', 'Coated', 'Suede', 'Unfinished',
+];
 const emptyCallout   = () => ({ label: '', specification: '' });
 const emptyTreatment = () => ({ name: '', description: '' });
 const emptyQCPoint   = () => ({ focus: '', method: '', pass: '' });

@@ -392,6 +392,22 @@ function PageMaterials({ d, images }) {
             <text x={cx + 14} y={cardY + 38 + imgH + 146} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">FACTORY</text>
             <text x={cx + 14} y={cardY + 38 + imgH + 162} fontSize="11" fill={FR.slate}>{clampLine(esc(m.factory || '—'), cardW - 28, 6.2)}</text>
             <line x1={cx + 14} y1={cardY + 38 + imgH + 166} x2={cx + cardW - 14} y2={cardY + 38 + imgH + 166} stroke={FR.sand} />
+
+            {/* COLOR (left) | FINISH (right) — split row */}
+            {(() => {
+              const hx = Math.round(cardW / 2);
+              const hw = hx - 20;
+              const by = cardY + 38 + imgH;
+              return (
+                <g>
+                  <text x={cx + 14} y={by + 186} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">COLOR</text>
+                  <text x={cx + 14} y={by + 202} fontSize="11" fill={FR.slate}>{clampLine(esc(m.color || '—'), hw, 6.2)}</text>
+                  <text x={cx + hx + 4} y={by + 186} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">FINISH</text>
+                  <text x={cx + hx + 4} y={by + 202} fontSize="11" fill={FR.slate}>{clampLine(esc(m.finish || '—'), hw, 6.2)}</text>
+                  <line x1={cx + 14} y1={by + 206} x2={cx + cardW - 14} y2={by + 206} stroke={FR.sand} />
+                </g>
+              );
+            })()}
           </g>
         );
       })}
