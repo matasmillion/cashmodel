@@ -192,7 +192,7 @@ export function StepCover({
       <SectionTitle>Overview</SectionTitle>
 
       <div style={{ maxWidth: 320, marginBottom: 4 }}>
-        <AspectPhoto label="Trim Photo" slotKey="component-cover" aspect={ASPECTS.TWO_THIRDS} images={images} onUpload={onUpload} onRemove={onRemove} />
+        <AspectPhoto label="Trim Photo" slotKey="component-cover" aspect={ASPECTS.LANDSCAPE_3_2} images={images} onUpload={onUpload} onRemove={onRemove} />
       </div>
 
       <Row cols="1fr 1fr 1fr">

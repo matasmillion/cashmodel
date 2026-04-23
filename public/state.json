@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-23T13:06:51.975Z",
+  "lastUpdated": "2026-04-23T13:09:30.124Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "615b514",
+      "date": "2026-04-23T13:07:10+00:00",
+      "message": "Trim pack construction callouts: 2:3 portrait reference images (~28% larger)"
+    },
+    {
       "sha": "36f7b4e",
       "date": "2026-04-23T12:53:48+00:00",
       "message": "Regenerate public/state.json"
@@ -1087,11 +1092,6 @@
       "sha": "429354b",
       "date": "2026-04-22T13:41:17+00:00",
       "message": "Trim pack: interactive crop + consistent A4 / 2:3 aspect ratios"
-    },
-    {
-      "sha": "a26f72c",
-      "date": "2026-04-22T13:14:35+00:00",
-      "message": "Trim pack: insert Design page between Overview and Materials"
     }
   ]
 }

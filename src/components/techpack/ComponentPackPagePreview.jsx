@@ -114,8 +114,10 @@ function PageCover({ d, images }) {
   //   644–766                   three approval cards (122 tall)
   //   775                       footer
 
-  const photoW = 160;
-  const photoH = Math.round(photoW * 3 / 2); // 2:3 portrait
+  // 3:2 landscape, sized to fill the title zone without crossing the divider
+  // rule at y=288. photoY=85, so max height = 288 - 85 - 11 = 192.
+  const photoH = 192;
+  const photoW = Math.round(photoH * 3 / 2); // 3:2 landscape → 288
   const photoX = PAGE_W - photoW - 40;
   const photoY = 85;
 
@@ -145,7 +147,7 @@ function PageCover({ d, images }) {
         : (
           <g>
             <rect x={photoX} y={photoY} width={photoW} height={photoH} fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" />
-            <text x={photoX + photoW / 2} y={photoY + photoH / 2 + 4} textAnchor="middle" fontSize="10" fill={FR.stone} fontStyle="italic">Trim photo · 2:3</text>
+            <text x={photoX + photoW / 2} y={photoY + photoH / 2 + 4} textAnchor="middle" fontSize="10" fill={FR.stone} fontStyle="italic">Trim photo · 3:2</text>
           </g>
         )}
 
