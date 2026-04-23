@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-23T06:23:34.292Z",
+  "lastUpdated": "2026-04-23T09:00:19.774Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "2661005",
+      "date": "2026-04-23T06:24:01+00:00",
+      "message": "Trim pack overview: loosen identity grid + iPad SVG download via Web Share"
+    },
+    {
       "sha": "50ff96a",
       "date": "2026-04-22T18:32:07+00:00",
       "message": "Trim pack PDF export: rasterise via html2canvas to fix blank pages"
@@ -1087,11 +1092,6 @@
       "sha": "6e711ea",
       "date": "2026-04-22T11:20:05+00:00",
       "message": "Trim pack: Overview becomes the lifecycle hub"
-    },
-    {
-      "sha": "b6eb30e",
-      "date": "2026-04-22T11:02:46+00:00",
-      "message": "Trim pack: replace Date Created with auto-stamped Date Last Updated"
     }
   ]
 }

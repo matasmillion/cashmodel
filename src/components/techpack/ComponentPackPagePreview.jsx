@@ -98,18 +98,20 @@ function PageCover({ d, images }) {
   const manager  = fa.manager  || {};
   const factory  = fa.factory  || {};
 
-  // Vertical layout budget (PAGE_H = 794, footer at 775):
+  // Vertical layout budget (PAGE_H = 794, footer rendered at y=775):
+  //   Children paint on top of PageFrame's footer text in z-order, so the
+  //   final approval cards MUST end before y=770 or they hide the footer.
   //   70                        header bar
-  //   85–325                    title block + 2:3 trim photo top-right (160×240)
+  //   85–325                    title block + 2:3 trim photo top-right
   //   288                       divider rule
   //   304                       "OVERVIEW" subheading
   //   320–440                   identity grid (4 rows × 30px, two columns)
-  //   456                       Revision History heading
-  //   472–560                   revision grid (header 22 + 3 body rows × 22)
-  //   576                       Samples heading
-  //   590–620                   sample strip pills (30)
-  //   636                       Final Approval heading
-  //   652–774                   three approval cards (122 tall)
+  //   452                       Revision History heading
+  //   468–556                   revision grid (header 22 + 3 body rows × 22)
+  //   570                       Samples heading
+  //   584–614                   sample strip pills (30)
+  //   628                       Final Approval heading
+  //   644–766                   three approval cards (122 tall)
   //   775                       footer
 
   const photoW = 160;
@@ -120,7 +122,7 @@ function PageCover({ d, images }) {
   const idY = 320;
   const idRowGap = 30;
 
-  const cardY = 652;
+  const cardY = 644;
   const cardH = 122;
   const cardGap = 14;
   const cardW = (PAGE_W - 80 - cardGap * 2) / 3;
@@ -139,7 +141,7 @@ function PageCover({ d, images }) {
 
       {/* Trim photo — 2:3 portrait, top-right. */}
       {cover
-        ? <image href={cover.data} x={photoX} y={photoY} width={photoW} height={photoH} preserveAspectRatio="xMidYMid slice" />
+        ? <image href={cover.data} xlinkHref={cover.data} x={photoX} y={photoY} width={photoW} height={photoH} preserveAspectRatio="xMidYMid slice" />
         : (
           <g>
             <rect x={photoX} y={photoY} width={photoW} height={photoH} fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" />
@@ -147,10 +149,7 @@ function PageCover({ d, images }) {
           </g>
         )}
 
-      {/* Identity grid — 4 rows × 30 px row gap.
-          Field renders label at y + value at y+16 (baseline). With a 30px
-          gap the next row's label sits safely below the prior value's
-          descent and the underline between them. */}
+      {/* Identity grid — 4 rows × 30 px row gap. */}
       <rect x="40" y="288" width={PAGE_W - 80} height="1" fill={FR.sand} />
       <text x={40} y={304} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="2">OVERVIEW</text>
       {leftCol.map((f, i) => {
@@ -173,15 +172,16 @@ function PageCover({ d, images }) {
       })}
 
       {/* Revision history strip */}
-      <SectionHeading x={40} y={456}>Revision History</SectionHeading>
-      <GridTable x={40} y={472} cols={revCols} rows={revRows} bodyRows={3} rowH={22} headerH={22} />
+      <SectionHeading x={40} y={452}>Revision History</SectionHeading>
+      <GridTable x={40} y={468} cols={revCols} rows={revRows} bodyRows={3} rowH={22} headerH={22} />
 
       {/* Samples — 3 stages */}
-      <SectionHeading x={40} y={576}>Samples</SectionHeading>
-      <SampleStrip d={d} x={40} y={590} w={PAGE_W - 80} />
+      <SectionHeading x={40} y={570}>Samples</SectionHeading>
+      <SampleStrip d={d} x={40} y={584} w={PAGE_W - 80} />
 
-      {/* Final approval — 3 compact cards */}
-      <SectionHeading x={40} y={636}>Final Approval</SectionHeading>
+      {/* Final approval — 3 compact cards. cardY + cardH must stay ≤ 770
+          so PageFrame's y=775 footer text isn't painted over. */}
+      <SectionHeading x={40} y={628}>Final Approval</SectionHeading>
       <CompactApprovalCard x={40}                         y={cardY} w={cardW} h={cardH} title="Designer" name={designer.name} signature={designer.signature} date={designer.date} />
       <CompactApprovalCard x={40 + cardW + cardGap}       y={cardY} w={cardW} h={cardH} title="Manager"  name={manager.name}  signature={manager.signature}  date={manager.date} />
       <CompactApprovalCard x={40 + (cardW + cardGap) * 2} y={cardY} w={cardW} h={cardH} title="Factory"  name={factory.name}  signature={factory.signature}  date={factory.dateChop} dateLabel="Date / Chop" />
@@ -288,7 +288,7 @@ function PhotoSlot({ x, y, w, h, image, placeholder }) {
     <g>
       <rect x={x} y={y} width={w} height={h} fill={FR.white} stroke={FR.soil} strokeDasharray="5 4" />
       {image
-        ? <image href={image.data} x={x + 4} y={y + 4} width={w - 8} height={h - 8} preserveAspectRatio="xMidYMid meet" />
+        ? <image href={image.data} xlinkHref={image.data} x={x + 4} y={y + 4} width={w - 8} height={h - 8} preserveAspectRatio="xMidYMid meet" />
         : (
           <text x={x + w / 2} y={y + h / 2 + 4} textAnchor="middle" fontSize="10" fill={FR.stone} fontStyle="italic">
             {placeholder || 'Drop image here'}
@@ -541,7 +541,7 @@ function PageEmbellishments({ d, images }) {
             {/* Pantone TCX card thumbnail (if library has one for the FR color). */}
             {cardImage && (
               <g>
-                <image href={cardImage} x={tcxX} y={cwRowY + swatchH + 52} width={cardThumbW} height={cardThumbH} preserveAspectRatio="xMidYMid slice" />
+                <image href={cardImage} xlinkHref={cardImage} x={tcxX} y={cwRowY + swatchH + 52} width={cardThumbW} height={cardThumbH} preserveAspectRatio="xMidYMid slice" />
                 <rect x={tcxX} y={cwRowY + swatchH + 52} width={cardThumbW} height={cardThumbH} fill="none" stroke={FR.sand} />
               </g>
             )}
@@ -804,6 +804,7 @@ export default function ComponentPackPagePreview({ data, images, step }) {
 
   return (
     <svg xmlns="http://www.w3.org/2000/svg"
+      xmlnsXlink="http://www.w3.org/1999/xlink"
       viewBox={`0 0 ${PAGE_W} ${PAGE_H}`}
       preserveAspectRatio="xMidYMin meet"
       style={{ width: '100%', height: 'auto', background: FR.white, boxShadow: '0 2px 14px rgba(0,0,0,0.12)', borderRadius: 6, fontFamily: 'Helvetica, Arial, sans-serif' }}>

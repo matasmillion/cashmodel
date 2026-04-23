@@ -48,7 +48,7 @@ export function generateComponentPackSVG(data, images) {
   }
   return (
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${PAGE_W} ${totalH}" width="${PAGE_W}" height="${totalH}">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${PAGE_W} ${totalH}" width="${PAGE_W}" height="${totalH}">` +
     pages.join('\n') +
     `</svg>`
   );
