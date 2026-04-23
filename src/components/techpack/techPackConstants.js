@@ -110,6 +110,7 @@ export const DEFAULT_DATA = {
   // PLM features
   parentStyleId: null,
   parentStyleName: '',
+  skippedSteps: [],
   revisions: [],
   samples: [],
   finalApproval: {

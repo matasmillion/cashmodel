@@ -113,6 +113,7 @@ export const DEFAULT_COMPONENT_DATA = {
   qcPoints: [emptyQCPoint(), emptyQCPoint(), emptyQCPoint()],
 
   // Lifecycle — edited from Overview, persisted on the pack.
+  skippedSteps: [],
   revisions: [],
   finalApproval: {
     designer: { name: '', signature: '', date: '' },

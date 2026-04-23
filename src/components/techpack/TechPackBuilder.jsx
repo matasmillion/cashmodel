@@ -201,6 +201,16 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     });
   }, []);
 
+  const toggleSkip = useCallback((stepIdx) => {
+    setData(prev => {
+      const current = prev.skippedSteps || [];
+      const next = current.includes(stepIdx)
+        ? current.filter(i => i !== stepIdx)
+        : [...current, stepIdx];
+      return { ...prev, skippedSteps: next };
+    });
+  }, []);
+
   // ── Revision snapshots ──
   const createRevision = useCallback(() => {
     const revisions = data.revisions || [];
@@ -261,6 +271,8 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   }, [pack, data, images, library]);
 
   const Comp = STEP_FNS[step];
+  const skippedSteps = data.skippedSteps || [];
+  const isCurrentSkipped = skippedSteps.includes(step);
   const libCount = (library.bom || []).length + (library.trims || []).length;
   const stepProps = {
     data, set, images, onUpload: handleImgUpload, onRemove: handleImgRemove,
@@ -316,12 +328,17 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           <div style={{ padding: '14px 0', flex: 1 }}>
             {STEPS.map((s, i) => {
               const stepLocked = isStepLocked(i, data.status);
+              const stepSkipped = skippedSteps.includes(i);
               return (
                 <button key={s.id} onClick={() => setStep(i)}
                   style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 16px', border: 'none', cursor: 'pointer', background: i === step ? FR.white : 'transparent', borderLeft: i === step ? `3px solid ${FR.soil}` : '3px solid transparent' }}>
-                  <span style={{ fontSize: 10, color: i === step ? FR.soil : FR.stone, fontWeight: 700, width: 18 }}>{s.icon}</span>
-                  <span style={{ fontSize: 11, color: i === step ? FR.slate : FR.stone, textAlign: 'left', flex: 1, opacity: stepLocked ? 0.5 : 1 }}>{s.title}</span>
-                  {stepLocked && <span style={{ fontSize: 10, color: FR.stone }}>🔒</span>}
+                  <span style={{ fontSize: 10, color: stepSkipped ? '#C0392B' : (i === step ? FR.soil : FR.stone), fontWeight: 700, width: 18 }}>
+                    {stepSkipped ? '×' : s.icon}
+                  </span>
+                  <span style={{ fontSize: 11, color: i === step ? FR.slate : FR.stone, textAlign: 'left', flex: 1, textDecoration: stepSkipped ? 'line-through' : 'none', opacity: stepSkipped ? 0.55 : (stepLocked ? 0.5 : 1) }}>
+                    {s.title}
+                  </span>
+                  {stepLocked && !stepSkipped && <span style={{ fontSize: 10, color: FR.stone }}>🔒</span>}
                 </button>
               );
             })}
@@ -337,6 +354,17 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
 
         {/* Main content */}
         <div style={{ flex: 1, minWidth: 0, padding: '20px 28px', maxHeight: '75vh', overflowY: 'auto' }}>
+          {/* Skip banner */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, padding: '9px 14px', background: isCurrentSkipped ? 'rgba(192,57,43,0.07)' : FR.salt, border: `1px solid ${isCurrentSkipped ? '#C0392B' : FR.sand}`, borderRadius: 6 }}>
+            <div style={{ flex: 1, fontSize: 11, color: isCurrentSkipped ? '#C0392B' : FR.stone }}>
+              {isCurrentSkipped ? 'This page is skipped — it will show a "PAGE NOT USED" slash in the export.' : 'Not using this page? Skip it and it will be crossed out in the export.'}
+            </div>
+            <button onClick={() => toggleSkip(step)}
+              style={{ padding: '5px 14px', background: isCurrentSkipped ? '#C0392B' : 'transparent', color: isCurrentSkipped ? 'white' : FR.stone, border: `1px solid ${isCurrentSkipped ? '#C0392B' : FR.sand}`, borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              {isCurrentSkipped ? 'Unskip' : 'Skip page'}
+            </button>
+          </div>
+
           <Comp {...stepProps} />
 
           {/* Revision panel on the Review step */}
@@ -363,7 +391,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
             <div style={{ fontSize: 9, color: FR.stone, letterSpacing: 2, fontWeight: 600, textTransform: 'uppercase' }}>Live Preview</div>
             <div style={{ fontSize: 9, color: FR.stone }}>Page {step + 1} / {STEPS.length}</div>
           </div>
-          <TechPackPagePreview data={data} images={images} step={step} />
+          <TechPackPagePreview data={data} images={images} step={step} skippedSteps={skippedSteps} />
         </div>
       </div>
     </div>

@@ -138,7 +138,7 @@ function VersionViewer({ revision, onClose }) {
         style={{ flex: 1, overflowY: 'auto', padding: '24px 40px', background: '#555', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
         {Array.from({ length: pageCount }).map((_, i) => (
           <div key={i} style={{ width: '100%', maxWidth: 1000, background: FR.white, borderRadius: 4 }}>
-            <ComponentPackPagePreview data={snapshotData} images={snapshotImages} step={i} />
+            <ComponentPackPagePreview data={snapshotData} images={snapshotImages} step={i} skippedSteps={snapshotData.skippedSteps || []} />
           </div>
         ))}
       </div>
@@ -406,6 +406,16 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     });
   }, [stampDate]);
 
+  const toggleSkip = useCallback((stepIdx) => {
+    setData(prev => {
+      const current = prev.skippedSteps || [];
+      const next = current.includes(stepIdx)
+        ? current.filter(i => i !== stepIdx)
+        : [...current, stepIdx];
+      return stampDate({ ...prev, skippedSteps: next });
+    });
+  }, [stampDate]);
+
   // Samples on the trim pack — mirrors the Tech Pack panel wiring.
   const addSample = useCallback((sample) => {
     setData(prev => stampDate({ ...prev, samples: [...(prev.samples || []), sample] }));
@@ -418,6 +428,8 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
   }, [stampDate]);
 
   const Comp = COMPONENT_STEP_FNS[step];
+  const skippedSteps = data.skippedSteps || [];
+  const isCurrentSkipped = skippedSteps.includes(step);
   const stepProps = {
     data, set, images, onUpload: handleImgUpload, onRemove: handleImgRemove,
     pickFRColor, existingSuppliers, existingPeople, onAddPerson: handleAddPerson,
@@ -478,13 +490,20 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
         {/* Sidebar */}
         <div style={{ width: 220, minWidth: 220, borderRight: `1px solid ${FR.sand}`, background: FR.salt, display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '14px 0', flex: 1 }}>
-            {COMPONENT_STEPS.map((s, i) => (
-              <button key={s.id} onClick={() => setStep(i)}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 16px', border: 'none', cursor: 'pointer', background: i === step ? FR.white : 'transparent', borderLeft: i === step ? `3px solid ${FR.soil}` : '3px solid transparent' }}>
-                <span style={{ fontSize: 10, color: i === step ? FR.soil : FR.stone, fontWeight: 700, width: 18 }}>{s.icon}</span>
-                <span style={{ fontSize: 11, color: i === step ? FR.slate : FR.stone, textAlign: 'left', flex: 1 }}>{s.title}</span>
-              </button>
-            ))}
+            {COMPONENT_STEPS.map((s, i) => {
+              const stepSkipped = skippedSteps.includes(i);
+              return (
+                <button key={s.id} onClick={() => setStep(i)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 16px', border: 'none', cursor: 'pointer', background: i === step ? FR.white : 'transparent', borderLeft: i === step ? `3px solid ${FR.soil}` : '3px solid transparent' }}>
+                  <span style={{ fontSize: 10, color: stepSkipped ? '#C0392B' : (i === step ? FR.soil : FR.stone), fontWeight: 700, width: 18 }}>
+                    {stepSkipped ? '×' : s.icon}
+                  </span>
+                  <span style={{ fontSize: 11, color: i === step ? FR.slate : FR.stone, textAlign: 'left', flex: 1, textDecoration: stepSkipped ? 'line-through' : 'none', opacity: stepSkipped ? 0.55 : 1 }}>
+                    {s.title}
+                  </span>
+                </button>
+              );
+            })}
           </div>
           <VersionPanel
             revisions={data.revisions || []}
@@ -494,6 +513,17 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
 
         {/* Main content */}
         <div style={{ flex: 1, minWidth: 0, padding: '20px 28px', maxHeight: '75vh', overflowY: 'auto' }}>
+          {/* Skip banner */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, padding: '9px 14px', background: isCurrentSkipped ? 'rgba(192,57,43,0.07)' : FR.salt, border: `1px solid ${isCurrentSkipped ? '#C0392B' : FR.sand}`, borderRadius: 6 }}>
+            <div style={{ flex: 1, fontSize: 11, color: isCurrentSkipped ? '#C0392B' : FR.stone }}>
+              {isCurrentSkipped ? 'This page is skipped — it will show a "PAGE NOT USED" slash in the export.' : 'Not using this page? Skip it and it will be crossed out in the export.'}
+            </div>
+            <button onClick={() => toggleSkip(step)}
+              style={{ padding: '5px 14px', background: isCurrentSkipped ? '#C0392B' : 'transparent', color: isCurrentSkipped ? 'white' : FR.stone, border: `1px solid ${isCurrentSkipped ? '#C0392B' : FR.sand}`, borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              {isCurrentSkipped ? 'Unskip' : 'Skip page'}
+            </button>
+          </div>
+
           <Comp {...stepProps} />
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24, paddingTop: 16, borderTop: `1px solid ${FR.sand}` }}>
@@ -515,7 +545,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
             <div style={{ fontSize: 9, color: FR.stone, letterSpacing: 2, fontWeight: 600, textTransform: 'uppercase' }}>Live Preview</div>
             <div style={{ fontSize: 9, color: FR.stone }}>Page {step + 1} / {COMPONENT_STEPS.length}</div>
           </div>
-          <ComponentPackPagePreview data={data} images={images} step={step} />
+          <ComponentPackPagePreview data={data} images={images} step={step} skippedSteps={skippedSteps} />
         </div>
       </div>
     </div>

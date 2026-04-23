@@ -831,12 +831,27 @@ const PAGE_FNS = [
   { title: 'Quality Control',  body: ({ d, images }) => <PageQC d={d} images={images} /> },
 ];
 
-export default function ComponentPackPagePreview({ data, images, step }) {
+function SkipOverlay() {
+  const cx = PAGE_W / 2;
+  const cy = PAGE_H / 2;
+  return (
+    <g>
+      <rect x={0} y={0} width={PAGE_W} height={PAGE_H} fill="white" opacity={0.8} />
+      <line x1={0} y1={0} x2={PAGE_W} y2={PAGE_H} stroke="#C0392B" strokeWidth={12} opacity={0.35} />
+      <line x1={PAGE_W} y1={0} x2={0} y2={PAGE_H} stroke="#C0392B" strokeWidth={12} opacity={0.35} />
+      <rect x={cx - 140} y={cy - 28} width={280} height={56} fill="#C0392B" rx={5} />
+      <text x={cx} y={cy + 9} textAnchor="middle" fontSize={19} fontWeight="bold" fill="white" letterSpacing={5} fontFamily="Helvetica, Arial, sans-serif">PAGE NOT USED</text>
+    </g>
+  );
+}
+
+export default function ComponentPackPagePreview({ data, images, step, skippedSteps }) {
   const d = data || {};
   const componentInfo = `${d.componentName || 'Untitled'} · ${d.componentType || ''}`;
   const pageNum = Math.min(Math.max(step + 1, 1), TOTAL_PAGES);
   const current = PAGE_FNS[step] || PAGE_FNS[0];
   const Body = current.body;
+  const isSkipped = Array.isArray(skippedSteps) && skippedSteps.includes(step);
 
   return (
     <svg xmlns="http://www.w3.org/2000/svg"
@@ -847,6 +862,7 @@ export default function ComponentPackPagePreview({ data, images, step }) {
       <PageFrame title={current.title} pageNum={pageNum} componentInfo={componentInfo}>
         <Body d={d} images={images} />
       </PageFrame>
+      {isSkipped && <SkipOverlay />}
     </svg>
   );
 }
