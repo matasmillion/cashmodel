@@ -100,28 +100,28 @@ function PageCover({ d, images }) {
 
   // Vertical layout budget (PAGE_H = 794, footer at 775):
   //   70                        header bar
-  //   90–270                    title block + 2:3 trim photo top-right (160×240)
-  //   280                       divider rule
-  //   298                       "OVERVIEW" subheading
-  //   316–400                   identity grid (4 rows × 22px, two columns)
-  //   420                       Revision History heading
-  //   436–516                   revision grid (header 22 + 3 body rows × 22)
-  //   534                       Samples heading
-  //   550–580                   sample strip pills (30)
-  //   598                       Final Approval heading
-  //   614–764                   three approval cards (150 tall)
+  //   85–325                    title block + 2:3 trim photo top-right (160×240)
+  //   288                       divider rule
+  //   304                       "OVERVIEW" subheading
+  //   320–440                   identity grid (4 rows × 30px, two columns)
+  //   456                       Revision History heading
+  //   472–560                   revision grid (header 22 + 3 body rows × 22)
+  //   576                       Samples heading
+  //   590–620                   sample strip pills (30)
+  //   636                       Final Approval heading
+  //   652–774                   three approval cards (122 tall)
   //   775                       footer
 
   const photoW = 160;
   const photoH = Math.round(photoW * 3 / 2); // 2:3 portrait
   const photoX = PAGE_W - photoW - 40;
-  const photoY = 90;
+  const photoY = 85;
 
-  const idY = 316;
-  const idRowGap = 22;
+  const idY = 320;
+  const idRowGap = 30;
 
-  const cardY = 614;
-  const cardH = 150;
+  const cardY = 652;
+  const cardH = 122;
   const cardGap = 14;
   const cardW = (PAGE_W - 80 - cardGap * 2) / 3;
 
@@ -137,7 +137,7 @@ function PageCover({ d, images }) {
         STATUS · {esc((d.status || '—').toUpperCase())}
       </text>
 
-      {/* Trim photo — 2:3 portrait, top-right. Sits entirely above the OVERVIEW divider. */}
+      {/* Trim photo — 2:3 portrait, top-right. */}
       {cover
         ? <image href={cover.data} x={photoX} y={photoY} width={photoW} height={photoH} preserveAspectRatio="xMidYMid slice" />
         : (
@@ -147,15 +147,18 @@ function PageCover({ d, images }) {
           </g>
         )}
 
-      {/* Identity grid — tight 4×2 with under-line separators */}
-      <rect x="40" y="280" width={PAGE_W - 80} height="1" fill={FR.sand} />
-      <text x={40} y={300} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="2">OVERVIEW</text>
+      {/* Identity grid — 4 rows × 30 px row gap.
+          Field renders label at y + value at y+16 (baseline). With a 30px
+          gap the next row's label sits safely below the prior value's
+          descent and the underline between them. */}
+      <rect x="40" y="288" width={PAGE_W - 80} height="1" fill={FR.sand} />
+      <text x={40} y={304} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="2">OVERVIEW</text>
       {leftCol.map((f, i) => {
         const y = idY + i * idRowGap;
         return (
           <g key={`L${i}`}>
             <Field x={40} y={y} label={f.label} value={f.value} w={500} />
-            <line x1={40} y1={y + 20} x2={540} y2={y + 20} stroke={FR.sand} />
+            <line x1={40} y1={y + 24} x2={540} y2={y + 24} stroke={FR.sand} />
           </g>
         );
       })}
@@ -164,21 +167,21 @@ function PageCover({ d, images }) {
         return (
           <g key={`R${i}`}>
             <Field x={580} y={y} label={f.label} value={f.value} w={500} />
-            <line x1={580} y1={y + 20} x2={PAGE_W - 40} y2={y + 20} stroke={FR.sand} />
+            <line x1={580} y1={y + 24} x2={PAGE_W - 40} y2={y + 24} stroke={FR.sand} />
           </g>
         );
       })}
 
       {/* Revision history strip */}
-      <SectionHeading x={40} y={420}>Revision History</SectionHeading>
-      <GridTable x={40} y={436} cols={revCols} rows={revRows} bodyRows={3} rowH={22} headerH={22} />
+      <SectionHeading x={40} y={456}>Revision History</SectionHeading>
+      <GridTable x={40} y={472} cols={revCols} rows={revRows} bodyRows={3} rowH={22} headerH={22} />
 
       {/* Samples — 3 stages */}
-      <SectionHeading x={40} y={534}>Samples</SectionHeading>
-      <SampleStrip d={d} x={40} y={548} w={PAGE_W - 80} />
+      <SectionHeading x={40} y={576}>Samples</SectionHeading>
+      <SampleStrip d={d} x={40} y={590} w={PAGE_W - 80} />
 
       {/* Final approval — 3 compact cards */}
-      <SectionHeading x={40} y={598}>Final Approval</SectionHeading>
+      <SectionHeading x={40} y={636}>Final Approval</SectionHeading>
       <CompactApprovalCard x={40}                         y={cardY} w={cardW} h={cardH} title="Designer" name={designer.name} signature={designer.signature} date={designer.date} />
       <CompactApprovalCard x={40 + cardW + cardGap}       y={cardY} w={cardW} h={cardH} title="Manager"  name={manager.name}  signature={manager.signature}  date={manager.date} />
       <CompactApprovalCard x={40 + (cardW + cardGap) * 2} y={cardY} w={cardW} h={cardH} title="Factory"  name={factory.name}  signature={factory.signature}  date={factory.dateChop} dateLabel="Date / Chop" />
@@ -190,23 +193,25 @@ function PageCover({ d, images }) {
 // rows in 150px. The original ApprovalPreviewCard assumes ~220px of height
 // and overflows when squeezed. This variant hard-codes tight spacing.
 function CompactApprovalCard({ x, y, w, h, title, name, signature, date, dateLabel = 'Date' }) {
+  // 3 rows fit in ~118 px — tighten label/value/underline spacing so the
+  // whole card lives inside the 122 px budget without overflow.
   return (
     <g>
       <rect x={x} y={y} width={w} height={h} fill={FR.white} stroke={FR.sand} />
-      <rect x={x} y={y} width={w} height={22} fill={FR.salt} />
-      <text x={x + 10} y={y + 15} fontSize="8.5" fontWeight="bold" fill={FR.soil} letterSpacing="1.5">{esc(title.toUpperCase())}</text>
+      <rect x={x} y={y} width={w} height={20} fill={FR.salt} />
+      <text x={x + 10} y={y + 14} fontSize="8.5" fontWeight="bold" fill={FR.soil} letterSpacing="1.5">{esc(title.toUpperCase())}</text>
 
-      <text x={x + 10} y={y + 40} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">NAME</text>
-      <text x={x + 10} y={y + 55} fontSize="10" fill={FR.slate}>{clampLine(esc(name || '—'), w - 20, 5.8)}</text>
-      <line x1={x + 10} y1={y + 59} x2={x + w - 10} y2={y + 59} stroke={FR.sand} />
+      <text x={x + 10} y={y + 34} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">NAME</text>
+      <text x={x + 10} y={y + 46} fontSize="10" fill={FR.slate}>{clampLine(esc(name || '—'), w - 20, 5.8)}</text>
+      <line x1={x + 10} y1={y + 50} x2={x + w - 10} y2={y + 50} stroke={FR.sand} />
 
-      <text x={x + 10} y={y + 78} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">SIGNATURE</text>
-      <text x={x + 10} y={y + 93} fontSize="10" fill={FR.slate}>{clampLine(esc(signature || '—'), w - 20, 5.8)}</text>
-      <line x1={x + 10} y1={y + 97} x2={x + w - 10} y2={y + 97} stroke={FR.sand} />
+      <text x={x + 10} y={y + 64} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">SIGNATURE</text>
+      <text x={x + 10} y={y + 76} fontSize="10" fill={FR.slate}>{clampLine(esc(signature || '—'), w - 20, 5.8)}</text>
+      <line x1={x + 10} y1={y + 80} x2={x + w - 10} y2={y + 80} stroke={FR.sand} />
 
-      <text x={x + 10} y={y + 116} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">{esc(dateLabel.toUpperCase())}</text>
-      <text x={x + 10} y={y + 131} fontSize="10" fill={FR.slate}>{clampLine(esc(date || '—'), w - 20, 5.8)}</text>
-      <line x1={x + 10} y1={y + 135} x2={x + w - 10} y2={y + 135} stroke={FR.sand} />
+      <text x={x + 10} y={y + 94} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">{esc(dateLabel.toUpperCase())}</text>
+      <text x={x + 10} y={y + 106} fontSize="10" fill={FR.slate}>{clampLine(esc(date || '—'), w - 20, 5.8)}</text>
+      <line x1={x + 10} y1={y + 110} x2={x + w - 10} y2={y + 110} stroke={FR.sand} />
     </g>
   );
 }
