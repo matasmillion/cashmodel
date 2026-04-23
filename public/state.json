@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-23T13:15:24.021Z",
+  "lastUpdated": "2026-04-23T13:19:50.010Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "cbfb9ac",
+      "date": "2026-04-23T13:15:38+00:00",
+      "message": "Trim pack materials: add Color and Finish dropdowns to each material card"
+    },
+    {
       "sha": "a4ab085",
       "date": "2026-04-23T13:09:46+00:00",
       "message": "Trim pack overview: cover photo 3:2 landscape, fills title zone to divider"
@@ -1087,11 +1092,6 @@
       "sha": "7a5e4a8",
       "date": "2026-04-22T17:39:25+00:00",
       "message": "Trim pack embellishments: colorway cards, shared FR color library, 3 artwork tiles"
-    },
-    {
-      "sha": "6267dc3",
-      "date": "2026-04-22T17:03:08+00:00",
-      "message": "Trim pack overview: tighten layout + fix legacy revision rendering"
     }
   ]
 }
