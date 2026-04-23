@@ -7,12 +7,12 @@
 //   6. Treatment       — 3 finish cards (image + text)
 //   7. Quality Control — 3 QC focus cards (image + text)
 
-import { STATUSES, COMPONENT_TYPES, APPROVAL_STATUSES, SAMPLE_TYPES, SAMPLE_VERDICTS, MATERIAL_COLORS, MATERIAL_FINISHES } from './componentPackConstants';
+import { STATUSES, COMPONENT_TYPES, APPROVAL_STATUSES, SAMPLE_TYPES, SAMPLE_VERDICTS, MATERIAL_FINISHES } from './componentPackConstants';
 import { FR, FR_COLOR_OPTIONS } from './techPackConstants';
 import { Input, Select, Row, SectionTitle, AspectPhoto, ASPECTS, EditableSelect, ArrayTable, FRColorCell, labelStyle, inputBase } from './TechPackPrimitives';
 import { addSupplier } from '../../utils/plmDirectory';
-import { getFRColor, updateFRColor, clearFRColorField } from '../../utils/colorLibrary';
-import { fileToDataUrl } from '../../utils/cropImage';
+import { getFRColor, updateFRColor } from '../../utils/colorLibrary';
+import { setPLMHash } from '../../utils/plmRouting';
 import { useState, useRef, useEffect } from 'react';
 import { CheckCircle, XCircle, Clock, Plus } from 'lucide-react';
 
@@ -372,7 +372,10 @@ export function StepMaterials({ data, set, images, onUpload, onRemove, existingS
             <Input label="Composition" value={m.composition} onChange={v => updateMat(i, 'composition', v)} placeholder="100% Cotton" />
             <Input label="Weight / Gauge" value={m.weightGauge} onChange={v => updateMat(i, 'weightGauge', v)} placeholder="400 GSM" />
             <Row>
-              <Select label="Color" value={m.color || ''} onChange={v => updateMat(i, 'color', v)} options={MATERIAL_COLORS} />
+              <div>
+                <label style={labelStyle}>Color</label>
+                <FRColorCell value={m.color || ''} onChange={v => updateMat(i, 'color', v)} />
+              </div>
               <Select label="Finish" value={m.finish || ''} onChange={v => updateMat(i, 'finish', v)} options={MATERIAL_FINISHES} />
             </Row>
             <EditableSelect
@@ -448,64 +451,53 @@ export function StepConstruction({ data, set, images, onUpload, onRemove }) {
 // later. Download links also show up in the exported PDF and will flow
 // into the factory portal + email automation when those phases land.
 const COLORWAY_CAP = 4;
-const emptyColorway = () => ({ name: '', usage: '', frColor: '', pantoneTCX: '', pantoneTPG: '', pantoneC: '', hex: '', rgb: '' });
+const emptyColorway = () => ({ name: '', usage: '', frColor: '' });
 
-// One colorway card. Name, usage, FR color anchor, Pantone codes, hex, RGB,
-// and an inline Pantone TCX card photo slot. Whenever the FR color is set,
-// the Pantone / hex / RGB edits AND the TCX card image are written back to
-// the shared color library (src/utils/colorLibrary.js) so other packs
-// referencing the same color see the update.
+// Compact colorway card. Picks an FR color; Pantone codes, hex, RGB, and the
+// Pantone TCX card image all live in the shared color library (edited on the
+// PLM → Colors tab). This card only stores {name, usage, frColor}. Legacy
+// packs with inline pantone/hex values get seeded into the library on first
+// mount, then those fields are dropped from the pack on the next save.
 function ColorwayCard({ index, value, onChange, onRemove, canRemove }) {
   const c = value || emptyColorway();
-  const fileRef = useRef(null);
-  // Library snapshot for the selected FR color (Pantone TCX card image comes
-  // from here). Re-reads whenever frColor changes so a fresh card image
-  // saved from another colorway/pack shows up.
   const [library, setLibrary] = useState(() => (c.frColor ? getFRColor(c.frColor) : null));
+
+  // Re-read the library whenever the selected color changes so another pack's
+  // edit to the palette shows up here.
   useEffect(() => {
     setLibrary(c.frColor ? getFRColor(c.frColor) : null);
   }, [c.frColor]);
 
-  // Update a field locally AND sync shared fields back to the library when
-  // this card is anchored to a named FR color.
-  const patch = (k, v) => {
-    const next = { ...c, [k]: v };
-
-    // Auto-fill from library when the user picks an FR color.
-    if (k === 'frColor') {
-      const entry = getFRColor(v);
-      if (entry) {
-        if (entry.hex)        next.hex        = entry.hex;
-        if (entry.rgb)        next.rgb        = entry.rgb;
-        if (entry.pantoneTCX) next.pantoneTCX = entry.pantoneTCX;
-        if (entry.pantoneTPG) next.pantoneTPG = entry.pantoneTPG;
-        if (entry.pantoneC)   next.pantoneC   = entry.pantoneC;
-      }
-      setLibrary(entry);
-    }
-
-    // Push shared codes back to the library.
-    if (next.frColor && ['pantoneTCX', 'pantoneTPG', 'pantoneC', 'hex', 'rgb'].includes(k)) {
-      updateFRColor(next.frColor, { [k]: v });
-      setLibrary(getFRColor(next.frColor));
-    }
-
-    onChange(next);
-  };
-
-  const uploadCard = async (file) => {
-    if (!file || !file.type.startsWith('image/') || !c.frColor) return;
-    const dataUri = await fileToDataUrl(file);
-    updateFRColor(c.frColor, { cardImage: dataUri });
-    setLibrary(getFRColor(c.frColor));
-  };
-
-  const removeCard = () => {
+  // One-time migration: if this card was saved before the palette-manager
+  // unification and carries pantone/hex/rgb values inline, seed any fields
+  // the library doesn't already know about. Never overwrite library values.
+  useEffect(() => {
     if (!c.frColor) return;
-    clearFRColorField(c.frColor, 'cardImage');
-    setLibrary(getFRColor(c.frColor));
-  };
+    const entry = getFRColor(c.frColor);
+    if (!entry) return;
+    const legacy = {
+      pantoneTCX: c.pantoneTCX, pantoneTPG: c.pantoneTPG,
+      pantoneC: c.pantoneC,     hex: c.hex, rgb: c.rgb,
+    };
+    const toSeed = {};
+    Object.entries(legacy).forEach(([k, v]) => {
+      if (v && !entry[k]) toSeed[k] = v;
+    });
+    if (Object.keys(toSeed).length) {
+      updateFRColor(c.frColor, toSeed);
+      setLibrary(getFRColor(c.frColor));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // Narrow save — editing any field strips legacy pantone/hex/rgb from the
+  // pack JSONB. Library stays authoritative.
+  const patch = (k, v) => onChange({
+    name: c.name || '', usage: c.usage || '', frColor: c.frColor || '',
+    [k]: v,
+  });
+
+  const swatchHex = library?.hex || FR.salt;
   const cardImage = library?.cardImage;
 
   return (
@@ -518,9 +510,14 @@ function ColorwayCard({ index, value, onChange, onRemove, canRemove }) {
         )}
       </div>
 
-      {/* Preview swatch chip — fills with the hex value so the user sees the
-          color they've specified. */}
-      <div style={{ width: '100%', height: 60, background: c.hex || FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 4 }} />
+      {/* Swatch strip + TCX card thumbnail (if library has one for this color) */}
+      <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ flex: 1, height: 48, background: swatchHex, border: `1px solid ${FR.sand}`, borderRadius: 4 }} />
+        {cardImage && (
+          <img src={cardImage} alt={`${c.frColor} TCX card`}
+            style={{ width: 32, height: 48, objectFit: 'cover', border: `1px solid ${FR.sand}`, borderRadius: 3 }} />
+        )}
+      </div>
 
       <Input label="Name" value={c.name} onChange={v => patch('name', v)} placeholder="Natural / Black" />
       <Input label="Used For" value={c.usage} onChange={v => patch('usage', v)} placeholder="Logo / Base fabric / Thread" />
@@ -530,44 +527,27 @@ function ColorwayCard({ index, value, onChange, onRemove, canRemove }) {
         <FRColorCell value={c.frColor} onChange={v => patch('frColor', v)} />
       </div>
 
-      <Input label="Pantone TCX" value={c.pantoneTCX} onChange={v => patch('pantoneTCX', v)} placeholder="e.g. 19-4305 TCX" />
-      <Input label="Pantone TPG" value={c.pantoneTPG} onChange={v => patch('pantoneTPG', v)} placeholder="e.g. 19-4305 TPG" />
-      <Input label="Pantone C"   value={c.pantoneC}   onChange={v => patch('pantoneC',   v)} placeholder="e.g. 19-4305 C" />
-      <Input label="Hex"         value={c.hex}        onChange={v => patch('hex',        v)} placeholder="#3A3A3A" />
-      <Input label="RGB"         value={c.rgb}        onChange={v => patch('rgb',        v)} placeholder="58, 58, 58" />
-
-      {/* Pantone TCX card image — lives in the shared color library, not in
-          the pack's images array. Uploading here saves it for every colorway
-          (in any pack) that references the same FR color. */}
-      <div style={{ marginTop: 4 }}>
-        <label style={labelStyle}>Pantone TCX Card</label>
-        {!c.frColor ? (
-          <div style={{ padding: 10, border: `1px dashed ${FR.sand}`, borderRadius: 4, background: FR.salt, fontSize: 10, color: FR.stone, fontStyle: 'italic', textAlign: 'center' }}>
-            Pick an FR color first to save a TCX card.
+      {/* Read-only library summary + edit link */}
+      {c.frColor && (
+        <div style={{ padding: '8px 10px', background: FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 10, color: FR.stone, lineHeight: 1.7 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: FR.soil, fontWeight: 600, letterSpacing: 0.3 }}>TCX</span>
+            <span style={{ color: FR.slate }}>{library?.pantoneTCX || '—'}</span>
           </div>
-        ) : (
-          <div onClick={() => fileRef.current?.click()}
-            style={{ position: 'relative', width: '100%', aspectRatio: '2 / 3', border: `1px dashed ${FR.sand}`, borderRadius: 4, background: cardImage ? 'transparent' : FR.salt, cursor: 'pointer', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <input ref={fileRef} type="file" accept="image/*"
-              onChange={e => { if (e.target.files?.[0]) uploadCard(e.target.files[0]); e.target.value = ''; }}
-              style={{ display: 'none' }} />
-            {cardImage ? (
-              <>
-                <img src={cardImage} alt={`${c.frColor} TCX card`}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                <button onClick={e => { e.stopPropagation(); removeCard(); }}
-                  style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: 10, background: FR.slate, color: FR.salt, border: 'none', fontSize: 11, cursor: 'pointer' }}>×</button>
-              </>
-            ) : (
-              <div style={{ textAlign: 'center', fontSize: 10, color: FR.stone, padding: 8 }}>
-                <div style={{ fontSize: 20, color: FR.sand, lineHeight: 1 }}>＋</div>
-                <div style={{ marginTop: 4 }}>Upload TCX card for <strong>{c.frColor}</strong></div>
-                <div style={{ fontSize: 9, color: FR.sand, marginTop: 2 }}>Shared with every pack</div>
-              </div>
-            )}
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: FR.soil, fontWeight: 600, letterSpacing: 0.3 }}>HEX</span>
+            <span style={{ color: FR.slate, fontFamily: 'monospace' }}>{library?.hex || '—'}</span>
           </div>
-        )}
-      </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: FR.soil, fontWeight: 600, letterSpacing: 0.3 }}>RGB</span>
+            <span style={{ color: FR.slate }}>{library?.rgb || '—'}</span>
+          </div>
+          <button onClick={() => setPLMHash({ section: 'colors' })}
+            style={{ marginTop: 4, background: 'none', border: 'none', color: FR.soil, fontSize: 10, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+            Edit in Colors →
+          </button>
+        </div>
+      )}
     </div>
   );
 }

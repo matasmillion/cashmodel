@@ -9,6 +9,7 @@ import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSE
 import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, EditableSelect, FRColorCell } from './TechPackPrimitives';
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
 import { addSupplier } from '../../utils/plmDirectory';
+import { getFRColor } from '../../utils/colorLibrary';
 
 function LockedBanner({ status }) {
   return (
@@ -337,12 +338,19 @@ export function StepBOM({ data, set, existingSuppliers = [] }) {
 }
 export function StepColor({ data, set, images, onUpload, onRemove }) {
   const colorways = data.colorways && data.colorways.length ? data.colorways : [{ name: '', frColor: '', pantone: '', hex: '', fabricSwatch: '', approvalStatus: 'Pending' }];
+  // When frColor changes, cache the library's Pantone TCX + hex onto the
+  // colorway row so preview rendering keeps working without extra lookups.
+  // The Pantone/hex columns themselves render read-only from the library.
   const updateCW = (i, k, v) => {
     set('colorways', colorways.map((r, idx) => {
       if (idx !== i) return r;
       if (k === 'frColor') {
-        const match = FR_COLOR_OPTIONS.find(c => c.name === v);
-        return { ...r, frColor: v, hex: match ? match.hex : r.hex };
+        const entry = getFRColor(v);
+        return {
+          ...r, frColor: v,
+          pantone: entry?.pantoneTCX || r.pantone || '',
+          hex:     entry?.hex        || r.hex     || '',
+        };
       }
       return { ...r, [k]: v };
     }));
@@ -356,6 +364,17 @@ export function StepColor({ data, set, images, onUpload, onRemove }) {
   const rmAP = (i) => set('artworkPlacements', placements.filter((_, idx) => idx !== i));
 
   const frColorRender = (v, onChange) => <FRColorCell value={v} onChange={onChange} />;
+  // Read-only text cells that pull their value from the color library using
+  // the row's frColor as the key. Edits happen only on PLM → Colors.
+  const libraryCellRender = (field) => (_val, _onChange, row) => {
+    const entry = row?.frColor ? getFRColor(row.frColor) : null;
+    const v = entry?.[field] || '';
+    return (
+      <div style={{ padding: '3px 2px', fontSize: 11, color: FR.stone, fontFamily: "'Helvetica Neue',sans-serif" }}>
+        {v || '—'}
+      </div>
+    );
+  };
   const approvalRender = (v, onChange) => (
     <select value={v || 'Pending'} onChange={e => onChange(e.target.value)}
       style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box' }}>
@@ -380,12 +399,15 @@ export function StepColor({ data, set, images, onUpload, onRemove }) {
 
       <div style={{ marginBottom: 18 }}>
         <label style={sectionLabel}>Colorway Specification</label>
+        <p style={{ fontSize: 10, color: FR.stone, marginTop: -4, marginBottom: 6, fontStyle: 'italic' }}>
+          Pantone TCX and Hex are pulled from the Colors palette. Edit them on <strong>PLM → Colors</strong>.
+        </p>
         <ArrayTable
           headers={[
             { key: 'name',           label: 'Colorway Name', placeholder: 'Slate Wash' },
             { key: 'frColor',        label: 'FR Color',      render: frColorRender },
-            { key: 'pantone',        label: 'Pantone Ref',   placeholder: '19-4305' },
-            { key: 'hex',            label: 'Hex',           placeholder: '#3A3A3A' },
+            { key: 'pantone',        label: 'Pantone TCX',   render: libraryCellRender('pantoneTCX') },
+            { key: 'hex',            label: 'Hex',           render: libraryCellRender('hex') },
             { key: 'fabricSwatch',   label: 'Fabric Swatch', placeholder: 'Filename / code' },
             { key: 'approvalStatus', label: 'Approval',      render: approvalRender },
           ]}

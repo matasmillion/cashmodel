@@ -1,10 +1,12 @@
-// PLM container — sub-tabs for Styles (tech packs) and Components (component packs)
+// PLM container — sub-tabs for Styles (tech packs), Trims (component packs),
+// and Colors (shared FR brand color palette, single source of truth).
 
 import { useEffect, useState } from 'react';
-import { Shirt, Boxes } from 'lucide-react';
+import { Shirt, Boxes, Palette } from 'lucide-react';
 import { FR } from './techPackConstants';
 import TechPackList from './TechPackList';
 import ComponentPackList from './ComponentPackList';
+import ColorPaletteManager from './ColorPaletteManager';
 import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
 
 export default function PLMView() {
@@ -56,10 +58,14 @@ export default function PLMView() {
         <button onClick={() => switchView('components')} style={tabStyle(view === 'components')}>
           <Boxes size={13} /> Trims
         </button>
+        <button onClick={() => switchView('colors')} style={tabStyle(view === 'colors')}>
+          <Palette size={13} /> Colors
+        </button>
       </div>
 
       {view === 'styles' && <TechPackList />}
       {view === 'components' && <ComponentPackList />}
+      {view === 'colors' && <ColorPaletteManager />}
     </div>
   );
 }

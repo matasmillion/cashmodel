@@ -59,10 +59,10 @@ const todayISO = () => {
 
 const emptyMaterial  = () => ({ name: '', composition: '', weightGauge: '', factory: '', color: '', finish: '' });
 
-export const MATERIAL_COLORS = [
-  'Natural', 'White', 'Off-White', 'Black', 'Slate', 'Stone', 'Sand',
-  'Navy', 'Olive', 'Brown', 'Tan', 'Red', 'Custom',
-];
+// Material color options now come from the shared FR brand palette
+// (FR_COLOR_OPTIONS in techPackConstants.js). The old MATERIAL_COLORS list
+// (Natural / White / Navy / ...) was removed as part of the color-system
+// unification — every color surface in the PLM pulls from the same palette.
 
 export const MATERIAL_FINISHES = [
   'N/A', 'Matte', 'Glossy', 'Satin', 'Brushed', 'Washed',
