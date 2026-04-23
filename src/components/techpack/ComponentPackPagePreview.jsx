@@ -398,25 +398,32 @@ function PageMaterials({ d, images }) {
 }
 
 // ── Page 3: Construction ───────────────────────────────────────────────────
-// 16:9 hero diagram (left 2/3 of page) + 3 stacked callout blocks (right 1/3).
+// A4-landscape hero diagram (left 2/3) + 3 stacked callout blocks (right 1/3).
+// Each callout: red "CALLOUT N — title" header strip, SPECIFICATION text on the
+// left, 3:2 landscape reference image on the right.
 function PageConstruction({ d, images }) {
   const imgs = images || [];
   const diagram = imgs.find(x => x.slot === 'construction-diagram');
   const callouts = (d.constructionCallouts || []).slice(0, 3);
   while (callouts.length < 3) callouts.push({});
 
-  // A4 landscape diagram on the left (≈600 × 424). Callouts stacked on the
-  // right to fill the remaining horizontal space without the previous
-  // overflow problem the old 16:9 hero caused.
   const heroX = 40;
   const heroY = 170;
   const heroW = 600;
-  const heroH = Math.round(heroW * 210 / 297); // A4 landscape
+  const heroH = Math.round(heroW * 210 / 297);
 
   const coColX = heroX + heroW + 30;
   const coColW = PAGE_W - coColX - 40;
   const coGap = 10;
-  const coH = Math.round((heroH - coGap * 2) / 3);
+  // Callouts extend to full available page height so spec text + image fit.
+  const availH = 775 - heroY - 10;
+  const coH = Math.round((availH - coGap * 2) / 3);
+
+  const pad = 12;
+  const innerW = coColW - pad * 2;
+  const imgW = 134;
+  const imgH = Math.round(imgW * 2 / 3); // 3:2 landscape
+  const specW = innerW - imgW - 10;
 
   return (
     <g>
@@ -429,21 +436,32 @@ function PageConstruction({ d, images }) {
 
       {callouts.map((c, i) => {
         const cy = heroY + i * (coH + coGap);
+        const refImg = imgs.find(x => x.slot === `callout-ref-${i}`);
+        const specText = c.specification || c.detail || '';
+        const imgX = coColX + pad + specW + 10;
         return (
           <g key={i}>
             <rect x={coColX} y={cy} width={coColW} height={coH} fill={FR.white} stroke={FR.sand} />
             <rect x={coColX} y={cy} width={coColW} height={22} fill={FR.salt} />
-            <text x={coColX + 12} y={cy + 15} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="1.5">
-              CALLOUT {i + 1}
+            <text x={coColX + pad} y={cy + 15} fontSize="9">
+              <tspan fontWeight="bold" fill="#C0392B" letterSpacing="1.5">CALLOUT {i + 1}</tspan>
+              <tspan fill={FR.stone} letterSpacing="0"> — </tspan>
+              <tspan fill={FR.slate} letterSpacing="0">{clampLine(esc(c.label || ''), specW, 5.5)}</tspan>
             </text>
-            <text x={coColX + 12} y={cy + 38} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">LABEL</text>
-            <text x={coColX + 12} y={cy + 54} fontSize="11" fill={FR.slate}>{clampLine(esc(c.label || '—'), coColW - 24, 6.2)}</text>
-            <text x={coColX + 12} y={cy + 74} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">DETAIL</text>
-            <foreignObject x={coColX + 12} y={cy + 80} width={coColW - 24} height={coH - 88}>
-              <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: 10, color: FR.slate, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
-                {c.detail || '—'}
+            <text x={coColX + pad} y={cy + 40} fontSize="7" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">SPECIFICATION</text>
+            <foreignObject x={coColX + pad} y={cy + 48} width={specW} height={coH - 58}>
+              <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: 9, color: FR.slate, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
+                {specText || '—'}
               </div>
             </foreignObject>
+            {refImg ? (
+              <image href={refImg.data} xlinkHref={refImg.data} x={imgX} y={cy + 30} width={imgW} height={imgH} preserveAspectRatio="xMidYMid meet" />
+            ) : (
+              <g>
+                <rect x={imgX} y={cy + 30} width={imgW} height={imgH} fill={FR.salt} stroke={FR.sand} strokeDasharray="3,2" rx="2" />
+                <text x={imgX + imgW / 2} y={cy + 30 + imgH / 2 + 4} textAnchor="middle" fontSize="7" fill={FR.stone}>ref image</text>
+              </g>
+            )}
           </g>
         );
       })}

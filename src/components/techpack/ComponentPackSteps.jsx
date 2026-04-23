@@ -415,9 +415,21 @@ export function StepConstruction({ data, set, images, onUpload, onRemove }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
         {callouts.slice(0, 3).map((c, i) => (
           <div key={i} style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <span style={{ fontSize: 9, color: FR.soil, fontWeight: 700, letterSpacing: 1.5 }}>CALLOUT {i + 1}</span>
-            <Input label="Label" value={c.label} onChange={v => updateCallout(i, 'label', v)} placeholder="e.g. Seam type" />
-            <Input label="Detail" value={c.detail} onChange={v => updateCallout(i, 'detail', v)} placeholder="Spec, tolerance, notes…" multiline />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 9, color: '#C0392B', fontWeight: 700, letterSpacing: 1.5, whiteSpace: 'nowrap' }}>CALLOUT {i + 1}</span>
+              <span style={{ color: FR.stone, fontSize: 11 }}>—</span>
+              <input
+                value={c.label || ''}
+                onChange={e => updateCallout(i, 'label', e.target.value)}
+                placeholder="Callout title"
+                style={{ flex: 1, fontSize: 11, padding: '3px 6px', border: `1px solid ${FR.sand}`, borderRadius: 3, color: FR.slate, background: 'white', fontFamily: "'Inter', sans-serif", outline: 'none' }}
+              />
+            </div>
+            <Input label="Specification" value={c.specification || c.detail || ''} onChange={v => updateCallout(i, 'specification', v)} placeholder="Spec, tolerance, notes…" multiline />
+            <div>
+              <label style={{ ...sectionLabel, marginTop: 4 }}>Reference Image</label>
+              <AspectPhoto slotKey={`callout-ref-${i}`} aspect={ASPECTS.LANDSCAPE_3_2} images={images} onUpload={onUpload} onRemove={onRemove} />
+            </div>
           </div>
         ))}
       </div>

@@ -9,8 +9,9 @@ import CropModal from './CropModal';
 //   A4 landscape → technical drawings that will be exported from Illustrator.
 //   2:3 portrait → photos (product shots, swatches, references, renders).
 export const ASPECTS = {
-  A4_LANDSCAPE: { ratio: 297 / 210, label: 'A4 · 297 × 210 mm',  shortLabel: 'A4 landscape' },
-  TWO_THIRDS:   { ratio: 2 / 3,     label: '2:3 · portrait photo', shortLabel: '2:3 portrait' },
+  A4_LANDSCAPE:   { ratio: 297 / 210, label: 'A4 · 297 × 210 mm',      shortLabel: 'A4 landscape' },
+  TWO_THIRDS:     { ratio: 2 / 3,     label: '2:3 · portrait photo',    shortLabel: '2:3 portrait' },
+  LANDSCAPE_3_2:  { ratio: 3 / 2,     label: '3:2 · landscape reference', shortLabel: '3:2 landscape' },
 };
 
 export const labelStyle = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' };
