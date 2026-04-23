@@ -428,7 +428,7 @@ export function StepConstruction({ data, set, images, onUpload, onRemove }) {
             <Input label="Specification" value={c.specification || c.detail || ''} onChange={v => updateCallout(i, 'specification', v)} placeholder="Spec, tolerance, notes…" multiline />
             <div>
               <label style={{ ...sectionLabel, marginTop: 4 }}>Reference Image</label>
-              <AspectPhoto slotKey={`callout-ref-${i}`} aspect={ASPECTS.LANDSCAPE_3_2} images={images} onUpload={onUpload} onRemove={onRemove} />
+              <AspectPhoto slotKey={`callout-ref-${i}`} aspect={ASPECTS.TWO_THIRDS} images={images} onUpload={onUpload} onRemove={onRemove} />
             </div>
           </div>
         ))}

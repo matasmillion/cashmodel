@@ -421,8 +421,8 @@ function PageConstruction({ d, images }) {
 
   const pad = 12;
   const innerW = coColW - pad * 2;
-  const imgW = 134;
-  const imgH = Math.round(imgW * 2 / 3); // 3:2 landscape
+  const imgW = 100;
+  const imgH = 150; // 2:3 portrait (~28% more area than the old 134×89 landscape)
   const specW = innerW - imgW - 10;
 
   return (
