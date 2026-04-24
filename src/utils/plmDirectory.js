@@ -1,12 +1,18 @@
-// Unified lookup for factories and people across the PLM.
+// Unified lookup for vendors and people across the PLM.
 // Aggregates from:
 //   1. localStorage mirrors of tech_packs + component_packs (fast path)
-//   2. Supabase JSONB projections of data.factory / data.supplier / approval
-//      names (covers rows that live in cloud but haven't been opened on this
-//      device, so their full data isn't in localStorage yet)
-//   3. custom persisted lists of manually-onboarded factories / people
+//   2. Supabase JSONB projections of data.vendor / data.factory / data.supplier
+//      / approval names (covers rows that live in cloud but haven't been
+//      opened on this device, so their full data isn't in localStorage yet)
+//   3. custom persisted lists of manually-onboarded vendors / people
 // New entries added through EditableSelect are written to the custom lists so
 // they show up immediately, even before the pack is saved.
+//
+// Post-migration note: the `data.factory` field name is still written by the
+// frozen tech pack builder (renaming it would require editing that builder,
+// which is out of scope for Prompt 1). Aggregation reads both the new
+// `data.vendor` and legacy `data.factory` so UI labels can drift toward
+// "Vendor" without disturbing stored records.
 
 import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
 
@@ -29,12 +35,16 @@ function addNormalized(set, value) {
   if (trimmed) set.add(trimmed);
 }
 
-// ── Factories ──────────────────────────────────────────────────────────────
-// Pulls factories from:
+// ── Vendors ───────────────────────────────────────────────────────────────
+// Pulls vendors from:
 //   • trim (component) packs — data.supplier + data.materials[].supplier
-//   • tech packs — data.factory + data.{bom,fabrics,trimsAccessories,labelsBranding}[].supplier
+//   • tech packs — (data.vendor ?? data.factory) + data.{bom,fabrics,
+//     trimsAccessories,labelsBranding}[].supplier
 //   • Supabase projection so rows not mirrored locally still count
 //   • custom persisted list (manually added)
+// Legacy read path: `data.factory` is still the field written by the frozen
+// tech pack builder, so we pull both the new `data.vendor` and the legacy
+// `data.factory` keys to keep every pack's maker surfaced.
 export async function listAllSuppliers() {
   const suppliers = new Set();
 
@@ -46,7 +56,9 @@ export async function listAllSuppliers() {
   const techPackSupplierKeys = ['bom', 'fabrics', 'trimsAccessories', 'labelsBranding'];
   readJSON(TECHPACKS_KEY, []).forEach(p => {
     const d = p?.data || {};
-    addNormalized(suppliers, d.factory);
+    // Read `vendor` first (new canonical field) with `factory` fallback for
+    // records written by the pre-rename tech pack builder.
+    addNormalized(suppliers, d.vendor ?? d.factory);
     techPackSupplierKeys.forEach(k => (d[k] || []).forEach(row => addNormalized(suppliers, row?.supplier)));
   });
 
@@ -54,14 +66,17 @@ export async function listAllSuppliers() {
 
   // Cloud fallback: covers packs that exist in Supabase but haven't been
   // fetched in full on this device yet. Projections keep the payload small —
-  // just the factory/supplier strings we need, not the whole JSONB blob.
+  // just the vendor/factory/supplier strings we need, not the whole JSONB blob.
   if (IS_SUPABASE_ENABLED) {
     try {
       const [techRes, compRes] = await Promise.all([
-        supabase.from('tech_packs').select('factory:data->>factory'),
+        // Legacy JSONB key `data.factory` still contains the vendor name on
+        // existing records. Projecting `data.vendor` first would miss every
+        // pre-migration record.
+        supabase.from('tech_packs').select('vendor:data->>vendor, factory:data->>factory'),
         supabase.from('component_packs').select('supplier'),
       ]);
-      (techRes.data || []).forEach(r => addNormalized(suppliers, r.factory));
+      (techRes.data || []).forEach(r => addNormalized(suppliers, r.vendor || r.factory));
       (compRes.data || []).forEach(r => addNormalized(suppliers, r.supplier));
     } catch (err) {
       console.error('listAllSuppliers supabase:', err);

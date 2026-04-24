@@ -342,7 +342,7 @@ export default function ComponentPackList() {
           <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
             <Search size={13} style={{ position: 'absolute', left: 8, top: 8, color: FR.stone }} />
             <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search trims, factories, categories…"
+              placeholder="Search trims, vendors, categories…"
               style={{ width: '100%', padding: '6px 8px 6px 28px', border: `1px solid ${FR.sand}`, borderRadius: 6, fontSize: 12, color: FR.slate, background: 'white', outline: 'none', boxSizing: 'border-box' }} />
           </div>
           <span style={{ fontSize: 10, color: FR.stone }}>{filtered.length} of {packs.length}</span>

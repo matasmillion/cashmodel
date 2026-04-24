@@ -73,7 +73,7 @@ function PageCover({ d, images }) {
   const derivedRevision = `V${(d.revisions || []).length + 1}.0`;
   const leftCol = [
     { label: 'Trim Type',           value: d.componentType },
-    { label: 'Factory',             value: d.supplier },
+    { label: 'Vendor',              value: d.supplier },
     { label: 'Season',              value: d.season },
     { label: 'Date Last Updated',   value: d.dateCreated },
   ];
@@ -186,7 +186,7 @@ function PageCover({ d, images }) {
       <SectionHeading x={40} y={628}>Final Approval</SectionHeading>
       <CompactApprovalCard x={40}                         y={cardY} w={cardW} h={cardH} title="Designer" name={designer.name} signature={designer.signature} date={designer.date} />
       <CompactApprovalCard x={40 + cardW + cardGap}       y={cardY} w={cardW} h={cardH} title="Manager"  name={manager.name}  signature={manager.signature}  date={manager.date} />
-      <CompactApprovalCard x={40 + (cardW + cardGap) * 2} y={cardY} w={cardW} h={cardH} title="Factory"  name={factory.name}  signature={factory.signature}  date={factory.dateChop} dateLabel="Date / Chop" />
+      <CompactApprovalCard x={40 + (cardW + cardGap) * 2} y={cardY} w={cardW} h={cardH} title="Vendor"   name={factory.name}  signature={factory.signature}  date={factory.dateChop} dateLabel="Date / Chop" />
     </g>
   );
 }
@@ -392,7 +392,7 @@ function PageMaterials({ d, images }) {
             <text x={cx + 14} y={cardY + 38 + imgH + 122} fontSize="11" fill={FR.slate}>{clampLine(esc(m.weightGauge || '—'), cardW - 28, 6.2)}</text>
             <line x1={cx + 14} y1={cardY + 38 + imgH + 126} x2={cx + cardW - 14} y2={cardY + 38 + imgH + 126} stroke={FR.sand} />
 
-            <text x={cx + 14} y={cardY + 38 + imgH + 146} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">FACTORY</text>
+            <text x={cx + 14} y={cardY + 38 + imgH + 146} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">VENDOR</text>
             <text x={cx + 14} y={cardY + 38 + imgH + 162} fontSize="11" fill={FR.slate}>{clampLine(esc(m.factory || '—'), cardW - 28, 6.2)}</text>
             <line x1={cx + 14} y1={cardY + 38 + imgH + 166} x2={cx + cardW - 14} y2={cardY + 38 + imgH + 166} stroke={FR.sand} />
 
@@ -695,7 +695,7 @@ function InfoStrip({ d }) {
       <rect x={40} y={stripY} width={PAGE_W - 80} height={stripH} fill={FR.salt} stroke={FR.sand} />
       <InfoStripCell x={40 + cellW * 0} y={stripY} w={cellW} label="Trim Name"  value={d.componentName} />
       <InfoStripCell x={40 + cellW * 1} y={stripY} w={cellW} label="Trim Type"  value={d.componentType} />
-      <InfoStripCell x={40 + cellW * 2} y={stripY} w={cellW} label="Factory"    value={d.supplier} />
+      <InfoStripCell x={40 + cellW * 2} y={stripY} w={cellW} label="Vendor"     value={d.supplier} />
       <InfoStripCell x={40 + cellW * 3} y={stripY} w={cellW} label="Date"       value={d.dateCreated} />
     </g>
   );

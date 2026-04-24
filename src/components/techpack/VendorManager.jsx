@@ -1,7 +1,7 @@
-// PLM Factory Directory — mirrors ColorPaletteManager.
-// Grid of factory cards; click one to open an editor modal with contact
+// PLM Vendor Directory — mirrors ColorPaletteManager.
+// Grid of vendor cards; click one to open an editor modal with contact
 // info, MOQ, lead time, specialties, notes, and a logo upload slot. All
-// edits flow through factoryLibrary (localStorage-only for now).
+// edits flow through vendorLibrary (localStorage-only for now).
 //
 // Names that appear in plmDirectory.listAllSuppliers() but don't yet have
 // a rich record in the library are stitched in as empty cards with a
@@ -10,28 +10,28 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Upload, Plus, Trash2, MapPin, Globe } from 'lucide-react';
 import { FR } from './techPackConstants';
-import { Input, Row, labelStyle, inputBase } from './TechPackPrimitives';
+import { Input, labelStyle } from './TechPackPrimitives';
 import {
-  listFactoriesLocal, listFactories,
-  getFactory, updateFactory, clearFactoryField,
-  addFactory, deleteFactory,
-} from '../../utils/factoryLibrary';
+  listVendorsLocal, listVendors,
+  getVendor, updateVendor, clearVendorField,
+  addVendor, deleteVendor,
+} from '../../utils/vendorLibrary';
 import { fileToDataUrl } from '../../utils/cropImage';
 
-export default function FactoryManager() {
-  const [factories, setFactories] = useState(() => listFactoriesLocal());
+export default function VendorManager() {
+  const [vendors, setVendors] = useState(() => listVendorsLocal());
   const [activeName, setActiveName] = useState(null);
   const [adding, setAdding] = useState(false);
 
   // Quick synchronous refresh from library store.
-  const refresh = () => setFactories(listFactoriesLocal());
+  const refresh = () => setVendors(listVendorsLocal());
 
   // Async refresh that also pulls names from plmDirectory. Used on mount
   // and after closing editors so the grid always reflects both sources.
   const refreshAll = async () => {
     try {
-      const full = await listFactories();
-      setFactories(full);
+      const full = await listVendors();
+      setVendors(full);
     } catch (err) {
       console.error(err);
       refresh();
@@ -46,7 +46,7 @@ export default function FactoryManager() {
   };
 
   const handleAdd = (name, country) => {
-    const res = addFactory(name, { country });
+    const res = addVendor(name, { country });
     if (!res.ok) {
       alert(res.reason);
       return false;
@@ -61,33 +61,33 @@ export default function FactoryManager() {
     <div>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16 }}>
         <div>
-          <h3 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 20, margin: 0 }}>Factory Directory</h3>
+          <h3 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 20, margin: 0 }}>Vendor Directory</h3>
           <p style={{ color: FR.stone, fontSize: 12, margin: '4px 0 0' }}>
-            One place for every factory — contact, MOQ, lead time, specialties.
+            One place for every vendor — contact, MOQ, lead time, specialties.
           </p>
         </div>
         <button onClick={() => setAdding(true)}
           style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-          <Plus size={12} /> Add factory
+          <Plus size={12} /> Add vendor
         </button>
       </div>
 
-      {factories.length === 0 ? (
+      {vendors.length === 0 ? (
         <div style={{ padding: '36px 24px', textAlign: 'center', background: FR.salt, border: `1px dashed ${FR.sand}`, borderRadius: 8 }}>
-          <div style={{ fontSize: 13, color: FR.stone }}>No factories yet.</div>
-          <div style={{ fontSize: 11, color: FR.sand, marginTop: 6 }}>Click + Add factory or enter one on any pack's Factory dropdown.</div>
+          <div style={{ fontSize: 13, color: FR.stone }}>No vendors yet.</div>
+          <div style={{ fontSize: 11, color: FR.sand, marginTop: 6 }}>Click + Add vendor or enter one on any pack's Vendor dropdown.</div>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
-          {factories.map(f => (
-            <FactoryCard key={f.name} factory={f} onClick={() => setActiveName(f.name)} />
+          {vendors.map(f => (
+            <VendorCard key={f.name} vendor={f} onClick={() => setActiveName(f.name)} />
           ))}
         </div>
       )}
 
-      {adding && <AddFactoryForm onCancel={() => setAdding(false)} onSubmit={handleAdd} />}
+      {adding && <AddVendorForm onCancel={() => setAdding(false)} onSubmit={handleAdd} />}
       {activeName && (
-        <FactoryEditor
+        <VendorEditor
           name={activeName}
           onClose={() => handleClose()}
           onDeleted={() => handleClose()} />
@@ -96,8 +96,8 @@ export default function FactoryManager() {
   );
 }
 
-function FactoryCard({ factory, onClick }) {
-  const f = factory;
+function VendorCard({ vendor, onClick }) {
+  const f = vendor;
   const hasDetails = f._hasRecord;
   const specialties = (f.specialties || '')
     .split(',')
@@ -167,7 +167,7 @@ function FactoryCard({ factory, onClick }) {
   );
 }
 
-function AddFactoryForm({ onCancel, onSubmit }) {
+function AddVendorForm({ onCancel, onSubmit }) {
   const [name, setName] = useState('');
   const [country, setCountry] = useState('');
 
@@ -184,7 +184,7 @@ function AddFactoryForm({ onCancel, onSubmit }) {
         style={{ background: FR.white, borderRadius: 10, width: '100%', maxWidth: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
         <div style={{ background: FR.slate, color: FR.salt, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: 9, letterSpacing: 3, fontWeight: 600, opacity: 0.8 }}>NEW FACTORY</div>
+            <div style={{ fontSize: 9, letterSpacing: 3, fontWeight: 600, opacity: 0.8 }}>NEW VENDOR</div>
             <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 22, marginTop: 2 }}>Add to directory</div>
           </div>
           <button type="button" onClick={onCancel} aria-label="Cancel"
@@ -193,7 +193,7 @@ function AddFactoryForm({ onCancel, onSubmit }) {
           </button>
         </div>
         <div style={{ padding: '18px 20px' }}>
-          <Input label="Factory Name" value={name} onChange={setName} placeholder="e.g. Acme Knits" />
+          <Input label="Vendor Name" value={name} onChange={setName} placeholder="e.g. Acme Knits" />
           <Input label="Country (optional)" value={country} onChange={setCountry} placeholder="China, Portugal, Italy…" />
           <p style={{ fontSize: 11, color: FR.stone, marginTop: 4 }}>
             Contact, MOQ, lead time, specialties, and logo can be added next.
@@ -205,7 +205,7 @@ function AddFactoryForm({ onCancel, onSubmit }) {
             </button>
             <button type="submit"
               style={{ padding: '6px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-              Create factory
+              Create vendor
             </button>
           </div>
         </div>
@@ -214,42 +214,42 @@ function AddFactoryForm({ onCancel, onSubmit }) {
   );
 }
 
-function FactoryEditor({ name, onClose, onDeleted }) {
-  const [entry, setEntry] = useState(() => getFactory(name) || { name });
+function VendorEditor({ name, onClose, onDeleted }) {
+  const [entry, setEntry] = useState(() => getVendor(name) || { name });
   const fileRef = useRef(null);
   const hasRecord = !!entry._hasRecord;
 
   const patch = (k, v) => {
     const next = { ...entry, [k]: v };
     setEntry(next);
-    // updateFactory ignores empty strings, so a clear has to go through
-    // clearFactoryField. For typical edits just write.
+    // updateVendor ignores empty strings, so a clear has to go through
+    // clearVendorField. For typical edits just write.
     if (v) {
-      updateFactory(name, { [k]: v });
-      setEntry({ ...getFactory(name), _hasRecord: true });
+      updateVendor(name, { [k]: v });
+      setEntry({ ...getVendor(name), _hasRecord: true });
     }
   };
 
   const uploadLogo = async (file) => {
     if (!file || !file.type.startsWith('image/')) return;
     const dataUri = await fileToDataUrl(file);
-    updateFactory(name, { logoImage: dataUri });
-    setEntry({ ...getFactory(name), _hasRecord: true });
+    updateVendor(name, { logoImage: dataUri });
+    setEntry({ ...getVendor(name), _hasRecord: true });
   };
 
   const removeLogo = () => {
-    clearFactoryField(name, 'logoImage');
-    setEntry(getFactory(name));
+    clearVendorField(name, 'logoImage');
+    setEntry(getVendor(name));
   };
 
   const handleDelete = () => {
     if (!hasRecord) {
-      // Nothing to delete — this factory exists only via plmDirectory.
+      // Nothing to delete — this vendor exists only via plmDirectory.
       onClose();
       return;
     }
-    if (!window.confirm(`Delete “${name}” from the directory? Any pack that still references this factory will keep the name as a plain text value.`)) return;
-    const res = deleteFactory(name);
+    if (!window.confirm(`Delete “${name}” from the directory? Any pack that still references this vendor will keep the name as a plain text value.`)) return;
+    const res = deleteVendor(name);
     if (!res.ok) {
       alert(res.reason);
       return;
@@ -266,7 +266,7 @@ function FactoryEditor({ name, onClose, onDeleted }) {
         style={{ background: FR.white, borderRadius: 10, width: '100%', maxWidth: 760, maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
         <div style={{ background: FR.slate, padding: '18px 22px', color: FR.salt, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: 9, letterSpacing: 3, fontWeight: 600, opacity: 0.8 }}>FACTORY</div>
+            <div style={{ fontSize: 9, letterSpacing: 3, fontWeight: 600, opacity: 0.8 }}>VENDOR</div>
             <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 26, lineHeight: 1, marginTop: 4 }}>{name}</div>
           </div>
           <button onClick={onClose} aria-label="Close"
@@ -281,15 +281,16 @@ function FactoryEditor({ name, onClose, onDeleted }) {
               <Input label="Country" value={entry.country || ''} onChange={v => patch('country', v)} placeholder="China, Portugal, Italy…" />
               <Input label="City" value={entry.city || ''} onChange={v => patch('city', v)} placeholder="Dongguan, Porto, Prato…" />
               <Input label="Primary Contact" value={entry.primaryContact || ''} onChange={v => patch('primaryContact', v)} placeholder="e.g. Lily Chen" />
-              <Input label="Email" value={entry.email || ''} onChange={v => patch('email', v)} placeholder="contact@factory.com" />
+              <Input label="Email" value={entry.email || ''} onChange={v => patch('email', v)} placeholder="contact@vendor.com" />
               <Input label="Phone / WeChat" value={entry.phone || ''} onChange={v => patch('phone', v)} placeholder="+86 138 0000 0000" />
-              <Input label="Website" value={entry.website || ''} onChange={v => patch('website', v)} placeholder="https://factory.com" />
+              <Input label="Website" value={entry.website || ''} onChange={v => patch('website', v)} placeholder="https://vendor.com" />
             </div>
 
             <div>
               <Input label="MOQ" value={entry.moq || ''} onChange={v => patch('moq', v)} placeholder="e.g. 500 units, 25 kg" />
               <Input label="Lead Time (days)" value={entry.leadTimeDays || ''} onChange={v => patch('leadTimeDays', v)} placeholder="e.g. 45-60" />
               <Input label="Specialties" value={entry.specialties || ''} onChange={v => patch('specialties', v)} placeholder="Knit, Woven, Trims" />
+              <Input label="Payment Terms" value={entry.payment_terms || ''} onChange={v => patch('payment_terms', v)} placeholder="e.g. 30/70 T/T, Net-60" />
               <Input label="Notes" value={entry.notes || ''} onChange={v => patch('notes', v)} placeholder="Anything worth remembering" multiline />
             </div>
 
@@ -325,9 +326,9 @@ function FactoryEditor({ name, onClose, onDeleted }) {
             </div>
             {hasRecord && (
               <button type="button" onClick={handleDelete}
-                title="Delete this factory from the directory"
+                title="Delete this vendor from the directory"
                 style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'transparent', color: '#C0392B', border: `1px solid #C0392B`, borderRadius: 3, fontSize: 10, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                <Trash2 size={11} /> Delete factory
+                <Trash2 size={11} /> Delete vendor
               </button>
             )}
           </div>

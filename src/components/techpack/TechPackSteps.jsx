@@ -83,11 +83,11 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
           <input readOnly value={data.revision || 'V1.0'}
             style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.stone, background: FR.salt, outline: 'none', boxSizing: 'border-box' }} />
         </div>
-        <EditableSelect label="Factory" value={data.factory}
+        <EditableSelect label="Vendor" value={data.factory}
           onChange={v => set('factory', v)}
           options={existingSuppliers}
           onAddOption={addSupplier}
-          placeholder="Add a new factory…" />
+          placeholder="Add a new vendor…" />
       </Row>
 
       <div style={{ marginBottom: 10 }}>
@@ -125,7 +125,7 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
         <SignatureBlock label="Approved By" value={data.approvedBy}
           onNameChange={v => setSig('approvedBy', 'name', v)}
           onDateChange={v => setSig('approvedBy', 'date', v)} />
-        <SignatureBlock label="Factory Confirmed" value={data.factoryConfirmed}
+        <SignatureBlock label="Vendor Confirmed" value={data.factoryConfirmed}
           onNameChange={v => setSig('factoryConfirmed', 'name', v)}
           onDateChange={v => setSig('factoryConfirmed', 'date', v)} />
       </Row>
@@ -153,7 +153,7 @@ export function StepDesignOverview({ data, set, images, onUpload, onRemove }) {
       </div>
 
       <Row>
-        <Input label="Factory Contact" value={data.factoryContact} onChange={v => set('factoryContact', v)} placeholder="Name / WeChat / Email" />
+        <Input label="Vendor Contact" value={data.factoryContact} onChange={v => set('factoryContact', v)} placeholder="Name / WeChat / Email" />
         <Select label="Fabric Type" value={data.fabricType} onChange={v => set('fabricType', v)}
           options={['Cotton Jersey', 'Denim', 'Twill Cotton', 'Waxed Canvas', 'Other']} />
       </Row>
@@ -300,7 +300,7 @@ export function StepBOM({ data, set, existingSuppliers = [] }) {
             { key: 'composition',  label: 'Composition',  placeholder: '100% Cotton' },
             { key: 'weightGsm',    label: 'Weight (GSM)', placeholder: '400' },
             { key: 'colorPantone', label: 'Color / Pantone', placeholder: 'Pantone 19-4305' },
-            { key: 'supplier',     label: 'Factory',      render: supplierRender },
+            { key: 'supplier',     label: 'Vendor',       render: supplierRender },
             { key: 'notes',        label: 'Notes' },
           ]}
           rows={fabrics} onUpdate={updF} onAdd={addF} onRemove={rmF} />
@@ -315,7 +315,7 @@ export function StepBOM({ data, set, existingSuppliers = [] }) {
             { key: 'material',      label: 'Material',      placeholder: 'Metal / Nylon' },
             { key: 'color',         label: 'Color',         render: colorRender },
             { key: 'sizeSpec',      label: 'Size / Spec',   placeholder: '15mm' },
-            { key: 'supplier',      label: 'Factory',       render: supplierRender },
+            { key: 'supplier',      label: 'Vendor',        render: supplierRender },
             { key: 'qtyPerGarment', label: 'Qty/Garment',   placeholder: '2' },
           ]}
           rows={trims} onUpdate={updT} onAdd={addT} onRemove={rmT} />
@@ -999,7 +999,7 @@ export function StepRevision({ data, set, onSubmit, submitting, submitResult, on
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
           <ApprovalCard title="Designer"    value={fa.designer}   onChange={v => setFA('designer', v)} />
           <ApprovalCard title="Brand Owner" value={fa.brandOwner} onChange={v => setFA('brandOwner', v)} />
-          <ApprovalCard title="Factory"     value={fa.factory}    onChange={v => setFA('factory', v)} dateLabel="Date / Chop" />
+          <ApprovalCard title="Vendor"      value={fa.factory}    onChange={v => setFA('factory', v)} dateLabel="Date / Chop" />
         </div>
       </div>
 
@@ -1043,7 +1043,7 @@ export const STEP_FNS = [
 // multi-prompt rewrite. Remove once PLM / PDF / SVG utilities are updated.
 export const StepIdentity = StepCover;
 export const StepSku = () => <ComingSoon title="SKU & Numbering" />;
-export const StepFactory = () => <ComingSoon title="Factory" />;
+export const StepFactory = () => <ComingSoon title="Vendor" />;
 export const StepDesign = StepDesignOverview;
 export const StepMaterials = StepBOM;
 export const StepReview = StepRevision;

@@ -130,8 +130,8 @@ export function generateTechPackSVG(pack) {
   svg += field('Style Number', d.styleNumber, 40, 345);
   svg += field('SKU Prefix', d.skuPrefix, 400, 345);
   svg += field('Barcode Method', d.barcodeMethod, 700, 345);
-  svg += sectionHeading('Factory', 40, 410);
-  svg += field('Factory', d.factory, 40, 445);
+  svg += sectionHeading('Vendor', 40, 410);
+  svg += field('Vendor', d.factory, 40, 445);
   svg += field('Contact', d.factoryContact, 500, 445);
   svg += field('Fabric Type', d.fabricType, 40, 495);
   svg += skipIf(0);

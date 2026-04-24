@@ -205,8 +205,8 @@ export async function generateTechPackPDF(pack) {
   field('SKU Prefix', d.skuPrefix, 100, y);
   field('Barcode Method', d.barcodeMethod, 180, y); y += 18;
 
-  sectionHeading('Factory', y); y += 8;
-  field('Factory', d.factory, 10, y);
+  sectionHeading('Vendor', y); y += 8;
+  field('Vendor', d.factory, 10, y);
   field('Contact', d.factoryContact, 150, y); y += 14;
   field('Fabric Type', d.fabricType, 10, y);
 

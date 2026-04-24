@@ -142,7 +142,7 @@ function SampleLog({ samples, onAdd, onUpdate, onRemove }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {(samples || []).length === 0 && !adding && (
         <div style={{ fontSize: 11, color: FR.stone, fontStyle: 'italic', padding: '6px 2px' }}>
-          No samples logged yet. Log Proto / Fit / SMS / PP / TOP iterations as the factory delivers them.
+          No samples logged yet. Log Proto / Fit / SMS / PP / TOP iterations as the vendor delivers them.
         </div>
       )}
 
@@ -233,12 +233,12 @@ export function StepCover({
 
       <Row cols="1fr 1fr 1fr">
         <EditableSelect
-          label="Factory"
+          label="Vendor"
           value={data.supplier}
           onChange={v => set('supplier', v)}
           options={existingSuppliers}
           onAddOption={addSupplier}
-          placeholder="Add a new factory…" />
+          placeholder="Add a new vendor…" />
         <div style={{ marginBottom: 10 }}>
           <label style={labelStyle}>Date Last Updated</label>
           <input readOnly value={data.dateCreated || ''}
@@ -331,7 +331,7 @@ export function StepApproval({
             value={fa.manager} onUpdate={setApprovalSlot}
             onConfirm={confirmRole} onUnconfirm={unconfirmRole}
             people={existingPeople} onAddPerson={onAddPerson} />
-          <ApprovalSlot role="factory" title="Factory"
+          <ApprovalSlot role="factory" title="Vendor"
             value={fa.factory} onUpdate={setApprovalSlot}
             onConfirm={confirmRole} onUnconfirm={unconfirmRole}
             people={existingPeople} onAddPerson={onAddPerson} />
@@ -343,9 +343,9 @@ export function StepApproval({
           style={{ padding: '8px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
           Submit to Manager
         </button>
-        <button onClick={() => createSnapshot('Submitted to factory')}
+        <button onClick={() => createSnapshot('Submitted to vendor')}
           style={{ padding: '8px 14px', background: FR.soil, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-          Submit to Factory
+          Submit to Vendor
         </button>
         <button onClick={onRequestRevision}
           style={{ padding: '8px 14px', background: 'transparent', color: FR.slate, border: `1px solid ${FR.slate}`, borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
@@ -472,12 +472,12 @@ export function StepMaterials({ data, set, images, onUpload, onRemove, existingS
               <Select label="Finish" value={m.finish || ''} onChange={v => updateMat(i, 'finish', v)} options={MATERIAL_FINISHES} />
             </Row>
             <EditableSelect
-              label="Factory"
+              label="Vendor"
               value={m.factory}
               onChange={v => updateMat(i, 'factory', v)}
               options={existingSuppliers}
               onAddOption={addSupplier}
-              placeholder="Add a new factory…" />
+              placeholder="Add a new vendor…" />
           </div>
         ))}
       </div>
@@ -511,7 +511,7 @@ export function StepConstruction({ data, set, images, onUpload, onRemove }) {
         <AspectPhoto slotKey="construction-diagram" aspect={ASPECTS.A4_LANDSCAPE} images={images} onUpload={onUpload} onRemove={onRemove} />
       </div>
 
-      <label style={sectionLabel}>Callouts — the three rules the factory must follow</label>
+      <label style={sectionLabel}>Callouts — the three rules the vendor must follow</label>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
         {callouts.slice(0, 3).map((c, i) => (
           <div key={i} style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, display: 'flex', flexDirection: 'column', gap: 8, ...hiddenCardStyle(c.hidden) }}>
@@ -738,7 +738,7 @@ export function StepEmbellishments({ data, set, images, onUpload, onRemove }) {
         <label style={sectionLabel}>Attachments — SVG / AI / PDF source files</label>
         <AttachmentZone attachments={data.attachments || []} onChange={v => set('attachments', v)} />
         <p style={{ fontSize: 10, color: FR.stone, marginTop: 6 }}>
-          Files persist with the pack. They'll live-link on the exported PDF and attach to the factory email / portal once those phases ship.
+          Files persist with the pack. They'll live-link on the exported PDF and attach to the vendor email / portal once those phases ship.
         </p>
       </div>
     </div>
@@ -891,7 +891,7 @@ export function StepQC({ data, set, images, onUpload, onRemove }) {
       <SectionTitle>Quality Control</SectionTitle>
 
       <p style={{ fontSize: 11, color: FR.stone, marginTop: -10, marginBottom: 16 }}>
-        The three things the factory must verify before bulk.
+        The three things the vendor must verify before bulk.
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>

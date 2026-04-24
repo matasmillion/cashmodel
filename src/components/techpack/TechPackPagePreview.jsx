@@ -91,7 +91,7 @@ function PageCover({ d, images }) {
           { label: 'Designed By',    value: sig(d.designedBy) },
         ];
         const right = [
-          { label: 'Factory',           value: d.factory },
+          { label: 'Vendor',            value: d.factory },
           { label: 'Colorways',         value: colorways },
           { label: 'Size Range',        value: d.sizeRange },
           { label: 'Target Retail ($)', value: d.targetRetail },
@@ -103,7 +103,7 @@ function PageCover({ d, images }) {
           <>
             {left.map((f, i)  => <MetaRow key={`L${i}`} x={leftX}  y={startY + i * gap} label={f.label} value={f.value} w={colW} />)}
             {right.map((f, i) => <MetaRow key={`R${i}`} x={rightX} y={startY + i * gap} label={f.label} value={f.value} w={colW} />)}
-            <MetaRow x={rightX} y={startY + 7 * gap} label="Factory Confirmed" value={sig(d.factoryConfirmed)} w={colW} />
+            <MetaRow x={rightX} y={startY + 7 * gap} label="Vendor Confirmed" value={sig(d.factoryConfirmed)} w={colW} />
           </>
         );
       })()}
@@ -195,9 +195,9 @@ function PageDesignOverview({ d, images }) {
     <g>
       <InfoStrip d={d} />
 
-      {/* Factory row */}
-      <MetaRow x={40}                          y={infoY} label="Factory"         value={d.factory}        w={(PAGE_W - 80 - 20) / 3} />
-      <MetaRow x={40 + (PAGE_W - 80) / 3}      y={infoY} label="Factory Contact" value={d.factoryContact} w={(PAGE_W - 80 - 20) / 3} />
+      {/* Vendor row */}
+      <MetaRow x={40}                          y={infoY} label="Vendor"          value={d.factory}        w={(PAGE_W - 80 - 20) / 3} />
+      <MetaRow x={40 + (PAGE_W - 80) / 3}      y={infoY} label="Vendor Contact"  value={d.factoryContact} w={(PAGE_W - 80 - 20) / 3} />
       <MetaRow x={40 + (PAGE_W - 80) * 2 / 3}  y={infoY} label="Fabric Type"     value={d.fabricType}     w={(PAGE_W - 80 - 20) / 3} />
 
       {/* Three photo slots */}
@@ -330,7 +330,7 @@ function PageBOM({ d }) {
     { key: 'composition',  label: 'Composition',  w: 170 },
     { key: 'weightGsm',    label: 'Weight (GSM)', w: 110 },
     { key: 'colorPantone', label: 'Color / Pantone', w: 150 },
-    { key: 'supplier',     label: 'Factory',      w: 170 },
+    { key: 'supplier',     label: 'Vendor',       w: 170 },
     { key: 'notes',        label: 'Notes',        w: 183 },
   ];
 
@@ -340,7 +340,7 @@ function PageBOM({ d }) {
     { key: 'material',      label: 'Material',    w: 150 },
     { key: 'color',         label: 'Color',       w: 120 },
     { key: 'sizeSpec',      label: 'Size / Spec', w: 130 },
-    { key: 'supplier',      label: 'Factory',     w: 180 },
+    { key: 'supplier',      label: 'Vendor',      w: 180 },
     { key: 'qtyPerGarment', label: 'Qty/Garment', w: 163 },
   ];
 
@@ -904,7 +904,7 @@ function PageRevision({ d }) {
       <SectionHeading x={40} y={478}>Final Approval</SectionHeading>
       <ApprovalPreviewCard x={40}                              y={cardY} w={cardW} h={cardH} title="Designer"    name={designer.name} signature={designer.signature} date={designer.date} />
       <ApprovalPreviewCard x={40 + cardW + cardGap}            y={cardY} w={cardW} h={cardH} title="Brand Owner" name={brand.name}    signature={brand.signature}    date={brand.date} />
-      <ApprovalPreviewCard x={40 + (cardW + cardGap) * 2}      y={cardY} w={cardW} h={cardH} title="Factory"     name={factory.name}  signature={factory.signature}  date={factory.dateChop} dateLabel="Date / Chop:" />
+      <ApprovalPreviewCard x={40 + (cardW + cardGap) * 2}      y={cardY} w={cardW} h={cardH} title="Vendor"      name={factory.name}  signature={factory.signature}  date={factory.dateChop} dateLabel="Date / Chop:" />
     </g>
   );
 }
