@@ -69,6 +69,19 @@ export function generateTechPackSVG(pack) {
   const d = pack.data || {};
   const images = pack.images || [];
   const styleInfo = `${d.styleName || 'Untitled'} · ${d.styleNumber || ''}`;
+  const skippedSteps = Array.isArray(d.skippedSteps) ? d.skippedSteps : [];
+
+  // Paints the "PAGE NOT USED" diagonal-cross overlay on top of a single
+  // page when that step was marked skipped in the builder. Rendered as the
+  // last child of the page's <g> so it sits above the content.
+  const skipOverlaySVG = () => (
+    `<rect x="0" y="0" width="1123" height="794" fill="#FFFFFF" fill-opacity="0.8"/>` +
+    `<line x1="0" y1="0" x2="1123" y2="794" stroke="#C0392B" stroke-width="12" stroke-opacity="0.35"/>` +
+    `<line x1="1123" y1="0" x2="0" y2="794" stroke="#C0392B" stroke-width="12" stroke-opacity="0.35"/>` +
+    `<rect x="421" y="369" width="280" height="56" fill="#C0392B" rx="5"/>` +
+    `<text x="561" y="406" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="19" font-weight="bold" fill="#FFFFFF" letter-spacing="5">PAGE NOT USED</text>`
+  );
+  const skipIf = (stepIdx) => skippedSteps.includes(stepIdx) ? skipOverlaySVG() : '';
 
   // Cover page as an illustrative single SVG — a full 14-page SVG export would be huge.
   // For the MVP, we produce one comprehensive "summary" SVG showing all critical data.
@@ -98,6 +111,7 @@ export function generateTechPackSVG(pack) {
   svg += `<text x="561" y="415" text-anchor="middle" font-size="12" fill="${FR.stone}">${esc([d.productCategory, d.productTier, d.season].filter(Boolean).join('  ·  '))}</text>`;
   svg += `<rect x="481" y="440" width="160" height="36" rx="6" fill="${FR.soil}"/>`;
   svg += `<text x="561" y="464" text-anchor="middle" font-size="11" font-weight="bold" fill="${FR.salt}" letter-spacing="1">${esc((d.status || 'DEVELOPMENT').toUpperCase())}</text>`;
+  svg += skipIf(0);
   svg += `</g>`;
 
   // ─── Identity ───
@@ -120,6 +134,7 @@ export function generateTechPackSVG(pack) {
   svg += field('Factory', d.factory, 40, 445);
   svg += field('Contact', d.factoryContact, 500, 445);
   svg += field('Fabric Type', d.fabricType, 40, 495);
+  svg += skipIf(0);
   svg += `</g>`;
 
   // ─── Materials & BOM ───
@@ -133,6 +148,7 @@ export function generateTechPackSVG(pack) {
     const t1 = table(40, 140, ['Component', 'Type / Spec', 'Material', 'Color', 'Weight', 'Supplier', 'Cost/Unit'], bomRows, [120, 180, 150, 110, 80, 180, 223]);
     svg += t1.svg;
   }
+  svg += skipIf(3);
   svg += `</g>`;
 
   // ─── Construction ───
@@ -145,6 +161,7 @@ export function generateTechPackSVG(pack) {
     const t2 = table(40, 140, ['Operation', 'Seam Type', 'Stitch', 'SPI', 'Thread', 'Notes'], seamRows, [180, 140, 100, 60, 140, 423]);
     svg += t2.svg;
   }
+  svg += skipIf(5);
   svg += `</g>`;
 
   // ─── Order & Delivery ───
@@ -165,6 +182,7 @@ export function generateTechPackSVG(pack) {
   svg += field('Incoterm', d.incoterm, 40, orderY + 85);
   svg += field('Target Ship', d.targetShipDate, 400, orderY + 85);
   svg += field('Target Arrival', d.targetArrivalDate, 700, orderY + 85);
+  svg += skipIf(11);
   svg += `</g>`;
 
   svg += `</svg>`;

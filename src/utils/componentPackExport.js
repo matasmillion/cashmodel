@@ -24,7 +24,7 @@ const TOTAL_PAGES = 7;
 // as a tall multi-page document.
 function renderPageMarkup(data, images, step) {
   const markup = renderToStaticMarkup(
-    createElement(ComponentPackPagePreview, { data, images, step })
+    createElement(ComponentPackPagePreview, { data, images, step, skippedSteps: data.skippedSteps || [] })
   );
   return markup.includes('xmlns=')
     ? markup
@@ -114,7 +114,7 @@ export async function generateComponentPackPDF(data, images) {
 
       // Render this page, wait for it to settle + images to load, then
       // rasterise.
-      root.render(createElement(ComponentPackPagePreview, { data, images, step: i }));
+      root.render(createElement(ComponentPackPagePreview, { data, images, step: i, skippedSteps: data.skippedSteps || [] }));
       await waitForFrame();
       await waitForImages(host);
       // Fonts may still be loading on the very first page — block once so

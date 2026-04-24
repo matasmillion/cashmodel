@@ -16,10 +16,38 @@ const hex = (h) => {
 export async function generateTechPackPDF(pack) {
   const d = pack.data || {};
   const images = pack.images || [];
+  const skippedSteps = Array.isArray(d.skippedSteps) ? d.skippedSteps : [];
 
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const W = 297, H = 210;
   let page = 1;
+
+  // Paints a "PAGE NOT USED" diagonal-cross overlay on top of the current
+  // page when the user marked the corresponding wizard step as skipped.
+  function drawSkipOverlay() {
+    // White wash at 80% so the skipped page reads as explicitly suppressed
+    // without losing the underlying context.
+    doc.setFillColor(255, 255, 255);
+    doc.setGState && doc.setGState(new doc.GState({ opacity: 0.8 }));
+    doc.rect(0, 0, W, H, 'F');
+    if (doc.setGState) doc.setGState(new doc.GState({ opacity: 0.4 }));
+    doc.setDrawColor(192, 57, 43);
+    doc.setLineWidth(3);
+    doc.line(0, 0, W, H);
+    doc.line(W, 0, 0, H);
+    if (doc.setGState) doc.setGState(new doc.GState({ opacity: 1 }));
+    doc.setFillColor(192, 57, 43);
+    doc.roundedRect(W / 2 - 40, H / 2 - 8, 80, 16, 2, 2, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text('PAGE NOT USED', W / 2, H / 2 + 2, { align: 'center' });
+    // Reset state so subsequent pages draw normally.
+    doc.setTextColor(...hex(FR.slate));
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setDrawColor(...hex(FR.soil));
+  }
 
   function header(title, subtitle) {
     doc.setFillColor(...hex(FR.slate));
@@ -49,10 +77,20 @@ export async function generateTechPackPDF(pack) {
     doc.text(`Page ${page}`, W - 10, H - 7, { align: 'right' });
   }
 
-  function newPage(title, subtitle) {
+  // `stepIdx` ties the PDF page back to the wizard STEPS[] index so the skip
+  // flag from the builder can draw a "PAGE NOT USED" overlay here. Multiple
+  // PDF pages may share a single step (e.g. the cover and identity pages
+  // both map to step 0) — all of them pick up the skip. We record the page
+  // → step mapping now and draw the overlay in a second pass at the end so
+  // it lands on top of the page content, not underneath it.
+  let currentStep = 0;
+  const pageToStep = {};
+  function newPage(title, subtitle, stepIdx) {
     if (page > 1) doc.addPage('a4', 'landscape');
     header(title, subtitle);
     footer();
+    if (Number.isFinite(stepIdx)) currentStep = stepIdx;
+    pageToStep[page] = currentStep;
     page++;
   }
 
@@ -132,7 +170,7 @@ export async function generateTechPackPDF(pack) {
   }
 
   // ─── Page 1: Cover ───
-  newPage('Tech Pack', `Rev. ${new Date().toISOString().slice(0, 10)}`);
+  newPage('Tech Pack', `Rev. ${new Date().toISOString().slice(0, 10)}`, 0);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(38);
   doc.setTextColor(...hex(FR.slate));
@@ -151,7 +189,7 @@ export async function generateTechPackPDF(pack) {
   doc.text((d.status || 'DEVELOPMENT').toUpperCase(), W / 2, 131, { align: 'center' });
 
   // ─── Page 2: Identity & Classification ───
-  newPage('Identity & Classification');
+  newPage('Identity & Classification', null, 0);
   let y = 28;
   sectionHeading('Product', y); y += 8;
   field('Style Name', d.styleName, 10, y);
@@ -173,7 +211,7 @@ export async function generateTechPackPDF(pack) {
   field('Fabric Type', d.fabricType, 10, y);
 
   // ─── Page 3: Design ───
-  newPage('Design & Construction');
+  newPage('Design & Construction', null, 1);
   y = 28;
   sectionHeading('Fit & Features', y); y += 8;
   field('Fit', d.fit, 10, y); y += 12;
@@ -182,7 +220,7 @@ export async function generateTechPackPDF(pack) {
   addImage('design-refs', 180, 28, 100, 80);
 
   // ─── Page 4: Flat Lays ───
-  newPage('Flat Lay Diagrams');
+  newPage('Flat Lay Diagrams', null, 2);
   addImage('flatlay-front', 10, 28, 85, 90);
   addImage('flatlay-back', 105, 28, 85, 90);
   addImage('flatlay-detail', 200, 28, 85, 90);
@@ -198,7 +236,7 @@ export async function generateTechPackPDF(pack) {
   doc.text(d.flatLayNotes || '', 10, 140, { maxWidth: W - 20 });
 
   // ─── Page 5: Bill of Materials ───
-  newPage('Bill of Materials');
+  newPage('Bill of Materials', null, 3);
   y = 28;
   sectionHeading('Components', y); y += 8;
   const bomItems = d.bom || d.trims || [];
@@ -207,7 +245,7 @@ export async function generateTechPackPDF(pack) {
   table(['Component', 'Type / Spec', 'Material', 'Color', 'Weight', 'Supplier', 'Cost/Unit', 'Notes'], bomRows, 10, y, [30, 40, 35, 25, 20, 35, 25, 67]);
 
   // ─── Page 6: Color & Artwork ───
-  newPage('Color & Artwork');
+  newPage('Color & Artwork', null, 4);
   y = 28;
   sectionHeading('Colorways', y); y += 8;
   const cwRows = (d.colorways || []).filter(c => c.name).map(c => [c.name, c.frColor, c.pantone, c.hex]);
@@ -219,7 +257,7 @@ export async function generateTechPackPDF(pack) {
   field('Method', d.logoMethod, 200, y);
 
   // ─── Page 7: Construction ───
-  newPage('Construction Details');
+  newPage('Construction Details', null, 5);
   y = 28;
   sectionHeading('Seam Specifications', y); y += 8;
   const seamRows = (d.seams || []).filter(s => s.operation).map(s =>
@@ -227,7 +265,7 @@ export async function generateTechPackPDF(pack) {
   table(['Operation', 'Seam Type', 'Stitch', 'SPI', 'Thread', 'Notes'], seamRows, 10, y, [50, 40, 30, 20, 40, 97]);
 
   // ─── Page 8: Pattern & Cutting ───
-  newPage('Pattern Pieces & Cutting');
+  newPage('Pattern Pieces & Cutting', null, 7);
   y = 28;
   const ppRows = (d.patternPieces || []).filter(p => p.name).map(p =>
     [p.name, p.qty, p.fabric, p.grain, p.fusing, p.notes]);
@@ -236,7 +274,7 @@ export async function generateTechPackPDF(pack) {
   field('Cutting Notes', d.cuttingNotes, 10, y);
 
   // ─── Page 9: POM ───
-  newPage('Points of Measure (cm)');
+  newPage('Points of Measure (cm)', null, 8);
   y = 28;
   field('Size Type', d.sizeType, 10, y); y += 14;
   const sz = d.sizeType === 'waist' ? ['W30', 'W32', 'W34', 'W36'] : ['S', 'M', 'L', 'XL'];
@@ -245,7 +283,7 @@ export async function generateTechPackPDF(pack) {
   table(['Measurement', 'Tol ±', ...sz], pomRows, 10, y, [70, 25, 30, 30, 30, 30]);
 
   // ─── Page 10: Treatments ───
-  newPage('Garment Treatments');
+  newPage('Garment Treatments', null, 9);
   y = 28;
   sectionHeading('Wash & Dye', y); y += 8;
   const trtRows = (d.treatments || []).filter(t => t.treatment).map(t =>
@@ -258,7 +296,7 @@ export async function generateTechPackPDF(pack) {
   table(['Area', 'Technique', 'Intensity', 'Notes'], distRows, 10, y, [50, 50, 30, 147]);
 
   // ─── Page 11: Labels & Packaging ───
-  newPage('Labels & Packaging');
+  newPage('Labels & Packaging', null, 10);
   y = 28;
   field('Packaging', d.packaging, 10, y); y += 14;
   field('Packaging Notes', d.packagingNotes, 10, y); y += 14;
@@ -270,7 +308,7 @@ export async function generateTechPackPDF(pack) {
   careLines.forEach((line, i) => doc.text(line, 10, y + i * 5));
 
   // ─── Page 12: Order & Delivery ───
-  newPage('Order & Delivery');
+  newPage('Order & Delivery', null, 11);
   y = 28;
   sectionHeading('Quantity Per Size', y); y += 8;
   const qRows = (d.quantities || []).filter(q => q.colorway).map(q =>
@@ -286,14 +324,14 @@ export async function generateTechPackPDF(pack) {
   field('Target Arrival', d.targetArrivalDate, 200, y);
 
   // ─── Page 13: Packing List ───
-  newPage('Packing List');
+  newPage('Packing List', null, 11);
   y = 28;
   const pkRows = (d.cartons || []).filter(c => c.cartonNum).map(c =>
     [c.cartonNum, c.colorway, c.sizeBreakdown, c.qtyPerCarton, c.dims, c.grossWeight, c.netWeight]);
   table(['#', 'Colorway', 'Size Breakdown', 'Qty', 'Dims (cm)', 'Gross kg', 'Net kg'], pkRows, 10, y, [15, 40, 60, 25, 40, 30, 67]);
 
   // ─── Page 14: Review & Revision ───
-  newPage('Review & Revision');
+  newPage('Review & Revision', null, 13);
   y = 40;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
@@ -305,6 +343,17 @@ export async function generateTechPackPDF(pack) {
   doc.text(`Generated: ${new Date().toLocaleString()}`, 10, y); y += 6;
   doc.text(`Source: Foreign Resource Cash Model — Product tab`, 10, y); y += 6;
   doc.text(`Tech pack ID: ${pack.id}`, 10, y);
+
+  // Second pass — stamp the "PAGE NOT USED" overlay on top of any skipped
+  // pages. Done after all content is drawn so the overlay actually lands
+  // on top instead of under the page text / images.
+  if (skippedSteps.length) {
+    Object.entries(pageToStep).forEach(([pageNum, stepIdx]) => {
+      if (!skippedSteps.includes(stepIdx)) return;
+      doc.setPage(Number(pageNum));
+      drawSkipOverlay();
+    });
+  }
 
   return doc.output('blob');
 }
