@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-24T19:15:15.703Z",
+  "lastUpdated": "2026-04-24T19:34:23.978Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "4ad3490",
+      "date": "2026-04-24T19:16:58+00:00",
+      "message": "chore: regenerate public/state.json after Prompt 1 commit"
+    },
+    {
+      "sha": "787ca0d",
+      "date": "2026-04-24T19:16:22+00:00",
+      "message": "feat(plm): migrate to library/styles/production IA + factory→vendor rename"
+    },
+    {
       "sha": "21dc437",
       "date": "2026-04-24T12:55:08+00:00",
       "message": "Stop rendering Empty slot colorway placeholders"
@@ -1082,16 +1092,6 @@
       "sha": "119f2a3",
       "date": "2026-04-24T10:58:22+00:00",
       "message": "Add website field to factory cards"
-    },
-    {
-      "sha": "bae7b72",
-      "date": "2026-04-24T10:48:53+00:00",
-      "message": "Revert factory cost + move Pantone card above color name"
-    },
-    {
-      "sha": "df0ecb3",
-      "date": "2026-04-24T10:42:31+00:00",
-      "message": "Add cost-per-unit to every modular PLM component + tech pack rollup"
     }
   ]
 }
