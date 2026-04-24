@@ -1,17 +1,28 @@
-// Trim Library — a simple, categorised list of reusable BOM trims (fabrics,
-// zippers, aglets, labels, etc.) that tech pack BOMs pull from. Not a PLM
-// pipeline — there's no kanban / status flow on this side. Groups are
-// collapsible rows by trim category; each group shows image cards for fast
-// visual browsing.
+// PLM Trims view — two displays, one default.
+//   • Grid: flat card layout, mirrors the Styles / Colors tabs.
+//   • Kanban: drag trims through the 3-stage lifecycle (Design /
+//     Sample / Production-Ready).
+// The grid is the default; the choice is persisted in localStorage so the
+// tab remembers which view the user prefers.
 
-import { useEffect, useMemo, useState } from 'react';
-import { Plus, Boxes, Copy, Trash2, Search, ChevronDown, ChevronRight, Package } from 'lucide-react';
-import { FR, DEFAULT_COMPONENT_DATA, BOM_COMPONENT_OPTIONS } from './componentPackConstants';
+import { useEffect, useState } from 'react';
+import { Plus, Boxes, Copy, Trash2, Search, Package, LayoutGrid, Columns3, GripVertical } from 'lucide-react';
+import { FR, DEFAULT_COMPONENT_DATA, STATUSES, LEGACY_STATUS_MIGRATION } from './componentPackConstants';
 import ComponentPackBuilder from './ComponentPackBuilder';
 import { CostPill } from './TechPackPrimitives';
-import { listComponentPacks, createComponentPack, getComponentPack, deleteComponentPack, duplicateComponentPack } from '../../utils/componentPackStore';
+import { listComponentPacks, createComponentPack, getComponentPack, deleteComponentPack, duplicateComponentPack, saveComponentPack } from '../../utils/componentPackStore';
 import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
 import { listAllSuppliers, listAllPeople } from '../../utils/plmDirectory';
+
+const VIEW_STORAGE_KEY = 'cashmodel_trims_view';
+
+// Kanban stage palette. Keeps the visual rhythm of the Styles pipeline
+// (earth tones for early stages, green for the shipped end).
+const STATUS_COLORS = {
+  Design:             { bg: '#F5F0E8', border: '#EBE5D5', dot: '#9A816B' },
+  Sample:             { bg: '#F0F4F7', border: '#D4E1EA', dot: '#B5C7D3' },
+  'Production-Ready': { bg: '#EDEFED', border: '#D0D6CE', dot: '#4CAF7D' },
+};
 
 function formatDate(iso) {
   if (!iso) return '';
@@ -31,30 +42,41 @@ function Thumb({ pack }) {
   );
 }
 
-function ComponentCard({ pack, onOpen, onDuplicate, onDelete }) {
+// Grid-view card — a trim shown as a standalone card with thumbnail,
+// name, supplier, status dot, cost pill, and the usual actions.
+function GridCard({ pack, onOpen, onDuplicate, onDelete }) {
+  const normalizedStatus = (() => {
+    let st = pack.status || 'Design';
+    if (LEGACY_STATUS_MIGRATION[st]) st = LEGACY_STATUS_MIGRATION[st];
+    return STATUSES.includes(st) ? st : 'Design';
+  })();
+  const statusColor = STATUS_COLORS[normalizedStatus] || STATUS_COLORS.Design;
+
   return (
     <div
-      style={{ background: 'white', borderRadius: 8, border: `1px solid ${FR.sand}`, cursor: 'pointer', overflow: 'hidden', position: 'relative', transition: 'box-shadow 0.15s, transform 0.15s' }}
-      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+      style={{ background: 'white', borderRadius: 8, border: `1px solid ${FR.sand}`, overflow: 'hidden', position: 'relative', transition: 'box-shadow 0.15s, transform 0.15s' }}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
     >
       <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}>
         <CostPill amount={pack.cost_per_unit} currency={pack.currency || 'USD'} title="Target unit cost of this trim" />
       </div>
-      <div onClick={() => onOpen(pack.id)} style={{ width: '100%', aspectRatio: '1 / 1', borderBottom: `1px solid ${FR.sand}` }}>
+      <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer', width: '100%', aspectRatio: '1 / 1', borderBottom: `1px solid ${FR.sand}` }}>
         <Thumb pack={pack} />
       </div>
       <div style={{ padding: 10 }}>
-        <div onClick={() => onOpen(pack.id)}>
+        <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer' }}>
           <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: FR.slate, fontWeight: 500, lineHeight: 1.2, minHeight: 34, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
             {pack.component_name || 'Untitled'}
           </div>
           {pack.supplier && <div style={{ fontSize: 10, color: FR.stone, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🏭 {pack.supplier}</div>}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6, fontSize: 10, color: FR.stone }}>
-            <span>{formatDate(pack.updated_at)}</span>
-          </div>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, marginTop: 6, borderTop: `1px solid ${FR.sand}`, paddingTop: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+          <div style={{ width: 8, height: 8, borderRadius: 4, background: statusColor.dot, flexShrink: 0 }} />
+          <span style={{ fontSize: 10, color: FR.slate, fontWeight: 600, letterSpacing: 0.3 }}>{normalizedStatus}</span>
+          <span style={{ fontSize: 9, color: FR.stone, marginLeft: 'auto' }}>{formatDate(pack.updated_at)}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, marginTop: 8, borderTop: `1px solid ${FR.sand}`, paddingTop: 6 }}>
           <button onClick={e => { e.stopPropagation(); onDuplicate(pack.id); }} title="Duplicate"
             style={{ padding: 4, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer' }}>
             <Copy size={11} />
@@ -69,27 +91,84 @@ function ComponentCard({ pack, onOpen, onDuplicate, onDelete }) {
   );
 }
 
-function CategoryRow({ category, packs, open, onToggle, onOpen, onDuplicate, onDelete }) {
+// Kanban-view card — same information, plus drag affordance so users can
+// move the trim between lifecycle stages.
+function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onDragStart, onDragEnd }) {
   return (
-    <div style={{ background: 'white', borderRadius: 8, border: `1px solid ${FR.sand}`, marginBottom: 10, overflow: 'hidden' }}>
-      <button onClick={onToggle}
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '12px 16px', background: FR.salt, border: 'none', cursor: 'pointer' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {open ? <ChevronDown size={14} style={{ color: FR.soil }} /> : <ChevronRight size={14} style={{ color: FR.soil }} />}
-          <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 17, color: FR.slate }}>{category || 'Uncategorised'}</span>
-          <span style={{ fontSize: 10, color: FR.stone, background: FR.sand, padding: '2px 8px', borderRadius: 10 }}>{packs.length}</span>
-        </span>
-      </button>
-      {open && (
-        <div style={{ padding: 14, display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
-          {packs.length === 0
-            ? <div style={{ fontSize: 11, color: FR.stone, fontStyle: 'italic' }}>No components in this category yet.</div>
-            : packs.map(p => (
-                <ComponentCard key={p.id} pack={p}
-                  onOpen={onOpen} onDuplicate={onDuplicate} onDelete={onDelete} />
-              ))}
+    <div
+      draggable
+      onDragStart={e => { e.dataTransfer.setData('text/plain', pack.id); onDragStart(pack.id); }}
+      onDragEnd={onDragEnd}
+      style={{
+        background: 'white', borderRadius: 8, marginBottom: 8,
+        border: `1px solid ${FR.sand}`, cursor: 'grab', position: 'relative',
+        transition: 'box-shadow 0.15s, transform 0.15s', overflow: 'hidden',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
+    >
+      <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}>
+        <CostPill amount={pack.cost_per_unit} currency={pack.currency || 'USD'} title="Target unit cost of this trim" />
+      </div>
+      <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer', width: '100%', aspectRatio: '4 / 3', background: FR.salt, overflow: 'hidden', borderBottom: `1px solid ${FR.sand}` }}>
+        <Thumb pack={pack} />
+      </div>
+      <div style={{ padding: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+          <GripVertical size={12} style={{ color: FR.sand, marginTop: 2, flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer' }}>
+              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: FR.slate, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {pack.component_name || 'Untitled'}
+              </div>
+              {pack.supplier && <div style={{ fontSize: 10, color: FR.stone, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🏭 {pack.supplier}</div>}
+            </div>
+            <div style={{ fontSize: 9, color: FR.stone, marginTop: 6, textAlign: 'right' }}>{formatDate(pack.updated_at)}</div>
+          </div>
         </div>
-      )}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, marginTop: 6 }}>
+          <button onClick={e => { e.stopPropagation(); onDuplicate(pack.id); }} title="Duplicate"
+            style={{ padding: 4, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer' }}>
+            <Copy size={11} />
+          </button>
+          <button onClick={e => { e.stopPropagation(); onDelete(pack.id); }} title="Delete"
+            style={{ padding: 4, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer' }}>
+            <Trash2 size={11} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KanbanColumn({ status, packs, onOpen, onDuplicate, onDelete, onDragStart, onDragEnd, onDrop, dragOverStatus, setDragOverStatus }) {
+  const colors = STATUS_COLORS[status] || STATUS_COLORS.Design;
+  const isOver = dragOverStatus === status;
+  return (
+    <div
+      onDragOver={e => { e.preventDefault(); setDragOverStatus(status); }}
+      onDragLeave={() => setDragOverStatus(null)}
+      onDrop={e => { e.preventDefault(); setDragOverStatus(null); const id = e.dataTransfer.getData('text/plain'); onDrop(id, status); }}
+      style={{
+        flex: 1, minWidth: 240, maxWidth: 380,
+        background: isOver ? colors.border : colors.bg,
+        borderRadius: 10, padding: 10,
+        border: `1px solid ${isOver ? FR.soil : colors.border}`,
+        transition: 'background 0.15s, border-color 0.15s',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, padding: '0 4px' }}>
+        <div style={{ width: 8, height: 8, borderRadius: 4, background: colors.dot }} />
+        <span style={{ fontSize: 11, fontWeight: 600, color: FR.slate, letterSpacing: 0.3 }}>{status}</span>
+        <span style={{ fontSize: 10, color: FR.stone, marginLeft: 'auto' }}>{packs.length}</span>
+      </div>
+      <div style={{ minHeight: 60 }}>
+        {packs.map(p => (
+          <KanbanCard key={p.id} pack={p}
+            onOpen={onOpen} onDuplicate={onDuplicate} onDelete={onDelete}
+            onDragStart={onDragStart} onDragEnd={onDragEnd} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -99,9 +178,20 @@ export default function ComponentPackList() {
   const [loading, setLoading] = useState(true);
   const [activePack, setActivePack] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [openCategories, setOpenCategories] = useState({}); // { [name]: bool }
   const [existingSuppliers, setExistingSuppliers] = useState([]);
   const [existingPeople, setExistingPeople] = useState([]);
+  const [draggingId, setDraggingId] = useState(null);
+  const [dragOverStatus, setDragOverStatus] = useState(null);
+
+  // Default view = grid. Persist the user's choice so the tab remembers it.
+  const [view, setView] = useState(() => {
+    try { return localStorage.getItem(VIEW_STORAGE_KEY) === 'kanban' ? 'kanban' : 'grid'; }
+    catch { return 'grid'; }
+  });
+  const switchView = (next) => {
+    setView(next);
+    try { localStorage.setItem(VIEW_STORAGE_KEY, next); } catch { /* ignore */ }
+  };
 
   const refresh = async () => {
     setLoading(true);
@@ -169,8 +259,29 @@ export default function ComponentPackList() {
     refresh();
   };
 
-  // Filter by search (computed regardless of activePack so the hook below
-  // is called in the same order on every render — React rules of hooks).
+  // Drag-to-update: optimistic local patch, then persist through the
+  // shared save path so the status change survives a reload / cloud sync.
+  const onDrop = async (id, newStatus) => {
+    setDraggingId(null);
+    const pack = packs.find(p => p.id === id);
+    if (!pack) return;
+    const currentStatus = LEGACY_STATUS_MIGRATION[pack.status] || pack.status || 'Design';
+    if (currentStatus === newStatus) return;
+
+    setPacks(prev => prev.map(p => p.id === id ? { ...p, status: newStatus } : p));
+
+    const full = await getComponentPack(id);
+    if (full) {
+      const updatedData = { ...(full.data || {}), status: newStatus };
+      await saveComponentPack(id, { data: updatedData, status: newStatus });
+    }
+  };
+
+  if (activePack) {
+    return <ComponentPackBuilder pack={activePack} onBack={closeBuilder} existingSuppliers={existingSuppliers} existingPeople={existingPeople} />;
+  }
+
+  // Filter by search.
   const q = searchQuery.toLowerCase();
   const filtered = packs.filter(p => {
     if (!q) return true;
@@ -179,42 +290,53 @@ export default function ComponentPackList() {
       || (p.supplier || '').toLowerCase().includes(q);
   });
 
-  // Group by category. Present every known category (even empty) so the
-  // library reads like a catalogue. Extra ad-hoc categories get listed too.
-  const grouped = useMemo(() => {
-    const byCat = {};
-    BOM_COMPONENT_OPTIONS.forEach(c => { byCat[c] = []; });
-    filtered.forEach(p => {
-      const cat = p.component_category || 'Other';
-      if (!byCat[cat]) byCat[cat] = [];
-      byCat[cat].push(p);
-    });
-    return byCat;
-  }, [filtered]);
+  // Group by status for the Kanban view.
+  const columns = {};
+  STATUSES.forEach(s => { columns[s] = []; });
+  filtered.forEach(p => {
+    let st = p.status || 'Design';
+    if (LEGACY_STATUS_MIGRATION[st]) st = LEGACY_STATUS_MIGRATION[st];
+    if (!columns[st]) st = 'Design';
+    columns[st].push(p);
+  });
 
-  if (activePack) {
-    return <ComponentPackBuilder pack={activePack} onBack={closeBuilder} existingSuppliers={existingSuppliers} existingPeople={existingPeople} />;
-  }
-
-  const toggleCategory = (name) =>
-    setOpenCategories(prev => ({ ...prev, [name]: !(prev[name] ?? packsInCategoryDefaultOpen(grouped[name])) }));
-
-  function packsInCategoryDefaultOpen(list) {
-    return (list || []).length > 0;
-  }
+  const viewPill = (active) => ({
+    display: 'flex', alignItems: 'center', gap: 5,
+    padding: '6px 10px',
+    background: active ? FR.slate : 'transparent',
+    color: active ? FR.salt : FR.stone,
+    border: `1px solid ${active ? FR.slate : FR.sand}`,
+    borderRadius: 6, fontSize: 11, fontWeight: active ? 600 : 400,
+    cursor: 'pointer', fontFamily: "'Inter', sans-serif",
+  });
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h3 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 20, margin: 0 }}>Trim Library</h3>
-          <p className="text-sm mt-1" style={{ color: FR.stone }}>Reusable fabrics, zippers, trims, and labels. Pull these into tech pack BOMs.</p>
+          <h3 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 20, margin: 0 }}>
+            {view === 'grid' ? 'Trim Library' : 'Trim Pipeline'}
+          </h3>
+          <p style={{ fontSize: 12, marginTop: 2, color: FR.stone }}>
+            {view === 'grid'
+              ? 'Reusable fabrics, zippers, trims, and labels. Click a card to open it.'
+              : 'Drag trims through stages. Click a card to open it.'}
+          </p>
         </div>
-        <button onClick={createNew}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs"
-          style={{ background: FR.slate, color: FR.salt, border: 'none', cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
-          <Plus size={14} /> New Trim
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 4, marginRight: 6 }}>
+            <button onClick={() => switchView('grid')} style={viewPill(view === 'grid')} title="Grid view">
+              <LayoutGrid size={12} /> Grid
+            </button>
+            <button onClick={() => switchView('kanban')} style={viewPill(view === 'kanban')} title="Kanban pipeline">
+              <Columns3 size={12} /> Kanban
+            </button>
+          </div>
+          <button onClick={createNew}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, fontSize: 11, background: FR.slate, color: FR.salt, border: 'none', cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
+            <Plus size={14} /> New Trim
+          </button>
+        </div>
       </div>
 
       {packs.length > 0 && (
@@ -242,20 +364,29 @@ export default function ComponentPackList() {
         </div>
       )}
 
-      {!loading && packs.length > 0 && (
-        <div>
-          {Object.entries(grouped).map(([cat, list]) => {
-            // Hide empty categories when the user is searching — the list is
-            // already noisy enough. Otherwise show them so the user sees the
-            // full catalogue structure.
-            if (q && list.length === 0) return null;
-            const isOpen = openCategories[cat] ?? (list.length > 0);
-            return (
-              <CategoryRow key={cat} category={cat} packs={list}
-                open={isOpen} onToggle={() => toggleCategory(cat)}
+      {!loading && packs.length > 0 && view === 'grid' && (
+        filtered.length === 0 ? (
+          <div style={{ padding: 28, textAlign: 'center', background: FR.salt, border: `1px dashed ${FR.sand}`, borderRadius: 8, color: FR.stone, fontSize: 12 }}>
+            No trims match the current search.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
+            {filtered.map(p => (
+              <GridCard key={p.id} pack={p}
                 onOpen={openPack} onDuplicate={onDuplicate} onDelete={onDelete} />
-            );
-          })}
+            ))}
+          </div>
+        )
+      )}
+
+      {!loading && packs.length > 0 && view === 'kanban' && (
+        <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8 }}>
+          {STATUSES.map(status => (
+            <KanbanColumn key={status} status={status} packs={columns[status]}
+              onOpen={openPack} onDuplicate={onDuplicate} onDelete={onDelete}
+              onDragStart={setDraggingId} onDragEnd={() => setDraggingId(null)}
+              onDrop={onDrop} dragOverStatus={dragOverStatus} setDragOverStatus={setDragOverStatus} />
+          ))}
         </div>
       )}
     </div>
