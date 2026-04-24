@@ -36,13 +36,19 @@ export async function listComponentPacks() {
       .select('id, component_name, component_category, status, supplier, cost_per_unit, currency, cover_image, updated_at, created_at')
       .order('updated_at', { ascending: false });
     if (!error && data) {
-      // Until every row has had its cover_image backfilled (pre-migration
-      // rows are null), lean on the dual-written local copy for thumbnails.
+      // Until every row has had its cover_image + cost_per_unit backfilled
+      // (pre-projection rows are null for both), lean on the dual-written
+      // local copy to fill in any missing projected fields.
       const local = readLocal();
       return data.map(r => {
-        if (r.cover_image) return r;
-        const mirror = local.find(l => l.id === r.id);
-        return { ...r, cover_image: extractCover(mirror?.images) };
+        let row = r;
+        const mirror = row.cover_image && row.cost_per_unit ? null : local.find(l => l.id === r.id);
+        if (!row.cover_image && mirror) row = { ...row, cover_image: extractCover(mirror.images) };
+        if (!row.cost_per_unit && mirror) {
+          const cost = mirror.data?.targetUnitCost || mirror.data?.costPerUnit || '';
+          if (cost) row = { ...row, cost_per_unit: cost };
+        }
+        return row;
       });
     }
   }
@@ -53,7 +59,7 @@ export async function listComponentPacks() {
       component_category: p.data?.componentCategory || '',
       status: p.data?.status || 'Design',
       supplier: p.data?.supplier || '',
-      cost_per_unit: p.data?.costPerUnit || '',
+      cost_per_unit: p.data?.targetUnitCost || p.data?.costPerUnit || '',
       currency: p.data?.currency || 'USD',
       updated_at: p.updated_at,
       created_at: p.created_at,
