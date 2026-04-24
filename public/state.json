@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-24T11:10:08.410Z",
+  "lastUpdated": "2026-04-24T11:12:23.935Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "a57b0a5",
+      "date": "2026-04-24T11:10:24+00:00",
+      "message": "Collapse factory website to a clean \"Website\" hyperlink"
+    },
+    {
       "sha": "f53a43a",
       "date": "2026-04-24T11:00:41+00:00",
       "message": "Pull trim pack card cost from targetUnitCost"
@@ -1087,11 +1092,6 @@
       "sha": "6baa136",
       "date": "2026-04-24T10:05:43+00:00",
       "message": "Add hide-from-export toggle to modular trim pack cards"
-    },
-    {
-      "sha": "00cf205",
-      "date": "2026-04-24T09:45:18+00:00",
-      "message": "Swap trim pack template from .svg to .ai"
     }
   ]
 }

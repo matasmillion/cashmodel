@@ -1,6 +1,10 @@
-// PLM Kanban board — drag-and-drop tech packs through lifecycle stages
+// PLM Styles view — two displays, one default.
+//   • Grid: flat card layout, mirrors the visual rhythm of the Colors tab.
+//   • Kanban: drag tech packs through lifecycle stages.
+// The grid is the default; the choice is persisted in localStorage so the
+// user lands on their preferred view next time.
 import { useEffect, useState, useRef } from 'react';
-import { Plus, Shirt, Copy, Trash2, GripVertical, GitBranch, Search } from 'lucide-react';
+import { Plus, Shirt, Copy, Trash2, GripVertical, GitBranch, Search, LayoutGrid, Columns3 } from 'lucide-react';
 import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STATUSES } from './techPackConstants';
 import { CostPill } from './TechPackPrimitives';
 import TechPackBuilder from './TechPackBuilder';
@@ -8,6 +12,8 @@ import { listTechPacks, createTechPack, getTechPack, deleteTechPack, duplicateTe
 import { listComponentPacks } from '../../utils/componentPackStore';
 import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
 import { listAllSuppliers } from '../../utils/plmDirectory';
+
+const VIEW_STORAGE_KEY = 'cashmodel_styles_view';
 
 function formatDate(iso) {
   if (!iso) return '';
@@ -88,6 +94,77 @@ function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onCreateVariant, onDr
   );
 }
 
+// Grid view card — same information as KanbanCard minus the drag affordance.
+// Status shows as a colored dot + label since the grid has no columns to
+// communicate lifecycle. Click anywhere on the card body opens the builder.
+function GridCard({ pack, onOpen, onDuplicate, onDelete, onCreateVariant }) {
+  const normalizedStatus = (() => {
+    let st = pack.status || 'Design';
+    if (st === 'Development') st = 'Design';
+    if (st === 'Completed') st = 'Released';
+    return STATUSES.includes(st) ? st : 'Design';
+  })();
+  const statusColor = STATUS_COLORS[normalizedStatus] || STATUS_COLORS.Design;
+
+  return (
+    <div
+      style={{
+        background: 'white', borderRadius: 8,
+        border: `1px solid ${FR.sand}`, position: 'relative',
+        transition: 'box-shadow 0.15s, transform 0.15s', overflow: 'hidden',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
+    >
+      <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}>
+        <CostPill amount={pack.total_unit_cost} currency={pack.currency || 'USD'} title="Total unit cost — BOM + colorways" />
+      </div>
+      <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer', width: '100%', aspectRatio: '4 / 3', background: FR.salt, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${FR.sand}` }}>
+        {pack.cover_image
+          ? <img src={pack.cover_image} alt={pack.style_name || 'Cover'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : <Shirt size={32} style={{ color: FR.sand }} />}
+      </div>
+      <div style={{ padding: 12 }}>
+        <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer' }}>
+          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 16, color: FR.slate, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {pack.style_name || 'Untitled'}
+          </div>
+          <div style={{ fontSize: 10, color: FR.stone, marginTop: 2 }}>{pack.product_category || '—'}</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
+          <div style={{ width: 8, height: 8, borderRadius: 4, background: statusColor.dot, flexShrink: 0 }} />
+          <span style={{ fontSize: 10, color: FR.slate, fontWeight: 600, letterSpacing: 0.3 }}>{normalizedStatus}</span>
+          <span style={{ fontSize: 9, color: FR.stone, marginLeft: 'auto' }}>{formatDate(pack.updated_at)}</span>
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: FR.stone, marginBottom: 2 }}>
+            <span>{pack.completion_pct || 0}% complete</span>
+          </div>
+          <div style={{ width: '100%', height: 3, background: FR.sand, borderRadius: 2 }}>
+            <div style={{ width: `${pack.completion_pct || 0}%`, height: '100%', background: FR.soil, borderRadius: 2 }} />
+          </div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, marginTop: 10, borderTop: `1px solid ${FR.sand}`, paddingTop: 8 }}>
+          {pack.style_name && (
+            <button onClick={e => { e.stopPropagation(); onCreateVariant(pack.id); }} title="Create Variant"
+              style={{ padding: 4, border: 'none', background: 'transparent', color: FR.soil, cursor: 'pointer' }}>
+              <GitBranch size={11} />
+            </button>
+          )}
+          <button onClick={e => { e.stopPropagation(); onDuplicate(pack.id); }} title="Duplicate"
+            style={{ padding: 4, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer' }}>
+            <Copy size={11} />
+          </button>
+          <button onClick={e => { e.stopPropagation(); onDelete(pack.id); }} title="Delete"
+            style={{ padding: 4, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer' }}>
+            <Trash2 size={11} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function KanbanColumn({ status, packs, onOpen, onDuplicate, onDelete, onCreateVariant, onDragStart, onDragEnd, onDrop, dragOverStatus, setDragOverStatus }) {
   const colors = STATUS_COLORS[status] || STATUS_COLORS.Design;
   const isOver = dragOverStatus === status;
@@ -129,6 +206,15 @@ export default function TechPackList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [existingSuppliers, setExistingSuppliers] = useState([]);
+  // Default view = grid. Persist the user's choice so the tab remembers it.
+  const [view, setView] = useState(() => {
+    try { return localStorage.getItem(VIEW_STORAGE_KEY) === 'kanban' ? 'kanban' : 'grid'; }
+    catch { return 'grid'; }
+  });
+  const switchView = (next) => {
+    setView(next);
+    try { localStorage.setItem(VIEW_STORAGE_KEY, next); } catch { /* ignore */ }
+  };
 
   const refresh = async () => {
     setLoading(true);
@@ -277,18 +363,43 @@ export default function TechPackList() {
     columns[st].push(p);
   });
 
+  const viewPill = (active) => ({
+    display: 'flex', alignItems: 'center', gap: 5,
+    padding: '6px 10px',
+    background: active ? FR.slate : 'transparent',
+    color: active ? FR.salt : FR.stone,
+    border: `1px solid ${active ? FR.slate : FR.sand}`,
+    borderRadius: 6, fontSize: 11, fontWeight: active ? 600 : 400,
+    cursor: 'pointer', fontFamily: "'Inter', sans-serif",
+  });
+
   return (
     <div>
-      <div className="flex justify-between items-center mb-3">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h3 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 20, margin: 0 }}>Product Pipeline</h3>
-          <p className="text-sm mt-1" style={{ color: FR.stone }}>Drag tech packs through stages. Click a card to open it.</p>
+          <h3 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 20, margin: 0 }}>
+            {view === 'grid' ? 'Styles' : 'Product Pipeline'}
+          </h3>
+          <p style={{ fontSize: 12, marginTop: 2, color: FR.stone }}>
+            {view === 'grid'
+              ? 'Every tech pack as a card. Click to open.'
+              : 'Drag tech packs through stages. Click a card to open it.'}
+          </p>
         </div>
-        <button onClick={createNew}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs"
-          style={{ background: FR.slate, color: FR.salt, border: 'none', cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
-          <Plus size={14} /> New Tech Pack
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 4, marginRight: 6 }}>
+            <button onClick={() => switchView('grid')} style={viewPill(view === 'grid')} title="Grid view">
+              <LayoutGrid size={12} /> Grid
+            </button>
+            <button onClick={() => switchView('kanban')} style={viewPill(view === 'kanban')} title="Kanban pipeline">
+              <Columns3 size={12} /> Kanban
+            </button>
+          </div>
+          <button onClick={createNew}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, fontSize: 11, background: FR.slate, color: FR.salt, border: 'none', cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
+            <Plus size={14} /> New Tech Pack
+          </button>
+        </div>
       </div>
 
       {/* Search + Filter bar */}
@@ -324,7 +435,22 @@ export default function TechPackList() {
         </div>
       )}
 
-      {!loading && packs.length > 0 && (
+      {!loading && packs.length > 0 && view === 'grid' && (
+        filtered.length === 0 ? (
+          <div style={{ padding: 28, textAlign: 'center', background: FR.salt, border: `1px dashed ${FR.sand}`, borderRadius: 8, color: FR.stone, fontSize: 12 }}>
+            No styles match the current search / filter.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
+            {filtered.map(p => (
+              <GridCard key={p.id} pack={p}
+                onOpen={openPack} onDuplicate={onDuplicate} onDelete={onDelete} onCreateVariant={onCreateVariant} />
+            ))}
+          </div>
+        )
+      )}
+
+      {!loading && packs.length > 0 && view === 'kanban' && (
         <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8 }}>
           {STATUSES.map(status => (
             <KanbanColumn key={status} status={status} packs={columns[status]}
