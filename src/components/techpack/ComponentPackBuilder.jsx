@@ -405,6 +405,8 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     pickFRColor, existingSuppliers, existingPeople, onAddPerson: handleAddPerson,
     createSnapshot, confirmRole, unconfirmRole,
     addSample, updateSample, removeSample,
+    onDownloadPDF: handleDownloadPDF, onDownloadSVG: handleDownloadSVG,
+    exporting, exportError,
   };
   const viewingRevision = viewingVersionIdx != null ? (data.revisions || [])[viewingVersionIdx] : null;
 

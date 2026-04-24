@@ -7,7 +7,7 @@ import { getFRColor } from '../../utils/colorLibrary';
 
 const PAGE_W = 1123;
 const PAGE_H = 794;
-const TOTAL_PAGES = 7;
+const TOTAL_PAGES = 8;
 
 function esc(s) { return String(s ?? ''); }
 function clampLine(s, maxW, charW = 6.5) {
@@ -843,14 +843,98 @@ function PageQC({ d, images }) {
   );
 }
 
+// ── Page 8: Samples & Approval ─────────────────────────────────────────────
+// Internal sign-off page: sample log on the left, three approval slots on
+// the right. Shows the final state of every sample type + who signed off
+// on each role. Designed to print at the end so factories see the spec
+// first and the sign-off chain second.
+function PageApproval({ d }) {
+  const samples = (d.samples || []).slice(0, 12);
+  const fa = d.finalApproval || {};
+
+  const leftX = 40;
+  const leftW = 640;
+  const rightX = leftX + leftW + 28;
+  const rightW = PAGE_W - rightX - 40;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+      <SectionHeading x={40} y={158}>Samples & Approval</SectionHeading>
+
+      {/* Sample log */}
+      <rect x={leftX} y={170} width={leftW} height={30} fill={FR.slate} />
+      <text x={leftX + 12} y={190} fontSize="10" fontWeight="bold" fill={FR.salt} letterSpacing="1.5">SAMPLE LOG</text>
+      <text x={leftX + 120} y={190} fontSize="9" fill={FR.salt}>TYPE</text>
+      <text x={leftX + 250} y={190} fontSize="9" fill={FR.salt}>DATE</text>
+      <text x={leftX + 360} y={190} fontSize="9" fill={FR.salt}>COURIER / TRACKING</text>
+      <text x={leftX + 560} y={190} fontSize="9" fill={FR.salt}>VERDICT</text>
+      {samples.length === 0 ? (
+        <text x={leftX + 14} y={230} fontSize="11" fill={FR.stone} fontStyle="italic">
+          No samples logged yet.
+        </text>
+      ) : samples.map((s, i) => {
+        const ry = 200 + i * 28;
+        const verdictColor = s.verdict === 'Approved' ? '#4CAF7D' : s.verdict === 'Rejected' ? '#C0392B' : FR.stone;
+        return (
+          <g key={s.id || i}>
+            <rect x={leftX} y={ry} width={leftW} height={28} fill={i % 2 ? FR.salt : FR.white} stroke={FR.sand} />
+            <text x={leftX + 14} y={ry + 18} fontSize="10" fontWeight="bold" fill={FR.slate}>{clampLine(esc(s.type || '—'), 100, 5.8)}</text>
+            <text x={leftX + 120} y={ry + 18} fontSize="10" fill={FR.slate}>{clampLine(esc(s.date || '—'), 120, 5.8)}</text>
+            <text x={leftX + 250} y={ry + 18} fontSize="10" fill={FR.slate}>—</text>
+            <text x={leftX + 360} y={ry + 18} fontSize="10" fill={FR.slate}>
+              {clampLine(esc([s.courier, s.trackingNumber].filter(Boolean).join(' · ') || '—'), 190, 5.8)}
+            </text>
+            <text x={leftX + 560} y={ry + 18} fontSize="10" fontWeight="bold" fill={verdictColor}>{esc(s.verdict || 'Pending')}</text>
+          </g>
+        );
+      })}
+
+      {/* Approval slots */}
+      <rect x={rightX} y={170} width={rightW} height={30} fill={FR.slate} />
+      <text x={rightX + 12} y={190} fontSize="10" fontWeight="bold" fill={FR.salt} letterSpacing="1.5">FINAL APPROVAL</text>
+      {['designer', 'manager', 'factory'].map((role, idx) => {
+        const slot = fa[role] || {};
+        const by = 210 + idx * 155;
+        const signed = !!(role === 'factory' ? slot.dateChop : slot.date);
+        return (
+          <g key={role}>
+            <rect x={rightX} y={by} width={rightW} height={145} fill={FR.white} stroke={FR.sand} />
+            <rect x={rightX} y={by} width={rightW} height={24} fill={FR.salt} />
+            <text x={rightX + 12} y={by + 16} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="1.5">
+              {role.toUpperCase()}
+            </text>
+            {signed && (
+              <text x={rightX + rightW - 12} y={by + 16} fontSize="8" fontWeight="bold" fill="#4CAF7D" textAnchor="end" letterSpacing="0.5">✓ SIGNED</text>
+            )}
+            <text x={rightX + 14} y={by + 46} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">NAME</text>
+            <text x={rightX + 14} y={by + 62} fontSize="11" fill={FR.slate}>{clampLine(esc(slot.name || '—'), rightW - 28, 6.2)}</text>
+            <line x1={rightX + 14} y1={by + 66} x2={rightX + rightW - 14} y2={by + 66} stroke={FR.sand} />
+            <text x={rightX + 14} y={by + 86} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">SIGNATURE</text>
+            <text x={rightX + 14} y={by + 104} fontFamily="'Cormorant Garamond', Georgia, serif" fontStyle="italic" fontSize="14" fill={FR.slate}>
+              {clampLine(esc(slot.signature || '—'), rightW - 28, 6.2)}
+            </text>
+            <line x1={rightX + 14} y1={by + 110} x2={rightX + rightW - 14} y2={by + 110} stroke={FR.sand} />
+            <text x={rightX + 14} y={by + 128} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">DATE</text>
+            <text x={rightX + 80} y={by + 128} fontSize="11" fill={FR.slate}>
+              {esc((role === 'factory' ? slot.dateChop : slot.date) || '—')}
+            </text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 const PAGE_FNS = [
-  { title: 'Overview',         body: ({ d, images }) => <PageCover d={d} images={images} /> },
-  { title: 'Design',           body: ({ d, images }) => <PageDesign d={d} images={images} /> },
-  { title: 'Materials',        body: ({ d, images }) => <PageMaterials d={d} images={images} /> },
-  { title: 'Construction',     body: ({ d, images }) => <PageConstruction d={d} images={images} /> },
-  { title: 'Embellishments',   body: ({ d, images }) => <PageEmbellishments d={d} images={images} /> },
-  { title: 'Treatment',        body: ({ d, images }) => <PageTreatment d={d} images={images} /> },
-  { title: 'Quality Control',  body: ({ d, images }) => <PageQC d={d} images={images} /> },
+  { title: 'Overview',          body: ({ d, images }) => <PageCover d={d} images={images} /> },
+  { title: 'Design',            body: ({ d, images }) => <PageDesign d={d} images={images} /> },
+  { title: 'Materials',         body: ({ d, images }) => <PageMaterials d={d} images={images} /> },
+  { title: 'Construction',      body: ({ d, images }) => <PageConstruction d={d} images={images} /> },
+  { title: 'Embellishments',    body: ({ d, images }) => <PageEmbellishments d={d} images={images} /> },
+  { title: 'Treatment',         body: ({ d, images }) => <PageTreatment d={d} images={images} /> },
+  { title: 'Quality Control',   body: ({ d, images }) => <PageQC d={d} images={images} /> },
+  { title: 'Samples & Approval', body: ({ d }) => <PageApproval d={d} /> },
 ];
 
 function SkipOverlay() {

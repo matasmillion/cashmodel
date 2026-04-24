@@ -39,9 +39,10 @@ export const CERTIFICATIONS = ['OEKO-TEX Standard 100', 'GOTS', 'GRS', 'bluesign
 // High-level trim classification that mirrors the SVG template dropdown.
 export const COMPONENT_TYPES = ['Label', 'Zipper', 'Fabric', 'Hardware', 'Packaging'];
 
-// 7-step wizard: Overview + Design + 5 content pages. Design sits between
-// Overview and Materials so the factory sees the visual intent before the
-// spec data. Everything after Overview follows a rule-of-three layout.
+// 8-step wizard. Samples + final approval come last so the factory sees
+// the spec first; versioning + sign-off is internal FR business that lives
+// on the final page. Everything between Overview and Approval follows a
+// rule-of-three layout.
 export const COMPONENT_STEPS = [
   { id: 'cover',          title: 'Overview',          icon: '01' },
   { id: 'design',         title: 'Design',            icon: '02' },
@@ -50,6 +51,7 @@ export const COMPONENT_STEPS = [
   { id: 'embellishments', title: 'Embellishments',    icon: '05' },
   { id: 'treatment',      title: 'Treatment',         icon: '06' },
   { id: 'qc',             title: 'Quality Control',   icon: '07' },
+  { id: 'approval',       title: 'Samples & Approval', icon: '08' },
 ];
 
 const todayISO = () => {

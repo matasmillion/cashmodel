@@ -189,9 +189,7 @@ function SampleLog({ samples, onAdd, onUpdate, onRemove }) {
 
 export function StepCover({
   data, set, images, onUpload, onRemove,
-  existingSuppliers = [], existingPeople = [], onAddPerson,
-  createSnapshot, confirmRole, unconfirmRole,
-  addSample, updateSample, removeSample,
+  existingSuppliers = [],
 }) {
   const revisionCount = (data.revisions || []).length;
   const derivedRevision = `V${revisionCount + 1}.0`;
@@ -205,18 +203,6 @@ export function StepCover({
   const addRev = () => set('revisions', [...revRows, { rev: '', date: '', changedBy: '', description: '', approvedBy: '' }]);
   const removeRev = (i) => set('revisions', revRows.filter((_, idx) => idx !== i));
 
-  const setApprovalSlot = (role, slot) => {
-    const fa = data.finalApproval || {};
-    set('finalApproval', { ...fa, [role]: slot });
-  };
-
-  const onRequestRevision = () => {
-    const note = (prompt('Revision request — what needs to change?') ?? '').trim();
-    if (!note) return;
-    createSnapshot(`Revision requested: ${note}`);
-  };
-
-  const fa = data.finalApproval || {};
   const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
 
   return (
@@ -289,8 +275,43 @@ export function StepCover({
           rows={revRows} onUpdate={updateRev} onAdd={addRev} onRemove={removeRev} />
       </div>
 
-      {/* Samples — Proto / Fit / SMS / PP / TOP lifecycle log */}
-      <div style={{ marginBottom: 18 }}>
+      <p style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${FR.sand}`, fontSize: 11, color: FR.stone, fontStyle: 'italic' }}>
+        Samples, approvals, and the final download live on the last page (Samples &amp; Approval).
+      </p>
+    </div>
+  );
+}
+
+// ── Page 8: Samples &amp; Approval ───────────────────────────────────────────
+// Final internal page — sits after the deliverable content so factories see
+// the spec first and never the asset-versioning / sign-off machinery.
+// Contains the sample lifecycle log (Proto / Fit / SMS / PP / TOP), the
+// three-role final approval, the designer → manager → factory workflow
+// buttons, and a big "Download Final Trim Pack" button.
+export function StepApproval({
+  data, set, existingPeople = [], onAddPerson,
+  createSnapshot, confirmRole, unconfirmRole,
+  addSample, updateSample, removeSample,
+  onDownloadPDF, onDownloadSVG, exporting, exportError,
+}) {
+  const fa = data.finalApproval || {};
+  const setApprovalSlot = (role, slot) => set('finalApproval', { ...fa, [role]: slot });
+
+  const onRequestRevision = () => {
+    const note = (prompt('Revision request — what needs to change?') ?? '').trim();
+    if (!note) return;
+    createSnapshot(`Revision requested: ${note}`);
+  };
+
+  return (
+    <div>
+      <SectionTitle>Samples &amp; Approval</SectionTitle>
+
+      <p style={{ fontSize: 11, color: FR.stone, marginTop: -10, marginBottom: 18 }}>
+        Internal page — asset versioning, sign-off, and the final downloadable trim pack.
+      </p>
+
+      <div style={{ marginBottom: 22 }}>
         <label style={sectionLabel}>Samples</label>
         <SampleLog
           samples={data.samples || []}
@@ -299,8 +320,7 @@ export function StepCover({
           onRemove={removeSample} />
       </div>
 
-      {/* Final approval — Designer / Manager / Factory */}
-      <div style={{ marginBottom: 18 }}>
+      <div style={{ marginBottom: 22 }}>
         <label style={sectionLabel}>Final Approval</label>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
           <ApprovalSlot role="designer" title="Designer"
@@ -318,8 +338,7 @@ export function StepCover({
         </div>
       </div>
 
-      {/* Workflow actions — drive the designer → manager → factory review loop */}
-      <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${FR.sand}`, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+      <div style={{ marginBottom: 22, paddingTop: 14, borderTop: `1px solid ${FR.sand}`, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <button onClick={() => createSnapshot('Submitted to manager')}
           style={{ padding: '8px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
           Submit to Manager
@@ -333,8 +352,33 @@ export function StepCover({
           Request Revision
         </button>
         <span style={{ fontSize: 10, color: FR.stone, alignSelf: 'center', marginLeft: 'auto' }}>
-          Each action captures a snapshot + revision entry above.
+          Each action captures a snapshot + revision entry on the Overview page.
         </span>
+      </div>
+
+      {/* Final download block — the "deliverable" export lives here so every
+          internal sign-off happens in one place. The same buttons still sit
+          in the top-right of the builder chrome, but surfacing them here
+          makes the "we're done" moment obvious. */}
+      <div style={{ padding: 18, border: `2px solid ${FR.slate}`, borderRadius: 8, background: FR.salt }}>
+        <div style={{ fontSize: 11, color: FR.soil, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase' }}>Final deliverable</div>
+        <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 22, color: FR.slate, marginTop: 2 }}>Download Final Trim Pack</div>
+        <p style={{ fontSize: 11, color: FR.stone, margin: '6px 0 14px' }}>
+          8-page A4 landscape rendering of every page above. Skipped pages carry a "PAGE NOT USED" slash; hidden items are suppressed.
+        </p>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button onClick={onDownloadPDF} disabled={!!exporting}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 18px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: exporting ? 'wait' : 'pointer' }}>
+            <Download size={13} /> {exporting === 'pdf' ? 'Exporting…' : 'Download PDF'}
+          </button>
+          <button onClick={onDownloadSVG} disabled={!!exporting}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 18px', background: 'transparent', color: FR.slate, border: `1px solid ${FR.slate}`, borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: exporting ? 'wait' : 'pointer' }}>
+            <Download size={13} /> {exporting === 'svg' ? 'Exporting…' : 'Download SVG'}
+          </button>
+          {exportError && (
+            <span style={{ fontSize: 11, color: '#C0392B', alignSelf: 'center' }}>⚠︎ {exportError}</span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -870,4 +914,4 @@ export function StepQC({ data, set, images, onUpload, onRemove }) {
   );
 }
 
-export const COMPONENT_STEP_FNS = [StepCover, StepDesign, StepMaterials, StepConstruction, StepEmbellishments, StepTreatment, StepQC];
+export const COMPONENT_STEP_FNS = [StepCover, StepDesign, StepMaterials, StepConstruction, StepEmbellishments, StepTreatment, StepQC, StepApproval];

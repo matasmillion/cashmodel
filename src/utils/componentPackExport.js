@@ -15,7 +15,7 @@ import ComponentPackPagePreview from '../components/techpack/ComponentPackPagePr
 
 const PAGE_W = 1123;
 const PAGE_H = 794;
-const TOTAL_PAGES = 7;
+const TOTAL_PAGES = 8;
 
 // ── SVG export ─────────────────────────────────────────────────────────────
 // `renderToStaticMarkup` gives us the page's root <svg> as a string. We
