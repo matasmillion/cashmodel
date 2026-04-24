@@ -8,7 +8,7 @@
 // muted "No details yet" badge so users can find and enrich them.
 
 import { useState, useEffect, useRef } from 'react';
-import { X, Upload, Plus, Trash2, MapPin } from 'lucide-react';
+import { X, Upload, Plus, Trash2, MapPin, Globe } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { Input, Row, labelStyle, inputBase } from './TechPackPrimitives';
 import {
@@ -130,6 +130,16 @@ function FactoryCard({ factory, onClick }) {
           ) : !hasDetails ? (
             <div style={{ fontSize: 10, color: FR.sand, fontStyle: 'italic', marginTop: 3 }}>No details yet</div>
           ) : null}
+          {f.website && (
+            <a
+              href={/^https?:\/\//i.test(f.website) ? f.website : `https://${f.website}`}
+              target="_blank" rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: FR.soil, marginTop: 3, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}
+              title={f.website}>
+              <Globe size={10} /> <span>{f.website.replace(/^https?:\/\//i, '').replace(/\/$/, '')}</span>
+            </a>
+          )}
         </div>
       </div>
 
@@ -273,6 +283,7 @@ function FactoryEditor({ name, onClose, onDeleted }) {
               <Input label="Primary Contact" value={entry.primaryContact || ''} onChange={v => patch('primaryContact', v)} placeholder="e.g. Lily Chen" />
               <Input label="Email" value={entry.email || ''} onChange={v => patch('email', v)} placeholder="contact@factory.com" />
               <Input label="Phone / WeChat" value={entry.phone || ''} onChange={v => patch('phone', v)} placeholder="+86 138 0000 0000" />
+              <Input label="Website" value={entry.website || ''} onChange={v => patch('website', v)} placeholder="https://factory.com" />
             </div>
 
             <div>

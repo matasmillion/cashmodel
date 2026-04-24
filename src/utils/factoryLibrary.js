@@ -36,6 +36,7 @@ const emptyEntry = (name) => ({
   primaryContact: '',
   email: '',
   phone: '',
+  website: '',
   moq: '',
   leadTimeDays: '',
   specialties: '',
