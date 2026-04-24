@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-24T11:40:13.105Z",
+  "lastUpdated": "2026-04-24T12:54:50.384Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "71ff064",
+      "date": "2026-04-24T11:40:29+00:00",
+      "message": "Compact Kanban cards so 5+ fit per column on desktop"
+    },
+    {
       "sha": "05b0ca0",
       "date": "2026-04-24T11:37:24+00:00",
       "message": "Remove cost pill from color cards"
@@ -1087,11 +1092,6 @@
       "sha": "c394633",
       "date": "2026-04-24T10:31:17+00:00",
       "message": "Move trim pack samples + final approval to a new page 8"
-    },
-    {
-      "sha": "e4fcd80",
-      "date": "2026-04-24T10:26:07+00:00",
-      "message": "Add Factories section to the PLM"
     }
   ]
 }

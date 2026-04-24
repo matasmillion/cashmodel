@@ -504,10 +504,12 @@ function PageEmbellishments({ d, images }) {
     .map(n => ({ img: imgs.find(x => x.slot === `embellishment-artwork-${n}`), origIdx: n - 1 }))
     .filter(x => !hiddenArt[x.origIdx]);
 
-  // Filter hidden colorways, then pad up to 4 visible slots.
-  const visibleColorways = (d.colorwaysList || []).slice(0, 4).filter(cw => !cw?.hidden);
-  const colorways = [...visibleColorways];
-  while (colorways.length < 4) colorways.push(null);
+  // Only render colorways that actually have content and aren't hidden.
+  // No empty-slot placeholders: if you have one colorway, the preview
+  // shows one colorway; if you hid colorway 2, it's just gone.
+  const colorways = (d.colorwaysList || [])
+    .slice(0, 4)
+    .filter(cw => cw && !cw.hidden && (cw.name || cw.frColor || cw.usage));
   const libraryByColor = (() => {
     const out = {};
     colorways.forEach(cw => {
@@ -518,11 +520,13 @@ function PageEmbellishments({ d, images }) {
     return out;
   })();
 
-  // Colorway row — four equal cards.
+  // Colorway row — cards scale to fill the row based on how many
+  // visible colorways there are (1 wide card, 2 half cards, etc.).
   const cwRowY = 170;
   const cwRowH = 210;
   const cwGap = 14;
-  const cwW = (PAGE_W - 80 - cwGap * 3) / 4;
+  const cwSlots = Math.max(colorways.length, 1);
+  const cwW = (PAGE_W - 80 - cwGap * Math.max(cwSlots - 1, 0)) / cwSlots;
 
   // Artwork row — three A4 landscape tiles centered.
   const artY = cwRowY + cwRowH + 28;
@@ -545,14 +549,6 @@ function PageEmbellishments({ d, images }) {
 
       {colorways.map((cw, i) => {
         const cx = 40 + i * (cwW + cwGap);
-        if (!cw) {
-          return (
-            <g key={i}>
-              <rect x={cx} y={cwRowY} width={cwW} height={cwRowH} fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" rx="3" />
-              <text x={cx + cwW / 2} y={cwRowY + cwRowH / 2 + 4} textAnchor="middle" fontSize="10" fill={FR.stone} fontStyle="italic">Empty slot</text>
-            </g>
-          );
-        }
         const entry = cw.frColor ? libraryByColor[cw.frColor] : null;
         const cardImage = entry?.cardImage;
         // Layout inside the card
