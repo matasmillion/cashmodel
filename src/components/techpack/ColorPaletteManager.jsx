@@ -145,9 +145,6 @@ function ColorCard({ color, onClick }) {
         <div style={{ position: 'absolute', bottom: 10, left: 12, color: textColor, fontFamily: "'Cormorant Garamond', serif", fontSize: 22, lineHeight: 1 }}>
           {c.name}
         </div>
-        <div style={{ position: 'absolute', top: 8, right: 8 }}>
-          <CostPill amount={c.costPerUnit} currency={c.currency || 'USD'} title="Per-unit cost of this color (wash / dye / treatment charge)" />
-        </div>
       </div>
       <div style={{ padding: '10px 12px', fontSize: 10, color: FR.stone, lineHeight: 1.75 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
