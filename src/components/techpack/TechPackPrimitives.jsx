@@ -1,6 +1,7 @@
 // Reusable UI primitives for the Tech Pack builder — ported from the original artifact
 import { useState, useRef } from 'react';
 import { FR, FR_COLOR_OPTIONS, resizeImage } from './techPackConstants';
+import { listFRColors } from '../../utils/colorLibrary';
 import { autoCropDataUrl } from '../../utils/autoCrop';
 import { fileToDataUrl } from '../../utils/cropImage';
 import CropModal from './CropModal';
@@ -402,11 +403,14 @@ export function EditableSelect({ label, value, onChange, options = [], onAddOpti
 }
 
 export function FRColorCell({ value, onChange }) {
+  // Live-read the library so custom colors added on the PLM → Colors tab
+  // show up in every picker across the app without needing a page refresh.
+  const all = listFRColors();
   return (
     <select value={value || ''} onChange={e => onChange(e.target.value)}
       style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 0', color: FR.slate, fontFamily: "'Helvetica Neue',sans-serif" }}>
       <option value="">Select color...</option>
-      {FR_COLOR_OPTIONS.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+      {all.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
     </select>
   );
 }

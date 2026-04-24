@@ -5,10 +5,10 @@
 // to every tech pack and trim pack that references the color by name.
 
 import { useState, useEffect, useRef } from 'react';
-import { X, Upload } from 'lucide-react';
+import { X, Upload, Plus, Trash2 } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { Input, Row, labelStyle, inputBase } from './TechPackPrimitives';
-import { listFRColors, getFRColor, updateFRColor, clearFRColorField } from '../../utils/colorLibrary';
+import { listFRColors, getFRColor, updateFRColor, clearFRColorField, addFRColor, deleteFRColor, isSeededFRColor } from '../../utils/colorLibrary';
 import { fileToDataUrl } from '../../utils/cropImage';
 
 // Pick a readable text color for overlay on a hex swatch.
@@ -27,22 +27,44 @@ function contrastColor(hex) {
 export default function ColorPaletteManager() {
   const [colors, setColors] = useState([]);
   const [activeName, setActiveName] = useState(null);
+  const [adding, setAdding] = useState(false);
 
   const refresh = () => setColors(listFRColors());
   useEffect(() => { refresh(); }, []);
 
-  const handleClose = () => {
+  const handleClose = (openName) => {
     setActiveName(null);
     refresh();
+    // After adding a new color we open its editor right away so the user
+    // can enter Pantone/hex details while the intent is still fresh.
+    if (openName) setActiveName(openName);
+  };
+
+  const handleAdd = (name, hex) => {
+    const res = addFRColor(name, { hex });
+    if (!res.ok) {
+      alert(res.reason);
+      return false;
+    }
+    setAdding(false);
+    refresh();
+    setActiveName(name);
+    return true;
   };
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <h3 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 20, margin: 0 }}>Brand Color Palette</h3>
-        <p style={{ color: FR.stone, fontSize: 12, margin: '4px 0 0' }}>
-          One source of truth. Edits here propagate to every tech pack and trim pack.
-        </p>
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16 }}>
+        <div>
+          <h3 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 20, margin: 0 }}>Brand Color Palette</h3>
+          <p style={{ color: FR.stone, fontSize: 12, margin: '4px 0 0' }}>
+            One source of truth. Edits here propagate to every tech pack and trim pack.
+          </p>
+        </div>
+        <button onClick={() => setAdding(true)}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          <Plus size={12} /> Add color
+        </button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 14 }}>
@@ -51,7 +73,58 @@ export default function ColorPaletteManager() {
         ))}
       </div>
 
-      {activeName && <ColorEditor name={activeName} onClose={handleClose} />}
+      {adding && <AddColorForm onCancel={() => setAdding(false)} onSubmit={handleAdd} />}
+      {activeName && <ColorEditor name={activeName} onClose={() => handleClose()} onDeleted={() => handleClose()} />}
+    </div>
+  );
+}
+
+// Inline add-new-color modal. Asks for a unique name + optional starting
+// hex; Pantone codes, RGB, and the TCX card image are filled in inside
+// the regular editor after the color is created.
+function AddColorForm({ onCancel, onSubmit }) {
+  const [name, setName] = useState('');
+  const [hex, setHex] = useState('');
+
+  const submit = (e) => {
+    e.preventDefault();
+    onSubmit(name, hex);
+  };
+
+  return (
+    <div role="dialog"
+      onClick={onCancel}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <form onClick={e => e.stopPropagation()} onSubmit={submit}
+        style={{ background: FR.white, borderRadius: 10, width: '100%', maxWidth: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+        <div style={{ background: FR.slate, color: FR.salt, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 9, letterSpacing: 3, fontWeight: 600, opacity: 0.8 }}>NEW FR COLOR</div>
+            <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 22, marginTop: 2 }}>Add to palette</div>
+          </div>
+          <button type="button" onClick={onCancel} aria-label="Cancel"
+            style={{ padding: 6, background: 'rgba(255,255,255,0.1)', color: FR.salt, border: 'none', borderRadius: 3, cursor: 'pointer' }}>
+            <X size={14} />
+          </button>
+        </div>
+        <div style={{ padding: '18px 20px' }}>
+          <Input label="Name" value={name} onChange={setName} placeholder="e.g. Bone, Moss, Rust…" />
+          <Input label="Starting Hex (optional)" value={hex} onChange={setHex} placeholder="#AABBCC" />
+          <p style={{ fontSize: 11, color: FR.stone, marginTop: 4 }}>
+            Pantone codes, RGB, and a TCX card image can be added right after.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+            <button type="button" onClick={onCancel}
+              style={{ padding: '6px 14px', background: 'transparent', color: FR.stone, border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 11, cursor: 'pointer' }}>
+              Cancel
+            </button>
+            <button type="submit"
+              style={{ padding: '6px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+              Create color
+            </button>
+          </div>
+        </div>
+      </form>
     </div>
   );
 }
@@ -91,9 +164,22 @@ function ColorCard({ color, onClick }) {
   );
 }
 
-function ColorEditor({ name, onClose }) {
+function ColorEditor({ name, onClose, onDeleted }) {
   const [entry, setEntry] = useState(() => getFRColor(name) || { name });
   const fileRef = useRef(null);
+  const seeded = isSeededFRColor(name);
+
+  const handleDelete = () => {
+    if (seeded) return;
+    if (!window.confirm(`Delete “${name}” from the palette? This cannot be undone, but packs that reference it will keep the name as a plain text value.`)) return;
+    const res = deleteFRColor(name);
+    if (!res.ok) {
+      alert(res.reason);
+      return;
+    }
+    if (onDeleted) onDeleted();
+    else onClose();
+  };
 
   const patch = (k, v) => {
     const next = { ...entry, [k]: v };
@@ -172,8 +258,17 @@ function ColorEditor({ name, onClose }) {
             </div>
           </div>
 
-          <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${FR.sand}`, fontSize: 10, color: FR.stone, fontStyle: 'italic' }}>
-            Saved automatically. Changes appear on every tech pack and trim pack using <strong style={{ color: FR.slate, fontStyle: 'normal' }}>{name}</strong>.
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${FR.sand}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+            <div style={{ fontSize: 10, color: FR.stone, fontStyle: 'italic' }}>
+              Saved automatically. Changes appear on every tech pack and trim pack using <strong style={{ color: FR.slate, fontStyle: 'normal' }}>{name}</strong>.
+            </div>
+            {!seeded && (
+              <button type="button" onClick={handleDelete}
+                title="Delete this custom color"
+                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'transparent', color: '#C0392B', border: `1px solid #C0392B`, borderRadius: 3, fontSize: 10, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                <Trash2 size={11} /> Delete color
+              </button>
+            )}
           </div>
         </div>
       </div>

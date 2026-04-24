@@ -87,3 +87,39 @@ export function clearFRColorField(name, field) {
   store[name] = rest;
   writeStore(store);
 }
+
+// The 9 FR staples cannot be renamed or deleted from the UI — they're the
+// identity of the brand. Custom colors (anything added through the
+// "+ Add color" button) are fully editable and deletable.
+export function isSeededFRColor(name) {
+  return FR_COLOR_OPTIONS.some(c => c.name === name);
+}
+
+// Create a new ad-hoc color. Returns { ok: true } on success or
+// { ok: false, reason } if the name is empty, already used, or a seed color.
+export function addFRColor(name, patch = {}) {
+  const clean = String(name || '').trim();
+  if (!clean) return { ok: false, reason: 'Name required.' };
+  if (isSeededFRColor(clean)) return { ok: false, reason: 'That name is already a brand color.' };
+  const store = readStore();
+  if (store[clean]) return { ok: false, reason: 'A color with that name already exists.' };
+  const entry = { ...emptyEntry(clean) };
+  Object.entries(patch || {}).forEach(([k, v]) => {
+    if (v === '' || v == null) return;
+    entry[k] = v;
+  });
+  store[clean] = entry;
+  writeStore(store);
+  return { ok: true };
+}
+
+// Remove a custom color. Seeded FR brand colors cannot be deleted.
+export function deleteFRColor(name) {
+  if (!name) return { ok: false, reason: 'Name required.' };
+  if (isSeededFRColor(name)) return { ok: false, reason: 'Brand colors cannot be deleted.' };
+  const store = readStore();
+  if (!store[name]) return { ok: false, reason: 'No such color.' };
+  const { [name]: _, ...rest } = store;
+  writeStore(rest);
+  return { ok: true };
+}

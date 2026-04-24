@@ -5,7 +5,8 @@
 // that will be replaced in subsequent prompts.
 
 import { useState } from 'react';
-import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, isStepLocked } from './techPackConstants';
+import { FR, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, isStepLocked } from './techPackConstants';
+import { listFRColors } from '../../utils/colorLibrary';
 import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, EditableSelect, FRColorCell } from './TechPackPrimitives';
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
 import { addSupplier } from '../../utils/plmDirectory';
@@ -389,9 +390,9 @@ export function StepColor({ data, set, images, onUpload, onRemove }) {
       <SectionTitle>Color & Artwork</SectionTitle>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {FR_COLOR_OPTIONS.map(c => (
+        {listFRColors().map(c => (
           <div key={c.name} style={{ textAlign: 'center' }}>
-            <div style={{ width: 40, height: 40, borderRadius: 4, background: c.hex, border: c.name === 'Salt' ? `1px solid ${FR.sand}` : 'none' }} />
+            <div style={{ width: 40, height: 40, borderRadius: 4, background: c.hex || FR.salt, border: c.name === 'Salt' || !c.hex ? `1px solid ${FR.sand}` : 'none' }} />
             <div style={{ fontSize: 8, color: FR.stone, marginTop: 2 }}>{c.name}</div>
           </div>
         ))}

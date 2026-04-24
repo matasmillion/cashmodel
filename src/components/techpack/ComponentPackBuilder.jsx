@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ArrowLeft, History, Printer, X, Download } from 'lucide-react';
 import { FR, DEFAULT_COMPONENT_DATA, COMPONENT_STEPS, LEGACY_STATUS_MIGRATION, LEGACY_SAMPLE_TYPE_MIGRATION } from './componentPackConstants';
-import { FR_COLOR_OPTIONS } from './techPackConstants';
+import { getFRColor } from '../../utils/colorLibrary';
 import { COMPONENT_STEP_FNS } from './ComponentPackSteps';
 import ComponentPackPagePreview from './ComponentPackPagePreview';
 import { saveComponentPack } from '../../utils/componentPackStore';
@@ -299,11 +299,11 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     setData(stampDate);
   }, [stampDate]);
 
-  // Auto-fill hex from FR color
+  // Auto-fill hex from the color library — picks up custom colors too.
   const pickFRColor = useCallback((colorName) => {
     set('frColor', colorName);
-    const match = FR_COLOR_OPTIONS.find(c => c.name === colorName);
-    if (match) set('hex', match.hex);
+    const match = getFRColor(colorName);
+    if (match && match.hex) set('hex', match.hex);
   }, [set]);
 
   const handleAddPerson = useCallback((name) => {
