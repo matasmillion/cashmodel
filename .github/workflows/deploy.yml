@@ -1,8 +1,11 @@
 name: Deploy to GitHub Pages
 
 on:
+  # Only deploy from the feature branch that holds the full app source.
+  # `main` is a staging area for spec/prompt uploads and trails the app
+  # state, so triggering a deploy from it would ship an incomplete tree.
   push:
-    branches: [main, claude/build-cash-model-app-11msn]
+    branches: [claude/build-cash-model-app-11msn]
 
 permissions:
   contents: read
