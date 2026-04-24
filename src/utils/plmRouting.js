@@ -5,6 +5,7 @@
 //   #product/styles                           → PLM, Styles list
 //   #product/components                       → PLM, Components list
 //   #product/colors                           → PLM, Color palette manager
+//   #product/factories                        → PLM, Factory directory
 //   #product/styles/<packId>                  → Tech Pack builder, step 1
 //   #product/styles/<packId>/<step>           → Tech Pack builder, specific step (1-indexed)
 //   #product/components/<packId>              → Component Pack builder, step 1
@@ -15,7 +16,7 @@
 // across reloads, back/forward, and tab switches.
 
 const PLM_TAB = 'product';
-const VALID_SECTIONS = new Set(['styles', 'components', 'colors']);
+const VALID_SECTIONS = new Set(['styles', 'components', 'colors', 'factories']);
 
 export function parsePLMHash() {
   if (typeof window === 'undefined') return { tab: null, section: 'styles', packId: null, step: 0 };

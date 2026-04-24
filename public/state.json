@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-24T10:18:51.009Z",
+  "lastUpdated": "2026-04-24T10:25:50.441Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "8a55033",
+      "date": "2026-04-24T10:19:08+00:00",
+      "message": "Allow adding custom colors to the PLM palette"
+    },
+    {
       "sha": "f518839",
       "date": "2026-04-24T10:12:34+00:00",
       "message": "Show PAGE NOT USED overlay on skipped pages in exports"
@@ -1087,11 +1092,6 @@
       "sha": "a4ab085",
       "date": "2026-04-23T13:09:46+00:00",
       "message": "Trim pack overview: cover photo 3:2 landscape, fills title zone to divider"
-    },
-    {
-      "sha": "615b514",
-      "date": "2026-04-23T13:07:10+00:00",
-      "message": "Trim pack construction callouts: 2:3 portrait reference images (~28% larger)"
     }
   ]
 }

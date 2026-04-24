@@ -1,12 +1,14 @@
 // PLM container — sub-tabs for Styles (tech packs), Trims (component packs),
-// and Colors (shared FR brand color palette, single source of truth).
+// Colors (shared FR brand color palette), and Factories (shared factory
+// directory). Styles are composed of trims, colors, and factories.
 
 import { useEffect, useState } from 'react';
-import { Shirt, Boxes, Palette } from 'lucide-react';
+import { Shirt, Boxes, Palette, Factory } from 'lucide-react';
 import { FR } from './techPackConstants';
 import TechPackList from './TechPackList';
 import ComponentPackList from './ComponentPackList';
 import ColorPaletteManager from './ColorPaletteManager';
+import FactoryManager from './FactoryManager';
 import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
 
 export default function PLMView() {
@@ -61,11 +63,15 @@ export default function PLMView() {
         <button onClick={() => switchView('colors')} style={tabStyle(view === 'colors')}>
           <Palette size={13} /> Colors
         </button>
+        <button onClick={() => switchView('factories')} style={tabStyle(view === 'factories')}>
+          <Factory size={13} /> Factories
+        </button>
       </div>
 
       {view === 'styles' && <TechPackList />}
       {view === 'components' && <ComponentPackList />}
       {view === 'colors' && <ColorPaletteManager />}
+      {view === 'factories' && <FactoryManager />}
     </div>
   );
 }
