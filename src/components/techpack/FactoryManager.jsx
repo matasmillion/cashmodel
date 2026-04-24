@@ -135,9 +135,9 @@ function FactoryCard({ factory, onClick }) {
               href={/^https?:\/\//i.test(f.website) ? f.website : `https://${f.website}`}
               target="_blank" rel="noopener noreferrer"
               onClick={e => e.stopPropagation()}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: FR.soil, marginTop: 3, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: FR.soil, marginTop: 3, textDecoration: 'underline' }}
               title={f.website}>
-              <Globe size={10} /> <span>{f.website.replace(/^https?:\/\//i, '').replace(/\/$/, '')}</span>
+              <Globe size={10} /> <span>Website</span>
             </a>
           )}
         </div>
