@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-24T09:44:55.948Z",
+  "lastUpdated": "2026-04-24T10:05:19.303Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "00cf205",
+      "date": "2026-04-24T09:45:18+00:00",
+      "message": "Swap trim pack template from .svg to .ai"
+    },
+    {
       "sha": "3ad9879",
       "date": "2026-04-24T09:25:09+00:00",
       "message": "Add Trim Pack Template download button on Overview page"
@@ -1087,11 +1092,6 @@
       "sha": "00b45f1",
       "date": "2026-04-23T12:53:11+00:00",
       "message": "Trim pack construction page: red callout headers + specification + reference image"
-    },
-    {
-      "sha": "c019dad",
-      "date": "2026-04-23T09:00:42+00:00",
-      "message": "Trim pack: restore footer on PDF/SVG + make images load in Illustrator"
     }
   ]
 }

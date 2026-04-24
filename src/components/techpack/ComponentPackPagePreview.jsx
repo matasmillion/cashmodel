@@ -347,11 +347,14 @@ function PageDesign({ d, images }) {
 // name + composition + weight/gauge + factory.
 function PageMaterials({ d, images }) {
   const imgs = images || [];
-  const materials = (d.materials || []).slice(0, 3);
-  while (materials.length < 3) materials.push({});
-
+  // Keep original index for image-slot lookup so hiding Material 2 doesn't
+  // shift Material 3's photo into the wrong card.
+  const visible = (d.materials || []).slice(0, 3)
+    .map((m, origIdx) => ({ m, origIdx }))
+    .filter(x => !x.m.hidden);
+  const slots = 3;
   const cardGap = 16;
-  const cardW = (PAGE_W - 80 - cardGap * 2) / 3;
+  const cardW = (PAGE_W - 80 - cardGap * (slots - 1)) / slots;
   const cardY = 170;
   const cardH = 560;
   // Swatch photo: 2:3 portrait, centered in the card.
@@ -363,9 +366,9 @@ function PageMaterials({ d, images }) {
       <InfoStrip d={d} />
       <SectionHeading x={40} y={158}>Materials</SectionHeading>
 
-      {materials.map((m, i) => {
+      {visible.map(({ m, origIdx }, i) => {
         const cx = 40 + i * (cardW + cardGap);
-        const img = imgs.find(x => x.slot === `material-${i}`);
+        const img = imgs.find(x => x.slot === `material-${origIdx}`);
         const imgX = cx + Math.round((cardW - imgW) / 2);
         return (
           <g key={i}>
@@ -422,8 +425,11 @@ function PageMaterials({ d, images }) {
 function PageConstruction({ d, images }) {
   const imgs = images || [];
   const diagram = imgs.find(x => x.slot === 'construction-diagram');
-  const callouts = (d.constructionCallouts || []).slice(0, 3);
-  while (callouts.length < 3) callouts.push({});
+  // Keep original index for the `callout-ref-${origIdx}` image slot lookup.
+  const visibleCallouts = (d.constructionCallouts || []).slice(0, 3)
+    .map((c, origIdx) => ({ c, origIdx }))
+    .filter(x => !x.c.hidden);
+  const calloutSlots = 3;
 
   const heroX = 40;
   const heroY = 170;
@@ -435,7 +441,7 @@ function PageConstruction({ d, images }) {
   const coGap = 10;
   // Callouts extend to full available page height so spec text + image fit.
   const availH = 775 - heroY - 10;
-  const coH = Math.round((availH - coGap * 2) / 3);
+  const coH = Math.round((availH - coGap * (calloutSlots - 1)) / calloutSlots);
 
   const pad = 12;
   const innerW = coColW - pad * 2;
@@ -452,9 +458,9 @@ function PageConstruction({ d, images }) {
       <rect x={heroX} y={heroY + heroH - 22} width={140} height={22} fill={FR.slate} />
       <text x={heroX + 10} y={heroY + heroH - 7} fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="1.5">MEASUREMENT DIAGRAM</text>
 
-      {callouts.map((c, i) => {
+      {visibleCallouts.map(({ c, origIdx }, i) => {
         const cy = heroY + i * (coH + coGap);
-        const refImg = imgs.find(x => x.slot === `callout-ref-${i}`);
+        const refImg = imgs.find(x => x.slot === `callout-ref-${origIdx}`);
         const specText = c.specification || c.detail || '';
         const imgX = coColX + pad + specW + 10;
         return (
@@ -493,9 +499,14 @@ function PageConstruction({ d, images }) {
 // images are pulled from the shared color library keyed on FR color name.
 function PageEmbellishments({ d, images }) {
   const imgs = images || [];
-  const artworkImgs = [1, 2, 3].map(n => imgs.find(x => x.slot === `embellishment-artwork-${n}`));
+  const hiddenArt = Array.isArray(d.artworkHidden) ? d.artworkHidden : [];
+  const artworkImgs = [1, 2, 3]
+    .map(n => ({ img: imgs.find(x => x.slot === `embellishment-artwork-${n}`), origIdx: n - 1 }))
+    .filter(x => !hiddenArt[x.origIdx]);
 
-  const colorways = (d.colorwaysList || []).slice(0, 4);
+  // Filter hidden colorways, then pad up to 4 visible slots.
+  const visibleColorways = (d.colorwaysList || []).slice(0, 4).filter(cw => !cw?.hidden);
+  const colorways = [...visibleColorways];
   while (colorways.length < 4) colorways.push(null);
   const libraryByColor = (() => {
     const out = {};
@@ -586,13 +597,20 @@ function PageEmbellishments({ d, images }) {
       })}
 
       <SectionHeading x={40} y={artY - 12}>Artwork</SectionHeading>
-      {artworkImgs.map((img, i) => {
-        const ax = artStartX + i * (artW + artGap);
+      {artworkImgs.map(({ img, origIdx }, i) => {
+        // Reflow visible artwork tiles — if Artwork 2 is hidden, Artwork 3
+        // slides left into slot 2 so the page stays balanced.
+        const slots = Math.max(artworkImgs.length, 1);
+        const tileW = slots === 3 ? artW : Math.min(artW, Math.round((PAGE_W - 80 - artGap * (slots - 1)) / slots));
+        const total = tileW * slots + artGap * (slots - 1);
+        const startX = Math.round((PAGE_W - total) / 2);
+        const ax = startX + i * (tileW + artGap);
+        const tileH = Math.round(tileW * 210 / 297);
         return (
-          <g key={i}>
-            <PhotoSlot x={ax} y={artY} w={artW} h={artH} image={img} placeholder={`Artwork ${i + 1} · A4 landscape`} />
-            <rect x={ax} y={artY + artH - 22} width={68} height={22} fill={FR.slate} />
-            <text x={ax + 10} y={artY + artH - 7} fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="1.5">ARTWORK {i + 1}</text>
+          <g key={origIdx}>
+            <PhotoSlot x={ax} y={artY} w={tileW} h={tileH} image={img} placeholder={`Artwork ${origIdx + 1} · A4 landscape`} />
+            <rect x={ax} y={artY + tileH - 22} width={68} height={22} fill={FR.slate} />
+            <text x={ax + 10} y={artY + tileH - 7} fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="1.5">ARTWORK {i + 1}</text>
           </g>
         );
       })}
@@ -623,11 +641,13 @@ function PageEmbellishments({ d, images }) {
 // the form.
 function PageTreatment({ d, images }) {
   const imgs = images || [];
-  const treatments = (d.treatments || []).slice(0, 3);
-  while (treatments.length < 3) treatments.push({});
+  const visible = (d.treatments || []).slice(0, 3)
+    .map((t, origIdx) => ({ t, origIdx }))
+    .filter(x => !x.t.hidden);
+  const slots = 3;
 
   const cardGap = 16;
-  const cardW = (PAGE_W - 80 - cardGap * 2) / 3;
+  const cardW = (PAGE_W - 80 - cardGap * (slots - 1)) / slots;
   const cardY = 170;
   const cardH = 560;
   // 2:3 portrait photo, centered in each card.
@@ -639,9 +659,9 @@ function PageTreatment({ d, images }) {
       <InfoStrip d={d} />
       <SectionHeading x={40} y={158}>Treatment</SectionHeading>
 
-      {treatments.map((t, i) => {
+      {visible.map(({ t, origIdx }, i) => {
         const cx = 40 + i * (cardW + cardGap);
-        const img = imgs.find(x => x.slot === `treatment-${i}`);
+        const img = imgs.find(x => x.slot === `treatment-${origIdx}`);
         const imgX = cx + Math.round((cardW - imgW) / 2);
         return (
           <g key={i}>
@@ -766,11 +786,13 @@ function ApprovalPreviewCard({ x, y, w, h, title, name, signature, date, dateLab
 // repetition: user learns one card shape, applies to both pages.
 function PageQC({ d, images }) {
   const imgs = images || [];
-  const qcPoints = (d.qcPoints || []).slice(0, 3);
-  while (qcPoints.length < 3) qcPoints.push({});
+  const visible = (d.qcPoints || []).slice(0, 3)
+    .map((q, origIdx) => ({ q, origIdx }))
+    .filter(x => !x.q.hidden);
+  const slots = 3;
 
   const cardGap = 16;
-  const cardW = (PAGE_W - 80 - cardGap * 2) / 3;
+  const cardW = (PAGE_W - 80 - cardGap * (slots - 1)) / slots;
   const cardY = 170;
   const cardH = 560;
   // 2:3 portrait reference photo, centered in each card.
@@ -782,9 +804,9 @@ function PageQC({ d, images }) {
       <InfoStrip d={d} />
       <SectionHeading x={40} y={158}>Quality Control</SectionHeading>
 
-      {qcPoints.map((q, i) => {
+      {visible.map(({ q, origIdx }, i) => {
         const cx = 40 + i * (cardW + cardGap);
-        const img = imgs.find(x => x.slot === `qc-${i}`);
+        const img = imgs.find(x => x.slot === `qc-${origIdx}`);
         const imgX = cx + Math.round((cardW - imgW) / 2);
         return (
           <g key={i}>

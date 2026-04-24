@@ -14,7 +14,7 @@ import { addSupplier } from '../../utils/plmDirectory';
 import { getFRColor, updateFRColor } from '../../utils/colorLibrary';
 import { setPLMHash } from '../../utils/plmRouting';
 import { useState, useRef, useEffect } from 'react';
-import { CheckCircle, XCircle, Clock, Plus, Download } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Plus, Download, Eye, EyeOff } from 'lucide-react';
 import { downloadBlob } from '../../utils/downloadBlob';
 
 const TRIMPACK_TEMPLATE_FILENAME = 'Trimpack Template.ai';
@@ -24,6 +24,28 @@ async function handleDownloadTrimpackTemplate() {
   if (!res.ok) throw new Error(`Template fetch failed: ${res.status}`);
   const blob = await res.blob();
   await downloadBlob(blob, TRIMPACK_TEMPLATE_FILENAME);
+}
+
+// Toggle button used in the top-right of every modular card (material,
+// callout, colorway, treatment, QC point, artwork slot). Clicking hides
+// the item from the A4 live preview and the downloaded PDF / SVG, but
+// keeps the data intact so un-hiding restores everything.
+function HideToggle({ hidden, onClick }) {
+  return (
+    <button type="button"
+      onClick={onClick}
+      title={hidden ? 'Show in preview & export' : 'Hide from preview & export'}
+      aria-label={hidden ? 'Show item in export' : 'Hide item from export'}
+      style={{ background: 'none', border: 'none', color: hidden ? '#C0392B' : FR.stone, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
+      {hidden ? <EyeOff size={14} /> : <Eye size={14} />}
+    </button>
+  );
+}
+
+// Visual styling overlay applied to a card in the builder when it's hidden.
+function hiddenCardStyle(hidden) {
+  if (!hidden) return {};
+  return { opacity: 0.55, borderStyle: 'dashed', background: 'rgba(192,57,43,0.04)' };
 }
 
 // ── Approval sign-off card ──────────────────────────────────────────────────
@@ -381,13 +403,18 @@ export function StepMaterials({ data, set, images, onUpload, onRemove, existingS
 
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(materials.length, 3)}, 1fr)`, gap: 14 }}>
         {materials.map((m, i) => (
-          <div key={i} style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div key={i} style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, display: 'flex', flexDirection: 'column', gap: 8, ...hiddenCardStyle(m.hidden) }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 9, color: FR.soil, fontWeight: 700, letterSpacing: 1.5 }}>MATERIAL {i + 1}</span>
-              {materials.length > 1 && (
-                <button onClick={() => removeMat(i)}
-                  style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 14, padding: 0 }}>×</button>
-              )}
+              <span style={{ fontSize: 9, color: m.hidden ? '#C0392B' : FR.soil, fontWeight: 700, letterSpacing: 1.5 }}>
+                MATERIAL {i + 1}{m.hidden && ' · HIDDEN'}
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <HideToggle hidden={!!m.hidden} onClick={() => updateMat(i, 'hidden', !m.hidden)} />
+                {materials.length > 1 && (
+                  <button onClick={() => removeMat(i)}
+                    style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 14, padding: 0 }}>×</button>
+                )}
+              </div>
             </div>
             <AspectPhoto slotKey={`material-${i}`} aspect={ASPECTS.TWO_THIRDS} images={images} onUpload={onUpload} onRemove={onRemove} />
             <Input label="Name" value={m.name} onChange={v => updateMat(i, 'name', v)} placeholder="e.g. Cotton Twill" />
@@ -443,9 +470,11 @@ export function StepConstruction({ data, set, images, onUpload, onRemove }) {
       <label style={sectionLabel}>Callouts — the three rules the factory must follow</label>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
         {callouts.slice(0, 3).map((c, i) => (
-          <div key={i} style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div key={i} style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, display: 'flex', flexDirection: 'column', gap: 8, ...hiddenCardStyle(c.hidden) }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 9, color: '#C0392B', fontWeight: 700, letterSpacing: 1.5, whiteSpace: 'nowrap' }}>CALLOUT {i + 1}</span>
+              <span style={{ fontSize: 9, color: '#C0392B', fontWeight: 700, letterSpacing: 1.5, whiteSpace: 'nowrap' }}>
+                CALLOUT {i + 1}{c.hidden && ' · HIDDEN'}
+              </span>
               <span style={{ color: FR.stone, fontSize: 11 }}>—</span>
               <input
                 value={c.label || ''}
@@ -453,6 +482,7 @@ export function StepConstruction({ data, set, images, onUpload, onRemove }) {
                 placeholder="Callout title"
                 style={{ flex: 1, fontSize: 11, padding: '3px 6px', border: `1px solid ${FR.sand}`, borderRadius: 3, color: FR.slate, background: 'white', fontFamily: "'Inter', sans-serif", outline: 'none' }}
               />
+              <HideToggle hidden={!!c.hidden} onClick={() => updateCallout(i, 'hidden', !c.hidden)} />
             </div>
             <Input label="Specification" value={c.specification || c.detail || ''} onChange={v => updateCallout(i, 'specification', v)} placeholder="Spec, tolerance, notes…" multiline />
             <div>
@@ -513,9 +543,10 @@ function ColorwayCard({ index, value, onChange, onRemove, canRemove }) {
   }, []);
 
   // Narrow save — editing any field strips legacy pantone/hex/rgb from the
-  // pack JSONB. Library stays authoritative.
+  // pack JSONB. Library stays authoritative. `hidden` is preserved.
   const patch = (k, v) => onChange({
     name: c.name || '', usage: c.usage || '', frColor: c.frColor || '',
+    hidden: c.hidden || false,
     [k]: v,
   });
 
@@ -523,13 +554,18 @@ function ColorwayCard({ index, value, onChange, onRemove, canRemove }) {
   const cardImage = library?.cardImage;
 
   return (
-    <div style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, display: 'flex', flexDirection: 'column', gap: 8, ...hiddenCardStyle(c.hidden) }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 9, color: FR.soil, fontWeight: 700, letterSpacing: 1.5 }}>COLORWAY {index + 1}</span>
-        {canRemove && (
-          <button onClick={onRemove}
-            style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 14, padding: 0 }}>×</button>
-        )}
+        <span style={{ fontSize: 9, color: c.hidden ? '#C0392B' : FR.soil, fontWeight: 700, letterSpacing: 1.5 }}>
+          COLORWAY {index + 1}{c.hidden && ' · HIDDEN'}
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <HideToggle hidden={!!c.hidden} onClick={() => patch('hidden', !c.hidden)} />
+          {canRemove && (
+            <button onClick={onRemove}
+              style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 14, padding: 0 }}>×</button>
+          )}
+        </div>
       </div>
 
       {/* Swatch strip + TCX card thumbnail (if library has one for this color) */}
@@ -583,6 +619,7 @@ export function StepEmbellishments({ data, set, images, onUpload, onRemove }) {
     name: r.name || '',
     usage: r.usage || '',
     frColor: r.frColor || '',
+    hidden: !!r.hidden,
     pantoneTCX: r.pantoneTCX || r.pantone || '',
     pantoneTPG: r.pantoneTPG || '',
     pantoneC: r.pantoneC || '',
@@ -631,9 +668,25 @@ export function StepEmbellishments({ data, set, images, onUpload, onRemove }) {
       <div style={{ marginBottom: 22 }}>
         <label style={sectionLabel}>Artwork — up to three A4 landscape tiles</label>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
-          <AspectPhoto label="Artwork 1" slotKey="embellishment-artwork-1" aspect={ASPECTS.A4_LANDSCAPE} images={images} onUpload={onUpload} onRemove={onRemove} />
-          <AspectPhoto label="Artwork 2" slotKey="embellishment-artwork-2" aspect={ASPECTS.A4_LANDSCAPE} images={images} onUpload={onUpload} onRemove={onRemove} />
-          <AspectPhoto label="Artwork 3" slotKey="embellishment-artwork-3" aspect={ASPECTS.A4_LANDSCAPE} images={images} onUpload={onUpload} onRemove={onRemove} />
+          {[0, 1, 2].map(idx => {
+            const artHidden = Array.isArray(data.artworkHidden) ? !!data.artworkHidden[idx] : false;
+            const toggleArtworkHidden = () => {
+              const next = Array.isArray(data.artworkHidden) ? [...data.artworkHidden] : [false, false, false];
+              next[idx] = !artHidden;
+              set('artworkHidden', next);
+            };
+            return (
+              <div key={idx} style={{ padding: 8, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, ...hiddenCardStyle(artHidden) }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <span style={{ fontSize: 9, color: artHidden ? '#C0392B' : FR.soil, fontWeight: 700, letterSpacing: 1.5 }}>
+                    ARTWORK {idx + 1}{artHidden && ' · HIDDEN'}
+                  </span>
+                  <HideToggle hidden={artHidden} onClick={toggleArtworkHidden} />
+                </div>
+                <AspectPhoto slotKey={`embellishment-artwork-${idx + 1}`} aspect={ASPECTS.A4_LANDSCAPE} images={images} onUpload={onUpload} onRemove={onRemove} />
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -762,8 +815,13 @@ export function StepTreatment({ data, set, images, onUpload, onRemove }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
         {treatments.slice(0, 3).map((t, i) => (
-          <div key={i} style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <span style={{ fontSize: 9, color: FR.soil, fontWeight: 700, letterSpacing: 1.5 }}>FINISH {i + 1}</span>
+          <div key={i} style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, display: 'flex', flexDirection: 'column', gap: 8, ...hiddenCardStyle(t.hidden) }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 9, color: t.hidden ? '#C0392B' : FR.soil, fontWeight: 700, letterSpacing: 1.5 }}>
+                FINISH {i + 1}{t.hidden && ' · HIDDEN'}
+              </span>
+              <HideToggle hidden={!!t.hidden} onClick={() => update(i, 'hidden', !t.hidden)} />
+            </div>
             <AspectPhoto slotKey={`treatment-${i}`} aspect={ASPECTS.TWO_THIRDS} images={images} onUpload={onUpload} onRemove={onRemove} />
             <Input label="Name" value={t.name} onChange={v => update(i, 'name', v)} placeholder="e.g. Garment wash" />
             <Input label="Description" value={t.description} onChange={v => update(i, 'description', v)} placeholder="Temperature, duration, chemicals…" multiline />
@@ -794,8 +852,13 @@ export function StepQC({ data, set, images, onUpload, onRemove }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
         {qcPoints.slice(0, 3).map((q, i) => (
-          <div key={i} style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <span style={{ fontSize: 9, color: FR.soil, fontWeight: 700, letterSpacing: 1.5 }}>QC FOCUS {i + 1}</span>
+          <div key={i} style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white, display: 'flex', flexDirection: 'column', gap: 8, ...hiddenCardStyle(q.hidden) }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 9, color: q.hidden ? '#C0392B' : FR.soil, fontWeight: 700, letterSpacing: 1.5 }}>
+                QC FOCUS {i + 1}{q.hidden && ' · HIDDEN'}
+              </span>
+              <HideToggle hidden={!!q.hidden} onClick={() => update(i, 'hidden', !q.hidden)} />
+            </div>
             <AspectPhoto slotKey={`qc-${i}`} aspect={ASPECTS.TWO_THIRDS} images={images} onUpload={onUpload} onRemove={onRemove} />
             <Input label="Focus" value={q.focus} onChange={v => update(i, 'focus', v)} placeholder="e.g. Pull strength" />
             <Input label="Method" value={q.method} onChange={v => update(i, 'method', v)} placeholder="Test method (e.g. ISO 13935 seam strength)" multiline />
