@@ -14,7 +14,17 @@ import { addSupplier } from '../../utils/plmDirectory';
 import { getFRColor, updateFRColor } from '../../utils/colorLibrary';
 import { setPLMHash } from '../../utils/plmRouting';
 import { useState, useRef, useEffect } from 'react';
-import { CheckCircle, XCircle, Clock, Plus } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Plus, Download } from 'lucide-react';
+import { downloadBlob } from '../../utils/downloadBlob';
+
+const TRIMPACK_TEMPLATE_FILENAME = 'Trimpack Template.svg';
+async function handleDownloadTrimpackTemplate() {
+  const url = `${import.meta.env.BASE_URL}${encodeURIComponent(TRIMPACK_TEMPLATE_FILENAME)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Template fetch failed: ${res.status}`);
+  const blob = await res.blob();
+  await downloadBlob(blob, TRIMPACK_TEMPLATE_FILENAME);
+}
 
 // ── Approval sign-off card ──────────────────────────────────────────────────
 // Name is an editable dropdown (populated from plmDirectory.listAllPeople),
@@ -190,6 +200,18 @@ export function StepCover({
   return (
     <div>
       <SectionTitle>Overview</SectionTitle>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, padding: '9px 14px', background: FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 6 }}>
+        <div style={{ flex: 1, fontSize: 11, color: FR.stone }}>
+          <strong style={{ color: FR.slate, fontWeight: 600 }}>Working files template</strong> — pre-cropped slots and aspect ratios for every image in this trim pack.
+        </div>
+        <button type="button"
+          aria-label="Download trim pack template (SVG)"
+          onClick={() => { handleDownloadTrimpackTemplate().catch(err => { console.error(err); alert('Template download failed.'); }); }}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          <Download size={11} /> Trim Pack Template
+        </button>
+      </div>
 
       <div style={{ maxWidth: 320, marginBottom: 4 }}>
         <AspectPhoto label="Trim Photo" slotKey="component-cover" aspect={ASPECTS.LANDSCAPE_3_2} images={images} onUpload={onUpload} onRemove={onRemove} />
