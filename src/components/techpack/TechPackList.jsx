@@ -4,7 +4,7 @@
 // The grid is the default; the choice is persisted in localStorage so the
 // user lands on their preferred view next time.
 import { useEffect, useState, useRef } from 'react';
-import { Plus, Shirt, Copy, Trash2, GripVertical, GitBranch, Search, LayoutGrid, Columns3 } from 'lucide-react';
+import { Plus, Shirt, Copy, Trash2, GitBranch, Search, LayoutGrid, Columns3 } from 'lucide-react';
 import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STATUSES } from './techPackConstants';
 import { CostPill } from './TechPackPrimitives';
 import TechPackBuilder from './TechPackBuilder';
@@ -30,65 +30,63 @@ const STATUS_COLORS = {
   Released:         { bg: '#F2F2F2', border: '#E0E0E0', dot: '#3A3A3A' },
 };
 
+// Compact Kanban card — horizontal layout so a typical desktop column
+// comfortably fits 5+ cards without scrolling inside the column. The
+// same info fits (thumb, name, category, status, completion, cost,
+// actions), just denser.
 function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onCreateVariant, onDragStart, onDragEnd }) {
   return (
     <div
       draggable
       onDragStart={e => { e.dataTransfer.setData('text/plain', pack.id); onDragStart(pack.id); }}
       onDragEnd={onDragEnd}
+      onClick={() => onOpen(pack.id)}
       style={{
-        background: 'white', borderRadius: 8, marginBottom: 8,
+        background: 'white', borderRadius: 6, marginBottom: 6,
         border: `1px solid ${FR.sand}`, cursor: 'grab', position: 'relative',
         transition: 'box-shadow 0.15s, transform 0.15s', overflow: 'hidden',
+        padding: 8,
       }}
       onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
     >
-      <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}>
-        <CostPill amount={pack.total_unit_cost} currency={pack.currency || 'USD'} title="Total unit cost — BOM + colorways" />
-      </div>
-      <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer', width: '100%', aspectRatio: '4 / 3', background: FR.salt, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${FR.sand}` }}>
-        {pack.cover_image
-          ? <img src={pack.cover_image} alt={pack.style_name || 'Cover'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          : <Shirt size={28} style={{ color: FR.sand }} />}
-      </div>
-      <div style={{ padding: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-        <GripVertical size={12} style={{ color: FR.sand, marginTop: 2, flexShrink: 0 }} />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ width: 48, height: 48, flexShrink: 0, background: FR.salt, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${FR.sand}` }}>
+          {pack.cover_image
+            ? <img src={pack.cover_image} alt={pack.style_name || 'Cover'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <Shirt size={18} style={{ color: FR.sand }} />}
+        </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer' }}>
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 15, color: FR.slate, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+            <div style={{ flex: 1, minWidth: 0, fontFamily: "'Cormorant Garamond', serif", fontSize: 13, color: FR.slate, fontWeight: 500, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {pack.style_name || 'Untitled'}
             </div>
-            <div style={{ fontSize: 10, color: FR.stone, marginTop: 2 }}>{pack.product_category || '—'}</div>
+            <CostPill amount={pack.total_unit_cost} currency={pack.currency || 'USD'} title="Total unit cost — BOM + colorways" />
           </div>
-          <div style={{ marginTop: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: FR.stone, marginBottom: 2 }}>
-              <span>{pack.completion_pct || 0}%</span>
-              <span>{formatDate(pack.updated_at)}</span>
-            </div>
-            <div style={{ width: '100%', height: 3, background: FR.sand, borderRadius: 2 }}>
+          <div style={{ fontSize: 9, color: FR.stone, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {pack.product_category || '—'} · {formatDate(pack.updated_at)}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+            <div style={{ flex: 1, height: 3, background: FR.sand, borderRadius: 2 }}>
               <div style={{ width: `${pack.completion_pct || 0}%`, height: '100%', background: FR.soil, borderRadius: 2 }} />
             </div>
+            <span style={{ fontSize: 9, color: FR.stone, minWidth: 22, textAlign: 'right' }}>{pack.completion_pct || 0}%</span>
+            {pack.style_name && (
+              <button onClick={e => { e.stopPropagation(); onCreateVariant(pack.id); }} title="Create Variant"
+                style={{ padding: 2, border: 'none', background: 'transparent', color: FR.soil, cursor: 'pointer', display: 'flex' }}>
+                <GitBranch size={10} />
+              </button>
+            )}
+            <button onClick={e => { e.stopPropagation(); onDuplicate(pack.id); }} title="Duplicate"
+              style={{ padding: 2, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer', display: 'flex' }}>
+              <Copy size={10} />
+            </button>
+            <button onClick={e => { e.stopPropagation(); onDelete(pack.id); }} title="Delete"
+              style={{ padding: 2, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer', display: 'flex' }}>
+              <Trash2 size={10} />
+            </button>
           </div>
         </div>
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, marginTop: 6 }}>
-        {pack.style_name && (
-          <button onClick={e => { e.stopPropagation(); onCreateVariant(pack.id); }} title="Create Variant"
-            style={{ padding: 4, border: 'none', background: 'transparent', color: FR.soil, cursor: 'pointer' }}>
-            <GitBranch size={11} />
-          </button>
-        )}
-        <button onClick={e => { e.stopPropagation(); onDuplicate(pack.id); }} title="Duplicate"
-          style={{ padding: 4, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer' }}>
-          <Copy size={11} />
-        </button>
-        <button onClick={e => { e.stopPropagation(); onDelete(pack.id); }} title="Delete"
-          style={{ padding: 4, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer' }}>
-          <Trash2 size={11} />
-        </button>
-      </div>
       </div>
     </div>
   );

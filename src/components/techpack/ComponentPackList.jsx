@@ -6,7 +6,7 @@
 // tab remembers which view the user prefers.
 
 import { useEffect, useState } from 'react';
-import { Plus, Boxes, Copy, Trash2, Search, Package, LayoutGrid, Columns3, GripVertical } from 'lucide-react';
+import { Plus, Boxes, Copy, Trash2, Search, Package, LayoutGrid, Columns3 } from 'lucide-react';
 import { FR, DEFAULT_COMPONENT_DATA, STATUSES, LEGACY_STATUS_MIGRATION } from './componentPackConstants';
 import ComponentPackBuilder from './ComponentPackBuilder';
 import { CostPill } from './TechPackPrimitives';
@@ -91,50 +91,48 @@ function GridCard({ pack, onOpen, onDuplicate, onDelete }) {
   );
 }
 
-// Kanban-view card — same information, plus drag affordance so users can
-// move the trim between lifecycle stages.
+// Compact Kanban card — horizontal layout so a typical desktop column
+// comfortably fits 5+ cards. Same info as the grid card, denser.
 function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onDragStart, onDragEnd }) {
   return (
     <div
       draggable
       onDragStart={e => { e.dataTransfer.setData('text/plain', pack.id); onDragStart(pack.id); }}
       onDragEnd={onDragEnd}
+      onClick={() => onOpen(pack.id)}
       style={{
-        background: 'white', borderRadius: 8, marginBottom: 8,
+        background: 'white', borderRadius: 6, marginBottom: 6,
         border: `1px solid ${FR.sand}`, cursor: 'grab', position: 'relative',
         transition: 'box-shadow 0.15s, transform 0.15s', overflow: 'hidden',
+        padding: 8,
       }}
       onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
     >
-      <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}>
-        <CostPill amount={pack.cost_per_unit} currency={pack.currency || 'USD'} title="Target unit cost of this trim" />
-      </div>
-      <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer', width: '100%', aspectRatio: '4 / 3', background: FR.salt, overflow: 'hidden', borderBottom: `1px solid ${FR.sand}` }}>
-        <Thumb pack={pack} />
-      </div>
-      <div style={{ padding: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-          <GripVertical size={12} style={{ color: FR.sand, marginTop: 2, flexShrink: 0 }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer' }}>
-              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: FR.slate, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {pack.component_name || 'Untitled'}
-              </div>
-              {pack.supplier && <div style={{ fontSize: 10, color: FR.stone, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🏭 {pack.supplier}</div>}
-            </div>
-            <div style={{ fontSize: 9, color: FR.stone, marginTop: 6, textAlign: 'right' }}>{formatDate(pack.updated_at)}</div>
-          </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ width: 48, height: 48, flexShrink: 0, background: FR.salt, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${FR.sand}` }}>
+          <Thumb pack={pack} />
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, marginTop: 6 }}>
-          <button onClick={e => { e.stopPropagation(); onDuplicate(pack.id); }} title="Duplicate"
-            style={{ padding: 4, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer' }}>
-            <Copy size={11} />
-          </button>
-          <button onClick={e => { e.stopPropagation(); onDelete(pack.id); }} title="Delete"
-            style={{ padding: 4, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer' }}>
-            <Trash2 size={11} />
-          </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+            <div style={{ flex: 1, minWidth: 0, fontFamily: "'Cormorant Garamond', serif", fontSize: 13, color: FR.slate, fontWeight: 500, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {pack.component_name || 'Untitled'}
+            </div>
+            <CostPill amount={pack.cost_per_unit} currency={pack.currency || 'USD'} title="Target unit cost of this trim" />
+          </div>
+          <div style={{ fontSize: 9, color: FR.stone, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {pack.supplier ? `🏭 ${pack.supplier}` : '—'} · {formatDate(pack.updated_at)}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, marginTop: 4 }}>
+            <button onClick={e => { e.stopPropagation(); onDuplicate(pack.id); }} title="Duplicate"
+              style={{ padding: 2, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer', display: 'flex' }}>
+              <Copy size={10} />
+            </button>
+            <button onClick={e => { e.stopPropagation(); onDelete(pack.id); }} title="Delete"
+              style={{ padding: 2, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer', display: 'flex' }}>
+              <Trash2 size={10} />
+            </button>
+          </div>
         </div>
       </div>
     </div>
