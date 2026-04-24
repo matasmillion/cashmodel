@@ -1,7 +1,7 @@
 // Main Tech Pack builder — 14-step wizard + PLM features (revisions, cost, samples, variants)
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ArrowLeft, History, Plus, CheckCircle, XCircle, Clock, Camera } from 'lucide-react';
-import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STEPS, IMG_STEPS, computeCompletion, isStepLocked, computeBOMCost, computeTotalUnitCost, computeColorwayCost, computeFactoryCost, SAMPLE_TYPES, SAMPLE_VERDICTS } from './techPackConstants';
+import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STEPS, IMG_STEPS, computeCompletion, isStepLocked, computeBOMCost, computeColorwayCost, SAMPLE_TYPES, SAMPLE_VERDICTS } from './techPackConstants';
 import { STEP_FNS } from './TechPackSteps';
 import TechPackPagePreview from './TechPackPagePreview';
 import { saveTechPack } from '../../utils/techPackStore';
@@ -10,8 +10,7 @@ import { generateTechPackSVG, svgToBlob } from '../../utils/techPackSVG';
 import { resizeImage } from './techPackConstants';
 import { parsePLMHash, replacePLMHash } from '../../utils/plmRouting';
 import { getFRColorCost } from '../../utils/colorLibrary';
-import { getFactoryCost } from '../../utils/factoryLibrary';
-import { CostPill, formatCost } from './TechPackPrimitives';
+import { formatCost } from './TechPackPrimitives';
 
 function sanitizeFilename(s) {
   return (s || 'techpack').replace(/[^\w\-]+/g, '_').slice(0, 60);
@@ -167,13 +166,12 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     };
   }, [step, pack.id]);
 
-  // Derived: full unit-cost roll-up — BOM + colorway library + factory CMT.
-  // Every modular PLM component contributes a per-unit number; the header
-  // badge sums them so "what does this garment cost to make" answers itself.
+  // Derived: full unit-cost roll-up — BOM + colorway library.
+  // Every cash line on the garment contributes a per-unit number; factories
+  // aren't a line item here (they're the maker, not a part).
   const bomCost = computeBOMCost(data);
   const colorwayCost = computeColorwayCost(data, getFRColorCost);
-  const factoryCost = computeFactoryCost(data, getFactoryCost);
-  const totalUnitCost = bomCost + colorwayCost + factoryCost;
+  const totalUnitCost = bomCost + colorwayCost;
   const targetFOB = parseFloat(data.targetFOB) || 0;
   const costVariance = targetFOB > 0 ? totalUnitCost - targetFOB : 0;
 
@@ -312,8 +310,8 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           {saving && <span style={{ fontSize: 10, color: FR.sage }}>Saving…</span>}
-          {/* Cost roll-up — BOM + colorway (wash/dye) + factory CMT. */}
-          <div style={{ textAlign: 'right' }} title={`BOM ${formatCost(bomCost)}  ·  Colorways ${formatCost(colorwayCost)}  ·  Factory CMT ${formatCost(factoryCost)}`}>
+          {/* Cost roll-up — BOM + colorway (wash/dye). */}
+          <div style={{ textAlign: 'right' }} title={`BOM ${formatCost(bomCost)}  ·  Colorways ${formatCost(colorwayCost)}`}>
             <div style={{ fontSize: 9, color: FR.stone }}>Total Unit Cost</div>
             <div style={{ fontSize: 13, color: totalUnitCost > 0 ? (costVariance > 0 ? '#D4956A' : FR.sage) : FR.stone, fontWeight: 600 }}>
               {formatCost(totalUnitCost)}
@@ -324,7 +322,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
               )}
             </div>
             <div style={{ fontSize: 8, color: FR.stone, marginTop: 1 }}>
-              BOM {formatCost(bomCost)} · Color {formatCost(colorwayCost)} · CMT {formatCost(factoryCost)}
+              BOM {formatCost(bomCost)} · Color {formatCost(colorwayCost)}
             </div>
           </div>
           <span style={{ fontSize: 9, color: FR.stone }}>{computeCompletion(data)}%</span>

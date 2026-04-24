@@ -59,7 +59,6 @@ export async function listTechPacks() {
   // Fallback — localStorage
   const { computeTotalUnitCost } = await import('../components/techpack/techPackConstants');
   const { getFRColorCost } = await import('./colorLibrary');
-  const { getFactoryCost } = await import('./factoryLibrary');
   return readLocal()
     .map(p => ({
       id: p.id,
@@ -67,7 +66,7 @@ export async function listTechPacks() {
       product_category: p.data?.productCategory || '',
       status: p.data?.status || 'Development',
       completion_pct: p.completion_pct || 0,
-      total_unit_cost: computeTotalUnitCost(p.data || {}, { getColorCost: getFRColorCost, getFactoryCost }),
+      total_unit_cost: computeTotalUnitCost(p.data || {}, { getColorCost: getFRColorCost }),
       currency: p.data?.currency || 'USD',
       updated_at: p.updated_at,
       created_at: p.created_at,

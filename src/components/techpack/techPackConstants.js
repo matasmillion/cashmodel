@@ -154,7 +154,6 @@ export function computeBOMCost(data) {
 // Sum of every library-sourced color cost across this pack's colorways.
 // Duplicates are counted once — if two colorways both reference "Slate",
 // that wash cost still only hits the garment once (same dye lot).
-// Imported dynamically to avoid a circular import with colorLibrary.
 export function computeColorwayCost(data, getColorCostFn) {
   if (!getColorCostFn) return 0;
   const seen = new Set();
@@ -164,17 +163,13 @@ export function computeColorwayCost(data, getColorCostFn) {
   return total;
 }
 
-// CMT fee looked up from the factory library for data.factory.
-export function computeFactoryCost(data, getFactoryCostFn) {
-  if (!data.factory || !getFactoryCostFn) return 0;
-  return getFactoryCostFn(data.factory) || 0;
-}
-
-// Full unit-cost roll-up: BOM + colorway library + factory CMT.
-export function computeTotalUnitCost(data, { getColorCost, getFactoryCost } = {}) {
+// Full unit-cost roll-up: BOM + colorway library.
+// Factories aren't a cash line on the garment — they're the maker — so no
+// CMT in this total. If we ever want to track CMT, it lives on the tech
+// pack itself, not on the factory directory entry.
+export function computeTotalUnitCost(data, { getColorCost } = {}) {
   return computeBOMCost(data)
-       + computeColorwayCost(data, getColorCost)
-       + computeFactoryCost(data, getFactoryCost);
+       + computeColorwayCost(data, getColorCost);
 }
 
 export function computeCompletion(data) {

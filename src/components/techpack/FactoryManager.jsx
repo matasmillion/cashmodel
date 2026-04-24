@@ -10,7 +10,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Upload, Plus, Trash2, MapPin } from 'lucide-react';
 import { FR } from './techPackConstants';
-import { Input, Row, labelStyle, inputBase, CostPill } from './TechPackPrimitives';
+import { Input, Row, labelStyle, inputBase } from './TechPackPrimitives';
 import {
   listFactoriesLocal, listFactories,
   getFactory, updateFactory, clearFactoryField,
@@ -108,13 +108,9 @@ function FactoryCard({ factory, onClick }) {
 
   return (
     <div onClick={onClick}
-      style={{ cursor: 'pointer', border: `1px solid ${FR.sand}`, borderRadius: 8, overflow: 'hidden', background: FR.white, position: 'relative', transition: 'box-shadow 0.15s, transform 0.15s' }}
+      style={{ cursor: 'pointer', border: `1px solid ${FR.sand}`, borderRadius: 8, overflow: 'hidden', background: FR.white, transition: 'box-shadow 0.15s, transform 0.15s' }}
       onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 3px 10px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-
-      <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 1 }}>
-        <CostPill amount={f.costPerUnit} currency={f.currency || 'USD'} title="Per-unit CMT (cut-make-trim) fee" />
-      </div>
 
       <div style={{ padding: '14px 14px 10px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
         {f.logoImage ? (
@@ -125,7 +121,7 @@ function FactoryCard({ factory, onClick }) {
             {(f.name || '?').charAt(0).toUpperCase()}
           </div>
         )}
-        <div style={{ flex: 1, minWidth: 0, paddingRight: 76 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 18, color: FR.slate, lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
           {location ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: FR.stone, marginTop: 3 }}>
@@ -263,22 +259,13 @@ function FactoryEditor({ name, onClose, onDeleted }) {
             <div style={{ fontSize: 9, letterSpacing: 3, fontWeight: 600, opacity: 0.8 }}>FACTORY</div>
             <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 26, lineHeight: 1, marginTop: 4 }}>{name}</div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <CostPill amount={entry.costPerUnit} currency={entry.currency || 'USD'} style={{ background: FR.salt, color: FR.slate }} />
-            <button onClick={onClose} aria-label="Close"
-              style={{ padding: 6, background: 'rgba(255,255,255,0.12)', color: FR.salt, border: 'none', borderRadius: 3, cursor: 'pointer' }}>
-              <X size={14} />
-            </button>
-          </div>
+          <button onClick={onClose} aria-label="Close"
+            style={{ padding: 6, background: 'rgba(255,255,255,0.12)', color: FR.salt, border: 'none', borderRadius: 3, cursor: 'pointer' }}>
+            <X size={14} />
+          </button>
         </div>
 
         <div style={{ padding: '18px 22px' }}>
-          <Row>
-            <Input label="CMT Fee / Unit" value={entry.costPerUnit || ''} onChange={v => patch('costPerUnit', v)} placeholder="0.00 = unknown / not applicable" />
-            <Input label="Currency" value={entry.currency || 'USD'} onChange={v => patch('currency', v)} placeholder="USD" />
-            <div />
-          </Row>
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 180px', gap: 20 }}>
             <div>
               <Input label="Country" value={entry.country || ''} onChange={v => patch('country', v)} placeholder="China, Portugal, Italy…" />

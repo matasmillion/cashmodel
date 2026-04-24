@@ -137,14 +137,14 @@ function ColorCard({ color, onClick }) {
       style={{ cursor: 'pointer', border: `1px solid ${FR.sand}`, borderRadius: 8, overflow: 'hidden', background: FR.white, transition: 'box-shadow 0.15s, transform 0.15s' }}
       onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 3px 10px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
-      <div style={{ background: c.hex || FR.salt, height: 110, position: 'relative' }}>
+      <div style={{ background: c.hex || FR.salt, height: 132, position: 'relative' }}>
+        {c.cardImage && (
+          <img src={c.cardImage} alt={`${c.name} TCX card`}
+            style={{ position: 'absolute', bottom: 40, left: 12, width: 28, height: 42, objectFit: 'cover', border: `1px solid rgba(255,255,255,0.4)`, borderRadius: 2 }} />
+        )}
         <div style={{ position: 'absolute', bottom: 10, left: 12, color: textColor, fontFamily: "'Cormorant Garamond', serif", fontSize: 22, lineHeight: 1 }}>
           {c.name}
         </div>
-        {c.cardImage && (
-          <img src={c.cardImage} alt={`${c.name} TCX card`}
-            style={{ position: 'absolute', top: 8, right: 44 + 8, width: 34, height: 52, objectFit: 'cover', border: `1px solid rgba(255,255,255,0.4)`, borderRadius: 2 }} />
-        )}
         <div style={{ position: 'absolute', top: 8, right: 8 }}>
           <CostPill amount={c.costPerUnit} currency={c.currency || 'USD'} title="Per-unit cost of this color (wash / dye / treatment charge)" />
         </div>
