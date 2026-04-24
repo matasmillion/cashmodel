@@ -17,7 +17,7 @@ import { useState, useRef, useEffect } from 'react';
 import { CheckCircle, XCircle, Clock, Plus, Download } from 'lucide-react';
 import { downloadBlob } from '../../utils/downloadBlob';
 
-const TRIMPACK_TEMPLATE_FILENAME = 'Trimpack Template.svg';
+const TRIMPACK_TEMPLATE_FILENAME = 'Trimpack Template.ai';
 async function handleDownloadTrimpackTemplate() {
   const url = `${import.meta.env.BASE_URL}${encodeURIComponent(TRIMPACK_TEMPLATE_FILENAME)}`;
   const res = await fetch(url);
@@ -206,10 +206,10 @@ export function StepCover({
           <strong style={{ color: FR.slate, fontWeight: 600 }}>Working files template</strong> — pre-cropped slots and aspect ratios for every image in this trim pack.
         </div>
         <button type="button"
-          aria-label="Download trim pack template (SVG)"
+          aria-label="Download trim pack template (Illustrator .ai file)"
           onClick={() => { handleDownloadTrimpackTemplate().catch(err => { console.error(err); alert('Template download failed.'); }); }}
           style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-          <Download size={11} /> Trim Pack Template
+          <Download size={11} /> Trim Pack Template (.ai)
         </button>
       </div>
 
