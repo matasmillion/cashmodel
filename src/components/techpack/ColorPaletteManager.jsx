@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Upload, Plus, Trash2 } from 'lucide-react';
 import { FR } from './techPackConstants';
-import { Input, Row, labelStyle, inputBase } from './TechPackPrimitives';
+import { Input, Row, labelStyle, inputBase, CostPill, formatCost } from './TechPackPrimitives';
 import { listFRColors, getFRColor, updateFRColor, clearFRColorField, addFRColor, deleteFRColor, isSeededFRColor } from '../../utils/colorLibrary';
 import { fileToDataUrl } from '../../utils/cropImage';
 
@@ -143,8 +143,11 @@ function ColorCard({ color, onClick }) {
         </div>
         {c.cardImage && (
           <img src={c.cardImage} alt={`${c.name} TCX card`}
-            style={{ position: 'absolute', top: 8, right: 8, width: 34, height: 52, objectFit: 'cover', border: `1px solid rgba(255,255,255,0.4)`, borderRadius: 2 }} />
+            style={{ position: 'absolute', top: 8, right: 44 + 8, width: 34, height: 52, objectFit: 'cover', border: `1px solid rgba(255,255,255,0.4)`, borderRadius: 2 }} />
         )}
+        <div style={{ position: 'absolute', top: 8, right: 8 }}>
+          <CostPill amount={c.costPerUnit} currency={c.currency || 'USD'} title="Per-unit cost of this color (wash / dye / treatment charge)" />
+        </div>
       </div>
       <div style={{ padding: '10px 12px', fontSize: 10, color: FR.stone, lineHeight: 1.75 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -215,15 +218,22 @@ function ColorEditor({ name, onClose, onDeleted }) {
             <div style={{ fontSize: 9, letterSpacing: 3, fontWeight: 600, opacity: 0.8 }}>FR BRAND COLOR</div>
             <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 26, lineHeight: 1, marginTop: 4 }}>{name}</div>
           </div>
-          <button onClick={onClose} aria-label="Close"
-            style={{ padding: 6, background: 'rgba(0,0,0,0.12)', color: textColor, border: 'none', borderRadius: 3, cursor: 'pointer' }}>
-            <X size={14} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <CostPill amount={entry.costPerUnit} currency={entry.currency || 'USD'} />
+            <button onClick={onClose} aria-label="Close"
+              style={{ padding: 6, background: 'rgba(0,0,0,0.12)', color: textColor, border: 'none', borderRadius: 3, cursor: 'pointer' }}>
+              <X size={14} />
+            </button>
+          </div>
         </div>
 
         <div style={{ padding: '18px 22px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 180px', gap: 20 }}>
             <div>
+              <Row>
+                <Input label="Unit Cost" value={entry.costPerUnit || ''} onChange={v => patch('costPerUnit', v)} placeholder="0.00 = flat stock; wash/dye charges here" />
+                <Input label="Currency" value={entry.currency || 'USD'} onChange={v => patch('currency', v)} placeholder="USD" />
+              </Row>
               <Input label="Pantone TCX" value={entry.pantoneTCX || ''} onChange={v => patch('pantoneTCX', v)} placeholder="e.g. 19-4305 TCX" />
               <Input label="Pantone TPG" value={entry.pantoneTPG || ''} onChange={v => patch('pantoneTPG', v)} placeholder="e.g. 19-4305 TPG" />
               <Input label="Pantone C"   value={entry.pantoneC   || ''} onChange={v => patch('pantoneC',   v)} placeholder="e.g. 19-4305 C" />

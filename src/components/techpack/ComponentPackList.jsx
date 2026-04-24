@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, Boxes, Copy, Trash2, Search, ChevronDown, ChevronRight, Package } from 'lucide-react';
 import { FR, DEFAULT_COMPONENT_DATA, BOM_COMPONENT_OPTIONS } from './componentPackConstants';
 import ComponentPackBuilder from './ComponentPackBuilder';
+import { CostPill } from './TechPackPrimitives';
 import { listComponentPacks, createComponentPack, getComponentPack, deleteComponentPack, duplicateComponentPack } from '../../utils/componentPackStore';
 import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
 import { listAllSuppliers, listAllPeople } from '../../utils/plmDirectory';
@@ -33,10 +34,13 @@ function Thumb({ pack }) {
 function ComponentCard({ pack, onOpen, onDuplicate, onDelete }) {
   return (
     <div
-      style={{ background: 'white', borderRadius: 8, border: `1px solid ${FR.sand}`, cursor: 'pointer', overflow: 'hidden', transition: 'box-shadow 0.15s, transform 0.15s' }}
+      style={{ background: 'white', borderRadius: 8, border: `1px solid ${FR.sand}`, cursor: 'pointer', overflow: 'hidden', position: 'relative', transition: 'box-shadow 0.15s, transform 0.15s' }}
       onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
     >
+      <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}>
+        <CostPill amount={pack.cost_per_unit} currency={pack.currency || 'USD'} title="Target unit cost of this trim" />
+      </div>
       <div onClick={() => onOpen(pack.id)} style={{ width: '100%', aspectRatio: '1 / 1', borderBottom: `1px solid ${FR.sand}` }}>
         <Thumb pack={pack} />
       </div>
@@ -46,8 +50,7 @@ function ComponentCard({ pack, onOpen, onDuplicate, onDelete }) {
             {pack.component_name || 'Untitled'}
           </div>
           {pack.supplier && <div style={{ fontSize: 10, color: FR.stone, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🏭 {pack.supplier}</div>}
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 10, color: FR.stone }}>
-            {pack.cost_per_unit ? <span>{pack.currency || 'USD'} {pack.cost_per_unit}</span> : <span>—</span>}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6, fontSize: 10, color: FR.stone }}>
             <span>{formatDate(pack.updated_at)}</span>
           </div>
         </div>

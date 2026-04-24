@@ -18,6 +18,35 @@ export const ASPECTS = {
 export const labelStyle = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' };
 export const inputBase = { width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.slate, background: FR.white, outline: 'none', boxSizing: 'border-box' };
 
+// Format a raw cost string (what we store in libraries) into a short display
+// string like "$0.00" or "CNY 12.50". USD is special-cased to the $ glyph;
+// other currencies use their 3-letter code as a prefix so the user can tell
+// what unit they're looking at.
+export function formatCost(amount, currency = 'USD') {
+  const n = parseFloat(amount);
+  const val = Number.isFinite(n) ? n : 0;
+  if (currency === 'USD') return `$${val.toFixed(2)}`;
+  return `${currency} ${val.toFixed(2)}`;
+}
+
+// Tiny dark pill used in the top-right of every modular PLM card (color,
+// factory, trim, style) to anchor the unit cost. Zero costs render too —
+// the whole point of the PLM cash model is that every line has a number.
+export function CostPill({ amount, currency = 'USD', title, style: override }) {
+  return (
+    <span title={title || `Unit cost: ${formatCost(amount, currency)}`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
+        background: FR.slate, color: FR.salt, borderRadius: 12,
+        fontSize: 11, fontWeight: 600, fontVariantNumeric: 'tabular-nums',
+        fontFamily: "'Helvetica Neue','Inter',sans-serif", whiteSpace: 'nowrap',
+        ...override,
+      }}>
+      {formatCost(amount, currency)}
+    </span>
+  );
+}
+
 export function Input({ label, value, onChange, placeholder, multiline }) {
   const props = { value, onChange: e => onChange(e.target.value), placeholder, style: inputBase, onFocus: e => e.target.style.borderColor = FR.soil, onBlur: e => e.target.style.borderColor = FR.sand };
   return (

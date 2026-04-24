@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Plus, Shirt, Copy, Trash2, GripVertical, GitBranch, Search } from 'lucide-react';
 import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STATUSES } from './techPackConstants';
+import { CostPill } from './TechPackPrimitives';
 import TechPackBuilder from './TechPackBuilder';
 import { listTechPacks, createTechPack, getTechPack, deleteTechPack, duplicateTechPack, saveTechPack } from '../../utils/techPackStore';
 import { listComponentPacks } from '../../utils/componentPackStore';
@@ -31,12 +32,15 @@ function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onCreateVariant, onDr
       onDragEnd={onDragEnd}
       style={{
         background: 'white', borderRadius: 8, marginBottom: 8,
-        border: `1px solid ${FR.sand}`, cursor: 'grab',
+        border: `1px solid ${FR.sand}`, cursor: 'grab', position: 'relative',
         transition: 'box-shadow 0.15s, transform 0.15s', overflow: 'hidden',
       }}
       onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
     >
+      <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}>
+        <CostPill amount={pack.total_unit_cost} currency={pack.currency || 'USD'} title="Total unit cost — BOM + colorways + CMT" />
+      </div>
       <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer', width: '100%', aspectRatio: '4 / 3', background: FR.salt, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${FR.sand}` }}>
         {pack.cover_image
           ? <img src={pack.cover_image} alt={pack.style_name || 'Cover'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />

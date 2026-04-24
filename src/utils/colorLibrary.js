@@ -36,6 +36,13 @@ const emptyEntry = (name, hex) => ({
   pantoneC: '',
   cardImage: null, // base64 data URL of the Pantone TCX swatch card photo
   usageNotes: '',
+  // Per-unit cost of applying this color. A flat stock color is typically
+  // free (the fabric is already that color). A wash / dye / print adds a
+  // real charge per garment — the treatment plant rate. Kept as a string
+  // so users can enter "0.85" without worrying about numeric coercion in
+  // the input field; parseFloat on read.
+  costPerUnit: '',
+  currency: 'USD',
 });
 
 // Return every color we know about — the FR staples seeded from the palette,
@@ -93,6 +100,14 @@ export function clearFRColorField(name, field) {
 // "+ Add color" button) are fully editable and deletable.
 export function isSeededFRColor(name) {
   return FR_COLOR_OPTIONS.some(c => c.name === name);
+}
+
+// Read costPerUnit as a number (0 if empty or unparseable). Used by the
+// tech pack cost roll-up to charge for wash / treatment / dye colors.
+export function getFRColorCost(name) {
+  const entry = getFRColor(name);
+  if (!entry) return 0;
+  return parseFloat(entry.costPerUnit) || 0;
 }
 
 // Create a new ad-hoc color. Returns { ok: true } on success or

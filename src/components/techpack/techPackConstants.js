@@ -151,6 +151,32 @@ export function computeBOMCost(data) {
   return bom.reduce((sum, item) => sum + (parseFloat(item.costPerUnit) || 0), 0);
 }
 
+// Sum of every library-sourced color cost across this pack's colorways.
+// Duplicates are counted once — if two colorways both reference "Slate",
+// that wash cost still only hits the garment once (same dye lot).
+// Imported dynamically to avoid a circular import with colorLibrary.
+export function computeColorwayCost(data, getColorCostFn) {
+  if (!getColorCostFn) return 0;
+  const seen = new Set();
+  (data.colorways || []).forEach(cw => { if (cw?.frColor) seen.add(cw.frColor); });
+  let total = 0;
+  seen.forEach(name => { total += getColorCostFn(name) || 0; });
+  return total;
+}
+
+// CMT fee looked up from the factory library for data.factory.
+export function computeFactoryCost(data, getFactoryCostFn) {
+  if (!data.factory || !getFactoryCostFn) return 0;
+  return getFactoryCostFn(data.factory) || 0;
+}
+
+// Full unit-cost roll-up: BOM + colorway library + factory CMT.
+export function computeTotalUnitCost(data, { getColorCost, getFactoryCost } = {}) {
+  return computeBOMCost(data)
+       + computeColorwayCost(data, getColorCost)
+       + computeFactoryCost(data, getFactoryCost);
+}
+
 export function computeCompletion(data) {
   const filled = Object.entries(data).filter(([k, v]) => {
     if (Array.isArray(v)) return v.some(r => Object.values(r).some(x => x));

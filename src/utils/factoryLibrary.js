@@ -41,6 +41,10 @@ const emptyEntry = (name) => ({
   specialties: '',
   notes: '',
   logoImage: null,
+  // CMT (cut-make-trim) fee the factory charges per garment. Rolls up
+  // into a tech pack's total unit cost alongside BOM + colorway cost.
+  costPerUnit: '',
+  currency: 'USD',
 });
 
 // Synchronous snapshot of every library record. FactoryManager shows these
@@ -78,6 +82,14 @@ export function getFactory(name) {
   const store = readStore();
   if (!store[name]) return { ...emptyEntry(name), _hasRecord: false };
   return { ...emptyEntry(name), ...store[name], _hasRecord: true };
+}
+
+// Read the CMT fee as a number (0 if unset). Used by the tech pack
+// cost roll-up.
+export function getFactoryCost(name) {
+  const entry = getFactory(name);
+  if (!entry) return 0;
+  return parseFloat(entry.costPerUnit) || 0;
 }
 
 // Merge a partial update into the factory's record. Any empty-string field

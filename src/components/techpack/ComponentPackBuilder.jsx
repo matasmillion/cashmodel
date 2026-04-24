@@ -14,6 +14,7 @@ import { parsePLMHash, replacePLMHash } from '../../utils/plmRouting';
 import { addPerson } from '../../utils/plmDirectory';
 import { generateComponentPackPDF, generateComponentPackSVG, svgToBlob } from '../../utils/componentPackExport';
 import { downloadBlob } from '../../utils/downloadBlob';
+import { CostPill } from './TechPackPrimitives';
 
 function sanitizeFilename(s) {
   return (s || 'trimpack').replace(/[^\w\-]+/g, '_').slice(0, 60);
@@ -259,7 +260,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
           component_category: data.componentCategory || '',
           status: data.status || 'Design',
           supplier: data.supplier || '',
-          cost_per_unit: data.costPerUnit || '',
+          cost_per_unit: data.targetUnitCost || data.costPerUnit || '',
           currency: data.currency || 'USD',
         });
         if (result && result.ok === false) {
@@ -452,6 +453,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
             style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', background: 'rgba(255,255,255,0.1)', color: FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 10, fontWeight: 600, cursor: exporting ? 'wait' : 'pointer' }}>
             <Download size={11} /> {exporting === 'svg' ? 'Exporting…' : 'SVG'}
           </button>
+          <CostPill amount={data.targetUnitCost} currency={data.currency || 'USD'} title="Target unit cost of this trim" style={{ background: FR.salt, color: FR.slate }} />
           <span style={{ fontSize: 9, color: FR.stone }}>{data.componentCategory || '—'}</span>
           <span style={{ fontSize: 9, color: FR.stone }}>v{(data.revisions || []).length}</span>
         </div>
