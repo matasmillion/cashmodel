@@ -1,0 +1,1097 @@
+{
+  "lastUpdated": "2026-04-24T19:34:23.978Z",
+  "liveUrl": "https://matasmillion.github.io/cashmodel/",
+  "repoUrl": "https://github.com/matasmillion/cashmodel",
+  "branch": "claude/build-cash-model-app-11msn",
+  "stateSchemaVersion": 1,
+  "purpose": "Machine-readable snapshot of the Foreign Resource Cash Model build. Claude fetches this to understand the current state of tabs, assumptions, formulas, and outstanding issues without needing to render the app.",
+  "techStack": {
+    "framework": "React 19 + Vite 8",
+    "styling": "Tailwind CSS 4 (via @tailwindcss/vite)",
+    "stateManagement": "useReducer + Context API",
+    "persistence": "localStorage (always) + Supabase Postgres (when VITE_SUPABASE_* secrets set)",
+    "auth": "Supabase Auth (conditional — skipped when not configured)",
+    "deployment": "GitHub Pages via GitHub Actions workflow",
+    "hosting": "https://matasmillion.github.io/cashmodel/"
+  },
+  "tabs": [
+    {
+      "id": "dashboard",
+      "name": "Dashboard",
+      "status": "built",
+      "components": [
+        "KPICards",
+        "CashflowChart",
+        "CashflowTable"
+      ]
+    },
+    {
+      "id": "revenue",
+      "name": "Revenue",
+      "status": "built",
+      "components": [
+        "RevenueForecast"
+      ]
+    },
+    {
+      "id": "cashflow",
+      "name": "P&L + Cash",
+      "status": "built",
+      "components": [
+        "CashflowTable"
+      ]
+    },
+    {
+      "id": "ad-units",
+      "name": "Creative",
+      "status": "built",
+      "components": [
+        "AdUnitModel"
+      ]
+    },
+    {
+      "id": "unit-economics",
+      "name": "Unit Econ",
+      "status": "built",
+      "components": [
+        "UnitEconomics"
+      ]
+    },
+    {
+      "id": "product",
+      "name": "Product",
+      "status": "built",
+      "components": [
+        "TechPackList",
+        "TechPackBuilder"
+      ],
+      "notes": "14-step tech pack builder. Auto-saves to Supabase. Generate & Download produces PDF + SVG. Pivots app toward a full ERP for solo fashion founders."
+    },
+    {
+      "id": "fulfillment",
+      "name": "Fulfillment",
+      "status": "built",
+      "components": [
+        "RateCardManager"
+      ],
+      "notes": "AI rate card parser using Anthropic API"
+    },
+    {
+      "id": "po-schedule",
+      "name": "PO Schedule",
+      "status": "built",
+      "components": [
+        "POSchedule"
+      ]
+    },
+    {
+      "id": "pos",
+      "name": "New PO",
+      "status": "built",
+      "components": [
+        "POBuilder"
+      ]
+    },
+    {
+      "id": "opex",
+      "name": "OPEX",
+      "status": "built",
+      "components": [
+        "OpexManager"
+      ]
+    },
+    {
+      "id": "scenarios",
+      "name": "Scenarios",
+      "status": "built",
+      "components": [
+        "ScenarioManager"
+      ]
+    },
+    {
+      "id": "integrations",
+      "name": "Integrations",
+      "status": "in-progress",
+      "components": [
+        "IntegrationsPanel"
+      ],
+      "notes": "Shopify/Klaviyo blocked by CORS; Meta Ads works; Banking requires backend"
+    }
+  ],
+  "assumptions": {
+    "weeklyGrowthRate": {
+      "value": 0.028,
+      "type": "percent",
+      "min": 0,
+      "max": 0.1,
+      "step": 0.002,
+      "description": "Compound weekly growth applied to daily ad spend"
+    },
+    "startingDailyAdSpend": {
+      "value": 150,
+      "type": "currency",
+      "min": 0,
+      "max": 1000,
+      "step": 10,
+      "description": "Meta ad spend on week 0"
+    },
+    "targetMER": {
+      "value": 0.33,
+      "type": "percent",
+      "step": 0.01,
+      "description": "Target marketing efficiency ratio (ad spend / revenue)"
+    },
+    "cogsRate": {
+      "value": 0.27,
+      "type": "percent",
+      "step": 0.01,
+      "description": "Blended cost of goods as % of revenue"
+    },
+    "aov": {
+      "value": 125,
+      "type": "currency",
+      "min": 20,
+      "max": 300,
+      "step": 5,
+      "description": "Average order value"
+    },
+    "unitsPerOrder": {
+      "value": 1.1,
+      "type": "number"
+    },
+    "variablePercent": {
+      "value": 0.138,
+      "type": "percent",
+      "step": 0.005,
+      "description": "Fulfillment + processing + shipping as % of revenue"
+    },
+    "paymentProcessingPercent": {
+      "value": 0.04,
+      "type": "percent",
+      "step": 0.005
+    },
+    "opexTier1": {
+      "value": 2000,
+      "type": "currency",
+      "min": 500,
+      "max": 10000,
+      "step": 100,
+      "description": "Monthly OPEX (tier 1)"
+    },
+    "opexTier2": {
+      "value": 2305,
+      "type": "currency",
+      "description": "Defined but unused — see openIssues.opex-tiers-unused"
+    },
+    "opexTier3": {
+      "value": 3200,
+      "type": "currency",
+      "description": "Defined but unused — see openIssues.opex-tiers-unused"
+    },
+    "poTriggerWeeks": {
+      "value": 11,
+      "type": "integer",
+      "min": 4,
+      "max": 20,
+      "step": 1,
+      "description": "Auto-trigger PO when weeksOfSupply falls below this"
+    },
+    "poCoversWeeks": {
+      "value": 8,
+      "type": "integer",
+      "description": "How many weeks of demand each PO should cover"
+    },
+    "poCooldownWeeks": {
+      "value": 8,
+      "type": "integer",
+      "description": "Minimum weeks between auto-POs"
+    },
+    "leadTime": {
+      "value": 10,
+      "type": "integer",
+      "description": "Weeks from order to delivery"
+    },
+    "depositPercent": {
+      "value": 0.3,
+      "type": "percent"
+    },
+    "prodPayPercent": {
+      "value": 0.4,
+      "type": "percent"
+    },
+    "net30Percent": {
+      "value": 0.3,
+      "type": "percent"
+    },
+    "prodPayWeek": {
+      "value": 5,
+      "type": "integer",
+      "description": "Weeks after deposit when production payment is due"
+    },
+    "net30PayWeek": {
+      "value": 9,
+      "type": "integer",
+      "description": "Weeks after deposit when net-30 payment is due"
+    },
+    "blendedLanded": {
+      "value": 28.566,
+      "type": "currency",
+      "description": "Blended cost per unit including freight"
+    },
+    "cashBuffer": {
+      "value": 500,
+      "type": "currency"
+    },
+    "taxRate": {
+      "value": 0.21,
+      "type": "percent"
+    },
+    "nol": {
+      "value": 50000,
+      "type": "currency",
+      "description": "Net operating loss carry-forward"
+    },
+    "founderVidsPerWeek": {
+      "value": 3,
+      "type": "integer"
+    },
+    "aiConceptsPerWeek": {
+      "value": 7,
+      "type": "integer"
+    }
+  },
+  "revenueModel": {
+    "description": "Layer-cake model: total revenue = acquisition + retention + events",
+    "layers": [
+      {
+        "name": "Acquisition",
+        "status": "built",
+        "formula": "weeklyAdSpend = startingDailyAdSpend × (1 + weeklyGrowthRate)^week × 7\nrevenue = weeklyAdSpend / targetMER",
+        "source": "Meta ad spend compounded weekly by growth rate, converted to revenue via target MER"
+      },
+      {
+        "name": "Retention",
+        "status": "placeholder",
+        "formula": "retentionRevenue = 0 (hardcoded)",
+        "source": "Needs Shopify cohort data — see openIssues.retention-placeholder"
+      },
+      {
+        "name": "Events",
+        "status": "built",
+        "formula": "eventRevenue = sum(event.estimatedRevenue WHERE event.weekIndex === currentWeek)",
+        "source": "User-added marketing events with manual revenue/CM estimates"
+      }
+    ]
+  },
+  "pnlStructure": {
+    "description": "Weekly P&L — each row builds on the one above",
+    "rows": [
+      {
+        "order": 1,
+        "name": "Revenue",
+        "formula": "acquisitionRevenue + retentionRevenue + eventRevenue"
+      },
+      {
+        "order": 2,
+        "name": "COGS",
+        "formula": "-(revenue × cogsRate)",
+        "sign": "negative"
+      },
+      {
+        "order": 3,
+        "name": "Gross Profit",
+        "formula": "revenue + cogs",
+        "derived": true
+      },
+      {
+        "order": 4,
+        "name": "Ad Spend",
+        "formula": "-(weeklyAdSpend)",
+        "sign": "negative"
+      },
+      {
+        "order": 5,
+        "name": "Creative Cost",
+        "formula": "-((week % 3 === 0 ? creatorDealCost : 0) + founderVids×20 + aiConcepts×5)",
+        "sign": "negative"
+      },
+      {
+        "order": 6,
+        "name": "Contribution Margin",
+        "formula": "grossProfit + adSpend + creativeCost",
+        "derived": true
+      },
+      {
+        "order": 7,
+        "name": "Variable Costs",
+        "formula": "-(revenue × variablePercent)",
+        "sign": "negative",
+        "description": "Fulfillment, payment processing, shipping"
+      },
+      {
+        "order": 8,
+        "name": "OPEX",
+        "formula": "-(opexTier1 / 4.33)",
+        "sign": "negative",
+        "description": "Monthly OPEX converted to weekly"
+      },
+      {
+        "order": 9,
+        "name": "Net Profit (P&L)",
+        "formula": "contributionMargin + variableCosts + opex",
+        "derived": true
+      }
+    ],
+    "sampleOutput": {
+      "week0": {
+        "week": 0,
+        "revenue": 3182,
+        "orders": 25,
+        "unitsSold": 28,
+        "weeklyAdSpend": 1050,
+        "cogs": -859,
+        "grossProfit": 2323,
+        "creativeCost": -227,
+        "contributionMargin": 1046,
+        "variableCosts": -439,
+        "opex": -462,
+        "plNetProfit": 145
+      },
+      "week10": {
+        "week": 10,
+        "revenue": 4194,
+        "orders": 34,
+        "unitsSold": 37,
+        "weeklyAdSpend": 1384,
+        "cogs": -1132,
+        "grossProfit": 3062,
+        "creativeCost": -95,
+        "contributionMargin": 1583,
+        "variableCosts": -579,
+        "opex": -462,
+        "plNetProfit": 542
+      },
+      "week20": {
+        "week": 20,
+        "revenue": 5527,
+        "orders": 44,
+        "unitsSold": 48,
+        "weeklyAdSpend": 1824,
+        "cogs": -1492,
+        "grossProfit": 4035,
+        "creativeCost": -95,
+        "contributionMargin": 2116,
+        "variableCosts": -763,
+        "opex": -462,
+        "plNetProfit": 891
+      },
+      "week30": {
+        "week": 30,
+        "revenue": 7285,
+        "orders": 58,
+        "unitsSold": 64,
+        "weeklyAdSpend": 2404,
+        "cogs": -1967,
+        "grossProfit": 5318,
+        "creativeCost": -227,
+        "contributionMargin": 2687,
+        "variableCosts": -1005,
+        "opex": -462,
+        "plNetProfit": 1220
+      }
+    },
+    "sampleOutputNote": "Values computed with current DEFAULT_ASSUMPTIONS. retentionRevenue=0, no events, no POs in sample."
+  },
+  "cashFlow": {
+    "weeklyFormula": "weeklyCash = contributionMargin + variableCosts + opex - taxReserve - poPayments",
+    "cumulativeFormula": "cumulativeCash[i] = (i === 0 ? seed.totalCash : cumulativeCash[i-1]) + weeklyCash[i]",
+    "freeCashFormula": "freeCash = cumulativeCash - (stAdsPayable + stFulfillmentPayable + workingCapital)",
+    "poIntegration": {
+      "status": "built",
+      "method": "POs add to poPayments on their scheduled payment weeks (30% deposit / 40% production / 30% net-30)"
+    },
+    "seed": {
+      "week0Date": "2026-03-30",
+      "totalCash": 11491.12,
+      "sbMain": 11709.42,
+      "workingCapital": 6210.73,
+      "stAdsPayable": 3223,
+      "stFulfillmentPayable": 1260.22
+    },
+    "notes": [
+      "Week 0 cash is seeded from CURRENT_WEEK_SEED.totalCash (last known actuals)",
+      "stAdsPayable cycles monthly — Meta charges every ~4 weeks",
+      "stFulfillmentPayable cycles per 3PL billing cycle",
+      "workingCapital tracks Shopify Capital float (~96% of variable costs)",
+      "Tax reserve is currently 0 (NOL shelter)"
+    ]
+  },
+  "poSchedule": {
+    "rule": "Auto-trigger when weeksOfSupply <= 11, covers 8 weeks of forward demand",
+    "leadTimeWeeks": 10,
+    "cooldownWeeks": 8,
+    "paymentSplit": {
+      "deposit": "30%",
+      "production": "40% (week 5)",
+      "net30": "30% (week 9)"
+    },
+    "autoGenerated": [
+      {
+        "id": "PO-01",
+        "weekIndex": 10,
+        "units": 326,
+        "fullCost": 9313,
+        "payments": {
+          "deposit": {
+            "weekIndex": 10,
+            "amount": 2794,
+            "percent": 30
+          },
+          "production": {
+            "weekIndex": 15,
+            "amount": 3725,
+            "percent": 40
+          },
+          "net30": {
+            "weekIndex": 19,
+            "amount": 2794,
+            "percent": 30
+          }
+        },
+        "arrivalWeekIndex": 20
+      },
+      {
+        "id": "PO-02",
+        "weekIndex": 18,
+        "units": 406,
+        "fullCost": 11598,
+        "payments": {
+          "deposit": {
+            "weekIndex": 18,
+            "amount": 3479,
+            "percent": 30
+          },
+          "production": {
+            "weekIndex": 23,
+            "amount": 4639,
+            "percent": 40
+          },
+          "net30": {
+            "weekIndex": 27,
+            "amount": 3479,
+            "percent": 30
+          }
+        },
+        "arrivalWeekIndex": 28
+      },
+      {
+        "id": "PO-03",
+        "weekIndex": 26,
+        "units": 507,
+        "fullCost": 14483,
+        "payments": {
+          "deposit": {
+            "weekIndex": 26,
+            "amount": 4345,
+            "percent": 30
+          },
+          "production": {
+            "weekIndex": 31,
+            "amount": 5793,
+            "percent": 40
+          },
+          "net30": {
+            "weekIndex": 35,
+            "amount": 4345,
+            "percent": 30
+          }
+        },
+        "arrivalWeekIndex": 36
+      },
+      {
+        "id": "PO-04",
+        "weekIndex": 34,
+        "units": 463,
+        "fullCost": 13226,
+        "payments": {
+          "deposit": {
+            "weekIndex": 34,
+            "amount": 3968,
+            "percent": 30
+          },
+          "production": {
+            "weekIndex": 39,
+            "amount": 5290,
+            "percent": 40
+          },
+          "net30": {
+            "weekIndex": 43,
+            "amount": 3968,
+            "percent": 30
+          }
+        },
+        "arrivalWeekIndex": 44
+      }
+    ],
+    "generatedFromAssumptions": true
+  },
+  "unitEconomics": {
+    "products": [
+      {
+        "id": "p1-zip-hoodie",
+        "name": "P1 - Zip Up Hoodie",
+        "collection": "Borderless Basics",
+        "price": 117,
+        "costs": {
+          "production": 27,
+          "packaging": 0.206,
+          "freightForwarding": 4.8,
+          "shipping": 13.21,
+          "paymentProcessing": 4.68,
+          "totalCOGS": 49.9
+        },
+        "grossProfit": 67.1,
+        "grossMarginPercent": 57.4
+      },
+      {
+        "id": "p2-hoodie",
+        "name": "P2 - Hoodie",
+        "collection": "Borderless Basics",
+        "price": 117,
+        "costs": {
+          "production": 25,
+          "packaging": 0.206,
+          "freightForwarding": 4,
+          "shipping": 13.21,
+          "paymentProcessing": 4.68,
+          "totalCOGS": 47.09
+        },
+        "grossProfit": 69.91,
+        "grossMarginPercent": 59.7
+      },
+      {
+        "id": "p3-sweatpants",
+        "name": "P3 - Sweatpants",
+        "collection": "Borderless Basics",
+        "price": 117,
+        "costs": {
+          "production": 25,
+          "packaging": 0.206,
+          "freightForwarding": 3.6,
+          "shipping": 13.21,
+          "paymentProcessing": 4.68,
+          "totalCOGS": 46.7
+        },
+        "grossProfit": 70.31,
+        "grossMarginPercent": 60.1
+      },
+      {
+        "id": "p4-tee",
+        "name": "P4 - Tee",
+        "collection": "Borderless Basics",
+        "price": 47,
+        "costs": {
+          "production": 12,
+          "packaging": 0.206,
+          "freightForwarding": 1.6,
+          "shipping": 8.44,
+          "paymentProcessing": 1.88,
+          "totalCOGS": 24.12
+        },
+        "grossProfit": 22.88,
+        "grossMarginPercent": 48.7
+      },
+      {
+        "id": "warefare-waffle",
+        "name": "Warefare Waffle Knit",
+        "collection": "Restocks",
+        "price": 95,
+        "costs": {
+          "production": 28.84,
+          "packaging": 0.206,
+          "freightForwarding": 4.58,
+          "shipping": 8.44,
+          "paymentProcessing": 3.8,
+          "totalCOGS": 45.87
+        },
+        "grossProfit": 49.13,
+        "grossMarginPercent": 51.7
+      }
+    ],
+    "blendedLanded": 28.566,
+    "blendedGM": 0.748619,
+    "effectiveGM": 0.610619,
+    "formula": "cogs = production + packaging + (weight × freightPerKg) + shippingLabel + pickPack + stickersCard + (price × paymentProcessingPercent)"
+  },
+  "creative": {
+    "adUnitTypes": [
+      {
+        "id": "creator",
+        "name": "Creator UGC",
+        "costPerUnit": 130,
+        "moq": 3,
+        "variationsPerUnit": 3,
+        "description": "Creator-shot video ads",
+        "avgLifespanWeeks": 4
+      },
+      {
+        "id": "high-production",
+        "name": "High Production",
+        "costPerUnit": 130,
+        "moq": 5,
+        "variationsPerUnit": 3,
+        "description": "Studio/campaign video ads",
+        "avgLifespanWeeks": 6
+      },
+      {
+        "id": "ai",
+        "name": "AI Generated",
+        "costPerUnit": 5,
+        "moq": 0,
+        "variationsPerUnit": 3,
+        "description": "AI-generated creative",
+        "avgLifespanWeeks": 2
+      },
+      {
+        "id": "founder",
+        "name": "Founder Ad",
+        "costPerUnit": 20,
+        "moq": 0,
+        "variationsPerUnit": 3,
+        "description": "Founder-to-camera content",
+        "avgLifespanWeeks": 3
+      }
+    ],
+    "creatorDealEconomics": {
+      "seedCost": 96.87,
+      "vidsPerDeal": 3,
+      "payPerVid": 100,
+      "dealCost": 396.87,
+      "costPerCreative": 132.29,
+      "commission": 0.06,
+      "hitRate": 0.1,
+      "creatorFundPercent": 0.15,
+      "preSeeded": 4,
+      "preInvest": 1587.48
+    },
+    "defaults": {
+      "founderVidsPerWeek": 3,
+      "aiConceptsPerWeek": 7,
+      "creatorDealCadenceWeeks": 3
+    },
+    "weeklyCostFormula": "(week % 3 === 0 ? creatorDeal.costPerCreative : 0) + (founderVidsPerWeek × 20) + (aiConceptsPerWeek × 5)"
+  },
+  "opex": {
+    "subscriptions": [
+      {
+        "id": "slack",
+        "name": "Slack",
+        "cost": 9.3,
+        "category": "Mandatory",
+        "active": true,
+        "billingDate": 18
+      },
+      {
+        "id": "google",
+        "name": "Google",
+        "cost": 17,
+        "category": "Mandatory",
+        "active": true,
+        "billingDate": 1
+      },
+      {
+        "id": "shopify",
+        "name": "Shopify",
+        "cost": 42,
+        "category": "Mandatory",
+        "active": true,
+        "billingDate": 29
+      },
+      {
+        "id": "finaloop",
+        "name": "Finaloop",
+        "cost": 131.75,
+        "category": "Mandatory",
+        "active": true,
+        "billingDate": 28
+      },
+      {
+        "id": "phone",
+        "name": "Phone",
+        "cost": 60,
+        "category": "Mandatory",
+        "active": true,
+        "billingDate": 1
+      },
+      {
+        "id": "gusto",
+        "name": "Gusto",
+        "cost": 55,
+        "category": "Mandatory",
+        "active": false,
+        "billingDate": null
+      },
+      {
+        "id": "kintsugi",
+        "name": "Kintsugi",
+        "cost": 80,
+        "category": "Mandatory",
+        "active": true,
+        "billingDate": 30
+      },
+      {
+        "id": "klaviyo",
+        "name": "Klaviyo",
+        "cost": 150,
+        "category": "Revenue/Cost",
+        "active": false,
+        "billingDate": 20
+      },
+      {
+        "id": "kleio",
+        "name": "Kleio",
+        "cost": 29,
+        "category": "Revenue/Cost",
+        "active": true,
+        "billingDate": 29
+      },
+      {
+        "id": "higgsfield",
+        "name": "Higgsfield",
+        "cost": 150,
+        "category": "Revenue/Cost",
+        "active": false,
+        "billingDate": 2
+      },
+      {
+        "id": "foreplay",
+        "name": "Foreplay",
+        "cost": 65,
+        "category": "Revenue/Cost",
+        "active": false,
+        "billingDate": null
+      },
+      {
+        "id": "claude",
+        "name": "Claude",
+        "cost": 100,
+        "category": "Mandatory",
+        "active": true,
+        "billingDate": 12
+      },
+      {
+        "id": "openclaw",
+        "name": "Openclaw",
+        "cost": 80,
+        "category": "Mandatory",
+        "active": false,
+        "billingDate": null
+      },
+      {
+        "id": "computer",
+        "name": "Computer",
+        "cost": 116,
+        "category": "Mandatory",
+        "active": true,
+        "billingDate": null
+      },
+      {
+        "id": "clo3d",
+        "name": "Clo3d",
+        "cost": 25,
+        "category": "Luxury",
+        "active": true,
+        "billingDate": 9
+      },
+      {
+        "id": "bof",
+        "name": "BOF",
+        "cost": 5,
+        "category": "Luxury",
+        "active": true,
+        "billingDate": 28
+      },
+      {
+        "id": "microsoft",
+        "name": "Microsoft",
+        "cost": 10,
+        "category": "Luxury",
+        "active": true,
+        "billingDate": 13
+      },
+      {
+        "id": "aquavoice",
+        "name": "AquaVoice",
+        "cost": 10,
+        "category": "Luxury",
+        "active": true,
+        "billingDate": 4
+      },
+      {
+        "id": "figma",
+        "name": "Figma",
+        "cost": 6,
+        "category": "Luxury",
+        "active": true,
+        "billingDate": 28
+      }
+    ],
+    "warehouse": {
+      "adminTech": 388,
+      "bins": 155,
+      "pallets": 35,
+      "returns": 20,
+      "nathanBelete": 250
+    },
+    "totals": {
+      "activeSubscriptionsMonthly": 641.05,
+      "warehouseMonthly": 848,
+      "totalMonthly": 1489.05,
+      "weeklyRunRate": 343.89
+    },
+    "categories": [
+      "Mandatory",
+      "Revenue/Cost",
+      "Luxury"
+    ],
+    "billingDatesConfigured": 15
+  },
+  "fulfillment": {
+    "status": "partial",
+    "rateCardParser": {
+      "status": "built",
+      "method": "Anthropic API (claude-sonnet-4-5) called directly from browser with user-provided API key",
+      "acceptsMultipleFiles": true,
+      "supportsParsingInstructions": true,
+      "storage": "localStorage + Supabase (if configured)"
+    },
+    "perProductDefaults": [
+      {
+        "id": "p1-zip-hoodie",
+        "name": "P1 - Zip Up Hoodie",
+        "shippingLabel": 10.3,
+        "pickPack": 2.72,
+        "stickersCard": 0.189,
+        "packaging": 0.206,
+        "totalFulfillmentPerUnit": 13.42
+      },
+      {
+        "id": "p2-hoodie",
+        "name": "P2 - Hoodie",
+        "shippingLabel": 10.3,
+        "pickPack": 2.72,
+        "stickersCard": 0.189,
+        "packaging": 0.206,
+        "totalFulfillmentPerUnit": 13.42
+      },
+      {
+        "id": "p3-sweatpants",
+        "name": "P3 - Sweatpants",
+        "shippingLabel": 10.3,
+        "pickPack": 2.72,
+        "stickersCard": 0.189,
+        "packaging": 0.206,
+        "totalFulfillmentPerUnit": 13.42
+      },
+      {
+        "id": "p4-tee",
+        "name": "P4 - Tee",
+        "shippingLabel": 5.53,
+        "pickPack": 2.72,
+        "stickersCard": 0.189,
+        "packaging": 0.206,
+        "totalFulfillmentPerUnit": 8.64
+      },
+      {
+        "id": "warefare-waffle",
+        "name": "Warefare Waffle Knit",
+        "shippingLabel": 5.53,
+        "pickPack": 2.72,
+        "stickersCard": 0.189,
+        "packaging": 0.206,
+        "totalFulfillmentPerUnit": 8.64
+      }
+    ]
+  },
+  "inventory": {
+    "currentUnits": 741,
+    "currentValue": 12726,
+    "weeksOfSupplyFormula": "inventoryUnits / currentWeek.unitsSold",
+    "poTriggerThreshold": 11,
+    "alertRule": "flag weeksOfSupply <= 11"
+  },
+  "liabilities": {
+    "creditCards": [
+      {
+        "id": "chase-5718",
+        "name": "CHASE 5718",
+        "balance": 658,
+        "minPayment": 658
+      },
+      {
+        "id": "amex-plum",
+        "name": "AMEX PLUM 0000",
+        "balance": 812.46,
+        "minPayment": 202
+      },
+      {
+        "id": "amex-blue",
+        "name": "AMEX BLUE 71005",
+        "balance": 16831,
+        "minPayment": 173
+      }
+    ],
+    "loans": {
+      "shopifyCapital": {
+        "balance": 17094.1,
+        "repaymentRate": 0.06
+      },
+      "longTermLoan": {
+        "balance": 20000,
+        "interestPayment": 250,
+        "interestFrequencyWeeks": 4
+      }
+    },
+    "totalCreditCardBalance": 18301.46,
+    "totalCreditCardMinPayment": 1033
+  },
+  "auth": {
+    "provider": "Supabase Auth",
+    "enabledWhen": "VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY secrets are set in GitHub",
+    "methods": [
+      "email/password",
+      "magic link",
+      "Google OAuth"
+    ],
+    "storage": "Supabase Postgres table `user_state` with Row-Level Security",
+    "fallback": "localStorage only — app skips auth entirely when not configured"
+  },
+  "integrations": {
+    "shopify": {
+      "status": "cors-blocked",
+      "method": "Admin API token",
+      "notes": "Needs backend proxy (Cloudflare Worker or Vercel function)"
+    },
+    "meta": {
+      "status": "working-client-side",
+      "method": "Graph API token",
+      "notes": "Meta Marketing API supports browser CORS"
+    },
+    "klaviyo": {
+      "status": "cors-blocked",
+      "method": "Private API key",
+      "notes": "Needs backend proxy"
+    },
+    "banking": {
+      "status": "manual-only",
+      "method": "Plaid (not built)",
+      "notes": "Requires backend, cash entered manually for now"
+    },
+    "anthropic": {
+      "status": "working-client-side",
+      "method": "API key in localStorage",
+      "notes": "Used for rate card parsing, model: claude-sonnet-4-5"
+    },
+    "threePL": {
+      "status": "built",
+      "method": "Rate card upload",
+      "notes": "Handled via Fulfillment tab with AI parser"
+    }
+  },
+  "openIssues": [
+    {
+      "id": "gh-pages-404",
+      "title": "GitHub Pages intermittent 404 on mobile",
+      "severity": "high",
+      "notes": "Verify repo → Settings → Pages → Source is \"GitHub Actions\" (not \"Deploy from branch\"). URL: https://matasmillion.github.io/cashmodel/"
+    },
+    {
+      "id": "cors-shopify",
+      "title": "Shopify Admin API blocked by CORS",
+      "severity": "medium",
+      "notes": "IntegrationsPanel → Shopify will fail with \"Failed to fetch\". Needs a Cloudflare Worker or Vercel function proxy."
+    },
+    {
+      "id": "cors-klaviyo",
+      "title": "Klaviyo Private API blocked by CORS",
+      "severity": "medium",
+      "notes": "Same fix as Shopify — lightweight backend proxy required."
+    },
+    {
+      "id": "retention-placeholder",
+      "title": "Retention revenue layer hardcoded to 0",
+      "severity": "medium",
+      "notes": "calculations.js line ~50: retentionRevenue = 0. Needs Shopify cohort data to compute repeat-purchase revenue."
+    },
+    {
+      "id": "banking-manual",
+      "title": "Bank cash balance is manual entry only",
+      "severity": "low",
+      "notes": "Plaid integration requires a backend — users update seed.totalCash manually via the Dashboard."
+    },
+    {
+      "id": "opex-tiers-unused",
+      "title": "opexTier2 and opexTier3 defined but unused",
+      "severity": "low",
+      "notes": "Projection engine only uses tier1. Logic for escalating OPEX at revenue milestones not yet built."
+    },
+    {
+      "id": "api-key-localstorage",
+      "title": "Anthropic API key stored in browser localStorage",
+      "severity": "low",
+      "notes": "Acceptable for single-user internal tool. Would need backend proxy for multi-user scenario."
+    }
+  ],
+  "changelog": [
+    {
+      "sha": "4ad3490",
+      "date": "2026-04-24T19:16:58+00:00",
+      "message": "chore: regenerate public/state.json after Prompt 1 commit"
+    },
+    {
+      "sha": "787ca0d",
+      "date": "2026-04-24T19:16:22+00:00",
+      "message": "feat(plm): migrate to library/styles/production IA + factory→vendor rename"
+    },
+    {
+      "sha": "21dc437",
+      "date": "2026-04-24T12:55:08+00:00",
+      "message": "Stop rendering Empty slot colorway placeholders"
+    },
+    {
+      "sha": "71ff064",
+      "date": "2026-04-24T11:40:29+00:00",
+      "message": "Compact Kanban cards so 5+ fit per column on desktop"
+    },
+    {
+      "sha": "05b0ca0",
+      "date": "2026-04-24T11:37:24+00:00",
+      "message": "Remove cost pill from color cards"
+    },
+    {
+      "sha": "670c168",
+      "date": "2026-04-24T11:19:57+00:00",
+      "message": "Trims tab: dual Grid + Kanban views, Grid as default"
+    },
+    {
+      "sha": "81d0154",
+      "date": "2026-04-24T11:12:43+00:00",
+      "message": "Styles tab: dual Grid + Kanban views, Grid as default"
+    },
+    {
+      "sha": "a57b0a5",
+      "date": "2026-04-24T11:10:24+00:00",
+      "message": "Collapse factory website to a clean \"Website\" hyperlink"
+    },
+    {
+      "sha": "f53a43a",
+      "date": "2026-04-24T11:00:41+00:00",
+      "message": "Pull trim pack card cost from targetUnitCost"
+    },
+    {
+      "sha": "119f2a3",
+      "date": "2026-04-24T10:58:22+00:00",
+      "message": "Add website field to factory cards"
+    }
+  ]
+}

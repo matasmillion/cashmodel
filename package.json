@@ -5,15 +5,22 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/generate-state.js",
     "build": "vite build",
+    "gen:state": "node scripts/generate-state.js",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.103.0",
     "@tailwindcss/vite": "^4.2.2",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "lucide-react": "^1.7.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "react-easy-crop": "^5.5.7",
+    "react-plaid-link": "^4.1.1",
     "react-router-dom": "^7.13.2",
     "recharts": "^3.8.1",
     "tailwindcss": "^4.2.2",

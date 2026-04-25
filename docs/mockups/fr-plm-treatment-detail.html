@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FR PLM · Treatment · Stone wash</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --salt:#F5F0E8;
+    --slate:#3A3A3A;
+    --sand:#EBE5D5;
+    --sienna:#D4956A;
+    --stone:#716F70;
+    --soil:#9A816B;
+    --sea:#B5C7D3;
+    --sage:#ADBDA3;
+    --good:#3B6D11;
+    --warn:#854F0B;
+    --bad:#A32D2D;
+    --serif:'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+    --sans:'Inter', system-ui, -apple-system, 'Helvetica Neue', sans-serif;
+    --mono:ui-monospace, SFMono-Regular, 'Menlo', monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--salt);
+    color:var(--slate);
+    font-family:var(--sans);
+    font-size:14px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    padding:24px 16px 48px;
+  }
+  .page{max-width:1080px;margin:0 auto;}
+
+  /* Top nav — mimics Cash Model app chrome */
+  .appbar{
+    display:flex;align-items:flex-end;justify-content:space-between;
+    padding-bottom:14px;border-bottom:0.5px solid rgba(58,58,58,0.15);
+    margin-bottom:22px;
+  }
+  .wordmark{font-family:var(--serif);font-size:18px;letter-spacing:0.08em;}
+  .subline{font-size:10px;letter-spacing:0.14em;color:rgba(58,58,58,0.5);margin-top:3px;}
+  .nav{display:flex;gap:4px;font-size:12px;}
+  .nav span{padding:6px 12px;border-radius:6px;color:rgba(58,58,58,0.6);cursor:pointer;}
+  .nav span.active{background:var(--slate);color:var(--salt);}
+
+  .tabs{display:flex;gap:26px;font-size:12px;margin-bottom:22px;border-bottom:0.5px solid rgba(58,58,58,0.08);padding-bottom:11px;}
+  .tabs span{color:rgba(58,58,58,0.5);cursor:pointer;}
+  .tabs span.active{color:var(--slate);font-weight:500;border-bottom:1.5px solid var(--slate);padding-bottom:11px;margin-bottom:-11.5px;}
+
+  .crumb{font-size:11px;letter-spacing:0.08em;color:rgba(58,58,58,0.5);margin-bottom:14px;}
+
+  /* Header */
+  .hdr{
+    display:flex;align-items:flex-end;justify-content:space-between;
+    border-bottom:0.5px solid rgba(58,58,58,0.15);padding-bottom:22px;margin-bottom:22px;
+  }
+  .hdr-left{display:flex;align-items:center;gap:20px;}
+  .swatch{width:64px;height:64px;border-radius:8px;background:var(--sienna);box-shadow:inset 0 0 0 0.5px rgba(0,0,0,0.1);}
+  .name{font-family:var(--serif);font-size:38px;line-height:1;}
+  .meta{display:flex;gap:12px;font-size:11px;color:rgba(58,58,58,0.6);margin-top:8px;letter-spacing:0.04em;}
+  .meta span+span::before{content:'·';margin-right:12px;color:rgba(58,58,58,0.3);}
+  .pill{background:rgba(99,153,34,0.12);color:var(--good);padding:6px 12px;border-radius:4px;font-size:11px;letter-spacing:0.06em;}
+
+  /* Stat strip */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px;}
+  .stat{background:#fff;border:0.5px solid rgba(58,58,58,0.15);border-radius:8px;padding:14px 16px;}
+  .stat-label{font-size:10px;color:rgba(58,58,58,0.55);letter-spacing:0.08em;margin-bottom:6px;text-transform:uppercase;}
+  .stat-value{font-family:var(--serif);font-size:26px;line-height:1;}
+  .stat-delta{font-size:11px;margin-top:5px;}
+  .up{color:var(--good);} .down{color:var(--good);} .neutral{color:rgba(58,58,58,0.5);}
+
+  /* Cards */
+  .card{background:#fff;border:0.5px solid rgba(58,58,58,0.15);border-radius:8px;padding:20px 22px;}
+  .card-hdr{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px;}
+  .card-title{font-family:var(--serif);font-size:18px;}
+  .card-hint{font-size:10px;color:rgba(58,58,58,0.5);letter-spacing:0.08em;text-transform:uppercase;}
+
+  /* Twin columns */
+  .twin{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px;}
+  .spec{display:grid;grid-template-columns:100px 1fr;row-gap:10px;font-size:12px;line-height:1.5;}
+  .spec .k{color:rgba(58,58,58,0.55);}
+  .code{font-family:var(--mono);font-size:11.5px;}
+  .muted{color:rgba(58,58,58,0.5);}
+
+  /* Production log table */
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  thead th{text-align:left;font-weight:500;padding:8px 8px 8px 0;color:rgba(58,58,58,0.55);letter-spacing:0.04em;font-size:11px;text-transform:uppercase;border-bottom:0.5px solid rgba(58,58,58,0.1);}
+  tbody td{padding:11px 8px 11px 0;border-bottom:0.5px solid rgba(58,58,58,0.08);font-family:var(--mono);font-size:11.5px;}
+  tbody tr:last-child td{border-bottom:none;}
+  td.r,th.r{text-align:right;}
+  tbody td.style{font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;}
+
+  /* Drift */
+  .drift{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+  .drift-item .pair{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;}
+  .drift-item .tile{aspect-ratio:1;border-radius:6px;}
+  .drift-label{font-size:10px;color:rgba(58,58,58,0.55);letter-spacing:0.06em;text-transform:uppercase;display:flex;justify-content:space-between;}
+  .drift-label .v.ok{color:var(--good);}
+  .drift-label .v.warn{color:var(--warn);}
+
+  /* Used in */
+  .usage{display:flex;flex-direction:column;}
+  .usage-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:0.5px solid rgba(58,58,58,0.08);font-size:12.5px;}
+  .usage-row:last-child{border-bottom:none;}
+  .usage-row .id{font-family:var(--mono);font-size:11.5px;}
+
+  /* Footer actions */
+  .foot{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:rgba(58,58,58,0.55);margin-top:22px;}
+  .foot-actions{display:flex;gap:14px;}
+  .foot-actions a{color:rgba(58,58,58,0.6);cursor:pointer;text-decoration:none;border-bottom:0.5px dashed rgba(58,58,58,0.25);padding-bottom:1px;}
+  .foot-actions a:hover{color:var(--slate);border-bottom-color:rgba(58,58,58,0.6);}
+
+  section{margin-bottom:22px;}
+
+  @media (max-width:720px){
+    .twin{grid-template-columns:1fr;}
+    .stats{grid-template-columns:repeat(2,1fr);}
+    .drift{grid-template-columns:1fr;}
+    .nav{display:none;}
+    .name{font-size:28px;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="appbar">
+    <div>
+      <div class="wordmark">FOREIGN RESOURCE</div>
+      <div class="subline">PRODUCT LIFECYCLE MANAGEMENT</div>
+    </div>
+    <div class="nav">
+      <span class="active">Library</span>
+      <span>Styles</span>
+      <span>Production</span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <span>Patterns</span>
+    <span>Fabrics</span>
+    <span>Colors</span>
+    <span>Trims</span>
+    <span class="active">Treatments</span>
+    <span>Embellishments</span>
+    <span>Vendors</span>
+  </div>
+
+  <div class="crumb">Library  /  Treatments  /  Stone wash</div>
+
+  <div class="hdr">
+    <div class="hdr-left">
+      <div class="swatch"></div>
+      <div>
+        <div class="name">Stone wash</div>
+        <div class="meta">
+          <span>TR-WSH-001</span><span>Wash</span><span>Base: Sienna</span><span>v2.1</span>
+        </div>
+      </div>
+    </div>
+    <span class="pill">Approved</span>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-label">Units produced</div>
+      <div class="stat-value">1,240</div>
+      <div class="stat-delta neutral">4 POs since May 2025</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Latest unit cost</div>
+      <div class="stat-value">$3.80</div>
+      <div class="stat-delta down">↓ 9.5% from first run</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Latest lead</div>
+      <div class="stat-value">12 d</div>
+      <div class="stat-delta down">↓ 4d from first run</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Defect rate</div>
+      <div class="stat-value">0.3%</div>
+      <div class="stat-delta down">↓ 73% from first run</div>
+    </div>
+  </div>
+
+  <section class="twin">
+    <div class="card">
+      <div class="card-hdr">
+        <div class="card-title">Physical spec</div>
+        <div class="card-hint">What the factory produces</div>
+      </div>
+      <div class="spec">
+        <div class="k">Chemistry</div><div>Enzyme (cellulase 2%) + pumice, softener finish, pH 5.5 ± 0.3</div>
+        <div class="k">Duration</div><div>40 minutes</div>
+        <div class="k">Temperature</div><div>55 °C</div>
+        <div class="k">Substrate</div><div>100% cotton, cotton-linen ≥ 70%</div>
+        <div class="k">Shrinkage</div><div>3–4% expected</div>
+        <div class="k">Vendor</div><div>Guangdong Ocean Wash</div>
+        <div class="k">Backup</div><div>Foshan Blue Wash</div>
+        <div class="k">MOQ · Terms</div><div>500 units · Net 30 · 50% deposit</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-hdr">
+        <div class="card-title">Digital asset</div>
+        <div class="card-hint">What the designer renders</div>
+      </div>
+      <div class="spec">
+        <div class="k">LoRA</div><div class="code">fr_stone_wash_v2.safetensors</div>
+        <div class="k">Base model</div><div>Flux · Fal endpoint</div>
+        <div class="k">Trigger</div><div class="code">fr_stone_wash</div>
+        <div class="k">Training set</div><div>127 images · v2 retrained Feb 12</div>
+        <div class="k">CLO .ZFAB</div><div class="muted">not synced — optional</div>
+        <div class="k">Thumbnail</div><div>Last rendered Feb 18, 2026</div>
+        <div class="k">Source</div><div>LoRA trained</div>
+        <div class="k">Drift (30d)</div><div class="up">4.2% — within target</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-hdr">
+      <div class="card-title">Production log</div>
+      <div class="card-hint">Append-only · every PO that used this atom</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>PO</th><th>Date</th><th>Style</th><th class="r">Units</th>
+          <th>Lot</th><th class="r">Cost</th><th class="r">Lead</th><th class="r">Defect</th><th class="r">Drift</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>#0024</td><td>2026-02</td><td class="style">AP-HD-STONE-01</td>
+          <td class="r">320</td><td>GO-2602-A</td>
+          <td class="r">$3.80</td><td class="r">12d</td>
+          <td class="r" style="color:var(--good);">0.3%</td>
+          <td class="r" style="color:var(--good);">3.1%</td>
+        </tr>
+        <tr>
+          <td>#0019</td><td>2025-11</td><td class="style">AP-PA-STONE-01</td>
+          <td class="r">260</td><td>GO-2511-B</td>
+          <td class="r">$3.85</td><td class="r">13d</td>
+          <td class="r" style="color:var(--good);">0.4%</td>
+          <td class="r" style="color:var(--good);">4.8%</td>
+        </tr>
+        <tr>
+          <td>#0014</td><td>2025-08</td><td class="style">AP-HD-STONE-01</td>
+          <td class="r">420</td><td>GO-2508-A</td>
+          <td class="r">$4.00</td><td class="r">14d</td>
+          <td class="r" style="color:var(--warn);">0.8%</td>
+          <td class="r" style="color:var(--warn);">9.2%</td>
+        </tr>
+        <tr>
+          <td>#0009</td><td>2025-05</td><td class="style">AP-PA-ECARGO-10</td>
+          <td class="r">240</td><td>FB-2505-A</td>
+          <td class="r">$4.20</td><td class="r">16d</td>
+          <td class="r" style="color:var(--bad);">1.1%</td>
+          <td class="r" style="color:var(--bad);">12.4%</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <div class="card-hdr">
+      <div class="card-title">Digital drift</div>
+      <div class="card-hint">LoRA prediction vs production photo · retrain if &gt; 8%</div>
+    </div>
+    <div class="drift">
+      <div class="drift-item">
+        <div class="pair">
+          <div class="tile" style="background:linear-gradient(135deg, #D4956A 0%, #B87048 100%);"></div>
+          <div class="tile" style="background:linear-gradient(140deg, #D0906A 0%, #BA744C 100%);"></div>
+        </div>
+        <div class="drift-label"><span>PO #0024 · Feb 2026</span><span class="v ok">3.1%</span></div>
+      </div>
+      <div class="drift-item">
+        <div class="pair">
+          <div class="tile" style="background:linear-gradient(135deg, #D4956A 0%, #B87048 100%);"></div>
+          <div class="tile" style="background:linear-gradient(138deg, #CE8C64 0%, #B56E45 100%);"></div>
+        </div>
+        <div class="drift-label"><span>PO #0019 · Nov 2025</span><span class="v ok">4.8%</span></div>
+      </div>
+      <div class="drift-item">
+        <div class="pair">
+          <div class="tile" style="background:linear-gradient(135deg, #D4956A 0%, #B87048 100%);"></div>
+          <div class="tile" style="background:linear-gradient(145deg, #C17E52 0%, #A45E38 100%);"></div>
+        </div>
+        <div class="drift-label"><span>PO #0014 · Aug 2025</span><span class="v warn">9.2% · retrained</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-hdr">
+      <div class="card-title">Used in</div>
+      <div class="card-hint">Active styles referencing this atom</div>
+    </div>
+    <div class="usage">
+      <div class="usage-row">
+        <span class="id">AP-HD-STONE-01 · Borderless stone hoodie</span>
+        <span class="muted">740 units · live</span>
+      </div>
+      <div class="usage-row">
+        <span class="id">AP-PA-STONE-01 · Borderless stone sweatpant</span>
+        <span class="muted">260 units · live</span>
+      </div>
+      <div class="usage-row">
+        <span class="id">AP-PA-ECARGO-10 · Elements cargo W34</span>
+        <span class="muted">240 units · archived</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot">
+    <div class="foot-actions">
+      <a>Edit</a>
+      <a>Retrain LoRA</a>
+      <a>Export tech pack</a>
+      <a>Sync to CLO-SET</a>
+      <a>New production run</a>
+    </div>
+    <span>Last updated Feb 18, 2026 · Matias</span>
+  </div>
+
+</div>
+</body>
+</html>

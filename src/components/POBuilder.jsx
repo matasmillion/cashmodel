@@ -194,7 +194,7 @@ export default function POBuilder() {
                         <span style={{ color: FR.slate }}>{formatDate(preview.productionStartDate)}</span>
                       </div>
                       <div className="flex justify-between text-xs">
-                        <span style={{ color: FR.stone }}>Ships from factory</span>
+                        <span style={{ color: FR.stone }}>Ships from vendor</span>
                         <span style={{ color: FR.slate }}>{formatDate(preview.shipmentDate)}</span>
                       </div>
                       <div className="flex justify-between text-xs">
