@@ -1,7 +1,6 @@
 import { AppProvider, useApp } from './context/AppContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import KPICards from './components/KPICards';
-import CashflowChart from './components/CashflowChart';
 import CashflowTable from './components/CashflowTable';
 import UnitEconomics from './components/UnitEconomics';
 import POBuilder from './components/POBuilder';
@@ -137,7 +136,6 @@ function Dashboard() {
         {state.activeTab === 'dashboard' && (
           <>
             <KPICards />
-            <CashflowChart />
             <CashflowTable />
           </>
         )}

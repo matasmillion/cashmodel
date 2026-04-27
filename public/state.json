@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-27T17:14:35.773Z",
+  "lastUpdated": "2026-04-27T17:54:26.785Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,9 +1044,14 @@
   ],
   "changelog": [
     {
-      "sha": "174786f",
-      "date": "2026-04-27T17:09:56+00:00",
-      "message": "fix(plm): re-render on PO click — dispatch popstate after pushState"
+      "sha": "e97021c",
+      "date": "2026-04-27T20:15:32+03:00",
+      "message": "fix(plm): use window.history.back() for PO detail Back button (#6)"
+    },
+    {
+      "sha": "d380c1b",
+      "date": "2026-04-27T20:10:34+03:00",
+      "message": "fix(plm): re-render on PO click — dispatch popstate after pushState (#5)"
     },
     {
       "sha": "d7d6c80",
@@ -1087,11 +1092,6 @@
       "sha": "5d96ad6",
       "date": "2026-04-27T11:01:22+00:00",
       "message": "feat(plm): writeback engine — placePO snapshot + closePO atom usage + rolling averages"
-    },
-    {
-      "sha": "6b446c0",
-      "date": "2026-04-27T10:54:21+00:00",
-      "message": "feat(plm): production detail usage log + drift section"
     }
   ]
 }
