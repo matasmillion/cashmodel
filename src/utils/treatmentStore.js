@@ -60,16 +60,22 @@ function nextCodeFor(type, rows) {
 }
 
 // Filter helper — list views hide archived rows by default; the detail
-// view opts in via `{ includeArchived: true }`.
-function filterRows(rows, { includeArchived = false } = {}) {
-  return includeArchived ? rows : rows.filter(r => r.status !== 'archived');
+// view opts in via `{ includeArchived: true }`. `status` / `type` further
+// narrow the result (status implies includeArchived when set explicitly).
+function filterRows(rows, { includeArchived = false, status = null, type = null } = {}) {
+  let out = rows;
+  if (status) out = out.filter(r => r.status === status);
+  else if (!includeArchived) out = out.filter(r => r.status !== 'archived');
+  if (type) out = out.filter(r => r.type === type);
+  return out;
 }
 
 // List every treatment (most recent first). Pulls from Supabase when
 // configured, falls back to localStorage. Reads merge — Supabase rows for
 // records the local store hasn't seen, local rows for the offline path.
-export async function listTreatments({ includeArchived = false } = {}) {
+export async function listTreatments({ includeArchived = false, status = null, type = null } = {}) {
   const local = readLocal();
+  const filterOpts = { includeArchived, status, type };
   if (IS_SUPABASE_ENABLED) {
     const { data, error } = await supabase
       .from('treatments')
@@ -82,12 +88,12 @@ export async function listTreatments({ includeArchived = false } = {}) {
         ...data,
         ...local.filter(r => !remoteIds.has(r.id)),
       ];
-      return filterRows(merged, { includeArchived })
+      return filterRows(merged, filterOpts)
         .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
     }
     if (error) console.error('listTreatments:', error);
   }
-  return filterRows(local, { includeArchived })
+  return filterRows(local, filterOpts)
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
 
@@ -151,6 +157,10 @@ export async function saveTreatment(id, updates) {
 
 // Soft-delete: flip status to 'archived'. Records stay in the store so any
 // production order or BOM line that references them still resolves.
+// Public alias matching the prompt-spec signature. `saveTreatment` was the
+// initial name; `updateTreatment` is the canonical public verb.
+export const updateTreatment = saveTreatment;
+
 export async function archiveTreatment(id) {
   return saveTreatment(id, { status: 'archived' });
 }
@@ -217,11 +227,14 @@ function emptyRollups() {
     units_produced: 0,
     pos_count: 0,
     first_run_at: null,
+    // `latest_cost_usd` is the public contract from the prompt; the suffixed
+    // `latest_unit_cost` mirror is what richer UI surfaces already read.
+    latest_cost_usd: 0,
     latest_unit_cost: null,
     latest_unit_cost_delta_pct: null,
-    latest_lead_days: null,
+    latest_lead_days: 0,
     latest_lead_delta_days: null,
-    defect_rate_pct: null,
+    defect_rate_pct: 0,
     defect_rate_delta_pct: null,
     drift_30d_pct: null,
     log: [],
@@ -238,6 +251,7 @@ const MOCK_ROLLUPS = {
     units_produced: 1240,
     pos_count: 4,
     first_run_at: '2025-05-01',
+    latest_cost_usd: 3.80,
     latest_unit_cost: 3.80,
     latest_unit_cost_delta_pct: -9.5,
     latest_lead_days: 12,
@@ -264,6 +278,7 @@ const MOCK_ROLLUPS = {
   },
   'seed-vintage-soft': {
     units_produced: 480, pos_count: 2, first_run_at: '2025-09-01',
+    latest_cost_usd: 2.95,
     latest_unit_cost: 2.95, latest_unit_cost_delta_pct: -3.2,
     latest_lead_days: 10, latest_lead_delta_days: -2,
     defect_rate_pct: 0.5, defect_rate_delta_pct: -40,
@@ -282,6 +297,7 @@ const MOCK_ROLLUPS = {
   },
   'seed-gone-global-dye': {
     units_produced: 360, pos_count: 1, first_run_at: '2025-12-01',
+    latest_cost_usd: 4.65,
     latest_unit_cost: 4.65, latest_unit_cost_delta_pct: 0,
     latest_lead_days: 18, latest_lead_delta_days: 0,
     defect_rate_pct: 0.6, defect_rate_delta_pct: 0,

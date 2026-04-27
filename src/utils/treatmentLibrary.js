@@ -73,6 +73,11 @@ export const TREATMENT_TYPE_CODE = Object.fromEntries(
 
 export const TREATMENT_STATUSES = ['draft', 'testing', 'approved', 'archived'];
 
+// Empty initial library — runtime data lives in localStorage via
+// treatmentStore. Exported so callers that want a deterministic empty
+// shape can import a single name instead of inlining a literal.
+export const INITIAL_LIBRARY = [];
+
 export const LORA_BASE_MODELS = [
   { id: 'flux',             label: 'Flux' },
   { id: 'sdxl',             label: 'SDXL' },
