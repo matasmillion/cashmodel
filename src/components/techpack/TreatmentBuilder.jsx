@@ -8,11 +8,12 @@
 // chunks 08-10.
 
 import { useEffect, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Edit2, Check, X } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { getFRColor } from '../../utils/colorLibrary';
-import { getTreatment, getTreatmentRollups } from '../../utils/treatmentStore';
-import { TREATMENT_TYPE_LABEL } from '../../utils/treatmentLibrary';
+import { resolveVendor } from '../../utils/vendorLibrary';
+import { getTreatment, getTreatmentRollups, updateTreatment } from '../../utils/treatmentStore';
+import { TREATMENT_TYPE_LABEL, LORA_BASE_MODELS } from '../../utils/treatmentLibrary';
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
@@ -39,6 +40,65 @@ function deltaTone(n, { lowerIsBetter = true } = {}) {
   return better ? 'good' : 'bad';
 }
 
+function formatLongDate(iso) {
+  if (!iso) return null;
+  try {
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch { return null; }
+}
+
+const SPEC_LABEL_STYLE = { color: 'rgba(58,58,58,0.55)' };
+const SPEC_VALUE_STYLE = { color: FR.slate, lineHeight: 1.5 };
+const MONO_STYLE = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11.5 };
+const INPUT_STYLE = {
+  width: '100%', padding: '4px 6px', border: '0.5px solid rgba(58,58,58,0.2)',
+  borderRadius: 3, fontSize: 12, color: FR.slate, background: '#fff',
+  fontFamily: "'Inter', sans-serif", outline: 'none', boxSizing: 'border-box',
+};
+
+// One row of the Physical / Digital spec grid. In view mode renders label/value
+// text; in edit mode renders the supplied editor (typically an Input) inline.
+function Spec({ label, children }) {
+  return (
+    <>
+      <div style={SPEC_LABEL_STYLE}>{label}</div>
+      <div style={SPEC_VALUE_STYLE}>{children}</div>
+    </>
+  );
+}
+
+function TextInput({ value, onChange, placeholder, mono = false }) {
+  return (
+    <input
+      value={value ?? ''}
+      onChange={e => onChange(e.target.value)}
+      placeholder={placeholder}
+      style={mono ? { ...INPUT_STYLE, ...MONO_STYLE } : INPUT_STYLE}
+    />
+  );
+}
+
+function NumberInput({ value, onChange, step = 1 }) {
+  return (
+    <input
+      type="number"
+      step={step}
+      value={value ?? ''}
+      onChange={e => onChange(e.target.value === '' ? '' : Number(e.target.value))}
+      style={INPUT_STYLE}
+    />
+  );
+}
+
+function SelectInput({ value, onChange, options }) {
+  return (
+    <select value={value ?? ''} onChange={e => onChange(e.target.value)} style={INPUT_STYLE}>
+      <option value="">—</option>
+      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  );
+}
+
 function StatCard({ label, value, delta, deltaTone: tone = 'neutral' }) {
   const color = tone === 'good' ? '#3B6D11'
     : tone === 'warn' ? '#854F0B'
@@ -58,6 +118,9 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
   const [treatment, setTreatment] = useState(treatmentProp || null);
   const [rollups, setRollups] = useState(null);
   const [loading, setLoading] = useState(!treatmentProp && !!id);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,6 +166,63 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
   const pill = STATUS_PILL[status] || STATUS_PILL.draft;
   const swatchHex = (treatment.base_color_id ? getFRColor(treatment.base_color_id)?.hex : null) || FR.sand;
 
+  // Editable surface — mirrors `treatment` in view mode, holds in-flight edits
+  // in edit mode. `setField`/`setDigitalField` write into the draft only.
+  const view = editing ? draft : treatment;
+  const setField = (key, value) => setDraft(d => ({ ...d, [key]: value }));
+  const setDigitalField = (key, value) => setDraft(d => ({ ...d, digital: { ...(d.digital || {}), [key]: value } }));
+
+  const enterEdit = () => { setDraft({ ...treatment, digital: { ...(treatment.digital || {}) } }); setEditing(true); };
+  const cancelEdit = () => { setDraft(null); setEditing(false); };
+  const saveEdit = async () => {
+    if (!draft) return;
+    setSaving(true);
+    try {
+      const patch = {
+        chemistry: draft.chemistry,
+        duration_minutes: Number(draft.duration_minutes) || 0,
+        temperature_c: Number(draft.temperature_c) || 0,
+        compatible_fabric_ids: draft.compatible_fabric_ids || [],
+        shrinkage_expected_pct: Number(draft.shrinkage_expected_pct) || 0,
+        primary_vendor_id: draft.primary_vendor_id || '',
+        backup_vendor_id: draft.backup_vendor_id || '',
+        moq_units: Number(draft.moq_units) || 0,
+        notes: draft.notes || '',
+        digital: draft.digital || treatment.digital,
+      };
+      const updated = await updateTreatment(treatment.id, patch);
+      if (updated) setTreatment(updated);
+      setEditing(false);
+      setDraft(null);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const primaryVendor = resolveVendor(view.primary_vendor_id);
+  const backupVendor = view.backup_vendor_id ? resolveVendor(view.backup_vendor_id) : null;
+  const substrate = (view.compatible_fabric_ids && view.compatible_fabric_ids.length)
+    ? view.compatible_fabric_ids.join(', ')
+    : '—';
+  const moqTerms = (() => {
+    const moq = view.moq_units ? `${Number(view.moq_units).toLocaleString()} units` : '—';
+    const terms = primaryVendor?.payment_terms || '';
+    return terms ? `${moq} · ${terms}` : moq;
+  })();
+
+  const dig = view.digital || {};
+  const trainCount = Array.isArray(dig.lora_training_image_urls) ? dig.lora_training_image_urls.length : 0;
+  const trainedDate = formatLongDate(dig.lora_trained_at);
+  const trainingSet = trainCount
+    ? `${trainCount} images${dig.lora_version ? ` · ${dig.lora_version}` : ''}${trainedDate ? ` retrained ${trainedDate}` : ''}`
+    : '—';
+  const lastRendered = formatLongDate(dig.last_digital_sync_at);
+  const driftPct = rollups?.drift_30d_pct;
+  const driftLine = driftPct != null
+    ? `${Number(driftPct).toFixed(1)}% — ${driftPct < 8 ? 'within target' : 'retrain recommended'}`
+    : '—';
+  const driftColor = driftPct != null && driftPct >= 8 ? '#854F0B' : '#3B6D11';
+
   // Stat strip values + deltas
   const units = rollups?.units_produced != null ? Number(rollups.units_produced).toLocaleString() : '—';
   const posCount = rollups?.pos_count;
@@ -133,11 +253,29 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
 
   return (
     <div>
-      {onBack && (
-        <button onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: FR.stone, fontSize: 11, cursor: 'pointer', padding: 0, marginBottom: 10 }}>
-          <ArrowLeft size={12} /> Back
-        </button>
-      )}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        {onBack ? (
+          <button onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: FR.stone, fontSize: 11, cursor: 'pointer', padding: 0 }}>
+            <ArrowLeft size={12} /> Back
+          </button>
+        ) : <span />}
+        <div style={{ display: 'flex', gap: 8 }}>
+          {!editing ? (
+            <button onClick={enterEdit} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'transparent', color: FR.slate, border: '0.5px solid rgba(58,58,58,0.25)', borderRadius: 6, fontSize: 11, cursor: 'pointer' }}>
+              <Edit2 size={12} /> Edit
+            </button>
+          ) : (
+            <>
+              <button onClick={cancelEdit} disabled={saving} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'transparent', color: FR.stone, border: '0.5px solid rgba(58,58,58,0.25)', borderRadius: 6, fontSize: 11, cursor: saving ? 'not-allowed' : 'pointer' }}>
+                <X size={12} /> Cancel
+              </button>
+              <button onClick={saveEdit} disabled={saving} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, fontSize: 11, cursor: saving ? 'wait' : 'pointer' }}>
+                <Check size={12} /> {saving ? 'Saving…' : 'Save'}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
 
       {/* Breadcrumb */}
       <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'rgba(58,58,58,0.5)', marginBottom: 14 }}>
@@ -176,7 +314,103 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
         <StatCard label="Defect rate" value={defect} delta={defectDelta} deltaTone={deltaTone(defectDeltaPct, { lowerIsBetter: true })} />
       </div>
 
-      {/* TODO: chunks 08-10 */}
+      {/* Twin columns — Physical spec / Digital asset */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 22 }}>
+        {/* Physical spec */}
+        <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: '20px 22px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 17, color: FR.slate }}>Physical spec</div>
+            <div style={{ fontSize: 10, color: 'rgba(58,58,58,0.5)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>What the vendor produces</div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', rowGap: 10, fontSize: 12, lineHeight: 1.5 }}>
+            <Spec label="Chemistry">
+              {editing
+                ? <TextInput value={view.chemistry} onChange={v => setField('chemistry', v)} />
+                : (view.chemistry || '—')}
+            </Spec>
+            <Spec label="Duration">
+              {editing
+                ? <NumberInput value={view.duration_minutes} onChange={v => setField('duration_minutes', v)} />
+                : (view.duration_minutes ? `${view.duration_minutes} minutes` : '—')}
+            </Spec>
+            <Spec label="Temperature">
+              {editing
+                ? <NumberInput value={view.temperature_c} onChange={v => setField('temperature_c', v)} />
+                : (view.temperature_c ? `${view.temperature_c} °C` : '—')}
+            </Spec>
+            <Spec label="Substrate">
+              {editing
+                ? <TextInput
+                    value={(view.compatible_fabric_ids || []).join(', ')}
+                    onChange={v => setField('compatible_fabric_ids', v.split(',').map(s => s.trim()).filter(Boolean))}
+                    placeholder="Comma-separated fabric ids" />
+                : substrate}
+            </Spec>
+            <Spec label="Shrinkage">
+              {editing
+                ? <NumberInput step={0.1} value={view.shrinkage_expected_pct} onChange={v => setField('shrinkage_expected_pct', v)} />
+                : (view.shrinkage_expected_pct ? `${view.shrinkage_expected_pct}% expected` : '—')}
+            </Spec>
+            <Spec label="Vendor">
+              {editing
+                ? <TextInput value={view.primary_vendor_id} onChange={v => setField('primary_vendor_id', v)} />
+                : (primaryVendor?.name || view.primary_vendor_id || '—')}
+            </Spec>
+            <Spec label="Backup">
+              {editing
+                ? <TextInput value={view.backup_vendor_id} onChange={v => setField('backup_vendor_id', v)} />
+                : (backupVendor?.name || view.backup_vendor_id || '—')}
+            </Spec>
+            <Spec label="MOQ · Terms">
+              {editing
+                ? <NumberInput value={view.moq_units} onChange={v => setField('moq_units', v)} />
+                : moqTerms}
+            </Spec>
+          </div>
+        </div>
+
+        {/* Digital asset */}
+        <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: '20px 22px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 17, color: FR.slate }}>Digital asset</div>
+            <div style={{ fontSize: 10, color: 'rgba(58,58,58,0.5)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>What the designer renders</div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', rowGap: 10, fontSize: 12, lineHeight: 1.5 }}>
+            <Spec label="LoRA">
+              {editing
+                ? <TextInput mono value={dig.lora_checkpoint_url} onChange={v => setDigitalField('lora_checkpoint_url', v)} />
+                : (dig.lora_checkpoint_url
+                    ? <span style={MONO_STYLE}>{dig.lora_checkpoint_url}</span>
+                    : <span style={{ color: 'rgba(58,58,58,0.5)' }}>—</span>)}
+            </Spec>
+            <Spec label="Base model">
+              {editing
+                ? <SelectInput value={dig.lora_base_model} onChange={v => setDigitalField('lora_base_model', v)} options={LORA_BASE_MODELS.map(m => ({ value: m.id, label: m.label }))} />
+                : (LORA_BASE_MODELS.find(m => m.id === dig.lora_base_model)?.label || '—')}
+            </Spec>
+            <Spec label="Trigger">
+              {editing
+                ? <TextInput mono value={dig.lora_trigger_phrase} onChange={v => setDigitalField('lora_trigger_phrase', v)} />
+                : (dig.lora_trigger_phrase
+                    ? <span style={MONO_STYLE}>{dig.lora_trigger_phrase}</span>
+                    : <span style={{ color: 'rgba(58,58,58,0.5)' }}>—</span>)}
+            </Spec>
+            <Spec label="Training set">{trainingSet}</Spec>
+            <Spec label="CLO .ZFAB">
+              {dig.clo_asset_url
+                ? <span style={MONO_STYLE}>{dig.clo_asset_url}</span>
+                : <span style={{ color: 'rgba(58,58,58,0.5)' }}>not synced — optional</span>}
+            </Spec>
+            <Spec label="Thumbnail">{lastRendered ? `Last rendered ${lastRendered}` : '—'}</Spec>
+            <Spec label="Source">{dig.digital_source || '—'}</Spec>
+            <Spec label="Drift (30d)">
+              <span style={{ color: driftPct != null ? driftColor : 'rgba(58,58,58,0.5)' }}>{driftLine}</span>
+            </Spec>
+          </div>
+        </div>
+      </div>
+
+      {/* TODO: chunks 09-10 */}
     </div>
   );
 }
