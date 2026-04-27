@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-27T17:14:35.773Z",
+  "lastUpdated": "2026-04-27T17:52:33.838Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,9 +1044,29 @@
   ],
   "changelog": [
     {
-      "sha": "174786f",
-      "date": "2026-04-27T17:09:56+00:00",
-      "message": "fix(plm): re-render on PO click — dispatch popstate after pushState"
+      "sha": "836371f",
+      "date": "2026-04-27T20:32:44+03:00",
+      "message": "Add files via upload"
+    },
+    {
+      "sha": "016d19f",
+      "date": "2026-04-27T20:31:46+03:00",
+      "message": "Create README.md"
+    },
+    {
+      "sha": "9437807",
+      "date": "2026-04-27T17:25:46+00:00",
+      "message": "docs(compliance): record auth stack decision (Clerk + passkey MFA)"
+    },
+    {
+      "sha": "0fab5eb",
+      "date": "2026-04-27T17:14:41+00:00",
+      "message": "fix(plm): use window.history.back() for PO detail Back button"
+    },
+    {
+      "sha": "d380c1b",
+      "date": "2026-04-27T20:10:34+03:00",
+      "message": "fix(plm): re-render on PO click — dispatch popstate after pushState (#5)"
     },
     {
       "sha": "d7d6c80",
@@ -1072,26 +1092,6 @@
       "sha": "7e74ee1",
       "date": "2026-04-27T12:38:57+00:00",
       "message": "fix(plm): hoist driftPct above its use sites in TreatmentBuilder"
-    },
-    {
-      "sha": "3c5e208",
-      "date": "2026-04-27T11:12:53+00:00",
-      "message": "feat(plm): seed one demo PO walked through full lifecycle"
-    },
-    {
-      "sha": "54d7695",
-      "date": "2026-04-27T11:09:35+00:00",
-      "message": "feat(plm): wire real production rollups into treatment builder"
-    },
-    {
-      "sha": "5d96ad6",
-      "date": "2026-04-27T11:01:22+00:00",
-      "message": "feat(plm): writeback engine — placePO snapshot + closePO atom usage + rolling averages"
-    },
-    {
-      "sha": "6b446c0",
-      "date": "2026-04-27T10:54:21+00:00",
-      "message": "feat(plm): production detail usage log + drift section"
     }
   ]
 }

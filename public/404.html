@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Foreign Resource — Cash Model</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#3A3A3A" />
+    <!--
+      Single Page App fallback for GitHub Pages.
+      https://github.com/rafgraph/spa-github-pages
+
+      GitHub Pages can't return index.html for unknown paths (it serves
+      404.html instead). This script catches the 404, encodes the path
+      into a query string, and redirects to the SPA root, where a
+      matching decoder in index.html restores the path before React
+      Router boots. Net effect: refreshing on /cashmodel/legal works.
+
+      pathSegmentsToKeep = 1 because we serve from /cashmodel/.
+    -->
+    <script>
+      var pathSegmentsToKeep = 1;
+      var l = window.location;
+      l.replace(
+        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+        l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
+        l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+        (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+        l.hash
+      );
+    </script>
+  </head>
+  <body></body>
+</html>
