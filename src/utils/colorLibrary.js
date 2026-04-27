@@ -43,6 +43,13 @@ const emptyEntry = (name, hex) => ({
   // the input field; parseFloat on read.
   costPerUnit: '',
   currency: 'USD',
+  // CLO3D / Adobe asset references — the digital twin of the color.
+  // ASE is Illustrator/Photoshop swatch exchange, ACE/ICC carries the
+  // color profile, and CLO3D references its own .color asset. Stored as
+  // URLs or filenames; the manager pastes the string verbatim.
+  adobeAseUrl: '',
+  adobeAceUrl: '',
+  clo3dColorUrl: '',
 });
 
 // Return every color we know about — the FR staples seeded from the palette,

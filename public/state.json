@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-27T13:55:55.147Z",
+  "lastUpdated": "2026-04-27T16:30:15.406Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,21 @@
   ],
   "changelog": [
     {
+      "sha": "a93a388",
+      "date": "2026-04-27T16:22:38+00:00",
+      "message": "Merge branch 'main' of http://127.0.0.1:46551/git/matasmillion/cashmodel into claude/fix-plm-tabs-Z5VDv"
+    },
+    {
+      "sha": "c246259",
+      "date": "2026-04-27T16:57:19+03:00",
+      "message": "feat(plm): grid/kanban view + 2:3 cover images for every atom library (#2)"
+    },
+    {
+      "sha": "f82a094",
+      "date": "2026-04-27T13:56:40+00:00",
+      "message": "feat(plm): grid/kanban view + 2:3 cover images for every atom library"
+    },
+    {
       "sha": "8aac8eb",
       "date": "2026-04-27T13:44:16+00:00",
       "message": "Merge branch 'main' of http://127.0.0.1:44459/git/matasmillion/cashmodel into claude/fix-plm-tabs-Z5VDv"
@@ -1077,21 +1092,6 @@
       "sha": "5d96ad6",
       "date": "2026-04-27T11:01:22+00:00",
       "message": "feat(plm): writeback engine — placePO snapshot + closePO atom usage + rolling averages"
-    },
-    {
-      "sha": "6b446c0",
-      "date": "2026-04-27T10:54:21+00:00",
-      "message": "feat(plm): production detail usage log + drift section"
-    },
-    {
-      "sha": "db4e5c8",
-      "date": "2026-04-27T10:51:33+00:00",
-      "message": "feat(plm): production detail header, stepper, bom snapshot"
-    },
-    {
-      "sha": "be70a79",
-      "date": "2026-04-27T10:49:25+00:00",
-      "message": "feat(plm): production list with new PO modal"
     }
   ]
 }

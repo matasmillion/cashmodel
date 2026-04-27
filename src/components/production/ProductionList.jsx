@@ -143,6 +143,9 @@ function NewPOModal({ onClose, onCreated }) {
   const [vendorId, setVendorId] = useState('');
   const [units, setUnits] = useState('');
   const [notes, setNotes] = useState('');
+  // Default size break shows the four staple FR sizes; user can edit the
+  // counts or add more rows at create time, but it's optional.
+  const [sizeBreak, setSizeBreak] = useState([['S', ''], ['M', ''], ['L', ''], ['XL', '']]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -155,13 +158,30 @@ function NewPOModal({ onClose, onCreated }) {
     return () => { cancelled = true; };
   }, []);
 
+  const updateSize = (i, key, val) => {
+    setSizeBreak(arr => arr.map((row, idx) => idx === i ? [key, val] : row));
+  };
+  const addSizeRow = () => setSizeBreak(arr => [...arr, ['', '']]);
+  const removeSizeRow = (i) => setSizeBreak(arr => arr.filter((_, idx) => idx !== i));
+
   const submit = async () => {
     setSaving(true);
     try {
+      const sb = {};
+      sizeBreak.forEach(([k, v]) => {
+        const key = String(k || '').trim().toUpperCase();
+        const n = Number(v);
+        if (key && Number.isFinite(n) && n > 0) sb[key] = n;
+      });
+      // Auto-derive total units from the size break sum if the user left
+      // the units field blank but provided per-size counts.
+      const sbSum = Object.values(sb).reduce((a, n) => a + n, 0);
+      const totalUnits = Number(units) || sbSum || 0;
       const po = await createPO({
         style_id: styleId,
         vendor_id: vendorId,
-        units: Number(units) || 0,
+        units: totalUnits,
+        size_break: sb,
         notes,
       });
       onCreated(po);
@@ -208,8 +228,31 @@ function NewPOModal({ onClose, onCreated }) {
         </div>
 
         <div style={{ marginBottom: 12 }}>
-          <label style={labelStyle}>Units ordered</label>
-          <input type="number" min="0" value={units} onChange={e => setUnits(e.target.value)} placeholder="0" style={inputStyle} />
+          <label style={labelStyle}>Units ordered (total)</label>
+          <input type="number" min="0" value={units} onChange={e => setUnits(e.target.value)} placeholder="Leave blank to total the size break" style={inputStyle} />
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
+            <label style={labelStyle}>Size break</label>
+            <span style={{ fontSize: 10, color: 'rgba(58,58,58,0.55)' }}>
+              Sum {sizeBreak.reduce((a, [, v]) => a + (Number(v) || 0), 0).toLocaleString()}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {sizeBreak.map(([size, count], i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 32px', gap: 8 }}>
+                <input value={size} onChange={e => updateSize(i, e.target.value.toUpperCase(), count)} placeholder="S" style={inputStyle} />
+                <input type="number" min="0" value={count} onChange={e => updateSize(i, size, e.target.value)} placeholder="0" style={inputStyle} />
+                <button onClick={() => removeSizeRow(i)} aria-label="Remove" style={{ background: 'transparent', border: `0.5px solid ${FR.sand}`, color: FR.stone, borderRadius: 4, cursor: 'pointer' }}>
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+            <button onClick={addSizeRow} type="button" style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: FR.soil, fontSize: 11, padding: 0, cursor: 'pointer' }}>
+              + Add size
+            </button>
+          </div>
         </div>
 
         <div style={{ marginBottom: 18 }}>

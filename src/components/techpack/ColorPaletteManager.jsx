@@ -238,6 +238,9 @@ function ColorEditor({ name, onClose, onDeleted }) {
                 <Input label="Hex" value={entry.hex || ''} onChange={v => patch('hex', v)} placeholder="#3A3A3A" />
                 <Input label="RGB" value={entry.rgb || ''} onChange={v => patch('rgb', v)} placeholder="58, 58, 58" />
               </Row>
+              <Input label="Adobe ASE swatch" value={entry.adobeAseUrl || ''} onChange={v => patch('adobeAseUrl', v)} placeholder="fr_palette.ase" />
+              <Input label="Adobe ACE / ICC profile" value={entry.adobeAceUrl || ''} onChange={v => patch('adobeAceUrl', v)} placeholder="fr_color.icc" />
+              <Input label="CLO3D color reference" value={entry.clo3dColorUrl || ''} onChange={v => patch('clo3dColorUrl', v)} placeholder="fr_slate_clo.color" />
             </div>
 
             <div>

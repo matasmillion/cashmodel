@@ -8,6 +8,7 @@ import { FR, FR_COLOR_OPTIONS } from './techPackConstants';
 import { saveFabric, archiveFabric, restoreFabric } from '../../utils/fabricStore';
 import { FABRIC_WEAVES, FABRIC_WEAVE_LABEL, FABRIC_STATUSES } from '../../utils/fabricLibrary';
 import CoverImagePicker from './CoverImagePicker';
+import VendorPicker from './VendorPicker';
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
@@ -175,7 +176,11 @@ export default function FabricBuilder({ fabric, onBack }) {
         <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Sourcing</h4>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
           <Field label="Mill / supplier">
-            <input value={draft.mill_id || ''} onChange={e => set({ mill_id: e.target.value })} placeholder="Lien Hsing Knits (Taipei)" style={INPUT_STYLE} />
+            <VendorPicker
+              value={draft.mill_id}
+              onChange={v => set({ mill_id: v })}
+              placeholder="Select mill or supplier…"
+            />
           </Field>
           <Field label="Lead time (days)">
             <input type="number" value={draft.lead_time_days ?? 0} onChange={e => set({ lead_time_days: parseInt(e.target.value, 10) || 0 })} style={INPUT_STYLE} />
@@ -190,7 +195,28 @@ export default function FabricBuilder({ fabric, onBack }) {
       </div>
 
       <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
-        <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Files & notes</h4>
+        <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 4 }}>CLO3D & digital twin</h4>
+        <p style={{ fontSize: 11, color: FR.stone, margin: '0 0 14px' }}>
+          The bits half of the atom. CLO references a .ZFAB; non-CLO renderers use the PBR maps.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+          <Field label=".ZFAB file (CLO3D)">
+            <input value={draft.zfab_file_url || ''} onChange={e => set({ zfab_file_url: e.target.value })} placeholder="fr_french_terry_340.zfab" style={INPUT_STYLE} />
+          </Field>
+          <Field label="PBR basecolor map">
+            <input value={draft.pbr_basecolor_url || ''} onChange={e => set({ pbr_basecolor_url: e.target.value })} placeholder="https://… or basecolor.png" style={INPUT_STYLE} />
+          </Field>
+          <Field label="PBR normal map">
+            <input value={draft.pbr_normal_url || ''} onChange={e => set({ pbr_normal_url: e.target.value })} placeholder="https://… or normal.png" style={INPUT_STYLE} />
+          </Field>
+          <Field label="PBR roughness map">
+            <input value={draft.pbr_roughness_url || ''} onChange={e => set({ pbr_roughness_url: e.target.value })} placeholder="https://… or roughness.png" style={INPUT_STYLE} />
+          </Field>
+        </div>
+      </div>
+
+      <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
+        <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Reference & notes</h4>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
           <Field label="Swatch image URL">
             <input value={draft.swatch_image_url || ''} onChange={e => set({ swatch_image_url: e.target.value })} placeholder="https://…" style={INPUT_STYLE} />
