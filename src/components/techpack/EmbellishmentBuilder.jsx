@@ -8,6 +8,7 @@ import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { saveEmbellishment, archiveEmbellishment, restoreEmbellishment } from '../../utils/embellishmentStore';
 import { EMBELLISHMENT_TYPES, EMBELLISHMENT_TYPE_LABEL, EMBELLISHMENT_STATUSES, PLACEMENT_OPTIONS } from '../../utils/embellishmentLibrary';
+import CoverImagePicker from './CoverImagePicker';
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
@@ -119,20 +120,28 @@ export default function EmbellishmentBuilder({ embellishment, onBack }) {
         </div>
       )}
 
-      <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
-        <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Identity</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-          <Field label="Type">
-            <select value={draft.type} onChange={e => set({ type: e.target.value })} style={INPUT_STYLE}>
-              {EMBELLISHMENT_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-            </select>
-          </Field>
-          <Field label="Version">
-            <input value={draft.version || ''} onChange={e => set({ version: e.target.value })} placeholder="v1.0" style={INPUT_STYLE} />
-          </Field>
-          <Field label="Technique">
-            <input value={draft.technique || ''} onChange={e => set({ technique: e.target.value })} placeholder="Flat satin stitch · 2 colors" style={INPUT_STYLE} />
-          </Field>
+      <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+        <CoverImagePicker
+          value={draft.cover_image}
+          onChange={dataUrl => set({ cover_image: dataUrl })}
+          label="Cover image"
+          hint="Drop the artwork or sample shot"
+        />
+        <div style={{ flex: 1, minWidth: 280 }}>
+          <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Identity</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+            <Field label="Type">
+              <select value={draft.type} onChange={e => set({ type: e.target.value })} style={INPUT_STYLE}>
+                {EMBELLISHMENT_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Version">
+              <input value={draft.version || ''} onChange={e => set({ version: e.target.value })} placeholder="v1.0" style={INPUT_STYLE} />
+            </Field>
+            <Field label="Technique">
+              <input value={draft.technique || ''} onChange={e => set({ technique: e.target.value })} placeholder="Flat satin stitch · 2 colors" style={INPUT_STYLE} />
+            </Field>
+          </div>
         </div>
       </div>
 

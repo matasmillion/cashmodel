@@ -80,6 +80,7 @@ export function emptyFabric(overrides = {}) {
     price_per_yard_usd: 0,
     currency: 'USD',
     swatch_image_url: '',
+    cover_image: null, // base64 data URL of a 2:3 portrait crop
     notes: '',
     ...overrides,
   };

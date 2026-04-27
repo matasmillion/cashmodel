@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-27T13:00:02.950Z",
+  "lastUpdated": "2026-04-27T13:55:55.147Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,26 @@
   ],
   "changelog": [
     {
+      "sha": "8aac8eb",
+      "date": "2026-04-27T13:44:16+00:00",
+      "message": "Merge branch 'main' of http://127.0.0.1:44459/git/matasmillion/cashmodel into claude/fix-plm-tabs-Z5VDv"
+    },
+    {
+      "sha": "98e7e90",
+      "date": "2026-04-27T16:39:16+03:00",
+      "message": "feat(plm): make Patterns, Fabrics, and Embellishments tabs functional (#1)"
+    },
+    {
+      "sha": "562fe1a",
+      "date": "2026-04-27T13:01:53+00:00",
+      "message": "feat(plm): make Patterns, Fabrics, and Embellishments tabs functional"
+    },
+    {
+      "sha": "7e74ee1",
+      "date": "2026-04-27T12:38:57+00:00",
+      "message": "fix(plm): hoist driftPct above its use sites in TreatmentBuilder"
+    },
+    {
       "sha": "3c5e208",
       "date": "2026-04-27T11:12:53+00:00",
       "message": "feat(plm): seed one demo PO walked through full lifecycle"
@@ -1072,26 +1092,6 @@
       "sha": "be70a79",
       "date": "2026-04-27T10:49:25+00:00",
       "message": "feat(plm): production list with new PO modal"
-    },
-    {
-      "sha": "2ba5659",
-      "date": "2026-04-27T10:47:32+00:00",
-      "message": "feat(plm): production store with state machine and append-only enforcement"
-    },
-    {
-      "sha": "48bd65d",
-      "date": "2026-04-27T10:44:53+00:00",
-      "message": "feat(plm): additive treatment picker on techpack BOM rows"
-    },
-    {
-      "sha": "b08107c",
-      "date": "2026-04-27T10:42:34+00:00",
-      "message": "feat(plm): seed three sample treatments and vendors"
-    },
-    {
-      "sha": "825086b",
-      "date": "2026-04-27T10:38:40+00:00",
-      "message": "feat(plm): treatment builder drift + used-in + footer actions"
     }
   ]
 }

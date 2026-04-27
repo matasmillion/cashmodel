@@ -92,6 +92,7 @@ export function emptyEmbellishment(overrides = {}) {
     currency: 'USD',
     lead_time_days: 0,
     moq_units: 0,
+    cover_image: null, // base64 data URL of a 2:3 portrait crop
     notes: '',
     ...overrides,
   };

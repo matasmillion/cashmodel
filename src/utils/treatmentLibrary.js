@@ -133,6 +133,7 @@ export function emptyTreatment(overrides = {}) {
     moq_units: 0,
     notes: '',
     swatch_image_url: '',
+    cover_image: null, // base64 data URL of a 2:3 portrait crop
     digital: emptyTreatmentDigital(),
     ...overrides,
   };
