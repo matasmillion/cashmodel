@@ -22,6 +22,7 @@ import TreatmentList from './TreatmentList';
 import EmbellishmentList from './EmbellishmentList';
 import { parsePLMHash, setPLMHash, normalizeLegacyHash } from '../../utils/plmRouting';
 import { seedTreatmentsIfEmpty } from '../../utils/treatmentStore';
+import ProductionList from '../production/ProductionList';
 
 const TOP_TABS = [
   { id: 'library', label: 'Library', icon: Library },
@@ -151,18 +152,7 @@ export default function PLMView() {
 
       {route.layer === 'styles' && <TechPackList />}
 
-      {route.layer === 'production' && <ProductionEmpty />}
-    </div>
-  );
-}
-
-function ProductionEmpty() {
-  return (
-    <div style={{ padding: '80px 24px', textAlign: 'center', background: FR.salt, border: `1px dashed ${FR.sand}`, borderRadius: 8 }}>
-      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 28, color: FR.slate }}>Production</div>
-      <div style={{ fontSize: 13, color: FR.stone, marginTop: 10, maxWidth: 520, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.65 }}>
-        Every PO snapshots a Style's BOM and writes actuals back to the Library. Coming in Phase 3.
-      </div>
+      {route.layer === 'production' && <ProductionList />}
     </div>
   );
 }
