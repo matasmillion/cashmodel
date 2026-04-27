@@ -22,6 +22,7 @@ import TreatmentList from './TreatmentList';
 import EmbellishmentList from './EmbellishmentList';
 import { parsePLMHash, setPLMHash, normalizeLegacyHash } from '../../utils/plmRouting';
 import { seedTreatmentsIfEmpty } from '../../utils/treatmentStore';
+import { seedProductionIfEmpty } from '../../utils/productionStore';
 import ProductionList from '../production/ProductionList';
 import ProductionDetail from '../production/ProductionDetail';
 
@@ -46,9 +47,12 @@ export default function PLMView() {
   // share links upgrade to the canonical grammar without a reload.
   useEffect(() => {
     normalizeLegacyHash();
-    // Seed treatment library + the two wash houses on first PLM mount.
-    // Idempotent — safe to call repeatedly across navigations.
-    seedTreatmentsIfEmpty();
+    // Seed treatment library + the two wash houses on first PLM mount, then
+    // chain the demo PO so the Treatment detail page lights up with rollup
+    // data on first paint. Both calls are idempotent.
+    seedTreatmentsIfEmpty()
+      .then(() => seedProductionIfEmpty())
+      .catch(err => console.error('PLM seed:', err));
   }, []);
 
   const [route, setRoute] = useState(() => {

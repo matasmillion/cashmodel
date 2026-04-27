@@ -535,3 +535,106 @@ export function updateDriftLog() {
 export function deleteDriftLog() {
   throw new Error('drift_log is append-only. Inserts only.');
 }
+
+// ── Seed PO ────────────────────────────────────────────────────────────────
+// One closed PO so the Treatment detail page has live rollup data on the
+// very first load. Idempotent: returns immediately if any POs already exist.
+// Depends on `seedTreatmentsIfEmpty` having already run (we look up the
+// stone-wash treatment by id). Style is materialized directly into
+// `cashmodel_techpacks` localStorage so we get a stable, human-friendly
+// style_id (`AP-HD-STONE-01`) instead of a UUID — the production list and
+// the BOM snapshot tree both render the id verbatim.
+const SEED_STYLE_ID = 'AP-HD-STONE-01';
+const SEED_TREATMENT_ID = 'seed-stone-wash';
+const SEED_VENDOR_NAME = 'Guangdong Ocean Wash';
+
+function ensureSeedStyle() {
+  const TECHPACKS_KEY = 'cashmodel_techpacks';
+  let packs;
+  try { packs = JSON.parse(localStorage.getItem(TECHPACKS_KEY) || '[]'); }
+  catch { packs = []; }
+  if (packs.find(p => p.id === SEED_STYLE_ID)) return;
+  const now = new Date().toISOString();
+  packs.push({
+    id: SEED_STYLE_ID,
+    style_name: 'Borderless stone hoodie',
+    product_category: 'Hoodie',
+    status: 'Production',
+    completion_pct: 85,
+    data: {
+      styleName: 'Borderless stone hoodie',
+      productCategory: 'Hoodie',
+      revision: 'V1.0',
+      status: 'Production',
+      vendor: SEED_VENDOR_NAME,
+      vendorContact: 'Mr. Lin · WeChat',
+      fabrics: [{
+        component: 'Fabric',
+        fabricType: 'Heavy cotton twill',
+        composition: '100% Cotton',
+        weightGsm: '420',
+        colorPantone: 'Sienna',
+        supplier: 'Guangdong Mill',
+        notes: '',
+        treatment_id: SEED_TREATMENT_ID,
+      }],
+      trimsAccessories: [],
+      labelsBranding: [],
+    },
+    images: [],
+    created_at: now,
+    updated_at: now,
+  });
+  try { localStorage.setItem(TECHPACKS_KEY, JSON.stringify(packs)); }
+  catch (err) { console.error('seed style write:', err); }
+}
+
+export async function seedProductionIfEmpty() {
+  if (readLocal(PO_KEY).length > 0) return null;
+  const { getTreatment } = await import('./treatmentStore');
+  const stoneWash = await getTreatment(SEED_TREATMENT_ID);
+  if (!stoneWash) return null;
+
+  ensureSeedStyle();
+
+  const po = await createPO({
+    style_id: SEED_STYLE_ID,
+    vendor_id: SEED_VENDOR_NAME,
+    units: 320,
+    unit_cost_usd: 3.80,
+    lead_days: 12,
+    notes: 'Seed PO for demo data',
+  });
+
+  await transitionPO(po.id, 'placed');
+  await transitionPO(po.id, 'in_production');
+  await transitionPO(po.id, 'received');
+  await transitionPO(po.id, 'closed', {
+    actuals: [{
+      atom_type: 'treatment',
+      atom_id: SEED_TREATMENT_ID,
+      atom_name: stoneWash.name,
+      atom_code: stoneWash.code,
+      atom_version: stoneWash.version,
+      physical_lot_number: 'GO-2602-A',
+      units_used: 320,
+      actual_cost_per_unit_usd: 3.80,
+      actual_lead_days: 12,
+      defect_rate_pct: 0.3,
+      quality_notes: 'Clean run, no callbacks.',
+      qc_photo_urls: [],
+    }],
+  });
+
+  await appendDriftLog({
+    po_id: po.id,
+    treatment_id: SEED_TREATMENT_ID,
+    score_pct: 3.1,
+    retrained: false,
+    predicted_grad: ['#D4956A', '#B87048'],
+    actual_grad: ['#D0906A', '#BA744C'],
+    recorded_at: new Date().toISOString(),
+  });
+
+  return po;
+}
