@@ -23,6 +23,9 @@ import EmbellishmentList from './EmbellishmentList';
 import { parsePLMHash, setPLMHash, normalizeLegacyHash } from '../../utils/plmRouting';
 import { seedTreatmentsIfEmpty } from '../../utils/treatmentStore';
 import { seedProductionIfEmpty } from '../../utils/productionStore';
+import { seedPatternsIfEmpty } from '../../utils/patternStore';
+import { seedFabricsIfEmpty } from '../../utils/fabricStore';
+import { seedEmbellishmentsIfEmpty } from '../../utils/embellishmentStore';
 import ProductionList from '../production/ProductionList';
 import ProductionDetail from '../production/ProductionDetail';
 
@@ -47,10 +50,13 @@ export default function PLMView() {
   // share links upgrade to the canonical grammar without a reload.
   useEffect(() => {
     normalizeLegacyHash();
-    // Seed treatment library + the two wash houses on first PLM mount, then
-    // chain the demo PO so the Treatment detail page lights up with rollup
-    // data on first paint. Both calls are idempotent.
+    // Seed every atom library on first PLM mount, then chain the demo PO
+    // so the Treatment detail page lights up with rollup data on first
+    // paint. Each call is idempotent — only runs when its store is empty.
     seedTreatmentsIfEmpty()
+      .then(() => seedPatternsIfEmpty())
+      .then(() => seedFabricsIfEmpty())
+      .then(() => seedEmbellishmentsIfEmpty())
       .then(() => seedProductionIfEmpty())
       .catch(err => console.error('PLM seed:', err));
   }, []);
