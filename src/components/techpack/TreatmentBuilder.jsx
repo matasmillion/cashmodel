@@ -427,7 +427,138 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
       {/* Production log */}
       <ProductionLog rows={rollups?.log || []} />
 
-      {/* TODO: chunk 10 */}
+      {/* Digital drift */}
+      <DigitalDrift rows={rollups?.drift || []} />
+
+      {/* Used in */}
+      <UsedIn rows={rollups?.used_in || []} />
+
+      {/* Footer actions */}
+      <FooterActions
+        treatment={treatment}
+        onEdit={enterEdit}
+      />
+    </div>
+  );
+}
+
+function DigitalDrift({ rows }) {
+  const muted = 'rgba(58,58,58,0.55)';
+  const items = rows.slice(0, 3);
+  return (
+    <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: '20px 22px', marginBottom: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 17, color: FR.slate }}>Digital drift</div>
+        <div style={{ fontSize: 10, color: muted, letterSpacing: '0.08em', textTransform: 'uppercase' }}>LoRA prediction vs production photo · retrain if &gt; 8%</div>
+      </div>
+      {items.length === 0 ? (
+        <div style={{ fontSize: 12, color: muted, padding: '14px 0' }}>No drift samples yet.</div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+          {items.map((item, i) => {
+            const pred = item.predicted_grad || ['#EBE5D5', '#D6CFB9'];
+            const act  = item.actual_grad    || ['#EBE5D5', '#D6CFB9'];
+            const dateLabel = (() => {
+              if (!item.date) return '';
+              try {
+                return new Date(`${item.date}-01`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+              } catch { return item.date; }
+            })();
+            const score = Number(item.score);
+            const driftClr = driftColor(score);
+            return (
+              <div key={`${item.po_code || i}`}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
+                  <div style={{ aspectRatio: '1 / 1', borderRadius: 6, background: `linear-gradient(135deg, ${pred[0]} 0%, ${pred[1]} 100%)` }} />
+                  <div style={{ aspectRatio: '1 / 1', borderRadius: 6, background: `linear-gradient(140deg, ${act[0]} 0%, ${act[1]} 100%)` }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: muted, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                  <span>{item.po_code || '—'}{dateLabel ? ` · ${dateLabel}` : ''}</span>
+                  <span style={{ color: driftClr }}>
+                    {Number.isFinite(score) ? `${score.toFixed(1)}%` : '—'}{item.retrained ? ' · retrained' : ''}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UsedIn({ rows }) {
+  const muted = 'rgba(58,58,58,0.5)';
+  return (
+    <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: '20px 22px', marginBottom: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 17, color: FR.slate }}>Used in</div>
+        <div style={{ fontSize: 10, color: 'rgba(58,58,58,0.55)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Active styles referencing this atom</div>
+      </div>
+      {rows.length === 0 ? (
+        <div style={{ fontSize: 12, color: muted, padding: '14px 0' }}>Not yet referenced in any style.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {rows.map((r, i) => {
+            const id = r.style_id || r.id;
+            const name = r.style_name || r.name || '';
+            const units = r.units != null ? `${Number(r.units).toLocaleString()} units` : '';
+            const status = r.status || '';
+            const right = [units, status].filter(Boolean).join(' · ');
+            const isLast = i === rows.length - 1;
+            return (
+              <div key={id || i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', fontSize: 12.5, borderBottom: isLast ? 'none' : '0.5px solid rgba(58,58,58,0.08)' }}>
+                <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11.5, color: FR.slate }}>
+                  {id}{id && name ? ' · ' : ''}{name}
+                </span>
+                <span style={{ color: muted }}>{right}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FooterActions({ treatment, onEdit }) {
+  const muted = 'rgba(58,58,58,0.55)';
+  const linkStyle = {
+    color: 'rgba(58,58,58,0.6)', cursor: 'pointer', textDecoration: 'none',
+    borderBottom: '0.5px dashed rgba(58,58,58,0.25)', paddingBottom: 1, fontSize: 11,
+  };
+  const onHover = (e, hover) => {
+    e.currentTarget.style.color = hover ? FR.slate : 'rgba(58,58,58,0.6)';
+    e.currentTarget.style.borderBottomColor = hover ? 'rgba(58,58,58,0.6)' : 'rgba(58,58,58,0.25)';
+  };
+  const action = (label, handler) => (
+    <a
+      onClick={(e) => { e.preventDefault(); handler(); }}
+      onMouseEnter={(e) => onHover(e, true)}
+      onMouseLeave={(e) => onHover(e, false)}
+      style={linkStyle}
+    >{label}</a>
+  );
+  const updated = treatment.updated_at
+    ? new Date(treatment.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
+  const actor = treatment.last_updated_by || null;
+  const updatedLine = updated ? `Last updated ${updated}${actor ? ` · ${actor}` : ''}` : '';
+
+  const newRun = () => {
+    window.location.hash = `#plm/production/new?treatment=${encodeURIComponent(treatment.id)}`;
+  };
+
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: muted, marginTop: 18 }}>
+      <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+        {action('Edit', onEdit)}
+        {action('Retrain LoRA', () => alert('LoRA retraining wires to Fal API in Phase 7. For now, manual.'))}
+        {action('Export tech pack', () => alert('Tech pack export coming in a future phase.'))}
+        {action('Sync to CLO-SET', () => alert('CLO-SET sync wires to CLO Open API in Phase 7.'))}
+        {action('New production run', newRun)}
+      </div>
+      <span>{updatedLine}</span>
     </div>
   );
 }
