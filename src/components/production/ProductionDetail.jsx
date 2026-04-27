@@ -6,8 +6,8 @@
 // status. BOM snapshot rendering is read-only; the snapshot itself is taken
 // in chunk 17 at PO placement.
 
-import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, X } from 'lucide-react';
 import { FR } from '../techpack/techPackConstants';
 import { getPO, transitionPO, listBOMSnapshots, listAtomUsage, listDriftLogs } from '../../utils/productionStore';
 import { getTreatment } from '../../utils/treatmentStore';
@@ -45,6 +45,8 @@ export default function ProductionDetail({ poId, onBack }) {
   const [snapshot, setSnapshot] = useState(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [toast, setToast] = useState(null);
 
   const refresh = useCallback(async () => {
     if (!poId) return;
@@ -64,6 +66,7 @@ export default function ProductionDetail({ poId, onBack }) {
   const advance = async () => {
     const next = NEXT_TRANSITION[po.status];
     if (!next) return;
+    if (next.to === 'closed') { setCloseOpen(true); return; }
     setActing(true);
     try {
       await transitionPO(po.id, next.to);
@@ -73,6 +76,16 @@ export default function ProductionDetail({ poId, onBack }) {
       alert(err.message || 'Transition failed');
     } finally {
       setActing(false);
+    }
+  };
+
+  const handleClosed = async (firstTreatmentId, atomCount) => {
+    setCloseOpen(false);
+    await refresh();
+    setToast(`${atomCount} atoms updated from ${po.code}`);
+    setTimeout(() => setToast(null), 3500);
+    if (firstTreatmentId) {
+      setPLMHash({ layer: 'library', atom: 'treatments', packId: firstTreatmentId });
     }
   };
 
@@ -158,6 +171,13 @@ export default function ProductionDetail({ poId, onBack }) {
 
       {/* Digital drift — only when the BOM references treatments */}
       <DigitalDrift poId={po.id} snapshot={snapshot} />
+
+      {closeOpen && <CloseModal po={po} snapshot={snapshot} onClose={() => setCloseOpen(false)} onClosed={handleClosed} />}
+      {toast && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: FR.slate, color: FR.salt, padding: '10px 18px', borderRadius: 6, fontSize: 12, boxShadow: '0 4px 14px rgba(0,0,0,0.18)', zIndex: 200 }}>
+          {toast}
+        </div>
+      )}
 
       {/* External activity */}
       <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: '20px 22px', marginBottom: 22 }}>
@@ -439,6 +459,161 @@ function Atom({ level, code, name, version }) {
       {version && (
         <span style={{ fontSize: 10, color: 'rgba(58,58,58,0.5)', letterSpacing: '0.04em', whiteSpace: 'nowrap', marginLeft: 12 }}>v{version}</span>
       )}
+    </div>
+  );
+}
+
+// Build the editable atom list shown in the Close PO modal from a BOM
+// snapshot. Treatments referenced by fabric rows are pulled in as their own
+// atom entries so per-treatment actuals (lot, defect, drift) flow back to
+// the treatment record. Fabric / trim / label rows surface too — they don't
+// update an atom registry yet but still get an atom_usage row written.
+function buildAtomRows(bom, treatmentMap) {
+  const rows = [];
+  const seenTreatments = new Set();
+  (bom || []).forEach((entry, i) => {
+    const section = entry._section || 'fabric';
+    const code = entry.code || entry.fabricType || entry.component || entry.type || `${section}-${i + 1}`;
+    const name = entry.name || entry.composition || entry.material || '';
+    rows.push({
+      key: `${section}:${i}`,
+      atom_type: section === 'fabric' ? 'fabric' : section === 'trim' ? 'trim' : 'embellishment',
+      atom_id: entry.id || code || `${section}-${i}`,
+      atom_name: name || code,
+      atom_code: code,
+      atom_version: entry.version || '',
+    });
+    const tid = entry.treatment_id;
+    if (tid && !seenTreatments.has(tid)) {
+      seenTreatments.add(tid);
+      const t = treatmentMap[tid];
+      rows.push({
+        key: `treatment:${tid}`,
+        atom_type: 'treatment',
+        atom_id: tid,
+        atom_name: t?.name || tid,
+        atom_code: t?.code || '',
+        atom_version: t?.version || '',
+      });
+    }
+  });
+  return rows;
+}
+
+function CloseModal({ po, snapshot, onClose, onClosed }) {
+  const [treatmentMap, setTreatmentMap] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    const ids = new Set();
+    (snapshot?.bom || []).forEach(r => { if (r?.treatment_id) ids.add(r.treatment_id); });
+    if (ids.size === 0) { setTreatmentMap({}); return; }
+    Promise.all([...ids].map(id => getTreatment(id).then(t => [id, t]))).then(pairs => {
+      if (cancelled) return;
+      setTreatmentMap(Object.fromEntries(pairs.filter(([, t]) => t)));
+    });
+    return () => { cancelled = true; };
+  }, [snapshot]);
+
+  const atomRows = useMemo(() => buildAtomRows(snapshot?.bom || [], treatmentMap), [snapshot, treatmentMap]);
+  const [actuals, setActuals] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  const setField = (key, field, value) => setActuals(a => ({
+    ...a,
+    [key]: { ...(a[key] || {}), [field]: value },
+  }));
+
+  const submit = async () => {
+    setSaving(true);
+    try {
+      const payload = atomRows.map(row => {
+        const a = actuals[row.key] || {};
+        return {
+          atom_type: row.atom_type,
+          atom_id: row.atom_id,
+          atom_name: row.atom_name,
+          atom_code: row.atom_code,
+          atom_version: row.atom_version,
+          physical_lot_number: a.lot || '',
+          units_used: a.units || 0,
+          actual_cost_per_unit_usd: a.cost || 0,
+          actual_lead_days: a.lead || null,
+          defect_rate_pct: a.defect || null,
+          quality_notes: a.notes || '',
+          qc_photo_urls: (a.photos || '').split(',').map(s => s.trim()).filter(Boolean),
+        };
+      });
+      await transitionPO(po.id, 'closed', { actuals: payload });
+      const firstTreatment = atomRows.find(r => r.atom_type === 'treatment');
+      onClosed(firstTreatment?.atom_id || null, atomRows.length);
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Close failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputStyle = { width: '100%', padding: '5px 7px', border: '0.5px solid rgba(58,58,58,0.2)', borderRadius: 3, fontSize: 11, color: FR.slate, background: '#fff', boxSizing: 'border-box', outline: 'none' };
+  const headerCell = { fontSize: 10, color: 'rgba(58,58,58,0.55)', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '6px 6px 6px 0', textAlign: 'left', fontWeight: 500 };
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(58,58,58,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 150 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 8, padding: 22, width: 980, maxWidth: '95vw', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 8px 30px rgba(0,0,0,0.18)' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, color: FR.slate }}>Close {po.code}</div>
+            <div style={{ fontSize: 11, color: FR.stone, marginTop: 4 }}>One row per atom — fill actuals; on submit, append-only usage rows are written and treatment rollups recompute.</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: FR.stone }}><X size={16} /></button>
+        </div>
+
+        {atomRows.length === 0 ? (
+          <div style={{ fontSize: 12, color: FR.stone, padding: 20 }}>No atoms found in BOM snapshot.</div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={headerCell}>Atom</th>
+                <th style={headerCell}>Lot</th>
+                <th style={{ ...headerCell, textAlign: 'right' }}>Units</th>
+                <th style={{ ...headerCell, textAlign: 'right' }}>Cost/u</th>
+                <th style={{ ...headerCell, textAlign: 'right' }}>Lead (d)</th>
+                <th style={{ ...headerCell, textAlign: 'right' }}>Defect %</th>
+                <th style={headerCell}>Notes</th>
+                <th style={headerCell}>Photo URLs</th>
+              </tr>
+            </thead>
+            <tbody>
+              {atomRows.map(row => {
+                const a = actuals[row.key] || {};
+                return (
+                  <tr key={row.key} style={{ borderTop: '0.5px solid rgba(58,58,58,0.08)' }}>
+                    <td style={{ padding: '8px 6px 8px 0', fontSize: 11.5, color: FR.slate }}>
+                      <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10.5, color: 'rgba(58,58,58,0.55)' }}>{row.atom_type} · {row.atom_code || row.atom_id}</div>
+                      <div>{row.atom_name}</div>
+                    </td>
+                    <td style={{ padding: '8px 6px 8px 0' }}><input value={a.lot || ''} onChange={e => setField(row.key, 'lot', e.target.value)} style={inputStyle} placeholder="GO-2602-A" /></td>
+                    <td style={{ padding: '8px 6px 8px 0' }}><input type="number" min="0" value={a.units || ''} onChange={e => setField(row.key, 'units', e.target.value)} style={{ ...inputStyle, textAlign: 'right' }} /></td>
+                    <td style={{ padding: '8px 6px 8px 0' }}><input type="number" step="0.01" min="0" value={a.cost || ''} onChange={e => setField(row.key, 'cost', e.target.value)} style={{ ...inputStyle, textAlign: 'right' }} /></td>
+                    <td style={{ padding: '8px 6px 8px 0' }}><input type="number" min="0" value={a.lead || ''} onChange={e => setField(row.key, 'lead', e.target.value)} style={{ ...inputStyle, textAlign: 'right' }} /></td>
+                    <td style={{ padding: '8px 6px 8px 0' }}><input type="number" step="0.1" min="0" value={a.defect || ''} onChange={e => setField(row.key, 'defect', e.target.value)} style={{ ...inputStyle, textAlign: 'right' }} /></td>
+                    <td style={{ padding: '8px 6px 8px 0' }}><input value={a.notes || ''} onChange={e => setField(row.key, 'notes', e.target.value)} style={inputStyle} /></td>
+                    <td style={{ padding: '8px 6px 8px 0' }}><input value={a.photos || ''} onChange={e => setField(row.key, 'photos', e.target.value)} placeholder="url1, url2" style={inputStyle} /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
+          <button onClick={onClose} disabled={saving} style={{ padding: '8px 14px', background: 'transparent', color: FR.stone, border: `0.5px solid ${FR.sand}`, borderRadius: 6, fontSize: 12, cursor: saving ? 'not-allowed' : 'pointer' }}>Cancel</button>
+          <button onClick={submit} disabled={saving || atomRows.length === 0} style={{ padding: '8px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: (saving || atomRows.length === 0) ? 'not-allowed' : 'pointer', opacity: (saving || atomRows.length === 0) ? 0.6 : 1 }}>
+            {saving ? 'Closing…' : `Close & write ${atomRows.length} usage row${atomRows.length === 1 ? '' : 's'}`}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

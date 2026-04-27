@@ -250,17 +250,128 @@ export async function transitionPO(id, newStatus, payload = {}) {
   if (newStatus === 'closed') stamp.closed_at = now;
   if (newStatus === 'cancelled') stamp.cancelled_at = now;
 
-  const next = { ...current, ...payload, ...stamp, status: newStatus, updated_at: now };
+  // Side effect: at PO placement, freeze a deep clone of the source style's
+  // BOM. Snapshot is immutable — later edits to the pack do NOT mutate it.
+  if (current.status === 'draft' && newStatus === 'placed' && current.style_id) {
+    try {
+      const { getTechPack } = await import('./techPackStore');
+      const pack = await getTechPack(current.style_id);
+      const fabrics = pack?.data?.fabrics || [];
+      const trims   = pack?.data?.trimsAccessories || [];
+      const labels  = pack?.data?.labelsBranding || [];
+      const bom = JSON.parse(JSON.stringify([
+        ...fabrics.map(r => ({ ...r, _section: 'fabric' })),
+        ...trims.map(r   => ({ ...r, _section: 'trim' })),
+        ...labels.map(r  => ({ ...r, _section: 'label' })),
+      ]));
+      await createBOMSnapshot({
+        po_id: id,
+        bom,
+        pack: pack ? {
+          id: pack.id,
+          style_name: pack.style_name || pack.data?.styleName || '',
+          version: pack.data?.revision || '',
+        } : null,
+      });
+    } catch (err) {
+      console.error('placePO snapshot:', err);
+    }
+  }
+
+  // Side effect: on close, write append-only atom_usage rows from `payload.actuals`
+  // and recompute rolling averages on each touched atom record.
+  let totalCostActual = 0;
+  if (current.status === 'received' && newStatus === 'closed') {
+    const actuals = Array.isArray(payload?.actuals) ? payload.actuals : [];
+    for (const a of actuals) {
+      const units = Number(a.units_used) || 0;
+      const cost = Number(a.actual_cost_per_unit_usd) || 0;
+      totalCostActual += units * cost;
+      try {
+        await appendAtomUsage({
+          po_id: id,
+          atom_type: a.atom_type,
+          atom_id: a.atom_id,
+          atom_name: a.atom_name,
+          atom_code: a.atom_code,
+          atom_version: a.atom_version,
+          lot: a.physical_lot_number || a.lot || '',
+          notes: a.quality_notes || a.notes || '',
+          qc_photo_urls: a.qc_photo_urls || [],
+          units,
+          unit_cost_usd: cost || null,
+          lead_days: a.actual_lead_days != null ? Number(a.actual_lead_days) : null,
+          defect_pct: a.defect_rate_pct != null ? Number(a.defect_rate_pct) : null,
+          recorded_at: a.produced_at || now,
+        });
+      } catch (err) { console.error('appendAtomUsage during close:', err); }
+    }
+    await recomputeAtomRollups(actuals);
+  }
+
+  // Strip side-effect-only fields from the payload before persisting onto the PO row.
+  const payloadRest = { ...(payload || {}) };
+  delete payloadRest.actuals;
+
+  const updates = { ...payloadRest, ...stamp, status: newStatus, updated_at: now };
+  if (newStatus === 'closed' && totalCostActual > 0) updates.total_cost_actual = totalCostActual;
+
+  const next = { ...current, ...updates };
   const rows = readLocal(PO_KEY);
   const idx = rows.findIndex(r => r.id === id);
   if (idx >= 0) { rows[idx] = next; writeLocal(PO_KEY, rows); }
   if (IS_SUPABASE_ENABLED) {
-    const { error } = await supabase.from('purchase_orders')
-      .update({ ...payload, ...stamp, status: newStatus, updated_at: now })
-      .eq('id', id);
+    const { error } = await supabase.from('purchase_orders').update(updates).eq('id', id);
     if (error) console.error('transitionPO:', error);
   }
   return next;
+}
+
+// After a close, recompute rolling averages on each atom touched by the
+// payload. Treatments are the only atom type with a writeable store today;
+// other atom types are skipped silently and will pick up the same hook as
+// their stores ship in later sprints.
+async function recomputeAtomRollups(actuals) {
+  const seen = new Map();
+  for (const a of actuals) {
+    if (!a?.atom_id || !a?.atom_type) continue;
+    const k = `${a.atom_type}:${a.atom_id}`;
+    if (!seen.has(k)) seen.set(k, { atom_type: a.atom_type, atom_id: a.atom_id });
+  }
+  for (const { atom_type, atom_id } of seen.values()) {
+    const all = await listAtomUsage({ atom_type, atom_id });
+    const sorted = [...all].sort((x, y) => (y.recorded_at || '').localeCompare(x.recorded_at || ''));
+    const last3 = sorted.slice(0, 3);
+    if (last3.length === 0) continue;
+    const totalUnits = last3.reduce((s, r) => s + (Number(r.units) || 0), 0);
+    const wAvg = (key) => {
+      let sum = 0; let weight = 0;
+      for (const r of last3) {
+        const v = r[key];
+        if (v == null) continue;
+        const w = totalUnits > 0 ? (Number(r.units) || 0) : 1;
+        sum += Number(v) * w;
+        weight += w;
+      }
+      return weight > 0 ? sum / weight : null;
+    };
+    const cost_per_unit_usd = wAvg('unit_cost_usd');
+    const lead_time_days = wAvg('lead_days');
+    const defect_rate_pct = wAvg('defect_pct');
+    const units_produced_total = sorted.reduce((s, r) => s + (Number(r.units) || 0), 0);
+
+    if (atom_type === 'treatment') {
+      try {
+        const { updateTreatment } = await import('./treatmentStore');
+        const patch = { units_produced_total };
+        if (cost_per_unit_usd != null) patch.cost_per_unit_usd = Number(cost_per_unit_usd.toFixed(2));
+        if (lead_time_days != null)    patch.lead_time_days    = Math.round(lead_time_days);
+        if (defect_rate_pct != null)   patch.defect_rate_pct   = Number(defect_rate_pct.toFixed(2));
+        await updateTreatment(atom_id, patch);
+      } catch (err) { console.error('recompute treatment rollup:', err); }
+    }
+    // fabric/color/trim/embellishment/pattern: no writeable store yet — skip.
+  }
 }
 
 // ── BOM snapshots (immutable after creation) ───────────────────────────────
