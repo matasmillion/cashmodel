@@ -4,13 +4,14 @@
 // Page 1 (Cover & Identity) is fully built. All other pages are placeholders
 // that will be replaced in subsequent prompts.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FR, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, isStepLocked } from './techPackConstants';
 import { listFRColors } from '../../utils/colorLibrary';
 import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, EditableSelect, FRColorCell } from './TechPackPrimitives';
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
 import { addSupplier } from '../../utils/plmDirectory';
 import { getFRColor } from '../../utils/colorLibrary';
+import { listTreatments } from '../../utils/treatmentStore';
 
 function LockedBanner({ status }) {
   return (
@@ -194,6 +195,17 @@ const FABRIC_CATEGORIES = new Set(['Fabric', 'Lining', 'Rib', 'Interfacing', 'In
 export function StepBOM({ data, set, existingSuppliers = [] }) {
   const [picker, setPicker] = useState(false);
   const [components, setComponents] = useState([]);
+  // Active (non-archived) treatments for the additive Treatment dropdown on
+  // each fabric BOM row. Loaded once on mount; the dropdown defaults to None
+  // so existing tech packs without a `treatment_id` keep rendering unchanged.
+  const [treatments, setTreatments] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    listTreatments({ includeArchived: false }).then(rows => {
+      if (!cancelled) setTreatments(rows || []);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const fabrics = data.fabrics && data.fabrics.length ? data.fabrics : [{ component: '', fabricType: '', composition: '', weightGsm: '', colorPantone: '', supplier: '', notes: '' }];
   const trims   = data.trimsAccessories && data.trimsAccessories.length ? data.trimsAccessories : [{ component: '', type: '', material: '', color: '', sizeSpec: '', supplier: '', qtyPerGarment: '' }];
@@ -252,6 +264,15 @@ export function StepBOM({ data, set, existingSuppliers = [] }) {
   const supplierRender = (val, onChange) => (
     <EditableSelect value={val} onChange={onChange} options={existingSuppliers} onAddOption={addSupplier} placeholder="Add new…" />
   );
+  const treatmentRender = (val, onChange) => (
+    <select value={val || ''} onChange={e => onChange(e.target.value || undefined)}
+      style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 0', color: FR.slate, fontFamily: "'Helvetica Neue',sans-serif" }}>
+      <option value="">&lt;None&gt;</option>
+      {treatments.map(t => (
+        <option key={t.id} value={t.id}>{t.name} · {t.code}</option>
+      ))}
+    </select>
+  );
   const colorRender = (val, onChange) => <FRColorCell value={val} onChange={onChange} />;
   const componentRender = (val, onChange) => (
     <select value={val || ''} onChange={e => onChange(e.target.value)}
@@ -301,6 +322,7 @@ export function StepBOM({ data, set, existingSuppliers = [] }) {
             { key: 'weightGsm',    label: 'Weight (GSM)', placeholder: '400' },
             { key: 'colorPantone', label: 'Color / Pantone', placeholder: 'Pantone 19-4305' },
             { key: 'supplier',     label: 'Vendor',       render: supplierRender },
+            { key: 'treatment_id', label: 'Treatment',    render: treatmentRender },
             { key: 'notes',        label: 'Notes' },
           ]}
           rows={fabrics} onUpdate={updF} onAdd={addF} onRemove={rmF} />
