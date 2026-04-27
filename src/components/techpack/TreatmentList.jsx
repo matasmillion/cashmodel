@@ -14,6 +14,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Search, MoreVertical, Copy, Archive, RotateCcw } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { getFRColor } from '../../utils/colorLibrary';
+import { resolveVendor } from '../../utils/vendorLibrary';
 import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
 import {
   listTreatments, createTreatment, getTreatment,
@@ -39,16 +40,38 @@ function StatusPill({ status }) {
   );
 }
 
-function Swatch({ colorName }) {
-  const entry = colorName ? getFRColor(colorName) : null;
-  const hex = entry?.hex || FR.sand;
+function StatRow({ label, value }) {
   return (
-    <div style={{ width: 44, height: 44, borderRadius: 6, background: hex, boxShadow: 'inset 0 0 0 0.5px rgba(0,0,0,0.1)' }} />
+    <>
+      <span style={{ color: FR.stone }}>{label}</span>
+      <span style={{ color: FR.slate, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</span>
+    </>
   );
+}
+
+function formatSince(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  } catch { return '—'; }
 }
 
 function Card({ treatment, rollups, onOpen, onMenu, menuOpen, onMenuClose, onArchive, onRestore, onDuplicate }) {
   const status = treatment.status || 'draft';
+  const swatchHex = (treatment.base_color_id ? getFRColor(treatment.base_color_id)?.hex : null) || FR.sand;
+  const vendorEntry = resolveVendor(treatment.primary_vendor_id);
+  const vendor = vendorEntry?.name || treatment.primary_vendor_id || '—';
+  const chem = treatment.chemistry
+    ? (treatment.chemistry.length > 30 ? `${treatment.chemistry.slice(0, 30)}…` : treatment.chemistry)
+    : '—';
+  const cost = rollups?.latest_cost_usd != null
+    ? `$${Number(rollups.latest_cost_usd).toFixed(2)} / unit`
+    : '—';
+  const lead = rollups?.latest_lead_days != null ? `${rollups.latest_lead_days} days` : '—';
+  const run = rollups?.units_produced != null
+    ? `${Number(rollups.units_produced).toLocaleString()} units`
+    : '—';
+
   return (
     <div
       onClick={() => onOpen(treatment.id)}
@@ -56,46 +79,46 @@ function Card({ treatment, rollups, onOpen, onMenu, menuOpen, onMenuClose, onArc
         background: '#fff',
         border: `0.5px solid rgba(58,58,58,0.15)`,
         borderRadius: 8,
-        padding: '18px 20px',
         cursor: 'pointer',
         position: 'relative',
+        overflow: 'hidden',
         transition: 'box-shadow 0.15s, transform 0.15s',
       }}
       onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
     >
-      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-        <Swatch colorName={treatment.base_color_id} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, color: FR.slate, lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {treatment.name || 'Untitled treatment'}
-            </div>
-            <StatusPill status={status} />
+      <div style={{ height: 54, background: swatchHex }} />
+      <div style={{ padding: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {treatment.name || 'Untitled treatment'}
           </div>
-          <div style={{ fontSize: 11, color: FR.stone, marginTop: 4, letterSpacing: 0.04 * 16 / 16, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-            {treatment.code} · {TREATMENT_TYPE_LABEL[treatment.type] || treatment.type} · {treatment.base_color_id || '—'} · {treatment.version}
-          </div>
+          <StatusPill status={status} />
+        </div>
+        <div style={{ fontSize: 10, color: FR.stone, marginTop: 4, marginBottom: 10, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+          {treatment.code} · {TREATMENT_TYPE_LABEL[treatment.type] || treatment.type}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr', columnGap: 8, rowGap: 4, fontSize: 11, lineHeight: 1.3 }}>
+          <StatRow label="House"     value={vendor} />
+          <StatRow label="Chemistry" value={chem} />
+          <StatRow label="Cost"      value={cost} />
+          <StatRow label="Lead"      value={lead} />
+          <StatRow label="Since"     value={formatSince(treatment.created_at)} />
+          <StatRow label="Run"       value={run} />
         </div>
         <button
           aria-label="Card menu"
           onClick={e => { e.stopPropagation(); onMenu(treatment.id); }}
-          style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', padding: 4, marginRight: -4, marginTop: -4 }}
+          style={{ position: 'absolute', top: 60, right: 8, background: 'rgba(255,255,255,0.85)', border: 'none', color: FR.stone, cursor: 'pointer', padding: 4, borderRadius: 4 }}
         >
           <MoreVertical size={14} />
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginTop: 14, paddingTop: 12, borderTop: `0.5px solid rgba(58,58,58,0.08)` }}>
-        <Stat label="Units" value={rollups?.units_produced != null ? Number(rollups.units_produced).toLocaleString() : '—'} />
-        <Stat label="Cost" value={rollups?.latest_unit_cost != null ? `$${Number(rollups.latest_unit_cost).toFixed(2)}` : '—'} />
-        <Stat label="Drift 30d" value={rollups?.drift_30d_pct != null ? `${Number(rollups.drift_30d_pct).toFixed(1)}%` : '—'} tone={rollups?.drift_30d_pct > 8 ? 'warn' : 'ok'} />
-      </div>
-
       {menuOpen && (
         <div
           onClick={e => e.stopPropagation()}
-          style={{ position: 'absolute', top: 38, right: 14, background: '#fff', border: `0.5px solid rgba(58,58,58,0.15)`, borderRadius: 6, boxShadow: '0 4px 14px rgba(0,0,0,0.08)', minWidth: 160, zIndex: 5 }}
+          style={{ position: 'absolute', top: 86, right: 14, background: '#fff', border: `0.5px solid rgba(58,58,58,0.15)`, borderRadius: 6, boxShadow: '0 4px 14px rgba(0,0,0,0.08)', minWidth: 160, zIndex: 5 }}
         >
           <MenuItem icon={Copy}    label="Duplicate"          onClick={() => { onMenuClose(); onDuplicate(treatment.id); }} />
           {status === 'archived'
@@ -104,16 +127,6 @@ function Card({ treatment, rollups, onOpen, onMenu, menuOpen, onMenuClose, onArc
           }
         </div>
       )}
-    </div>
-  );
-}
-
-function Stat({ label, value, tone }) {
-  const color = tone === 'warn' ? '#854F0B' : tone === 'bad' ? '#A32D2D' : FR.slate;
-  return (
-    <div>
-      <div style={{ fontSize: 9, letterSpacing: 0.08 * 16 / 16, color: 'rgba(58,58,58,0.55)', textTransform: 'uppercase' }}>{label}</div>
-      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color, marginTop: 2 }}>{value}</div>
     </div>
   );
 }
@@ -241,9 +254,9 @@ export default function TreatmentList() {
     <div>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <h3 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 22, margin: 0 }}>Treatments</h3>
+          <h3 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 26, margin: 0 }}>Treatment library</h3>
           <p style={{ color: FR.stone, fontSize: 12, margin: '4px 0 0' }}>
-            Washes, dyes, prints, finishes, distress — each with its own chemistry, vendor, and digital twin.
+            Every wash, dye, and finish stored as a reusable recipe. Test once, reference forever.
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', position: 'relative' }} ref={pickerRef}>
@@ -295,8 +308,15 @@ export default function TreatmentList() {
         <div style={{ padding: '60px 24px', textAlign: 'center', background: FR.salt, border: `1px dashed ${FR.sand}`, borderRadius: 8 }}>
           <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, color: FR.slate }}>No treatments yet</div>
           <div style={{ fontSize: 12, color: FR.stone, marginTop: 8, maxWidth: 460, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.6 }}>
-            Add a wash, dye, print, finish, or distress technique to start building the digital + physical twin.
+            Every wash, dye, and finish you test becomes a permanent library asset.
           </div>
+          <button
+            disabled={creating}
+            onClick={() => setPicker(p => !p)}
+            style={{ marginTop: 18, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: creating ? 'not-allowed' : 'pointer', opacity: creating ? 0.6 : 1 }}
+          >
+            <Plus size={13} /> Add treatment
+          </button>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
