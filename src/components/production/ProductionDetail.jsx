@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { FR } from '../techpack/techPackConstants';
-import { getPO, transitionPO, listBOMSnapshots } from '../../utils/productionStore';
+import { getPO, transitionPO, listBOMSnapshots, listAtomUsage, listDriftLogs } from '../../utils/productionStore';
 import { getTreatment } from '../../utils/treatmentStore';
 import { setPLMHash } from '../../utils/plmRouting';
 
@@ -153,7 +153,176 @@ export default function ProductionDetail({ poId, onBack }) {
       {/* BOM snapshot */}
       <BOMSnapshot snapshot={snapshot} poStatus={po.status} />
 
-      {/* TODO: chunk 16 */}
+      {/* Atom usage log */}
+      <AtomUsageLog poId={po.id} poStatus={po.status} />
+
+      {/* Digital drift — only when the BOM references treatments */}
+      <DigitalDrift poId={po.id} snapshot={snapshot} />
+
+      {/* External activity */}
+      <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: '20px 22px', marginBottom: 22 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10, gap: 14 }}>
+          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 17, color: FR.slate }}>External activity</div>
+          <div style={{ fontSize: 10, color: 'rgba(58,58,58,0.55)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Vendor portal · coming in Sprint 2</div>
+        </div>
+        <div style={{ fontSize: 12, color: 'rgba(58,58,58,0.55)', padding: '8px 0' }}>No external updates yet.</div>
+        {/* Vendor status updates from /vendor/* surface — populated in Sprint 2 Prompt 5 */}
+      </div>
+    </div>
+  );
+}
+
+function defectColor(pct) {
+  if (pct == null) return 'rgba(58,58,58,0.5)';
+  if (pct < 0.5) return '#3B6D11';
+  if (pct <= 1.0) return '#854F0B';
+  return '#A32D2D';
+}
+function driftColor(pct) {
+  if (pct == null) return 'rgba(58,58,58,0.5)';
+  if (pct < 5) return '#3B6D11';
+  if (pct <= 10) return '#854F0B';
+  return '#A32D2D';
+}
+
+function AtomUsageLog({ poId, poStatus }) {
+  const [rows, setRows] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    listAtomUsage({ po_id: poId }).then(r => { if (!cancelled) setRows(r || []); });
+    return () => { cancelled = true; };
+  }, [poId]);
+
+  const muted = 'rgba(58,58,58,0.55)';
+  const beforeReceived = poStatus === 'draft' || poStatus === 'placed' || poStatus === 'in_production';
+
+  const headerCell = {
+    fontSize: 11, color: muted, textTransform: 'uppercase', letterSpacing: '0.04em',
+    padding: '6px 8px 6px 0', fontWeight: 500, textAlign: 'left',
+    borderBottom: '0.5px solid rgba(58,58,58,0.1)',
+  };
+  const headerCellRight = { ...headerCell, textAlign: 'right' };
+  const dataCell = {
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11.5,
+    padding: '9px 8px 9px 0', color: FR.slate, borderTop: '0.5px solid rgba(58,58,58,0.1)',
+  };
+  const dataCellRight = { ...dataCell, textAlign: 'right' };
+
+  return (
+    <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: '20px 22px', marginBottom: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16, gap: 14, flexWrap: 'wrap' }}>
+        <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 17, color: FR.slate }}>Atom usage log</div>
+        <div style={{ fontSize: 10, color: muted, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Append-only · written when PO closes</div>
+      </div>
+      {beforeReceived ? (
+        <div style={{ fontSize: 12, color: muted, padding: '14px 0' }}>Usage log will populate when the PO closes.</div>
+      ) : rows == null ? (
+        <div style={{ fontSize: 12, color: muted, padding: '14px 0' }}>Loading…</div>
+      ) : rows.length === 0 ? (
+        <div style={{ fontSize: 12, color: muted, padding: '14px 0' }}>No atom usage recorded yet for this PO.</div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={headerCell}>Atom</th>
+              <th style={headerCell}>Code</th>
+              <th style={headerCell}>Version</th>
+              <th style={headerCell}>Lot</th>
+              <th style={headerCellRight}>Units</th>
+              <th style={headerCellRight}>Cost</th>
+              <th style={headerCellRight}>Lead</th>
+              <th style={headerCellRight}>Defect</th>
+              <th style={headerCell}>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.id || i}>
+                <td style={dataCell}>{r.atom_name || r.atom_type || '—'}</td>
+                <td style={dataCell}>{r.atom_code || r.atom_id || '—'}</td>
+                <td style={dataCell}>{r.atom_version ? `v${r.atom_version}` : '—'}</td>
+                <td style={dataCell}>{r.lot || '—'}</td>
+                <td style={dataCellRight}>{r.units != null ? Number(r.units).toLocaleString() : '—'}</td>
+                <td style={dataCellRight}>{r.unit_cost_usd != null ? `$${Number(r.unit_cost_usd).toFixed(2)}` : '—'}</td>
+                <td style={dataCellRight}>{r.lead_days != null ? `${r.lead_days}d` : '—'}</td>
+                <td style={{ ...dataCellRight, color: defectColor(r.defect_pct) }}>{r.defect_pct != null ? `${Number(r.defect_pct).toFixed(1)}%` : '—'}</td>
+                <td style={{ ...dataCell, fontFamily: "'Inter', sans-serif", color: muted, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.notes || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function DigitalDrift({ poId, snapshot }) {
+  const [items, setItems] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const treatmentIds = Array.from(new Set((snapshot?.bom || [])
+      .map(r => r?.treatment_id)
+      .filter(Boolean)));
+    if (treatmentIds.length === 0) {
+      if (!cancelled) { setItems([]); setLoaded(true); }
+      return;
+    }
+    Promise.all(treatmentIds.map(async (tid) => {
+      const [treatment, drift] = await Promise.all([
+        getTreatment(tid),
+        listDriftLogs({ treatment_id: tid, po_id: poId }),
+      ]);
+      const driftRow = (drift || [])[0] || null;
+      return { treatment_id: tid, treatment, drift: driftRow };
+    })).then(list => { if (!cancelled) { setItems(list); setLoaded(true); } });
+    return () => { cancelled = true; };
+  }, [poId, snapshot]);
+
+  if (!snapshot) return null;
+  if (loaded && items.length === 0) return null; // No treatments → skip section entirely
+
+  const muted = 'rgba(58,58,58,0.55)';
+  return (
+    <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: '20px 22px', marginBottom: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16, gap: 14, flexWrap: 'wrap' }}>
+        <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 17, color: FR.slate }}>Digital drift</div>
+        <div style={{ fontSize: 10, color: muted, letterSpacing: '0.08em', textTransform: 'uppercase' }}>LoRA prediction vs production photo · per treatment in this BOM</div>
+      </div>
+      {!loaded ? (
+        <div style={{ fontSize: 12, color: muted, padding: '14px 0' }}>Loading…</div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+          {items.map(({ treatment_id, treatment, drift }) => {
+            const score = drift?.score_pct;
+            const pred = drift?.predicted_grad || ['#EBE5D5', '#D6CFB9'];
+            const act  = drift?.actual_grad    || ['#9A9A9A', '#5A5A5A'];
+            const clr = driftColor(score);
+            const retrainFlag = score != null && score > 8;
+            return (
+              <div key={treatment_id}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
+                  <div style={{ aspectRatio: '1 / 1', borderRadius: 6, background: `linear-gradient(135deg, ${pred[0]} 0%, ${pred[1]} 100%)` }} title="Predicted render" />
+                  <div style={{ aspectRatio: '1 / 1', borderRadius: 6, background: drift ? `linear-gradient(140deg, ${act[0]} 0%, ${act[1]} 100%)` : 'repeating-linear-gradient(45deg, rgba(58,58,58,0.04), rgba(58,58,58,0.04) 6px, rgba(58,58,58,0.08) 6px, rgba(58,58,58,0.08) 12px)' }} title="Actual photo" />
+                </div>
+                <div style={{ fontSize: 12, color: FR.slate, marginBottom: 4 }}>
+                  {treatment?.name || treatment_id}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: muted, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                  <span>{treatment?.code || treatment_id}</span>
+                  <span style={{ color: clr }}>
+                    {score != null ? `${Number(score).toFixed(1)}%` : 'No drift sample'}
+                  </span>
+                </div>
+                {retrainFlag && (
+                  <div style={{ marginTop: 6, fontSize: 10, color: '#854F0B', letterSpacing: '0.04em' }}>Retrain recommended</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

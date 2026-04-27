@@ -337,7 +337,11 @@ export async function appendAtomUsage(input) {
   if (!input || !input.po_id || !input.atom_type || !input.atom_id) {
     throw new Error('appendAtomUsage: po_id, atom_type, atom_id are required');
   }
+  // Pass through any caller-supplied display fields (atom_name, atom_code,
+  // atom_version, lot, notes, etc.) — the typedef calls out the validated
+  // numerics but the store doesn't strip extras.
   const row = {
+    ...input,
     id: newId(),
     po_id: input.po_id,
     atom_type: input.atom_type,
