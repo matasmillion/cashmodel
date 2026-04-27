@@ -51,6 +51,10 @@ const LIBRARY_SET = new Set(LIBRARY_SECTIONS);
 
 const TOP_LAYERS = new Set(['library', 'styles', 'production']);
 
+// Default landing atom when the URL is bare (`#product` or `#product/library`).
+// Patterns is first in the library tab order, so a fresh user lands at the
+// natural left-most starting point of the library; Colors has data but lives
+// mid-row and would feel arbitrary as the entry surface.
 const DEFAULT_LIBRARY_ATOM = 'patterns';
 
 // New grammar ⇆ legacy `section` translation.
@@ -73,6 +77,7 @@ const ATOM_TO_LEGACY_SECTION = {
 const LEGACY_SECTION_TO_ROUTE = {
   styles: { layer: 'styles', atom: null },
   components: { layer: 'library', atom: 'trims' },
+  trims: { layer: 'library', atom: 'trims' },
   colors: { layer: 'library', atom: 'colors' },
   factories: { layer: 'library', atom: 'vendors' },
 };
