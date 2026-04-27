@@ -9,6 +9,7 @@ import { saveFabric, archiveFabric, restoreFabric } from '../../utils/fabricStor
 import { FABRIC_WEAVES, FABRIC_WEAVE_LABEL, FABRIC_STATUSES } from '../../utils/fabricLibrary';
 import CoverImagePicker from './CoverImagePicker';
 import VendorPicker from './VendorPicker';
+import FileSlot from './FileSlot';
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
@@ -201,16 +202,36 @@ export default function FabricBuilder({ fabric, onBack }) {
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
           <Field label=".ZFAB file (CLO3D)">
-            <input value={draft.zfab_file_url || ''} onChange={e => set({ zfab_file_url: e.target.value })} placeholder="fr_french_terry_340.zfab" style={INPUT_STYLE} />
+            <FileSlot
+              value={draft.zfab_file_url}
+              onChange={v => set({ zfab_file_url: v })}
+              accept=".zfab,.zprj"
+              hint="Drop a .zfab fabric asset"
+            />
           </Field>
           <Field label="PBR basecolor map">
-            <input value={draft.pbr_basecolor_url || ''} onChange={e => set({ pbr_basecolor_url: e.target.value })} placeholder="https://… or basecolor.png" style={INPUT_STYLE} />
+            <FileSlot
+              value={draft.pbr_basecolor_url}
+              onChange={v => set({ pbr_basecolor_url: v })}
+              accept="image/*"
+              hint="Drop a basecolor texture (PNG/JPG)"
+            />
           </Field>
           <Field label="PBR normal map">
-            <input value={draft.pbr_normal_url || ''} onChange={e => set({ pbr_normal_url: e.target.value })} placeholder="https://… or normal.png" style={INPUT_STYLE} />
+            <FileSlot
+              value={draft.pbr_normal_url}
+              onChange={v => set({ pbr_normal_url: v })}
+              accept="image/*"
+              hint="Drop a normal map (PNG/JPG)"
+            />
           </Field>
           <Field label="PBR roughness map">
-            <input value={draft.pbr_roughness_url || ''} onChange={e => set({ pbr_roughness_url: e.target.value })} placeholder="https://… or roughness.png" style={INPUT_STYLE} />
+            <FileSlot
+              value={draft.pbr_roughness_url}
+              onChange={v => set({ pbr_roughness_url: v })}
+              accept="image/*"
+              hint="Drop a roughness map (PNG/JPG)"
+            />
           </Field>
         </div>
       </div>
@@ -218,8 +239,13 @@ export default function FabricBuilder({ fabric, onBack }) {
       <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
         <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Reference & notes</h4>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
-          <Field label="Swatch image URL">
-            <input value={draft.swatch_image_url || ''} onChange={e => set({ swatch_image_url: e.target.value })} placeholder="https://…" style={INPUT_STYLE} />
+          <Field label="Swatch image">
+            <FileSlot
+              value={draft.swatch_image_url}
+              onChange={v => set({ swatch_image_url: v })}
+              accept="image/*"
+              hint="Drop a swatch reference photo"
+            />
           </Field>
           <Field label="Notes">
             <textarea

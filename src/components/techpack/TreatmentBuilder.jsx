@@ -17,6 +17,7 @@ import { listDriftLogs } from '../../utils/productionStore';
 import { TREATMENT_TYPE_LABEL, LORA_BASE_MODELS } from '../../utils/treatmentLibrary';
 import CoverImagePicker from './CoverImagePicker';
 import VendorPicker from './VendorPicker';
+import FileSlot from './FileSlot';
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
@@ -432,9 +433,16 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
           <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', rowGap: 10, fontSize: 12, lineHeight: 1.5 }}>
             <Spec label="LoRA">
               {editing
-                ? <TextInput mono value={dig.lora_checkpoint_url} onChange={v => setDigitalField('lora_checkpoint_url', v)} />
+                ? <FileSlot
+                    value={dig.lora_checkpoint_url}
+                    onChange={v => setDigitalField('lora_checkpoint_url', v)}
+                    accept=".safetensors,.ckpt,.bin,.pt"
+                    hint="Drop a .safetensors / .ckpt checkpoint"
+                  />
                 : (dig.lora_checkpoint_url
-                    ? <span style={MONO_STYLE}>{dig.lora_checkpoint_url}</span>
+                    ? (dig.lora_checkpoint_url.startsWith('data:')
+                        ? <span style={MONO_STYLE}>(uploaded checkpoint)</span>
+                        : <span style={MONO_STYLE}>{dig.lora_checkpoint_url}</span>)
                     : <span style={{ color: 'rgba(58,58,58,0.5)' }}>—</span>)}
             </Spec>
             <Spec label="Base model">

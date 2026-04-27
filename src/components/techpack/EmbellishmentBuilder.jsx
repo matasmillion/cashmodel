@@ -10,6 +10,7 @@ import { saveEmbellishment, archiveEmbellishment, restoreEmbellishment } from '.
 import { EMBELLISHMENT_TYPES, EMBELLISHMENT_TYPE_LABEL, EMBELLISHMENT_STATUSES, PLACEMENT_OPTIONS } from '../../utils/embellishmentLibrary';
 import CoverImagePicker from './CoverImagePicker';
 import VendorPicker from './VendorPicker';
+import FileSlot from './FileSlot';
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
@@ -203,22 +204,51 @@ export default function EmbellishmentBuilder({ embellishment, onBack }) {
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
           <Field label="Adobe Illustrator (.ai)">
-            <input value={draft.adobe_ai_url || ''} onChange={e => set({ adobe_ai_url: e.target.value })} placeholder="fr_logo_v3.ai" style={INPUT_STYLE} />
+            <FileSlot
+              value={draft.adobe_ai_url}
+              onChange={v => set({ adobe_ai_url: v })}
+              accept=".ai,.eps,.svg,.pdf"
+              hint="Drop an .ai / .eps / .svg working file"
+            />
           </Field>
           <Field label="Adobe Photoshop (.psd)">
-            <input value={draft.adobe_psd_url || ''} onChange={e => set({ adobe_psd_url: e.target.value })} placeholder="fr_back_art_v1.psd" style={INPUT_STYLE} />
+            <FileSlot
+              value={draft.adobe_psd_url}
+              onChange={v => set({ adobe_psd_url: v })}
+              accept=".psd,.psb,.tif,.tiff"
+              hint="Drop a .psd working file"
+            />
           </Field>
           <Field label="CLO3D graphic (.png export)">
-            <input value={draft.clo3d_graphic_url || ''} onChange={e => set({ clo3d_graphic_url: e.target.value })} placeholder="fr_logo_clo.png" style={INPUT_STYLE} />
+            <FileSlot
+              value={draft.clo3d_graphic_url}
+              onChange={v => set({ clo3d_graphic_url: v })}
+              accept="image/*"
+              hint="Drop a CLO-ready PNG export"
+            />
           </Field>
           <Field label="Digitizing file (.dst / .exp)">
-            <input value={draft.digitizing_file_url || ''} onChange={e => set({ digitizing_file_url: e.target.value })} placeholder="fr_logo_v3.dst" style={INPUT_STYLE} />
+            <FileSlot
+              value={draft.digitizing_file_url}
+              onChange={v => set({ digitizing_file_url: v })}
+              accept=".dst,.exp,.emb,.pes"
+              hint="Drop a .dst / .exp digitizing file"
+            />
           </Field>
-          <Field label="Artwork URL (master)">
-            <input value={draft.artwork_file_url || ''} onChange={e => set({ artwork_file_url: e.target.value })} placeholder="https://…" style={INPUT_STYLE} />
+          <Field label="Artwork master">
+            <FileSlot
+              value={draft.artwork_file_url}
+              onChange={v => set({ artwork_file_url: v })}
+              hint="Drop or paste the master artwork URL"
+            />
           </Field>
-          <Field label="Placement reference image">
-            <input value={draft.placement_image_url || ''} onChange={e => set({ placement_image_url: e.target.value })} placeholder="https://…" style={INPUT_STYLE} />
+          <Field label="Placement reference">
+            <FileSlot
+              value={draft.placement_image_url}
+              onChange={v => set({ placement_image_url: v })}
+              accept="image/*"
+              hint="Drop a placement reference photo"
+            />
           </Field>
         </div>
         <div style={{ marginTop: 14 }}>
