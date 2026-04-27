@@ -7,10 +7,12 @@
 // in chunk 17 at PO placement.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, X } from 'lucide-react';
+import { ArrowLeft, X, Edit2 } from 'lucide-react';
 import { FR } from '../techpack/techPackConstants';
-import { getPO, transitionPO, listBOMSnapshots, listAtomUsage, listDriftLogs } from '../../utils/productionStore';
+import { getPO, transitionPO, updatePO, listBOMSnapshots, listAtomUsage, listDriftLogs } from '../../utils/productionStore';
 import { getTreatment } from '../../utils/treatmentStore';
+import { listTechPacks } from '../../utils/techPackStore';
+import { listVendors } from '../../utils/vendorLibrary';
 import { setPLMHash } from '../../utils/plmRouting';
 
 const STATUS_PILL = {
@@ -46,6 +48,7 @@ export default function ProductionDetail({ poId, onBack }) {
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [toast, setToast] = useState(null);
 
   const refresh = useCallback(async () => {
@@ -144,9 +147,19 @@ export default function ProductionDetail({ poId, onBack }) {
             </div>
           )}
         </div>
-        <span style={{ background: pill.bg, color: pill.fg, padding: '6px 12px', borderRadius: 4, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600 }}>
-          {pill.label}
-        </span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {po.status !== 'cancelled' && po.status !== 'closed' && (
+            <button
+              onClick={() => setEditOpen(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'transparent', color: FR.slate, border: '0.5px solid rgba(58,58,58,0.25)', borderRadius: 6, fontSize: 11, cursor: 'pointer' }}
+            >
+              <Edit2 size={12} /> Edit PO
+            </button>
+          )}
+          <span style={{ background: pill.bg, color: pill.fg, padding: '6px 12px', borderRadius: 4, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600 }}>
+            {pill.label}
+          </span>
+        </div>
       </div>
 
       {/* Status stepper */}
@@ -163,6 +176,9 @@ export default function ProductionDetail({ poId, onBack }) {
         </div>
       )}
 
+      {/* Size break — per-size unit counts */}
+      <SizeBreakCard sizeBreak={po.size_break} totalUnits={po.units} />
+
       {/* BOM snapshot */}
       <BOMSnapshot snapshot={snapshot} poStatus={po.status} />
 
@@ -173,6 +189,7 @@ export default function ProductionDetail({ poId, onBack }) {
       <DigitalDrift poId={po.id} snapshot={snapshot} />
 
       {closeOpen && <CloseModal po={po} snapshot={snapshot} onClose={() => setCloseOpen(false)} onClosed={handleClosed} />}
+      {editOpen && <EditPOModal po={po} onClose={() => setEditOpen(false)} onSaved={async () => { setEditOpen(false); await refresh(); }} />}
       {toast && (
         <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: FR.slate, color: FR.salt, padding: '10px 18px', borderRadius: 6, fontSize: 12, boxShadow: '0 4px 14px rgba(0,0,0,0.18)', zIndex: 200 }}>
           {toast}
@@ -611,6 +628,188 @@ function CloseModal({ po, snapshot, onClose, onClosed }) {
           <button onClick={onClose} disabled={saving} style={{ padding: '8px 14px', background: 'transparent', color: FR.stone, border: `0.5px solid ${FR.sand}`, borderRadius: 6, fontSize: 12, cursor: saving ? 'not-allowed' : 'pointer' }}>Cancel</button>
           <button onClick={submit} disabled={saving || atomRows.length === 0} style={{ padding: '8px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: (saving || atomRows.length === 0) ? 'not-allowed' : 'pointer', opacity: (saving || atomRows.length === 0) ? 0.6 : 1 }}>
             {saving ? 'Closing…' : `Close & write ${atomRows.length} usage row${atomRows.length === 1 ? '' : 's'}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// Size break card — read-only display of the per-size unit counts on the PO.
+// Sums to `totalUnits` when the size break is fully populated; rounded
+// totals are tolerated and surfaced as a "Sum / total" row.
+function SizeBreakCard({ sizeBreak, totalUnits }) {
+  const entries = Object.entries(sizeBreak || {}).filter(([, v]) => Number(v) > 0);
+  const sum = entries.reduce((a, [, v]) => a + (Number(v) || 0), 0);
+  return (
+    <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: '20px 22px', marginBottom: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14, gap: 14 }}>
+        <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 17, color: FR.slate }}>Size break</div>
+        <div style={{ fontSize: 10, color: 'rgba(58,58,58,0.55)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          {entries.length === 0
+            ? 'Not set'
+            : `Sum ${sum.toLocaleString()}${totalUnits ? ` / ${Number(totalUnits).toLocaleString()}` : ''}`}
+        </div>
+      </div>
+      {entries.length === 0 ? (
+        <div style={{ fontSize: 12, color: 'rgba(58,58,58,0.55)' }}>
+          No size break has been set on this PO. Edit to add per-size counts.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          {entries.map(([size, count]) => (
+            <div key={size} style={{ minWidth: 64 }}>
+              <div style={{ fontSize: 10, color: 'rgba(58,58,58,0.55)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{size}</div>
+              <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 18, color: FR.slate, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+                {Number(count).toLocaleString()}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Edit PO modal — covers every PO_EDITABLE_FIELDS slot. Status is owned by
+// the state-machine (transitionPO), not the editor — that's why there's no
+// status field here. Cancelled or closed POs are read-only at the call site.
+function EditPOModal({ po, onClose, onSaved }) {
+  const [styles, setStyles] = useState([]);
+  const [vendors, setVendors] = useState([]);
+  const [styleId, setStyleId] = useState(po.style_id || '');
+  const [vendorId, setVendorId] = useState(po.vendor_id || '');
+  const [units, setUnits] = useState(po.units ?? '');
+  const [unitCost, setUnitCost] = useState(po.unit_cost_usd ?? '');
+  const [leadDays, setLeadDays] = useState(po.lead_days ?? '');
+  const [notes, setNotes] = useState(po.notes || '');
+  const [sizeBreak, setSizeBreak] = useState(() => {
+    const sb = po.size_break || {};
+    const order = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+    const known = order.map(s => [s, sb[s] ?? '']);
+    const extras = Object.entries(sb).filter(([k]) => !order.includes(k));
+    return [...known, ...extras];
+  });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([listTechPacks(), listVendors()]).then(([s, v]) => {
+      if (cancelled) return;
+      setStyles(s || []);
+      setVendors(v || []);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const updateSize = (i, key, val) => {
+    setSizeBreak(arr => arr.map((row, idx) => idx === i ? [key, val] : row));
+  };
+  const addSizeRow = () => setSizeBreak(arr => [...arr, ['', '']]);
+  const removeSizeRow = (i) => setSizeBreak(arr => arr.filter((_, idx) => idx !== i));
+
+  const submit = async () => {
+    setSaving(true);
+    try {
+      const sb = {};
+      sizeBreak.forEach(([k, v]) => {
+        const key = String(k || '').trim().toUpperCase();
+        const n = Number(v);
+        if (key && Number.isFinite(n) && n > 0) sb[key] = n;
+      });
+      await updatePO(po.id, {
+        style_id: styleId,
+        vendor_id: vendorId,
+        units: Number(units) || 0,
+        unit_cost_usd: Number(unitCost) || 0,
+        lead_days: Number(leadDays) || 0,
+        size_break: sb,
+        notes,
+      });
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const labelStyle = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 4, letterSpacing: '0.05em', textTransform: 'uppercase' };
+  const inputStyle = { width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 4, fontSize: 13, color: FR.slate, background: '#fff', boxSizing: 'border-box', outline: 'none' };
+
+  const sizeSum = sizeBreak.reduce((a, [, v]) => a + (Number(v) || 0), 0);
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(58,58,58,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 8, padding: 22, width: 560, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 8px 30px rgba(0,0,0,0.18)' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, color: FR.slate }}>Edit PO · {po.code}</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: FR.stone }}><X size={16} /></button>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div>
+            <label style={labelStyle}>Style</label>
+            <select value={styleId} onChange={e => setStyleId(e.target.value)} style={inputStyle}>
+              <option value="">Select a style…</option>
+              {styles.map(s => <option key={s.id} value={s.id}>{s.style_name || s.id}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Vendor</label>
+            <select value={vendorId} onChange={e => setVendorId(e.target.value)} style={inputStyle}>
+              <option value="">Select a vendor…</option>
+              {vendors.map(v => <option key={v.name} value={v.name}>{v.name}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div>
+            <label style={labelStyle}>Units</label>
+            <input type="number" min="0" value={units} onChange={e => setUnits(e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>Unit cost (USD)</label>
+            <input type="number" min="0" step="0.01" value={unitCost} onChange={e => setUnitCost(e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>Lead days</label>
+            <input type="number" min="0" value={leadDays} onChange={e => setLeadDays(e.target.value)} style={inputStyle} />
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
+            <label style={labelStyle}>Size break</label>
+            <span style={{ fontSize: 10, color: 'rgba(58,58,58,0.55)' }}>
+              Sum {sizeSum.toLocaleString()}{units ? ` / ${Number(units).toLocaleString()}` : ''}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {sizeBreak.map(([size, count], i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 32px', gap: 8 }}>
+                <input value={size} onChange={e => updateSize(i, e.target.value.toUpperCase(), count)} placeholder="S" style={inputStyle} />
+                <input type="number" min="0" value={count} onChange={e => updateSize(i, size, e.target.value)} placeholder="0" style={inputStyle} />
+                <button onClick={() => removeSizeRow(i)} aria-label="Remove" style={{ background: 'transparent', border: `0.5px solid ${FR.sand}`, color: FR.stone, borderRadius: 4, cursor: 'pointer' }}>
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+            <button onClick={addSizeRow} style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: FR.soil, fontSize: 11, padding: 0, cursor: 'pointer' }}>
+              + Add size
+            </button>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 18 }}>
+          <label style={labelStyle}>Notes</label>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} style={{ ...inputStyle, fontFamily: "'Inter', sans-serif", resize: 'vertical' }} />
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button onClick={onClose} disabled={saving} style={{ padding: '8px 14px', background: 'transparent', color: FR.stone, border: `0.5px solid ${FR.sand}`, borderRadius: 6, fontSize: 12, cursor: saving ? 'not-allowed' : 'pointer' }}>Cancel</button>
+          <button onClick={submit} disabled={saving} style={{ padding: '8px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}>
+            {saving ? 'Saving…' : 'Save changes'}
           </button>
         </div>
       </div>

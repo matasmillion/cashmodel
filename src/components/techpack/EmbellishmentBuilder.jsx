@@ -9,6 +9,7 @@ import { FR } from './techPackConstants';
 import { saveEmbellishment, archiveEmbellishment, restoreEmbellishment } from '../../utils/embellishmentStore';
 import { EMBELLISHMENT_TYPES, EMBELLISHMENT_TYPE_LABEL, EMBELLISHMENT_STATUSES, PLACEMENT_OPTIONS } from '../../utils/embellishmentLibrary';
 import CoverImagePicker from './CoverImagePicker';
+import VendorPicker from './VendorPicker';
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
@@ -170,10 +171,18 @@ export default function EmbellishmentBuilder({ embellishment, onBack }) {
         <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Sourcing</h4>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
           <Field label="Primary vendor">
-            <input value={draft.primary_vendor_id || ''} onChange={e => set({ primary_vendor_id: e.target.value })} placeholder="Yiwu Embroidery Co." style={INPUT_STYLE} />
+            <VendorPicker
+              value={draft.primary_vendor_id}
+              onChange={v => set({ primary_vendor_id: v })}
+              placeholder="Select primary vendor…"
+            />
           </Field>
           <Field label="Backup vendor">
-            <input value={draft.backup_vendor_id || ''} onChange={e => set({ backup_vendor_id: e.target.value })} style={INPUT_STYLE} />
+            <VendorPicker
+              value={draft.backup_vendor_id}
+              onChange={v => set({ backup_vendor_id: v })}
+              placeholder="Select backup vendor…"
+            />
           </Field>
           <Field label="Cost / unit (USD)">
             <input type="number" step="0.01" value={draft.cost_per_unit_usd ?? 0} onChange={e => set({ cost_per_unit_usd: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
@@ -188,10 +197,25 @@ export default function EmbellishmentBuilder({ embellishment, onBack }) {
       </div>
 
       <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
-        <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Files & notes</h4>
+        <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 4 }}>CLO3D & Adobe files</h4>
+        <p style={{ fontSize: 11, color: FR.stone, margin: '0 0 14px' }}>
+          The bits half of the atom. Adobe holds the working artwork; CLO3D references the export; embroidery and DTG vendors take the digitizing file.
+        </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
-          <Field label="Artwork file URL">
-            <input value={draft.artwork_file_url || ''} onChange={e => set({ artwork_file_url: e.target.value })} placeholder="https://… or fr_logo_v3.dst" style={INPUT_STYLE} />
+          <Field label="Adobe Illustrator (.ai)">
+            <input value={draft.adobe_ai_url || ''} onChange={e => set({ adobe_ai_url: e.target.value })} placeholder="fr_logo_v3.ai" style={INPUT_STYLE} />
+          </Field>
+          <Field label="Adobe Photoshop (.psd)">
+            <input value={draft.adobe_psd_url || ''} onChange={e => set({ adobe_psd_url: e.target.value })} placeholder="fr_back_art_v1.psd" style={INPUT_STYLE} />
+          </Field>
+          <Field label="CLO3D graphic (.png export)">
+            <input value={draft.clo3d_graphic_url || ''} onChange={e => set({ clo3d_graphic_url: e.target.value })} placeholder="fr_logo_clo.png" style={INPUT_STYLE} />
+          </Field>
+          <Field label="Digitizing file (.dst / .exp)">
+            <input value={draft.digitizing_file_url || ''} onChange={e => set({ digitizing_file_url: e.target.value })} placeholder="fr_logo_v3.dst" style={INPUT_STYLE} />
+          </Field>
+          <Field label="Artwork URL (master)">
+            <input value={draft.artwork_file_url || ''} onChange={e => set({ artwork_file_url: e.target.value })} placeholder="https://…" style={INPUT_STYLE} />
           </Field>
           <Field label="Placement reference image">
             <input value={draft.placement_image_url || ''} onChange={e => set({ placement_image_url: e.target.value })} placeholder="https://…" style={INPUT_STYLE} />

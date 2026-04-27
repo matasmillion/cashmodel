@@ -177,6 +177,9 @@ export async function createPO(input = {}) {
     units: Number(input.units) || 0,
     unit_cost_usd: Number(input.unit_cost_usd) || 0,
     lead_days: Number(input.lead_days) || 0,
+    // Size break: { S: 30, M: 40, L: 50, XL: 30, … }. Sum should equal
+    // `units` but isn't enforced — vendors sometimes round odd totals.
+    size_break: input.size_break || {},
     placed_at: null,
     received_at: null,
     closed_at: null,
@@ -206,7 +209,7 @@ export async function createPO(input = {}) {
   return row;
 }
 
-const PO_EDITABLE_FIELDS = new Set(['units', 'unit_cost_usd', 'lead_days', 'notes', 'vendor_id', 'style_id']);
+const PO_EDITABLE_FIELDS = new Set(['units', 'unit_cost_usd', 'lead_days', 'notes', 'vendor_id', 'style_id', 'size_break']);
 
 // Only fields in PO_EDITABLE_FIELDS can change via updatePO. Status changes
 // are owned by transitionPO so the state-machine rules can't be bypassed.

@@ -81,6 +81,14 @@ export function emptyFabric(overrides = {}) {
     currency: 'USD',
     swatch_image_url: '',
     cover_image: null, // base64 data URL of a 2:3 portrait crop
+    // CLO3D / digital-twin asset references. Stored as URLs (or filenames
+    // that resolve against the asset bucket); the builder lets users paste
+    // either form. Fabrics need a .ZFAB to render in CLO; PBR maps cover
+    // base color, normal, and roughness for non-CLO renderers.
+    zfab_file_url: '',
+    pbr_basecolor_url: '',
+    pbr_normal_url: '',
+    pbr_roughness_url: '',
     notes: '',
     ...overrides,
   };

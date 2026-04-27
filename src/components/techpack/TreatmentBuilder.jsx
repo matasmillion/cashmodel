@@ -16,6 +16,7 @@ import { getTreatment, getTreatmentRollups, getProductionLog, getUsedInForTreatm
 import { listDriftLogs } from '../../utils/productionStore';
 import { TREATMENT_TYPE_LABEL, LORA_BASE_MODELS } from '../../utils/treatmentLibrary';
 import CoverImagePicker from './CoverImagePicker';
+import VendorPicker from './VendorPicker';
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
@@ -217,6 +218,8 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
         shrinkage_expected_pct: Number(draft.shrinkage_expected_pct) || 0,
         primary_vendor_id: draft.primary_vendor_id || '',
         backup_vendor_id: draft.backup_vendor_id || '',
+        cost_per_unit_usd: Number(draft.cost_per_unit_usd) || 0,
+        lead_time_days: Number(draft.lead_time_days) || 0,
         moq_units: Number(draft.moq_units) || 0,
         notes: draft.notes || '',
         cover_image: draft.cover_image ?? null,
@@ -267,6 +270,16 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
   const cost = rollups?.latest_cost_usd ? `$${Number(rollups.latest_cost_usd).toFixed(2)}` : '—';
   const lead = rollups?.latest_lead_days ? `${Math.round(rollups.latest_lead_days)} d` : '—';
   const defect = rollups?.defect_rate_pct ? fmtPct(rollups.defect_rate_pct) : '—';
+
+  // Deltas land with a baseline-tracking follow-up (chunk-spec 11). Until
+  // then the StatCard slots accept null and render the empty state — the
+  // bare references below kept rendering crash the page.
+  const costDelta = null;
+  const costDeltaPct = null;
+  const leadDelta = null;
+  const leadDeltaDays = null;
+  const defectDelta = null;
+  const defectDeltaPct = null;
 
   return (
     <div>
@@ -384,13 +397,23 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
             </Spec>
             <Spec label="Vendor">
               {editing
-                ? <TextInput value={view.primary_vendor_id} onChange={v => setField('primary_vendor_id', v)} />
+                ? <VendorPicker value={view.primary_vendor_id} onChange={v => setField('primary_vendor_id', v)} placeholder="Select vendor…" />
                 : (primaryVendor?.name || view.primary_vendor_id || '—')}
             </Spec>
             <Spec label="Backup">
               {editing
-                ? <TextInput value={view.backup_vendor_id} onChange={v => setField('backup_vendor_id', v)} />
+                ? <VendorPicker value={view.backup_vendor_id} onChange={v => setField('backup_vendor_id', v)} placeholder="Select backup…" />
                 : (backupVendor?.name || view.backup_vendor_id || '—')}
+            </Spec>
+            <Spec label="Target cost">
+              {editing
+                ? <NumberInput step={0.01} value={view.cost_per_unit_usd} onChange={v => setField('cost_per_unit_usd', v)} />
+                : (view.cost_per_unit_usd ? `$${Number(view.cost_per_unit_usd).toFixed(2)} / unit` : '—')}
+            </Spec>
+            <Spec label="Target lead">
+              {editing
+                ? <NumberInput value={view.lead_time_days} onChange={v => setField('lead_time_days', v)} />
+                : (view.lead_time_days ? `${view.lead_time_days} days` : '—')}
             </Spec>
             <Spec label="MOQ · Terms">
               {editing

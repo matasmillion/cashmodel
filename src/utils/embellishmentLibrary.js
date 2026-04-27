@@ -93,6 +93,13 @@ export function emptyEmbellishment(overrides = {}) {
     lead_time_days: 0,
     moq_units: 0,
     cover_image: null, // base64 data URL of a 2:3 portrait crop
+    // CLO3D / Adobe asset references. Embellishments live as graphics in
+    // CLO3D (a graphic .png with placement metadata) and as artwork
+    // packs in Adobe (.ai / .psd / .eps for vendor handoff).
+    adobe_ai_url: '',         // Illustrator working file
+    adobe_psd_url: '',        // Photoshop working file
+    clo3d_graphic_url: '',    // CLO3D-compatible graphic export
+    digitizing_file_url: '',  // .DST / .EXP for embroidery
     notes: '',
     ...overrides,
   };
