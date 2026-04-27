@@ -15,6 +15,7 @@ import { FR } from './techPackConstants';
 import { savePattern, archivePattern, restorePattern } from '../../utils/patternStore';
 import { PATTERN_CATEGORIES, PATTERN_CATEGORY_LABEL, PATTERN_STATUSES, STANDARD_SIZE_SETS } from '../../utils/patternLibrary';
 import CoverImagePicker from './CoverImagePicker';
+import FileSlot from './FileSlot';
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
@@ -231,20 +232,20 @@ export default function PatternBuilder({ pattern, onBack }) {
       <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
         <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Files & notes</h4>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
-          <Field label="DXF / CAD file URL">
-            <input
-              value={draft.cad_file_url || ''}
-              onChange={e => set({ cad_file_url: e.target.value })}
-              placeholder="fr_hoodie_block_v3.dxf"
-              style={INPUT_STYLE}
+          <Field label="DXF / CAD file">
+            <FileSlot
+              value={draft.cad_file_url}
+              onChange={v => set({ cad_file_url: v })}
+              accept=".dxf,.dwg,.ai,.pdf"
+              hint="Drop a .dxf / .dwg / .ai pattern file"
             />
           </Field>
-          <Field label="Thumbnail URL">
-            <input
-              value={draft.thumbnail_url || ''}
-              onChange={e => set({ thumbnail_url: e.target.value })}
-              placeholder="https://…"
-              style={INPUT_STYLE}
+          <Field label="Thumbnail">
+            <FileSlot
+              value={draft.thumbnail_url}
+              onChange={v => set({ thumbnail_url: v })}
+              accept="image/*"
+              hint="Drop a thumbnail image"
             />
           </Field>
         </div>

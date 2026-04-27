@@ -10,6 +10,7 @@ import { FR } from './techPackConstants';
 import { Input, Row, labelStyle, inputBase, CostPill, formatCost } from './TechPackPrimitives';
 import { listFRColors, getFRColor, updateFRColor, clearFRColorField, addFRColor, deleteFRColor, isSeededFRColor } from '../../utils/colorLibrary';
 import { fileToDataUrl } from '../../utils/cropImage';
+import FileSlot from './FileSlot';
 
 // Pick a readable text color for overlay on a hex swatch.
 function contrastColor(hex) {
@@ -187,6 +188,7 @@ function ColorEditor({ name, onClose, onDeleted }) {
     // updateFRColor ignores empty strings, so a clear has to go through
     // clearFRColorField. For typical edits just write.
     if (v) updateFRColor(name, { [k]: v });
+    else clearFRColorField(name, k);
   };
 
   const uploadCard = async (file) => {
@@ -238,9 +240,32 @@ function ColorEditor({ name, onClose, onDeleted }) {
                 <Input label="Hex" value={entry.hex || ''} onChange={v => patch('hex', v)} placeholder="#3A3A3A" />
                 <Input label="RGB" value={entry.rgb || ''} onChange={v => patch('rgb', v)} placeholder="58, 58, 58" />
               </Row>
-              <Input label="Adobe ASE swatch" value={entry.adobeAseUrl || ''} onChange={v => patch('adobeAseUrl', v)} placeholder="fr_palette.ase" />
-              <Input label="Adobe ACE / ICC profile" value={entry.adobeAceUrl || ''} onChange={v => patch('adobeAceUrl', v)} placeholder="fr_color.icc" />
-              <Input label="CLO3D color reference" value={entry.clo3dColorUrl || ''} onChange={v => patch('clo3dColorUrl', v)} placeholder="fr_slate_clo.color" />
+              <div style={{ marginTop: 8 }}>
+                <label style={labelStyle}>Adobe ASE swatch</label>
+                <FileSlot
+                  value={entry.adobeAseUrl}
+                  onChange={v => patch('adobeAseUrl', v)}
+                  accept=".ase,.aco,.acb"
+                  hint="Drop a .ase swatch file"
+                />
+              </div>
+              <div style={{ marginTop: 8 }}>
+                <label style={labelStyle}>Adobe ACE / ICC profile</label>
+                <FileSlot
+                  value={entry.adobeAceUrl}
+                  onChange={v => patch('adobeAceUrl', v)}
+                  accept=".ace,.icc,.icm"
+                  hint="Drop an .icc / .ace color profile"
+                />
+              </div>
+              <div style={{ marginTop: 8 }}>
+                <label style={labelStyle}>CLO3D color reference</label>
+                <FileSlot
+                  value={entry.clo3dColorUrl}
+                  onChange={v => patch('clo3dColorUrl', v)}
+                  hint="Drop a CLO3D color reference"
+                />
+              </div>
             </div>
 
             <div>
