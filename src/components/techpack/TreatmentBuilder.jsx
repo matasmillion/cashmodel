@@ -15,6 +15,7 @@ import { resolveVendor } from '../../utils/vendorLibrary';
 import { getTreatment, getTreatmentRollups, getProductionLog, getUsedInForTreatment, updateTreatment } from '../../utils/treatmentStore';
 import { listDriftLogs } from '../../utils/productionStore';
 import { TREATMENT_TYPE_LABEL, LORA_BASE_MODELS } from '../../utils/treatmentLibrary';
+import CoverImagePicker from './CoverImagePicker';
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
@@ -218,6 +219,7 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
         backup_vendor_id: draft.backup_vendor_id || '',
         moq_units: Number(draft.moq_units) || 0,
         notes: draft.notes || '',
+        cover_image: draft.cover_image ?? null,
         digital: draft.digital || treatment.digital,
       };
       const updated = await updateTreatment(treatment.id, patch);
@@ -298,9 +300,23 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
       </div>
 
       {/* Header row */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', borderBottom: '0.5px solid rgba(58,58,58,0.15)', paddingBottom: 22, marginBottom: 22 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-          <div style={{ width: 64, height: 64, borderRadius: 8, background: swatchHex, boxShadow: 'inset 0 0 0 0.5px rgba(0,0,0,0.1)' }} />
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', borderBottom: '0.5px solid rgba(58,58,58,0.15)', paddingBottom: 22, marginBottom: 22, gap: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 20 }}>
+          {editing ? (
+            <CoverImagePicker
+              value={view.cover_image}
+              onChange={dataUrl => setField('cover_image', dataUrl)}
+              label="Cover image"
+              hint="Drop a swatch photo"
+              width={120}
+            />
+          ) : view.cover_image ? (
+            <div style={{ width: 120, height: 180, borderRadius: 8, overflow: 'hidden', boxShadow: 'inset 0 0 0 0.5px rgba(0,0,0,0.1)' }}>
+              <img src={view.cover_image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+          ) : (
+            <div style={{ width: 120, height: 180, borderRadius: 8, background: swatchHex, boxShadow: 'inset 0 0 0 0.5px rgba(0,0,0,0.1)' }} />
+          )}
           <div>
             <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 38, lineHeight: 1, color: FR.slate }}>
               {treatment.name || 'Untitled treatment'}

@@ -7,6 +7,7 @@ import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import { FR, FR_COLOR_OPTIONS } from './techPackConstants';
 import { saveFabric, archiveFabric, restoreFabric } from '../../utils/fabricStore';
 import { FABRIC_WEAVES, FABRIC_WEAVE_LABEL, FABRIC_STATUSES } from '../../utils/fabricLibrary';
+import CoverImagePicker from './CoverImagePicker';
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
@@ -118,23 +119,31 @@ export default function FabricBuilder({ fabric, onBack }) {
         </div>
       )}
 
-      <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
-        <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Identity</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-          <Field label="Weave">
-            <select value={draft.weave} onChange={e => set({ weave: e.target.value })} style={INPUT_STYLE}>
-              {FABRIC_WEAVES.map(w => <option key={w.id} value={w.id}>{w.label}</option>)}
-            </select>
-          </Field>
-          <Field label="Version">
-            <input value={draft.version || ''} onChange={e => set({ version: e.target.value })} placeholder="v1.0" style={INPUT_STYLE} />
-          </Field>
-          <Field label="Composition">
-            <input value={draft.composition || ''} onChange={e => set({ composition: e.target.value })} placeholder="100% Cotton" style={INPUT_STYLE} />
-          </Field>
-          <Field label="Hand / feel">
-            <input value={draft.hand || ''} onChange={e => set({ hand: e.target.value })} placeholder="Soft, dry, slight loop back" style={INPUT_STYLE} />
-          </Field>
+      <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+        <CoverImagePicker
+          value={draft.cover_image}
+          onChange={dataUrl => set({ cover_image: dataUrl })}
+          label="Cover image"
+          hint="Drop a swatch photo"
+        />
+        <div style={{ flex: 1, minWidth: 280 }}>
+          <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Identity</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+            <Field label="Weave">
+              <select value={draft.weave} onChange={e => set({ weave: e.target.value })} style={INPUT_STYLE}>
+                {FABRIC_WEAVES.map(w => <option key={w.id} value={w.id}>{w.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Version">
+              <input value={draft.version || ''} onChange={e => set({ version: e.target.value })} placeholder="v1.0" style={INPUT_STYLE} />
+            </Field>
+            <Field label="Composition">
+              <input value={draft.composition || ''} onChange={e => set({ composition: e.target.value })} placeholder="100% Cotton" style={INPUT_STYLE} />
+            </Field>
+            <Field label="Hand / feel">
+              <input value={draft.hand || ''} onChange={e => set({ hand: e.target.value })} placeholder="Soft, dry, slight loop back" style={INPUT_STYLE} />
+            </Field>
+          </div>
         </div>
       </div>
 

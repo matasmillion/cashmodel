@@ -14,6 +14,7 @@ import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { savePattern, archivePattern, restorePattern } from '../../utils/patternStore';
 import { PATTERN_CATEGORIES, PATTERN_CATEGORY_LABEL, PATTERN_STATUSES, STANDARD_SIZE_SETS } from '../../utils/patternLibrary';
+import CoverImagePicker from './CoverImagePicker';
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
@@ -128,8 +129,15 @@ export default function PatternBuilder({ pattern, onBack }) {
         </div>
       )}
 
-      <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
-        <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Identity</h4>
+      <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+        <CoverImagePicker
+          value={draft.cover_image}
+          onChange={dataUrl => set({ cover_image: dataUrl })}
+          label="Cover image"
+          hint="Drop a photo of the block"
+        />
+        <div style={{ flex: 1, minWidth: 280 }}>
+          <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Identity</h4>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
           <Field label="Category">
             <select
@@ -156,6 +164,7 @@ export default function PatternBuilder({ pattern, onBack }) {
               style={INPUT_STYLE}
             />
           </Field>
+        </div>
         </div>
       </div>
 

@@ -76,6 +76,7 @@ export function emptyPattern(overrides = {}) {
     seam_allowance_cm: 1.0,
     cad_file_url: '',
     thumbnail_url: '',
+    cover_image: null, // base64 data URL of a 2:3 portrait crop
     notes: '',
     ...overrides,
   };
