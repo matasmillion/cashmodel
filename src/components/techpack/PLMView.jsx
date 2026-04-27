@@ -23,6 +23,7 @@ import EmbellishmentList from './EmbellishmentList';
 import { parsePLMHash, setPLMHash, normalizeLegacyHash } from '../../utils/plmRouting';
 import { seedTreatmentsIfEmpty } from '../../utils/treatmentStore';
 import ProductionList from '../production/ProductionList';
+import ProductionDetail from '../production/ProductionDetail';
 
 const TOP_TABS = [
   { id: 'library', label: 'Library', icon: Library },
@@ -52,14 +53,14 @@ export default function PLMView() {
 
   const [route, setRoute] = useState(() => {
     const parsed = parsePLMHash();
-    return { layer: parsed.layer, atom: parsed.atom };
+    return { layer: parsed.layer, atom: parsed.atom, packId: parsed.packId };
   });
 
-  // Keep layer/atom in sync with the URL — back/forward, manual edits, deep links.
+  // Keep layer/atom/packId in sync with the URL — back/forward, manual edits, deep links.
   useEffect(() => {
     const sync = () => {
-      const { layer, atom } = parsePLMHash();
-      setRoute(prev => (prev.layer === layer && prev.atom === atom ? prev : { layer, atom }));
+      const { layer, atom, packId } = parsePLMHash();
+      setRoute(prev => (prev.layer === layer && prev.atom === atom && prev.packId === packId ? prev : { layer, atom, packId }));
     };
     window.addEventListener('hashchange', sync);
     window.addEventListener('popstate', sync);
@@ -152,7 +153,9 @@ export default function PLMView() {
 
       {route.layer === 'styles' && <TechPackList />}
 
-      {route.layer === 'production' && <ProductionList />}
+      {route.layer === 'production' && (route.packId
+        ? <ProductionDetail poId={route.packId} onBack={() => setPLMHash({ layer: 'production' })} />
+        : <ProductionList />)}
     </div>
   );
 }
