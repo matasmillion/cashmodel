@@ -47,6 +47,20 @@ function formatLongDate(iso) {
   } catch { return null; }
 }
 
+function defectColor(pct) {
+  if (pct == null) return 'rgba(58,58,58,0.5)';
+  if (pct < 0.5) return '#3B6D11';
+  if (pct <= 1.0) return '#854F0B';
+  return '#A32D2D';
+}
+
+function driftColor(pct) {
+  if (pct == null) return 'rgba(58,58,58,0.5)';
+  if (pct < 5) return '#3B6D11';
+  if (pct <= 10) return '#854F0B';
+  return '#A32D2D';
+}
+
 const SPEC_LABEL_STYLE = { color: 'rgba(58,58,58,0.55)' };
 const SPEC_VALUE_STYLE = { color: FR.slate, lineHeight: 1.5 };
 const MONO_STYLE = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11.5 };
@@ -410,7 +424,71 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
         </div>
       </div>
 
-      {/* TODO: chunks 09-10 */}
+      {/* Production log */}
+      <ProductionLog rows={rollups?.log || []} />
+
+      {/* TODO: chunk 10 */}
+    </div>
+  );
+}
+
+function ProductionLog({ rows }) {
+  const muted = 'rgba(58,58,58,0.55)';
+  const borderTop = '0.5px solid rgba(58,58,58,0.1)';
+  const headerCell = {
+    fontSize: 11, color: muted, textTransform: 'uppercase', letterSpacing: '0.04em',
+    padding: '6px 8px 6px 0', fontWeight: 500, textAlign: 'left',
+    borderBottom: '0.5px solid rgba(58,58,58,0.1)',
+  };
+  const headerCellRight = { ...headerCell, textAlign: 'right' };
+  const dataCell = {
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11.5,
+    padding: '9px 8px 9px 0', color: FR.slate, borderTop,
+  };
+  const dataCellRight = { ...dataCell, textAlign: 'right' };
+
+  return (
+    <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: '20px 22px', marginBottom: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 17, color: FR.slate }}>Production log</div>
+        <div style={{ fontSize: 10, color: muted, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Append-only · every PO that used this atom</div>
+      </div>
+      {rows.length === 0 ? (
+        <div style={{ fontSize: 12, color: muted, padding: '14px 0' }}>
+          No production runs yet. Once a PO that references this treatment closes, it appears here.
+        </div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={headerCell}>PO</th>
+              <th style={headerCell}>Date</th>
+              <th style={headerCell}>Style</th>
+              <th style={headerCellRight}>Units</th>
+              <th style={headerCell}>Lot</th>
+              <th style={headerCellRight}>Cost</th>
+              <th style={headerCellRight}>Lead</th>
+              <th style={headerCellRight}>Defect</th>
+              <th style={headerCellRight}>Drift</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.po_code || i}>
+                <td style={dataCell}>{r.po_code || '—'}</td>
+                <td style={dataCell}>{r.date || '—'}</td>
+                <td style={{ ...dataCell, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>{r.style || '—'}</td>
+                <td style={dataCellRight}>{r.units != null ? Number(r.units).toLocaleString() : '—'}</td>
+                <td style={dataCell}>{r.lot || '—'}</td>
+                <td style={dataCellRight}>{r.cost != null ? `$${Number(r.cost).toFixed(2)}` : '—'}</td>
+                <td style={dataCellRight}>{r.lead != null ? `${r.lead}d` : '—'}</td>
+                <td style={{ ...dataCellRight, color: defectColor(r.defect) }}>{r.defect != null ? `${Number(r.defect).toFixed(1)}%` : '—'}</td>
+                <td style={{ ...dataCellRight, color: driftColor(r.drift) }}>{r.drift != null ? `${Number(r.drift).toFixed(1)}%` : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

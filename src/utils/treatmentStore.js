@@ -161,6 +161,15 @@ export async function saveTreatment(id, updates) {
 // initial name; `updateTreatment` is the canonical public verb.
 export const updateTreatment = saveTreatment;
 
+// Mock production log used by the treatment detail table until chunk 18
+// replaces it with a real query against the production store. Returns an
+// empty array for unknown ids so the UI renders the empty-state cleanly.
+export async function getMockProductionLog(treatmentId) {
+  if (!treatmentId) return [];
+  const rollups = await getTreatmentRollups(treatmentId);
+  return Array.isArray(rollups?.log) ? rollups.log : [];
+}
+
 export async function archiveTreatment(id) {
   return saveTreatment(id, { status: 'archived' });
 }
