@@ -21,6 +21,7 @@ import FabricList from './FabricList';
 import TreatmentList from './TreatmentList';
 import EmbellishmentList from './EmbellishmentList';
 import { parsePLMHash, setPLMHash, normalizeLegacyHash } from '../../utils/plmRouting';
+import { seedTreatmentsIfEmpty } from '../../utils/treatmentStore';
 
 const TOP_TABS = [
   { id: 'library', label: 'Library', icon: Library },
@@ -43,6 +44,9 @@ export default function PLMView() {
   // share links upgrade to the canonical grammar without a reload.
   useEffect(() => {
     normalizeLegacyHash();
+    // Seed treatment library + the two wash houses on first PLM mount.
+    // Idempotent — safe to call repeatedly across navigations.
+    seedTreatmentsIfEmpty();
   }, []);
 
   const [route, setRoute] = useState(() => {

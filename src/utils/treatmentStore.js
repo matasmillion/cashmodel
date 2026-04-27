@@ -15,6 +15,7 @@
 
 import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
 import { emptyTreatment, TREATMENT_TYPE_CODE } from './treatmentLibrary';
+import { addVendor } from './vendorLibrary';
 
 const LOCAL_KEY = 'cashmodel_treatments';
 
@@ -323,10 +324,45 @@ const MOCK_ROLLUPS = {
   },
 };
 
+// Seed the two wash houses the treatment seeds reference. Idempotent — the
+// vendorLibrary's addVendor returns `{ ok: false }` if the name is already in
+// the library, so this is safe to call on every PLM mount.
+function seedSeedVendors() {
+  addVendor('Guangdong Ocean Wash', {
+    country: 'China',
+    city: 'Foshan',
+    primaryContact: 'Mr. Lin',
+    moq: '300 units',
+    leadTimeDays: 14,
+    specialties: 'Enzyme washes, garment dye',
+    payment_terms: 'Net 30 · 50% deposit',
+    capabilities: ['wash', 'garment_dye'],
+    moq_units: 300,
+    lead_time_days: 14,
+    rating: 4,
+  });
+  addVendor('Foshan Blue Wash', {
+    country: 'China',
+    city: 'Foshan',
+    primaryContact: 'Ms. Chen',
+    moq: '300 units',
+    leadTimeDays: 10,
+    specialties: 'Stone wash, vintage finish',
+    payment_terms: 'Net 30',
+    capabilities: ['wash', 'finish'],
+    moq_units: 300,
+    lead_time_days: 10,
+    rating: 4,
+  });
+}
+
 // Seed three treatments on first run if the store is empty. Idempotent —
 // only fires when there are zero local rows. Numbers and copy match the
 // reference mockup so the UI lands populated.
 export async function seedTreatmentsIfEmpty() {
+  // Vendor seeds are idempotent on their own and need to be present even when
+  // treatments are already seeded (e.g. data migrated in from another device).
+  try { seedSeedVendors(); } catch (err) { console.error('seedSeedVendors:', err); }
   const local = readLocal();
   if (local.length > 0) return [];
   const now = new Date().toISOString();
