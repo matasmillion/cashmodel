@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-27T17:03:50.319Z",
+  "lastUpdated": "2026-04-27T17:09:52.635Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,14 +1044,14 @@
   ],
   "changelog": [
     {
-      "sha": "cfabed9",
-      "date": "2026-04-27T16:30:53+00:00",
-      "message": "feat(plm): vendor dropdowns, CLO3D/Adobe file slots, PO edit + size break"
+      "sha": "d7d6c80",
+      "date": "2026-04-27T20:06:34+03:00",
+      "message": "feat(plm): real file uploads in every library card (FileSlot) (#4)"
     },
     {
-      "sha": "a93a388",
-      "date": "2026-04-27T16:22:38+00:00",
-      "message": "Merge branch 'main' of http://127.0.0.1:46551/git/matasmillion/cashmodel into claude/fix-plm-tabs-Z5VDv"
+      "sha": "9bb4b44",
+      "date": "2026-04-27T19:31:39+03:00",
+      "message": "feat(plm): hotfix Treatments crash, vendor dropdowns, CLO3D/Adobe file slots, PO edit + size break (#3)"
     },
     {
       "sha": "c246259",
@@ -1059,24 +1059,9 @@
       "message": "feat(plm): grid/kanban view + 2:3 cover images for every atom library (#2)"
     },
     {
-      "sha": "f82a094",
-      "date": "2026-04-27T13:56:40+00:00",
-      "message": "feat(plm): grid/kanban view + 2:3 cover images for every atom library"
-    },
-    {
-      "sha": "8aac8eb",
-      "date": "2026-04-27T13:44:16+00:00",
-      "message": "Merge branch 'main' of http://127.0.0.1:44459/git/matasmillion/cashmodel into claude/fix-plm-tabs-Z5VDv"
-    },
-    {
       "sha": "98e7e90",
       "date": "2026-04-27T16:39:16+03:00",
       "message": "feat(plm): make Patterns, Fabrics, and Embellishments tabs functional (#1)"
-    },
-    {
-      "sha": "562fe1a",
-      "date": "2026-04-27T13:01:53+00:00",
-      "message": "feat(plm): make Patterns, Fabrics, and Embellishments tabs functional"
     },
     {
       "sha": "7e74ee1",
@@ -1092,6 +1077,21 @@
       "sha": "54d7695",
       "date": "2026-04-27T11:09:35+00:00",
       "message": "feat(plm): wire real production rollups into treatment builder"
+    },
+    {
+      "sha": "5d96ad6",
+      "date": "2026-04-27T11:01:22+00:00",
+      "message": "feat(plm): writeback engine — placePO snapshot + closePO atom usage + rolling averages"
+    },
+    {
+      "sha": "6b446c0",
+      "date": "2026-04-27T10:54:21+00:00",
+      "message": "feat(plm): production detail usage log + drift section"
+    },
+    {
+      "sha": "db4e5c8",
+      "date": "2026-04-27T10:51:33+00:00",
+      "message": "feat(plm): production detail header, stepper, bom snapshot"
     }
   ]
 }
