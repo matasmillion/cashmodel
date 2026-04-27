@@ -212,6 +212,11 @@ export function setPLMHash(parts) {
   const next = buildPLMHash(parts);
   if (window.location.hash !== next) {
     window.history.pushState(null, '', next);
+    // pushState doesn't fire hashchange / popstate, so subscribers in
+    // PLMView and the list components wouldn't re-read the URL on their
+    // own. Dispatch popstate manually so every router-aware effect picks
+    // up the change immediately instead of needing a reload.
+    window.dispatchEvent(new PopStateEvent('popstate'));
   }
 }
 
@@ -221,6 +226,7 @@ export function replacePLMHash(parts) {
   const next = buildPLMHash(parts);
   if (window.location.hash !== next) {
     window.history.replaceState(null, '', next);
+    window.dispatchEvent(new PopStateEvent('popstate'));
   }
 }
 
