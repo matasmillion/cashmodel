@@ -96,7 +96,7 @@ function PageCover({ d, images }) {
   const fa = d.finalApproval || {};
   const designer = fa.designer || {};
   const manager  = fa.manager  || {};
-  const factory  = fa.factory  || {};
+  const vendor   = fa.vendor   || {};
 
   // Vertical layout budget (PAGE_H = 794, footer rendered at y=775):
   //   Children paint on top of PageFrame's footer text in z-order, so the
@@ -186,7 +186,7 @@ function PageCover({ d, images }) {
       <SectionHeading x={40} y={628}>Final Approval</SectionHeading>
       <CompactApprovalCard x={40}                         y={cardY} w={cardW} h={cardH} title="Designer" name={designer.name} signature={designer.signature} date={designer.date} />
       <CompactApprovalCard x={40 + cardW + cardGap}       y={cardY} w={cardW} h={cardH} title="Manager"  name={manager.name}  signature={manager.signature}  date={manager.date} />
-      <CompactApprovalCard x={40 + (cardW + cardGap) * 2} y={cardY} w={cardW} h={cardH} title="Vendor"   name={factory.name}  signature={factory.signature}  date={factory.dateChop} dateLabel="Date / Chop" />
+      <CompactApprovalCard x={40 + (cardW + cardGap) * 2} y={cardY} w={cardW} h={cardH} title="Vendor"   name={vendor.name}   signature={vendor.signature}   date={vendor.dateChop}  dateLabel="Date / Chop" />
     </g>
   );
 }
@@ -344,7 +344,7 @@ function PageDesign({ d, images }) {
 
 // ── Page 3: Materials ──────────────────────────────────────────────────────
 // Up to 3 material cards rendered side by side. Each card: photo slot +
-// name + composition + weight/gauge + factory.
+// name + composition + weight/gauge + vendor.
 function PageMaterials({ d, images }) {
   const imgs = images || [];
   // Keep original index for image-slot lookup so hiding Material 2 doesn't
@@ -393,7 +393,7 @@ function PageMaterials({ d, images }) {
             <line x1={cx + 14} y1={cardY + 38 + imgH + 126} x2={cx + cardW - 14} y2={cardY + 38 + imgH + 126} stroke={FR.sand} />
 
             <text x={cx + 14} y={cardY + 38 + imgH + 146} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">VENDOR</text>
-            <text x={cx + 14} y={cardY + 38 + imgH + 162} fontSize="11" fill={FR.slate}>{clampLine(esc(m.factory || '—'), cardW - 28, 6.2)}</text>
+            <text x={cx + 14} y={cardY + 38 + imgH + 162} fontSize="11" fill={FR.slate}>{clampLine(esc(m.vendor || '—'), cardW - 28, 6.2)}</text>
             <line x1={cx + 14} y1={cardY + 38 + imgH + 166} x2={cx + cardW - 14} y2={cardY + 38 + imgH + 166} stroke={FR.sand} />
 
             {/* COLOR (left) | FINISH (right) — split row */}
@@ -842,7 +842,7 @@ function PageQC({ d, images }) {
 // ── Page 8: Samples & Approval ─────────────────────────────────────────────
 // Internal sign-off page: sample log on the left, three approval slots on
 // the right. Shows the final state of every sample type + who signed off
-// on each role. Designed to print at the end so factories see the spec
+// on each role. Designed to print at the end so vendors see the spec
 // first and the sign-off chain second.
 function PageApproval({ d }) {
   const samples = (d.samples || []).slice(0, 12);
@@ -889,10 +889,10 @@ function PageApproval({ d }) {
       {/* Approval slots */}
       <rect x={rightX} y={170} width={rightW} height={30} fill={FR.slate} />
       <text x={rightX + 12} y={190} fontSize="10" fontWeight="bold" fill={FR.salt} letterSpacing="1.5">FINAL APPROVAL</text>
-      {['designer', 'manager', 'factory'].map((role, idx) => {
+      {['designer', 'manager', 'vendor'].map((role, idx) => {
         const slot = fa[role] || {};
         const by = 210 + idx * 155;
-        const signed = !!(role === 'factory' ? slot.dateChop : slot.date);
+        const signed = !!(role === 'vendor' ? slot.dateChop : slot.date);
         return (
           <g key={role}>
             <rect x={rightX} y={by} width={rightW} height={145} fill={FR.white} stroke={FR.sand} />
@@ -913,7 +913,7 @@ function PageApproval({ d }) {
             <line x1={rightX + 14} y1={by + 110} x2={rightX + rightW - 14} y2={by + 110} stroke={FR.sand} />
             <text x={rightX + 14} y={by + 128} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">DATE</text>
             <text x={rightX + 80} y={by + 128} fontSize="11" fill={FR.slate}>
-              {esc((role === 'factory' ? slot.dateChop : slot.date) || '—')}
+              {esc((role === 'vendor' ? slot.dateChop : slot.date) || '—')}
             </text>
           </g>
         );

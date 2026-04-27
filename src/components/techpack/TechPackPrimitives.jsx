@@ -30,7 +30,7 @@ export function formatCost(amount, currency = 'USD') {
 }
 
 // Tiny dark pill used in the top-right of every modular PLM card (color,
-// factory, trim, style) to anchor the unit cost. Zero costs render too —
+// vendor, trim, style) to anchor the unit cost. Zero costs render too —
 // the whole point of the PLM cash model is that every line has a number.
 export function CostPill({ amount, currency = 'USD', title, style: override }) {
   return (

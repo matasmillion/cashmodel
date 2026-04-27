@@ -51,10 +51,10 @@ function hiddenCardStyle(hidden) {
 // ── Approval sign-off card ──────────────────────────────────────────────────
 // Name is an editable dropdown (populated from plmDirectory.listAllPeople),
 // Signature is a plain text input, Date is read-only and stamped by the
-// Confirm button. Factory uses `dateChop` to stay aligned with traditional
-// factory chop sign-off conventions (same as on tech packs).
+// Confirm button. Vendor uses `dateChop` to stay aligned with traditional
+// vendor chop sign-off conventions (same as on tech packs).
 function ApprovalSlot({ role, title, value, onUpdate, onConfirm, onUnconfirm, people = [], onAddPerson }) {
-  const dateKey = role === 'factory' ? 'dateChop' : 'date';
+  const dateKey = role === 'vendor' ? 'dateChop' : 'date';
   const v = value || { name: '', signature: '', [dateKey]: '' };
   const date = v[dateKey] || '';
   const confirmed = Boolean(date);
@@ -81,7 +81,7 @@ function ApprovalSlot({ role, title, value, onUpdate, onConfirm, onUnconfirm, pe
       </div>
 
       <div>
-        <label style={labelStyle}>{role === 'factory' ? 'Date / Chop' : 'Date'}</label>
+        <label style={labelStyle}>{role === 'vendor' ? 'Date / Chop' : 'Date'}</label>
         <input readOnly value={date}
           style={{ ...inputBase, background: FR.salt, color: FR.stone, cursor: 'not-allowed' }} />
       </div>
@@ -283,10 +283,10 @@ export function StepCover({
 }
 
 // ── Page 8: Samples &amp; Approval ───────────────────────────────────────────
-// Final internal page — sits after the deliverable content so factories see
+// Final internal page — sits after the deliverable content so vendors see
 // the spec first and never the asset-versioning / sign-off machinery.
 // Contains the sample lifecycle log (Proto / Fit / SMS / PP / TOP), the
-// three-role final approval, the designer → manager → factory workflow
+// three-role final approval, the designer → manager → vendor workflow
 // buttons, and a big "Download Final Trim Pack" button.
 export function StepApproval({
   data, set, existingPeople = [], onAddPerson,
@@ -331,8 +331,8 @@ export function StepApproval({
             value={fa.manager} onUpdate={setApprovalSlot}
             onConfirm={confirmRole} onUnconfirm={unconfirmRole}
             people={existingPeople} onAddPerson={onAddPerson} />
-          <ApprovalSlot role="factory" title="Vendor"
-            value={fa.factory} onUpdate={setApprovalSlot}
+          <ApprovalSlot role="vendor" title="Vendor"
+            value={fa.vendor} onUpdate={setApprovalSlot}
             onConfirm={confirmRole} onUnconfirm={unconfirmRole}
             people={existingPeople} onAddPerson={onAddPerson} />
         </div>
@@ -389,7 +389,7 @@ const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeigh
 
 // ── Page 2: Design ──────────────────────────────────────────────────────────
 // One 9:16 sketch at top + two equally-sized reference/render images below.
-// Pure visual page — no text fields. Lets the factory see the intent before
+// Pure visual page — no text fields. Lets the vendor see the intent before
 // wading into materials / construction specs.
 export function StepDesign({ images, onUpload, onRemove }) {
   return (
@@ -421,7 +421,7 @@ export function StepDesign({ images, onUpload, onRemove }) {
 
 // ── Page 3: Materials ───────────────────────────────────────────────────────
 // Three material cards side by side. Card = photo + name + composition +
-// weight/gauge + factory. Users can add more with an explicit button; the
+// weight/gauge + vendor. Users can add more with an explicit button; the
 // rule-of-three ceiling is a default, not a cap.
 export function StepMaterials({ data, set, images, onUpload, onRemove, existingSuppliers = [] }) {
   const materials = data.materials && data.materials.length
@@ -431,7 +431,7 @@ export function StepMaterials({ data, set, images, onUpload, onRemove, existingS
   const updateMat = (i, k, v) =>
     set('materials', materials.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
   const addMat = () =>
-    set('materials', [...materials, { name: '', composition: '', weightGauge: '', factory: '', color: '', finish: '' }]);
+    set('materials', [...materials, { name: '', composition: '', weightGauge: '', vendor: '', color: '', finish: '' }]);
   const removeMat = (i) => {
     if (materials.length <= 1) return;
     set('materials', materials.filter((_, idx) => idx !== i));
@@ -473,8 +473,8 @@ export function StepMaterials({ data, set, images, onUpload, onRemove, existingS
             </Row>
             <EditableSelect
               label="Vendor"
-              value={m.factory}
-              onChange={v => updateMat(i, 'factory', v)}
+              value={m.vendor}
+              onChange={v => updateMat(i, 'vendor', v)}
               options={existingSuppliers}
               onAddOption={addSupplier}
               placeholder="Add a new vendor…" />
@@ -545,7 +545,7 @@ export function StepConstruction({ data, set, images, onUpload, onRemove }) {
 // PDF source art. Attachments are stored inline as base64 data URIs inside
 // data.attachments, so they persist with the pack and can be downloaded
 // later. Download links also show up in the exported PDF and will flow
-// into the factory portal + email automation when those phases land.
+// into the vendor portal + email automation when those phases land.
 const COLORWAY_CAP = 4;
 const emptyColorway = () => ({ name: '', usage: '', frColor: '' });
 

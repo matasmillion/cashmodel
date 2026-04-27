@@ -39,7 +39,7 @@ export const CERTIFICATIONS = ['OEKO-TEX Standard 100', 'GOTS', 'GRS', 'bluesign
 // High-level trim classification that mirrors the SVG template dropdown.
 export const COMPONENT_TYPES = ['Label', 'Zipper', 'Fabric', 'Hardware', 'Packaging'];
 
-// 8-step wizard. Samples + final approval come last so the factory sees
+// 8-step wizard. Samples + final approval come last so the vendor sees
 // the spec first; versioning + sign-off is internal FR business that lives
 // on the final page. Everything between Overview and Approval follows a
 // rule-of-three layout.
@@ -59,7 +59,7 @@ const todayISO = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-const emptyMaterial  = () => ({ name: '', composition: '', weightGauge: '', factory: '', color: '', finish: '' });
+const emptyMaterial  = () => ({ name: '', composition: '', weightGauge: '', vendor: '', color: '', finish: '' });
 
 // Material color options now come from the shared FR brand palette
 // (FR_COLOR_OPTIONS in techPackConstants.js). The old MATERIAL_COLORS list
@@ -120,7 +120,7 @@ export const DEFAULT_COMPONENT_DATA = {
   finalApproval: {
     designer: { name: '', signature: '', date: '' },
     manager:  { name: '', signature: '', date: '' },
-    factory:  { name: '', signature: '', dateChop: '' },
+    vendor:   { name: '', signature: '', dateChop: '' },
   },
 };
 

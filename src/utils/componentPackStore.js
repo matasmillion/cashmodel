@@ -5,6 +5,27 @@ import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
 
 const LOCAL_KEY = 'cashmodel_component_packs';
 
+// Materials and the final-approval slot used to be keyed `factory`; the rename
+// landed in componentPackConstants but pre-rename rows still hold the old key.
+// Surface them under `vendor` on read so the builder + preview can read one
+// shape regardless of when the record was saved.
+function migrateLegacyVendorKeys(row) {
+  if (!row || !row.data) return row;
+  const d = row.data;
+  let nextData = d;
+  if (Array.isArray(d.materials) && d.materials.some(m => m && m.vendor === undefined && m.factory !== undefined)) {
+    nextData = {
+      ...nextData,
+      materials: d.materials.map(m => (m && m.vendor === undefined && m.factory !== undefined ? { ...m, vendor: m.factory } : m)),
+    };
+  }
+  const fa = nextData.finalApproval;
+  if (fa && fa.vendor === undefined && fa.factory !== undefined) {
+    nextData = { ...nextData, finalApproval: { ...fa, vendor: fa.factory } };
+  }
+  return nextData === d ? row : { ...row, data: nextData };
+}
+
 function readLocal() {
   try { return JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]'); } catch { return []; }
 }
@@ -80,13 +101,14 @@ export async function getComponentPack(id) {
         if (cover) {
           supabase.from('component_packs').update({ cover_image: cover }).eq('id', id)
             .then(({ error: upErr }) => { if (upErr) console.error('cover_image backfill:', upErr); });
-          return { ...data, cover_image: cover };
+          return migrateLegacyVendorKeys({ ...data, cover_image: cover });
         }
       }
-      return data;
+      return migrateLegacyVendorKeys(data);
     }
   }
-  return readLocal().find(p => p.id === id) || null;
+  const local = readLocal().find(p => p.id === id);
+  return local ? migrateLegacyVendorKeys(local) : null;
 }
 
 export async function createComponentPack(defaultData) {

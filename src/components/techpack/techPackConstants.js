@@ -65,10 +65,10 @@ export const DEFAULT_DATA = {
   sizeRange: 'S / M / L / XL',
   designedBy: { name: '', date: '' },
   approvedBy: { name: '', date: '' },
-  factoryConfirmed: { name: '', date: '' },
+  vendorConfirmed: { name: '', date: '' },
 
   // Page 2+
-  factory: '', factoryContact: '', fabricType: '',
+  vendor: '', vendorContact: '', fabricType: '',
   designNotes: '', fit: '', keyFeatures: '', flatLayNotes: '',
   keyDesignNotes: [{ detail: '', description: '', reference: '' }],
   fabrics: [{ component: '', fabricType: '', composition: '', weightGsm: '', colorPantone: '', supplier: '', notes: '' }],
@@ -116,7 +116,7 @@ export const DEFAULT_DATA = {
   finalApproval: {
     designer:   { name: '', signature: '', date: '' },
     brandOwner: { name: '', signature: '', date: '' },
-    factory:    { name: '', signature: '', dateChop: '' },
+    vendor:     { name: '', signature: '', dateChop: '' },
   },
 };
 
@@ -164,9 +164,9 @@ export function computeColorwayCost(data, getColorCostFn) {
 }
 
 // Full unit-cost roll-up: BOM + colorway library.
-// Factories aren't a cash line on the garment — they're the maker — so no
+// Vendors aren't a cash line on the garment — they're the maker — so no
 // CMT in this total. If we ever want to track CMT, it lives on the tech
-// pack itself, not on the factory directory entry.
+// pack itself, not on the vendor directory entry.
 export function computeTotalUnitCost(data, { getColorCost } = {}) {
   return computeBOMCost(data)
        + computeColorwayCost(data, getColorCost);

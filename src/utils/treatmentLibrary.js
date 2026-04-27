@@ -7,7 +7,7 @@
 // finish, or a distress technique. Each one carries:
 //
 //   • Physical spec — chemistry, duration, temperature, vendor + backup,
-//     MOQ, lead time, cost — the recipe a factory needs to reproduce it.
+//     MOQ, lead time, cost — the recipe a vendor needs to reproduce it.
 //   • Digital twin — a LoRA checkpoint trained on swatches of the real
 //     output, plus optional CLO-SET .ZFAB / Rhino files. The digital twin
 //     is what designers render with; the physical spec is what production

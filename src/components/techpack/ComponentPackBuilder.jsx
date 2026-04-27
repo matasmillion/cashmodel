@@ -345,10 +345,10 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     });
   }, [images]);
 
-  // Stamp the clicked approval role with today's date. Factory uses a
-  // separate dateChop key (per traditional factory "chop" sign-off convention).
+  // Stamp the clicked approval role with today's date. Vendor uses a
+  // separate dateChop key (per traditional vendor "chop" sign-off convention).
   const confirmRole = useCallback((role) => {
-    const dateKey = role === 'factory' ? 'dateChop' : 'date';
+    const dateKey = role === 'vendor' ? 'dateChop' : 'date';
     setData(prev => {
       const fa = prev.finalApproval || {};
       const slot = fa[role] || {};
@@ -363,7 +363,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
   }, [stampDate]);
 
   const unconfirmRole = useCallback((role) => {
-    const dateKey = role === 'factory' ? 'dateChop' : 'date';
+    const dateKey = role === 'vendor' ? 'dateChop' : 'date';
     setData(prev => {
       const fa = prev.finalApproval || {};
       const slot = fa[role] || {};

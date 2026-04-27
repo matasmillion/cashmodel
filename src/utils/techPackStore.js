@@ -5,6 +5,28 @@ import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
 
 const LOCAL_KEY = 'cashmodel_techpacks';
 
+// Records written before the factory→vendor rename carry the old keys
+// (`factory`, `factoryContact`, `factoryConfirmed`, `finalApproval.factory`).
+// Surface them under the new names on read so the rest of the app can rely
+// on the renamed shape. The fallback keeps both shapes valid in storage
+// until a save rewrites the row with the new keys.
+function migrateLegacyVendorKeys(row) {
+  if (!row || !row.data) return row;
+  const d = row.data;
+  const needsTopLevel = (d.vendor === undefined && d.factory !== undefined)
+    || (d.vendorContact === undefined && d.factoryContact !== undefined)
+    || (d.vendorConfirmed === undefined && d.factoryConfirmed !== undefined);
+  const fa = d.finalApproval;
+  const needsFA = fa && fa.vendor === undefined && fa.factory !== undefined;
+  if (!needsTopLevel && !needsFA) return row;
+  const nextData = { ...d };
+  if (d.vendor === undefined && d.factory !== undefined) nextData.vendor = d.factory;
+  if (d.vendorContact === undefined && d.factoryContact !== undefined) nextData.vendorContact = d.factoryContact;
+  if (d.vendorConfirmed === undefined && d.factoryConfirmed !== undefined) nextData.vendorConfirmed = d.factoryConfirmed;
+  if (needsFA) nextData.finalApproval = { ...fa, vendor: fa.factory };
+  return { ...row, data: nextData };
+}
+
 function readLocal() {
   try {
     const raw = localStorage.getItem(LOCAL_KEY);
@@ -83,10 +105,10 @@ export async function getTechPack(id) {
       .select('*')
       .eq('id', id)
       .maybeSingle();
-    if (!error && data) return data;
+    if (!error && data) return migrateLegacyVendorKeys(data);
   }
   const local = readLocal().find(p => p.id === id);
-  return local || null;
+  return local ? migrateLegacyVendorKeys(local) : null;
 }
 
 // Create a new empty tech pack

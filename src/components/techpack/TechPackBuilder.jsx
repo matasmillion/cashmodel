@@ -38,7 +38,7 @@ function RevisionPanel({ revisions, onCreateRevision }) {
         </button>
       </div>
       {recent.length === 0 ? (
-        <p style={{ fontSize: 10, color: FR.stone, margin: 0 }}>No snapshots yet. Create one before sending to factory.</p>
+        <p style={{ fontSize: 10, color: FR.stone, margin: 0 }}>No snapshots yet. Create one before sending to vendor.</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {recent.map((r, i) => (
@@ -167,7 +167,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   }, [step, pack.id]);
 
   // Derived: full unit-cost roll-up — BOM + colorway library.
-  // Every cash line on the garment contributes a per-unit number; factories
+  // Every cash line on the garment contributes a per-unit number; vendors
   // aren't a line item here (they're the maker, not a part).
   const bomCost = computeBOMCost(data);
   const colorwayCost = computeColorwayCost(data, getFRColorCost);

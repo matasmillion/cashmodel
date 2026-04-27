@@ -8,11 +8,12 @@
 // New entries added through EditableSelect are written to the custom lists so
 // they show up immediately, even before the pack is saved.
 //
-// Post-migration note: the `data.factory` field name is still written by the
-// frozen tech pack builder (renaming it would require editing that builder,
-// which is out of scope for Prompt 1). Aggregation reads both the new
-// `data.vendor` and legacy `data.factory` so UI labels can drift toward
-// "Vendor" without disturbing stored records.
+// Legacy compat: the active tech pack builder now writes `data.vendor`,
+// `data.vendorContact`, `data.vendorConfirmed`, and `finalApproval.vendor`,
+// but cloud rows written before the rename still carry the old `data.factory`
+// / `data.factoryConfirmed` / `finalApproval.factory` keys. Aggregation reads
+// the new keys first and falls back to the legacy ones so neither set of
+// records goes missing in the directory dropdowns.
 
 import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
 
@@ -42,8 +43,8 @@ function addNormalized(set, value) {
 //     trimsAccessories,labelsBranding}[].supplier
 //   • Supabase projection so rows not mirrored locally still count
 //   • custom persisted list (manually added)
-// Legacy read path: `data.factory` is still the field written by the frozen
-// tech pack builder, so we pull both the new `data.vendor` and the legacy
+// Legacy read path: cloud rows written before the rename still carry
+// `data.factory`, so we pull both the new `data.vendor` and the legacy
 // `data.factory` keys to keep every pack's maker surfaced.
 export async function listAllSuppliers() {
   const suppliers = new Set();
@@ -57,7 +58,7 @@ export async function listAllSuppliers() {
   readJSON(TECHPACKS_KEY, []).forEach(p => {
     const d = p?.data || {};
     // Read `vendor` first (new canonical field) with `factory` fallback for
-    // records written by the pre-rename tech pack builder.
+    // records written before the rename.
     addNormalized(suppliers, d.vendor ?? d.factory);
     techPackSupplierKeys.forEach(k => (d[k] || []).forEach(row => addNormalized(suppliers, row?.supplier)));
   });
@@ -71,8 +72,7 @@ export async function listAllSuppliers() {
     try {
       const [techRes, compRes] = await Promise.all([
         // Legacy JSONB key `data.factory` still contains the vendor name on
-        // existing records. Projecting `data.vendor` first would miss every
-        // pre-migration record.
+        // pre-rename records. Project both so neither set is missed.
         supabase.from('tech_packs').select('vendor:data->>vendor, factory:data->>factory'),
         supabase.from('component_packs').select('supplier'),
       ]);
@@ -111,18 +111,18 @@ export async function listAllPeople() {
     const fa = d.finalApproval || {};
     addNormalized(people, fa.designer?.name);
     addNormalized(people, fa.brandOwner?.name);
-    addNormalized(people, fa.factory?.name);
+    addNormalized(people, (fa.vendor ?? fa.factory)?.name);
   });
 
   readJSON(TECHPACKS_KEY, []).forEach(p => {
     const d = p?.data || {};
     addNormalized(people, d.designedBy?.name);
     addNormalized(people, d.approvedBy?.name);
-    addNormalized(people, d.factoryConfirmed?.name);
+    addNormalized(people, (d.vendorConfirmed ?? d.factoryConfirmed)?.name);
     const fa = d.finalApproval || {};
     addNormalized(people, fa.designer?.name);
     addNormalized(people, fa.brandOwner?.name);
-    addNormalized(people, fa.factory?.name);
+    addNormalized(people, (fa.vendor ?? fa.factory)?.name);
   });
 
   readJSON(CUSTOM_PEOPLE_KEY, []).forEach(s => addNormalized(people, s));
@@ -131,7 +131,7 @@ export async function listAllPeople() {
     try {
       const [techRes, compRes] = await Promise.all([
         supabase.from('tech_packs').select(
-          'designedByName:data->designedBy->>name, approvedByName:data->approvedBy->>name, factoryConfirmedName:data->factoryConfirmed->>name'
+          'designedByName:data->designedBy->>name, approvedByName:data->approvedBy->>name, vendorConfirmedName:data->vendorConfirmed->>name, factoryConfirmedName:data->factoryConfirmed->>name'
         ),
         supabase.from('component_packs').select(
           'designedByName:data->designedBy->>name, approvedByName:data->approvedBy->>name'
@@ -140,7 +140,7 @@ export async function listAllPeople() {
       (techRes.data || []).forEach(r => {
         addNormalized(people, r.designedByName);
         addNormalized(people, r.approvedByName);
-        addNormalized(people, r.factoryConfirmedName);
+        addNormalized(people, r.vendorConfirmedName || r.factoryConfirmedName);
       });
       (compRes.data || []).forEach(r => {
         addNormalized(people, r.designedByName);

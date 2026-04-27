@@ -1,7 +1,7 @@
 // Shared Vendor library. Mirrors colorLibrary.js — the library store holds
 // the rich metadata (contact info, MOQ, lead time, specialties, notes,
 // logo image, capabilities, payment terms, rating) per vendor, keyed by
-// the same name string used in pack dropdowns (data.supplier / data.factory
+// the same name string used in pack dropdowns (data.supplier / data.vendor
 // / material.supplier).
 //
 // Renamed from `factoryLibrary` as part of the Library/Styles/Production
@@ -128,7 +128,7 @@ export function getVendor(name) {
 
 // Resolve a vendor by either the current name key or a legacy identifier.
 // The prompt calls for accepting legacy `factory_id` values; nothing in
-// this codebase uses numeric/UUID FKs for factories today (they're all
+// this codebase uses numeric/UUID FKs for vendors today (they're all
 // name strings), but we keep the signature flexible so Prompts 2+ and any
 // future foreign-key refactor can call this one helper and get the same
 // resolution path — new name → legacy name → null.
