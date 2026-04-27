@@ -12,7 +12,8 @@ import { ArrowLeft, Edit2, Check, X } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { getFRColor } from '../../utils/colorLibrary';
 import { resolveVendor } from '../../utils/vendorLibrary';
-import { getTreatment, getTreatmentRollups, updateTreatment } from '../../utils/treatmentStore';
+import { getTreatment, getTreatmentRollups, getProductionLog, getUsedInForTreatment, updateTreatment } from '../../utils/treatmentStore';
+import { listDriftLogs } from '../../utils/productionStore';
 import { TREATMENT_TYPE_LABEL, LORA_BASE_MODELS } from '../../utils/treatmentLibrary';
 
 const STATUS_PILL = {
@@ -131,6 +132,9 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
   const id = treatmentProp?.id || treatmentId;
   const [treatment, setTreatment] = useState(treatmentProp || null);
   const [rollups, setRollups] = useState(null);
+  const [productionLog, setProductionLog] = useState([]);
+  const [driftRows, setDriftRows] = useState([]);
+  const [usedIn, setUsedIn] = useState([]);
   const [loading, setLoading] = useState(!treatmentProp && !!id);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(null);
@@ -155,7 +159,19 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
   useEffect(() => {
     let cancelled = false;
     if (!id) return;
-    getTreatmentRollups(id).then(r => { if (!cancelled) setRollups(r); });
+    Promise.all([
+      getTreatmentRollups(id),
+      getProductionLog(id),
+      listDriftLogs({ treatment_id: id }),
+      getUsedInForTreatment(id),
+    ]).then(([r, log, drift, usedInRows]) => {
+      if (cancelled) return;
+      setRollups(r);
+      setProductionLog(log);
+      // Most recent drift first; the strip shows the top 3.
+      setDriftRows([...drift].sort((a, b) => (b.recorded_at || '').localeCompare(a.recorded_at || '')));
+      setUsedIn(usedInRows);
+    });
     return () => { cancelled = true; };
   }, [id]);
 
@@ -231,39 +247,25 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
     ? `${trainCount} images${dig.lora_version ? ` · ${dig.lora_version}` : ''}${trainedDate ? ` retrained ${trainedDate}` : ''}`
     : '—';
   const lastRendered = formatLongDate(dig.last_digital_sync_at);
-  const driftPct = rollups?.drift_30d_pct;
   const driftLine = driftPct != null
     ? `${Number(driftPct).toFixed(1)}% — ${driftPct < 8 ? 'within target' : 'retrain recommended'}`
     : '—';
-  const driftColor = driftPct != null && driftPct >= 8 ? '#854F0B' : '#3B6D11';
+  const driftLineColor = driftPct != null && driftPct >= 8 ? '#854F0B' : '#3B6D11';
 
-  // Stat strip values + deltas
-  const units = rollups?.units_produced != null ? Number(rollups.units_produced).toLocaleString() : '—';
-  const posCount = rollups?.pos_count;
+  // Stat strip values — rollups now come straight from atom_usage; deltas
+  // are deferred until a chunk-spec follow-up wires baseline tracking.
+  const units = rollups?.units_produced ? Number(rollups.units_produced).toLocaleString() : '—';
+  const posCount = rollups?.pos_count || 0;
   const since = formatMonthYear(rollups?.first_run_at || treatment.created_at);
-  const unitsDelta = posCount != null && since
+  const unitsDelta = posCount > 0 && since
     ? `${posCount} ${posCount === 1 ? 'PO' : 'POs'} since ${since}`
     : null;
 
-  const cost = rollups?.latest_cost_usd != null
-    ? `$${Number(rollups.latest_cost_usd).toFixed(2)}`
-    : (rollups?.latest_unit_cost != null ? `$${Number(rollups.latest_unit_cost).toFixed(2)}` : '—');
-  const costDeltaPct = rollups?.latest_unit_cost_delta_pct;
-  const costDelta = costDeltaPct != null
-    ? `${costDeltaPct > 0 ? '↑' : '↓'} ${Math.abs(costDeltaPct).toFixed(1)}% from first run`
-    : null;
+  const cost = rollups?.latest_cost_usd ? `$${Number(rollups.latest_cost_usd).toFixed(2)}` : '—';
+  const lead = rollups?.latest_lead_days ? `${Math.round(rollups.latest_lead_days)} d` : '—';
+  const defect = rollups?.defect_rate_pct ? fmtPct(rollups.defect_rate_pct) : '—';
 
-  const lead = rollups?.latest_lead_days != null ? `${rollups.latest_lead_days} d` : '—';
-  const leadDeltaDays = rollups?.latest_lead_delta_days;
-  const leadDelta = leadDeltaDays != null && leadDeltaDays !== 0
-    ? `${leadDeltaDays > 0 ? '↑' : '↓'} ${Math.abs(leadDeltaDays)}d from first run`
-    : null;
-
-  const defect = fmtPct(rollups?.defect_rate_pct) || '—';
-  const defectDeltaPct = rollups?.defect_rate_delta_pct;
-  const defectDelta = defectDeltaPct != null && defectDeltaPct !== 0
-    ? `${defectDeltaPct > 0 ? '↑' : '↓'} ${Math.abs(defectDeltaPct).toFixed(0)}% from first run`
-    : null;
+  const driftPct = driftRows[0]?.score_pct ?? null;
 
   return (
     <div>
@@ -418,20 +420,27 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
             <Spec label="Thumbnail">{lastRendered ? `Last rendered ${lastRendered}` : '—'}</Spec>
             <Spec label="Source">{dig.digital_source || '—'}</Spec>
             <Spec label="Drift (30d)">
-              <span style={{ color: driftPct != null ? driftColor : 'rgba(58,58,58,0.5)' }}>{driftLine}</span>
+              <span style={{ color: driftPct != null ? driftLineColor : 'rgba(58,58,58,0.5)' }}>{driftLine}</span>
             </Spec>
           </div>
         </div>
       </div>
 
       {/* Production log */}
-      <ProductionLog rows={rollups?.log || []} />
+      <ProductionLog rows={productionLog} />
 
       {/* Digital drift */}
-      <DigitalDrift rows={rollups?.drift || []} />
+      <DigitalDrift rows={driftRows.map(d => ({
+        po_code: d.po_id,
+        date: d.recorded_at ? d.recorded_at.slice(0, 7) : '',
+        score: d.score_pct,
+        retrained: d.retrained,
+        predicted_grad: d.predicted_grad,
+        actual_grad: d.actual_grad,
+      }))} />
 
       {/* Used in */}
-      <UsedIn rows={rollups?.used_in || []} />
+      <UsedIn rows={usedIn} />
 
       {/* Footer actions */}
       <FooterActions
@@ -452,7 +461,7 @@ function DigitalDrift({ rows }) {
         <div style={{ fontSize: 10, color: muted, letterSpacing: '0.08em', textTransform: 'uppercase' }}>LoRA prediction vs production photo · retrain if &gt; 8%</div>
       </div>
       {items.length === 0 ? (
-        <div style={{ fontSize: 12, color: muted, padding: '14px 0' }}>No drift samples yet.</div>
+        <div style={{ fontSize: 12, color: muted, padding: '14px 0' }}>No drift data — drift is measured on PO close.</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
           {items.map((item, i) => {
@@ -586,7 +595,7 @@ function ProductionLog({ rows }) {
       </div>
       {rows.length === 0 ? (
         <div style={{ fontSize: 12, color: muted, padding: '14px 0' }}>
-          No production runs yet. Once a PO that references this treatment closes, it appears here.
+          No production runs yet — first PO using this treatment will populate this log.
         </div>
       ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>

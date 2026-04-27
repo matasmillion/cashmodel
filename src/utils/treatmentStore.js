@@ -162,13 +162,39 @@ export async function saveTreatment(id, updates) {
 // initial name; `updateTreatment` is the canonical public verb.
 export const updateTreatment = saveTreatment;
 
-// Mock production log used by the treatment detail table until chunk 18
-// replaces it with a real query against the production store. Returns an
-// empty array for unknown ids so the UI renders the empty-state cleanly.
-export async function getMockProductionLog(treatmentId) {
+// Production log for a treatment. Joins `atom_usage` rows with the
+// originating PO and the latest `drift_log` for the same {po_id, treatment_id}
+// pair. Sorted most-recent first. Returns rows shaped for the production-log
+// table on the treatment detail page.
+export async function getProductionLog(treatmentId) {
   if (!treatmentId) return [];
-  const rollups = await getTreatmentRollups(treatmentId);
-  return Array.isArray(rollups?.log) ? rollups.log : [];
+  const [{ listAtomUsage, listDriftLogs, getPO }] = await Promise.all([
+    import('./productionStore'),
+  ]);
+  const usage = await listAtomUsage({ atom_type: 'treatment', atom_id: treatmentId });
+  if (!usage.length) return [];
+  const driftRows = await listDriftLogs({ treatment_id: treatmentId });
+  const driftByPO = new Map(driftRows.map(d => [d.po_id, d]));
+
+  const sorted = [...usage].sort((a, b) => (b.recorded_at || '').localeCompare(a.recorded_at || ''));
+  const out = [];
+  for (const r of sorted) {
+    const po = await getPO(r.po_id);
+    const drift = driftByPO.get(r.po_id);
+    const date = (po?.placed_at || r.recorded_at || '').slice(0, 7); // YYYY-MM
+    out.push({
+      po_code: po?.code || r.po_id,
+      date,
+      style: po?.style_id || '—',
+      units: r.units != null ? Number(r.units) : null,
+      lot: r.lot || r.physical_lot_number || '—',
+      cost: r.unit_cost_usd != null ? Number(r.unit_cost_usd) : null,
+      lead: r.lead_days != null ? Number(r.lead_days) : null,
+      defect: r.defect_pct != null ? Number(r.defect_pct) : null,
+      drift: drift?.score_pct != null ? Number(drift.score_pct) : null,
+    });
+  }
+  return out;
 }
 
 export async function archiveTreatment(id) {
@@ -211,25 +237,41 @@ export async function duplicateTreatment(id) {
 }
 
 // Rollups — every treatment list/detail card surfaces unit counts, latest
-// cost, latest lead, defect rate. Until production writeback ships in
-// Prompt 3 these are mocked from the seed data; once `atom_usage` exists
-// the real implementation lands in productionStore + this stub gets
-// replaced (kept here as the public contract so callers don't change).
-//
-// Returns a Promise so the eventual real data path (Supabase aggregate)
-// drops in without breaking the UI's await chain.
+// cost, latest lead, defect rate. Computed live from append-only `atom_usage`
+// rows: weighted by units across the last three runs for cost/lead/defect,
+// totalled across all runs for `units_produced`. First-run + PO count
+// derived from the same data set. Returns zeros when no PO has closed
+// against this treatment yet.
 export async function getTreatmentRollups(treatmentId) {
   if (!treatmentId) return emptyRollups();
-  // Real implementation lives in productionStore.computeAtomRollups; we
-  // attempt the import lazily so this module doesn't pull production code
-  // into the bundle until production is mounted.
-  try {
-    const mod = await import('./productionStore');
-    if (mod && typeof mod.computeAtomRollups === 'function') {
-      return mod.computeAtomRollups('treatment', treatmentId);
+  const { listAtomUsage } = await import('./productionStore');
+  const rows = await listAtomUsage({ atom_type: 'treatment', atom_id: treatmentId });
+  if (!rows.length) return emptyRollups();
+
+  const sorted = [...rows].sort((a, b) => (b.recorded_at || '').localeCompare(a.recorded_at || ''));
+  const last3 = sorted.slice(0, 3);
+  const totalUnitsLast3 = last3.reduce((s, r) => s + (Number(r.units) || 0), 0);
+  const wAvg = (key) => {
+    let sum = 0; let weight = 0;
+    for (const r of last3) {
+      const v = r[key];
+      if (v == null) continue;
+      const w = totalUnitsLast3 > 0 ? (Number(r.units) || 0) : 1;
+      sum += Number(v) * w;
+      weight += w;
     }
-  } catch {/* productionStore not available yet — fall through to mock */}
-  return MOCK_ROLLUPS[treatmentId] || emptyRollups();
+    return weight > 0 ? sum / weight : 0;
+  };
+  const units_produced = sorted.reduce((s, r) => s + (Number(r.units) || 0), 0);
+  const earliest = sorted[sorted.length - 1];
+  return {
+    units_produced,
+    pos_count: new Set(sorted.map(r => r.po_id)).size,
+    first_run_at: earliest?.recorded_at || null,
+    latest_cost_usd: wAvg('unit_cost_usd'),
+    latest_lead_days: wAvg('lead_days'),
+    defect_rate_pct: wAvg('defect_pct'),
+  };
 }
 
 function emptyRollups() {
@@ -237,92 +279,50 @@ function emptyRollups() {
     units_produced: 0,
     pos_count: 0,
     first_run_at: null,
-    // `latest_cost_usd` is the public contract from the prompt; the suffixed
-    // `latest_unit_cost` mirror is what richer UI surfaces already read.
     latest_cost_usd: 0,
-    latest_unit_cost: null,
-    latest_unit_cost_delta_pct: null,
     latest_lead_days: 0,
-    latest_lead_delta_days: null,
     defect_rate_pct: 0,
-    defect_rate_delta_pct: null,
-    drift_30d_pct: null,
-    log: [],
-    drift: [],
-    used_in: [],
   };
 }
 
-// Mock fallback — covers the three seed treatments before Prompt 3 wires
-// real production data. Numbers come from the mockup so the seeded UI
-// matches the reference at first paint.
-const MOCK_ROLLUPS = {
-  'seed-stone-wash': {
-    units_produced: 1240,
-    pos_count: 4,
-    first_run_at: '2025-05-01',
-    latest_cost_usd: 3.80,
-    latest_unit_cost: 3.80,
-    latest_unit_cost_delta_pct: -9.5,
-    latest_lead_days: 12,
-    latest_lead_delta_days: -4,
-    defect_rate_pct: 0.3,
-    defect_rate_delta_pct: -73,
-    drift_30d_pct: 4.2,
-    log: [
-      { po_code: '#0024', date: '2026-02', style: 'AP-HD-STONE-01',     units: 320, lot: 'GO-2602-A', cost: 3.80, lead: 12, defect: 0.3, drift: 3.1 },
-      { po_code: '#0019', date: '2025-11', style: 'AP-PA-STONE-01',     units: 260, lot: 'GO-2511-B', cost: 3.85, lead: 13, defect: 0.4, drift: 4.8 },
-      { po_code: '#0014', date: '2025-08', style: 'AP-HD-STONE-01',     units: 420, lot: 'GO-2508-A', cost: 4.00, lead: 14, defect: 0.8, drift: 9.2 },
-      { po_code: '#0009', date: '2025-05', style: 'AP-PA-ECARGO-10',    units: 240, lot: 'FB-2505-A', cost: 4.20, lead: 16, defect: 1.1, drift: 12.4 },
-    ],
-    drift: [
-      { po_code: '#0024', date: '2026-02', score: 3.1, retrained: false, predicted_grad: ['#D4956A', '#B87048'], actual_grad: ['#D0906A', '#BA744C'] },
-      { po_code: '#0019', date: '2025-11', score: 4.8, retrained: false, predicted_grad: ['#D4956A', '#B87048'], actual_grad: ['#CE8C64', '#B56E45'] },
-      { po_code: '#0014', date: '2025-08', score: 9.2, retrained: true,  predicted_grad: ['#D4956A', '#B87048'], actual_grad: ['#C17E52', '#A45E38'] },
-    ],
-    used_in: [
-      { style_id: 'AP-HD-STONE-01',  style_name: 'Borderless stone hoodie',     units: 740, status: 'live' },
-      { style_id: 'AP-PA-STONE-01',  style_name: 'Borderless stone sweatpant',  units: 260, status: 'live' },
-      { style_id: 'AP-PA-ECARGO-10', style_name: 'Elements cargo W34',          units: 240, status: 'archived' },
-    ],
-  },
-  'seed-vintage-soft': {
-    units_produced: 480, pos_count: 2, first_run_at: '2025-09-01',
-    latest_cost_usd: 2.95,
-    latest_unit_cost: 2.95, latest_unit_cost_delta_pct: -3.2,
-    latest_lead_days: 10, latest_lead_delta_days: -2,
-    defect_rate_pct: 0.5, defect_rate_delta_pct: -40,
-    drift_30d_pct: 5.1,
-    log: [
-      { po_code: '#0021', date: '2026-01', style: 'AP-TS-VINTAGE-01', units: 280, lot: 'FB-2601-A', cost: 2.95, lead: 10, defect: 0.5, drift: 5.1 },
-      { po_code: '#0012', date: '2025-09', style: 'AP-TS-VINTAGE-01', units: 200, lot: 'FB-2509-B', cost: 3.05, lead: 12, defect: 0.9, drift: 7.2 },
-    ],
-    drift: [
-      { po_code: '#0021', date: '2026-01', score: 5.1, retrained: false, predicted_grad: ['#EBE5D5', '#D6CFB9'], actual_grad: ['#E6E0CD', '#D0C8AE'] },
-      { po_code: '#0012', date: '2025-09', score: 7.2, retrained: false, predicted_grad: ['#EBE5D5', '#D6CFB9'], actual_grad: ['#DDD3B8', '#C5BA9A'] },
-    ],
-    used_in: [
-      { style_id: 'AP-TS-VINTAGE-01', style_name: 'Vintage soft tee', units: 480, status: 'live' },
-    ],
-  },
-  'seed-gone-global-dye': {
-    units_produced: 360, pos_count: 1, first_run_at: '2025-12-01',
-    latest_cost_usd: 4.65,
-    latest_unit_cost: 4.65, latest_unit_cost_delta_pct: 0,
-    latest_lead_days: 18, latest_lead_delta_days: 0,
-    defect_rate_pct: 0.6, defect_rate_delta_pct: 0,
-    drift_30d_pct: 3.4,
-    log: [
-      { po_code: '#0020', date: '2025-12', style: 'AP-HD-GONE-01', units: 360, lot: 'GO-2512-A', cost: 4.65, lead: 18, defect: 0.6, drift: 3.4 },
-    ],
-    drift: [
-      { po_code: '#0020', date: '2025-12', score: 3.4, retrained: false, predicted_grad: ['#3A3A3A', '#1F1F1F'], actual_grad: ['#3D3D3D', '#212121'] },
-    ],
-    used_in: [
-      { style_id: 'AP-HD-GONE-01', style_name: 'Gone hoodie · slate', units: 360, status: 'live' },
-    ],
-  },
-};
+// Distinct styles that have ever produced this treatment, with cumulative
+// units. Status reflects the underlying tech pack's status when available.
+export async function getUsedInForTreatment(treatmentId) {
+  if (!treatmentId) return [];
+  const { listAtomUsage, getPO } = await import('./productionStore');
+  const rows = await listAtomUsage({ atom_type: 'treatment', atom_id: treatmentId });
+  if (!rows.length) return [];
+  const byPO = new Map();
+  for (const r of rows) {
+    if (!byPO.has(r.po_id)) byPO.set(r.po_id, []);
+    byPO.get(r.po_id).push(r);
+  }
+  const styleAgg = new Map();
+  for (const [po_id, runs] of byPO) {
+    const po = await getPO(po_id);
+    const styleId = po?.style_id || '—';
+    const units = runs.reduce((s, r) => s + (Number(r.units) || 0), 0);
+    if (!styleAgg.has(styleId)) styleAgg.set(styleId, { style_id: styleId, units: 0, status: 'live' });
+    styleAgg.get(styleId).units += units;
+  }
+  // Best-effort tech pack lookup for style_name + status.
+  const { getTechPack } = await import('./techPackStore');
+  const out = [];
+  for (const entry of styleAgg.values()) {
+    let style_name = '';
+    let status = entry.status;
+    try {
+      const pack = await getTechPack(entry.style_id);
+      if (pack) {
+        style_name = pack.style_name || pack.data?.styleName || '';
+        status = pack.status || pack.data?.status || status;
+      }
+    } catch {/* missing pack — keep style_id-only display */}
+    out.push({ ...entry, style_name, status });
+  }
+  return out;
+}
+
 
 // Seed the two wash houses the treatment seeds reference. Idempotent — the
 // vendorLibrary's addVendor returns `{ ok: false }` if the name is already in
