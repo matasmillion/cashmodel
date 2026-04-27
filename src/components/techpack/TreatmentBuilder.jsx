@@ -247,6 +247,7 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
     ? `${trainCount} images${dig.lora_version ? ` · ${dig.lora_version}` : ''}${trainedDate ? ` retrained ${trainedDate}` : ''}`
     : '—';
   const lastRendered = formatLongDate(dig.last_digital_sync_at);
+  const driftPct = driftRows[0]?.score_pct ?? null;
   const driftLine = driftPct != null
     ? `${Number(driftPct).toFixed(1)}% — ${driftPct < 8 ? 'within target' : 'retrain recommended'}`
     : '—';
@@ -264,8 +265,6 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
   const cost = rollups?.latest_cost_usd ? `$${Number(rollups.latest_cost_usd).toFixed(2)}` : '—';
   const lead = rollups?.latest_lead_days ? `${Math.round(rollups.latest_lead_days)} d` : '—';
   const defect = rollups?.defect_rate_pct ? fmtPct(rollups.defect_rate_pct) : '—';
-
-  const driftPct = driftRows[0]?.score_pct ?? null;
 
   return (
     <div>
