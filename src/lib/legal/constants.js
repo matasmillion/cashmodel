@@ -54,7 +54,7 @@ export const POLICY_INDEX = [
     title: 'Information Security Policy',
     summary:
       'How Foreign Resource Co. protects banking, business, and (forthcoming) consumer data — governance, controls, vendors, incident response.',
-    live: false,
+    live: true,
   },
   {
     id: 'dataRetention',

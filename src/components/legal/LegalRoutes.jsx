@@ -7,12 +7,14 @@
 import { Routes, Route } from 'react-router-dom';
 import LegalLayout from './LegalLayout';
 import LegalIndexPage from './LegalIndexPage';
+import InformationSecurityPolicyPage from './pages/InformationSecurityPolicyPage';
 
 export default function LegalRoutes() {
   return (
     <LegalLayout>
       <Routes>
         <Route index element={<LegalIndexPage />} />
+        <Route path="information-security-policy" element={<InformationSecurityPolicyPage />} />
         {/* Per-policy routes mount here as each prompt lands. */}
       </Routes>
     </LegalLayout>
