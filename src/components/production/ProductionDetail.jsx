@@ -116,7 +116,19 @@ export default function ProductionDetail({ poId, onBack }) {
     totalActual ? fmtMoney(totalActual) : null,
   ].filter(Boolean);
 
-  const goBack = () => (onBack ? onBack() : setPLMHash({ layer: 'production' }));
+  // Prefer a real browser back-step when there's history to walk: it
+  // fires a native popstate that every router-aware effect picks up,
+  // and preserves scroll / filter state on the production list. Fall
+  // back to setPLMHash for deep-link entries with no prior page.
+  const goBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else if (onBack) {
+      onBack();
+    } else {
+      setPLMHash({ layer: 'production' });
+    }
+  };
   const nextAction = NEXT_TRANSITION[po.status];
 
   return (
