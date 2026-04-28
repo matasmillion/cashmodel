@@ -9,6 +9,7 @@ import LegalLayout from './LegalLayout';
 import LegalIndexPage from './LegalIndexPage';
 import InformationSecurityPolicyPage from './pages/InformationSecurityPolicyPage';
 import DataRetentionAndDeletionPolicyPage from './pages/DataRetentionAndDeletionPolicyPage';
+import AccessControlPolicyPage from './pages/AccessControlPolicyPage';
 import VersionHistoryPage from './pages/VersionHistoryPage';
 
 export default function LegalRoutes() {
@@ -18,8 +19,8 @@ export default function LegalRoutes() {
         <Route index element={<LegalIndexPage />} />
         <Route path="information-security-policy" element={<InformationSecurityPolicyPage />} />
         <Route path="data-retention-and-deletion-policy" element={<DataRetentionAndDeletionPolicyPage />} />
+        <Route path="access-control-policy" element={<AccessControlPolicyPage />} />
         <Route path="version-history" element={<VersionHistoryPage />} />
-        {/* Per-policy routes mount here as each prompt lands. */}
       </Routes>
     </LegalLayout>
   );

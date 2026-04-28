@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-28T07:09:51.668Z",
+  "lastUpdated": "2026-04-28T07:26:59.683Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,14 +1044,24 @@
   ],
   "changelog": [
     {
-      "sha": "42d7705",
-      "date": "2026-04-28T07:07:41+00:00",
-      "message": "feat(legal): cross-link DR + InfoSec, flip DR live (P2/C3)"
+      "sha": "640703e",
+      "date": "2026-04-28T07:24:11+00:00",
+      "message": "feat(legal): Access Control Policy page (P3/C2)"
     },
     {
-      "sha": "693bb22",
-      "date": "2026-04-28T07:04:38+00:00",
-      "message": "feat(legal): Data Retention & Deletion Policy page (P2/C2)"
+      "sha": "8829032",
+      "date": "2026-04-28T10:10:40+03:00",
+      "message": "feat(legal): add Data Retention & Deletion Policy v1.1 (#9)"
+    },
+    {
+      "sha": "3b8c9cd",
+      "date": "2026-04-28T06:56:46+00:00",
+      "message": "13-week (58-wk) cashflow on Dashboard, ported from xlsx"
+    },
+    {
+      "sha": "a867262",
+      "date": "2026-04-28T09:22:13+03:00",
+      "message": "Add files via upload"
     },
     {
       "sha": "99d925e",
@@ -1082,16 +1092,6 @@
       "sha": "d7d6c80",
       "date": "2026-04-27T20:06:34+03:00",
       "message": "feat(plm): real file uploads in every library card (FileSlot) (#4)"
-    },
-    {
-      "sha": "9bb4b44",
-      "date": "2026-04-27T19:31:39+03:00",
-      "message": "feat(plm): hotfix Treatments crash, vendor dropdowns, CLO3D/Adobe file slots, PO edit + size break (#3)"
-    },
-    {
-      "sha": "c246259",
-      "date": "2026-04-27T16:57:19+03:00",
-      "message": "feat(plm): grid/kanban view + 2:3 cover images for every atom library (#2)"
     }
   ]
 }

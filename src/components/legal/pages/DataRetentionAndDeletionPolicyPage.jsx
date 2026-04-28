@@ -17,6 +17,7 @@ import PolicyTOC from '../PolicyTOC';
 import PolicySection from '../PolicySection';
 import PolicyFooter from '../PolicyFooter';
 import RelatedPolicies from '../RelatedPolicies';
+import ResponsivePolicyTable from '../ResponsivePolicyTable';
 
 const PDF_HREF = `${import.meta.env.BASE_URL}legal/data-retention-and-deletion-policy-v1-1.pdf`;
 const CANONICAL = `${PUBLIC_BASE_URL}/legal/data-retention-and-deletion-policy`;
@@ -31,72 +32,82 @@ const PARA = { margin: '8px 0' };
 const EMPH = { fontWeight: 600, color: '#3A3A3A' };
 const SUB_HEAD = { fontWeight: 600, color: '#3A3A3A', marginTop: 14 };
 
-// Retention schedule — every row is a [category, examples, retention,
-// disposal] tuple. Pulled out of the JSX so the desktop <table> and
-// the ≤640px card-stack both consume the same data.
-/** @type {Array<{ category: string; examples: string; retention: string; disposal: string }>} */
+// Retention schedule — pulled out of the JSX so the desktop table and
+// the mobile card-stack (rendered by <ResponsivePolicyTable />) both
+// consume the same data. `key` is required for React + the card title.
 const RETENTION_SCHEDULE = [
   {
+    key: 'plaid-access-tokens',
     category: 'Plaid access tokens',
     examples: 'OAuth tokens, item IDs, account IDs',
     retention: 'Active connection only; deleted within 30 days of disconnect or account closure',
     disposal: 'Cryptographic erasure (key destruction) + DB row delete',
   },
   {
+    key: 'plaid-derived-banking-data',
     category: 'Plaid-derived banking data',
     examples: 'Transactions, balances, account metadata cached for dashboard rendering',
     retention: 'Cached briefly (≤ 30 days rolling); refreshed on demand from Plaid API',
     disposal: 'Automatic cache expiry + DB row delete',
   },
   {
+    key: 'source-of-truth-financial-records',
     category: 'Source-of-truth financial records',
     examples: 'Mercury / Shopify / Finaloop authoritative records (FR is consumer of these)',
     retention: 'Governed by upstream provider retention policy',
     disposal: 'Per upstream provider procedure',
   },
   {
+    key: 'internal-erp-operational-metadata',
     category: 'Internal ERP operational metadata',
     examples: 'PO records, vendor info, internal notes',
     retention: 'Lifetime of the business; archived after 7 years if no longer in active use',
     disposal: 'Logical delete then secure DB purge',
   },
   {
+    key: 'business-financial-records',
     category: 'Business financial records',
     examples: 'Books, ledgers, tax records',
     retention: '7 years (US tax / corporate recordkeeping)',
     disposal: 'Secure deletion after retention period',
   },
   {
+    key: 'authentication-access-logs',
     category: 'Authentication & access logs',
     examples: 'Login events, MFA challenges, privileged actions',
     retention: '90 days (rolling)',
     disposal: 'Automatic log rotation',
   },
   {
+    key: 'application-error-audit-logs',
     category: 'Application error / audit logs',
     examples: 'Stack traces, system events (PII/tokens excluded)',
     retention: '90 days (rolling)',
     disposal: 'Automatic log rotation',
   },
   {
+    key: 'user-accounts-internal',
     category: 'User accounts (internal)',
     examples: 'Employee / contractor accounts in the ERP',
     retention: 'Active during engagement; disabled within 24h of separation; deleted within 30 days',
     disposal: 'DB row delete + revocation of all credentials',
   },
   {
+    key: 'backups',
     category: 'Backups',
     examples: 'Database point-in-time recovery snapshots',
     retention: 'Per provider default (typically 7–30 days)',
     disposal: 'Provider-managed lifecycle',
   },
   {
+    key: 'future-consumer-accounts',
     category: 'Future: Consumer accounts & PII',
     examples: '(N/A today — placeholder for future consumer launch)',
     retention: 'Active until account deletion request; deleted within 30 days of verified request',
     disposal: 'Hard delete; backup tombstone within next backup cycle',
   },
   {
+    key: 'future-consumer-marketing-data',
     category: 'Future: Consumer marketing data',
     examples: '(N/A today — placeholder)',
     retention: 'Until unsubscribe or 24 months of inactivity',
@@ -104,97 +115,15 @@ const RETENTION_SCHEDULE = [
   },
 ];
 
+const RETENTION_COLUMNS = [
+  { label: 'Data Category', field: 'category', primary: true },
+  { label: 'Examples', field: 'examples' },
+  { label: 'Retention', field: 'retention' },
+  { label: 'Disposal Method', field: 'disposal' },
+];
+
 function RetentionScheduleTable() {
-  return (
-    <>
-      {/* Inline style block scopes the desktop/mobile switch entirely
-          to this component — no global CSS leakage. The display-table
-          surface hides on narrow viewports; the card-stack surface
-          hides on wide ones. */}
-      <style>{`
-        .fr-retention-table-wrap { margin: 14px 0; }
-        .fr-retention-table {
-          width: 100%; border-collapse: collapse; font-size: 13px;
-          font-family: 'Inter', sans-serif;
-          border: 0.5px solid rgba(58,58,58,0.15);
-        }
-        .fr-retention-table th {
-          text-align: left; padding: 10px 12px;
-          background: #3A3A3A; color: #F5F0E8;
-          font-weight: 600; letter-spacing: 0.04em;
-          font-size: 11px; text-transform: uppercase;
-          border-bottom: 0.5px solid rgba(58,58,58,0.15);
-        }
-        .fr-retention-table td {
-          padding: 10px 12px; border-bottom: 0.5px solid rgba(58,58,58,0.08);
-          vertical-align: top; color: #3A3A3A;
-        }
-        .fr-retention-table td:first-child { font-weight: 600; }
-        .fr-retention-cards { display: none; }
-        @media (max-width: 640px) {
-          .fr-retention-table { display: none; }
-          .fr-retention-cards { display: flex; flex-direction: column; gap: 10px; }
-          .fr-retention-card {
-            background: #fff; border: 0.5px solid rgba(58,58,58,0.15);
-            border-radius: 8px; padding: 14px 16px;
-          }
-          .fr-retention-card-title {
-            font-weight: 600; color: #3A3A3A; margin-bottom: 8px;
-            font-size: 14px;
-          }
-          .fr-retention-card dl {
-            margin: 0; display: grid;
-            grid-template-columns: max-content 1fr;
-            column-gap: 10px; row-gap: 6px;
-            font-size: 12.5px; line-height: 1.5;
-          }
-          .fr-retention-card dt {
-            color: rgba(58,58,58,0.55);
-            font-size: 10px; letter-spacing: 0.06em;
-            text-transform: uppercase;
-            padding-top: 2px;
-          }
-          .fr-retention-card dd { margin: 0; color: #3A3A3A; }
-        }
-      `}</style>
-
-      <div className="fr-retention-table-wrap">
-        <table className="fr-retention-table">
-          <thead>
-            <tr>
-              <th>Data Category</th>
-              <th>Examples</th>
-              <th>Retention</th>
-              <th>Disposal Method</th>
-            </tr>
-          </thead>
-          <tbody>
-            {RETENTION_SCHEDULE.map(row => (
-              <tr key={row.category}>
-                <td>{row.category}</td>
-                <td>{row.examples}</td>
-                <td>{row.retention}</td>
-                <td>{row.disposal}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <div className="fr-retention-cards">
-          {RETENTION_SCHEDULE.map(row => (
-            <div key={row.category} className="fr-retention-card">
-              <div className="fr-retention-card-title">{row.category}</div>
-              <dl>
-                <dt>Examples</dt><dd>{row.examples}</dd>
-                <dt>Retention</dt><dd>{row.retention}</dd>
-                <dt>Disposal</dt><dd>{row.disposal}</dd>
-              </dl>
-            </div>
-          ))}
-        </div>
-      </div>
-    </>
-  );
+  return <ResponsivePolicyTable columns={RETENTION_COLUMNS} rows={RETENTION_SCHEDULE} />;
 }
 
 const SECTIONS = [
