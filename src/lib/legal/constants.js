@@ -70,6 +70,6 @@ export const POLICY_INDEX = [
     title: 'Access Control Policy',
     summary:
       'Who can access what, how access is granted and removed, and how we audit it.',
-    live: false,
+    live: true,
   },
 ];
