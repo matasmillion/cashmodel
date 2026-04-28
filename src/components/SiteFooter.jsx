@@ -11,6 +11,7 @@
 
 import { Link } from 'react-router-dom';
 import { POLICY_INDEX } from '../lib/legal/constants';
+import LastReviewed from './legal/LastReviewed';
 
 export default function SiteFooter() {
   return (
@@ -69,12 +70,15 @@ export default function SiteFooter() {
               </Link>
             </li>
             {POLICY_INDEX.map(p => (
-              <li key={p.id} style={{ paddingLeft: 12 }}>
+              <li key={p.id} style={{ paddingLeft: 12, display: 'flex', flexDirection: 'column' }}>
                 {p.live
                   ? (
-                    <Link to={`/legal/${p.slug}`} style={{ color: '#3A3A3A', textDecoration: 'none' }}>
-                      {p.title}
-                    </Link>
+                    <>
+                      <Link to={`/legal/${p.slug}`} style={{ color: '#3A3A3A', textDecoration: 'none' }}>
+                        {p.title}
+                      </Link>
+                      <LastReviewed policy={p.id} style={{ fontSize: 10, color: 'rgba(58,58,58,0.45)' }} />
+                    </>
                   )
                   : (
                     <span style={{ color: 'rgba(58,58,58,0.45)' }}>
@@ -84,6 +88,11 @@ export default function SiteFooter() {
                 }
               </li>
             ))}
+            <li style={{ paddingLeft: 12, marginTop: 6 }}>
+              <Link to="/legal/version-history" style={{ color: '#716F70', textDecoration: 'none', fontSize: 11, letterSpacing: '0.04em' }}>
+                Version history
+              </Link>
+            </li>
           </ul>
         </nav>
       </div>
