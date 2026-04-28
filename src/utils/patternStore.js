@@ -17,6 +17,7 @@
 // transitions, not the atom records themselves.
 
 import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
+import { getCurrentUserIdSync } from '../lib/auth';
 import { emptyPattern, PATTERN_CATEGORIES, PATTERN_CATEGORY_CODE } from './patternLibrary';
 
 const LOCAL_KEY = 'cashmodel_patterns';
@@ -35,14 +36,8 @@ function writeLocal(rows) {
   catch (err) { console.error('patternStore write:', err); }
 }
 
-function currentUserId() {
-  try {
-    const raw = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
-    if (!raw) return null;
-    const session = JSON.parse(localStorage.getItem(raw));
-    return session?.user?.id ?? null;
-  } catch { return null; }
-}
+// Synchronous reader; null if Clerk is still loading or no user signed in.
+const currentUserId = getCurrentUserIdSync;
 
 function newId() {
   return (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());

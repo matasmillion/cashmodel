@@ -1,9 +1,9 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { ClerkProvider } from '@clerk/clerk-react';
 import { AppProvider, useApp } from './context/AppContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import KPICards from './components/KPICards';
 import CashflowTable from './components/CashflowTable';
-import Cashflow58WeekTable from './components/Cashflow58WeekTable';
 import UnitEconomics from './components/UnitEconomics';
 import POBuilder from './components/POBuilder';
 import POSchedule from './components/POSchedule';
@@ -14,11 +14,13 @@ import RevenueForecast from './components/RevenueForecast';
 import AdUnitModel from './components/AdUnitModel';
 import RateCardManager from './components/RateCardManager';
 import PLMView from './components/techpack/PLMView';
-import AuthGate from './auth/AuthGate';
+import RequireAuth from './components/auth/RequireAuth';
+import Header from './components/auth/Header';
+import SignInPage from './components/auth/SignInPage';
+import SignUpPage from './components/auth/SignUpPage';
 import SiteFooter from './components/SiteFooter';
 import LegalRoutes from './components/legal/LegalRoutes';
-import { supabase, IS_SUPABASE_ENABLED } from './lib/supabase';
-import { LayoutDashboard, Table2, Calculator, Package, Receipt, Sliders, Plug, TrendingUp, Film, CalendarRange, Truck, LogOut, Shirt, RefreshCw, CheckCircle, AlertCircle, Loader } from 'lucide-react';
+import { LayoutDashboard, Table2, Calculator, Package, Receipt, Sliders, Plug, TrendingUp, Film, CalendarRange, Truck, Shirt, RefreshCw, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 
 const tabs = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -97,18 +99,7 @@ function Dashboard() {
                 </p>
               </div>
               <SyncIndicator />
-              {IS_SUPABASE_ENABLED && (
-                <button
-                  onClick={() => supabase.auth.signOut()}
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs"
-                  title="Sign out"
-                  style={{ color: '#716F70', background: 'transparent', border: 'none', cursor: 'pointer' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = '#EBE5D5'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-                >
-                  <LogOut size={13} />
-                </button>
-              )}
+              <Header />
             </div>
             <nav className="flex gap-1 flex-wrap">
               {tabs.map(tab => {
@@ -140,7 +131,7 @@ function Dashboard() {
         {state.activeTab === 'dashboard' && (
           <>
             <KPICards />
-            <Cashflow58WeekTable />
+            <CashflowTable />
           </>
         )}
         {state.activeTab === 'revenue' && <RevenueForecast />}
@@ -166,29 +157,60 @@ function Dashboard() {
 // the basename is `/cashmodel` (no trailing slash) per react-router-dom
 // expectations.
 const ROUTER_BASENAME = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+if (!CLERK_PUBLISHABLE_KEY && typeof window !== 'undefined') {
+  // Dev / preview without Clerk keys configured will hit this. Better
+  // to surface a loud error than to silently fail in <ClerkProvider>.
+  // eslint-disable-next-line no-console
+  console.error('Missing VITE_CLERK_PUBLISHABLE_KEY — set it in .env.local for dev or as a GitHub Actions secret for the Pages build.');
+}
+
+// Clerk + react-router-dom integration: ClerkProvider sits inside
+// BrowserRouter so it can read the navigate function; we hand it
+// routerPush / routerReplace so Clerk's internal redirects
+// (sign-in -> sign-up, completed sign-in -> dashboard, etc.) stay
+// SPA-internal instead of doing window.location reloads.
+function RoutedApp() {
+  const navigate = useNavigate();
+  return (
+    <ClerkProvider
+      publishableKey={CLERK_PUBLISHABLE_KEY}
+      routerPush={(to) => navigate(to)}
+      routerReplace={(to) => navigate(to, { replace: true })}
+    >
+      <Routes>
+        {/* /legal/* renders standalone, outside the FR app dashboard
+            chrome, with no auth gate — these pages are publicly
+            accessible per the rollout spec. */}
+        <Route path="/legal/*" element={<LegalRoutes />} />
+        {/* Sign-in / sign-up are public; Clerk's Restricted sign-up
+            mode enforces the invite gate at /sign-up. */}
+        <Route path="/sign-in/*" element={<SignInPage />} />
+        <Route path="/sign-up/*" element={<SignUpPage />} />
+        {/* Everything else falls through to the existing FR dashboard
+            shell, gated by <RequireAuth> which redirects unauthed
+            users to /sign-in. */}
+        <Route
+          path="*"
+          element={
+            <RequireAuth>
+              <AppProvider>
+                <Dashboard />
+              </AppProvider>
+            </RequireAuth>
+          }
+        />
+      </Routes>
+    </ClerkProvider>
+  );
+}
 
 function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter basename={ROUTER_BASENAME}>
-        <Routes>
-          {/* /legal/* renders standalone, outside the FR app dashboard
-              chrome, with no AuthGate — these pages are publicly
-              accessible per the rollout spec. */}
-          <Route path="/legal/*" element={<LegalRoutes />} />
-          {/* Everything else falls through to the existing FR dashboard
-              shell, which keeps its tab nav and AuthGate intact. */}
-          <Route
-            path="*"
-            element={
-              <AuthGate>
-                <AppProvider>
-                  <Dashboard />
-                </AppProvider>
-              </AuthGate>
-            }
-          />
-        </Routes>
+        <RoutedApp />
       </BrowserRouter>
     </ErrorBoundary>
   );

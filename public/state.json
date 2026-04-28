@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-28T13:23:25.168Z",
+  "lastUpdated": "2026-04-28T13:37:11.538Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "be32380",
+      "date": "2026-04-28T13:24:06+00:00",
+      "message": "chore(auth): install @clerk/clerk-react + untrack .env.local (P4/C2)"
+    },
+    {
       "sha": "6e9937b",
       "date": "2026-04-28T15:39:48+03:00",
       "message": "Create .env.local"
@@ -1087,11 +1092,6 @@
       "sha": "e97021c",
       "date": "2026-04-27T20:15:32+03:00",
       "message": "fix(plm): use window.history.back() for PO detail Back button (#6)"
-    },
-    {
-      "sha": "d380c1b",
-      "date": "2026-04-27T20:10:34+03:00",
-      "message": "fix(plm): re-render on PO click — dispatch popstate after pushState (#5)"
     }
   ]
 }

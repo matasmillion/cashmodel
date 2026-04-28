@@ -21,6 +21,7 @@
 // rows use uuids — they're internal and don't need a human-friendly handle.
 
 import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
+import { getCurrentUserIdSync } from '../lib/auth';
 
 const PO_KEY        = 'cashmodel_pos';
 const BOM_SNAP_KEY  = 'cashmodel_bom_snapshots';
@@ -95,14 +96,8 @@ function writeLocal(key, rows) {
 function newId() {
   return (crypto.randomUUID && crypto.randomUUID()) || `id-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
-function currentUserId() {
-  try {
-    const raw = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
-    if (!raw) return null;
-    const session = JSON.parse(localStorage.getItem(raw));
-    return session?.user?.id ?? null;
-  } catch { return null; }
-}
+// Synchronous reader; null if Clerk is still loading or no user signed in.
+const currentUserId = getCurrentUserIdSync;
 
 // ── PO codes ───────────────────────────────────────────────────────────────
 

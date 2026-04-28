@@ -5,8 +5,8 @@
 //
 // This layout is rendered OUTSIDE the FR app dashboard nav, on purpose:
 // reviewers (Plaid) and search engines see the legal pages as
-// standalone, customer-facing surfaces. The PLM tab nav, AuthGate, and
-// Supabase session are deliberately not part of this tree.
+// standalone, customer-facing surfaces. The PLM tab nav, RequireAuth,
+// and Clerk session are deliberately not part of this tree.
 
 import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
