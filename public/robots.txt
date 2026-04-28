@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://matasmillion.github.io/cashmodel/sitemap.xml
