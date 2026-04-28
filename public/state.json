@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-28T07:03:35.523Z",
+  "lastUpdated": "2026-04-28T07:06:33.973Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "693bb22",
+      "date": "2026-04-28T07:04:38+00:00",
+      "message": "feat(legal): Data Retention & Deletion Policy page (P2/C2)"
+    },
+    {
       "sha": "99d925e",
       "date": "2026-04-28T09:51:25+03:00",
       "message": "fix(legal): tighten SiteFooter alignment + visual hierarchy (#8)"
@@ -1087,11 +1092,6 @@
       "sha": "98e7e90",
       "date": "2026-04-27T16:39:16+03:00",
       "message": "feat(plm): make Patterns, Fabrics, and Embellishments tabs functional (#1)"
-    },
-    {
-      "sha": "7e74ee1",
-      "date": "2026-04-27T12:38:57+00:00",
-      "message": "fix(plm): hoist driftPct above its use sites in TreatmentBuilder"
     }
   ]
 }

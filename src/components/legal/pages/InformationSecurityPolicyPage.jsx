@@ -16,6 +16,7 @@ import PolicyHeader from '../PolicyHeader';
 import PolicyTOC from '../PolicyTOC';
 import PolicySection from '../PolicySection';
 import PolicyFooter from '../PolicyFooter';
+import RelatedPolicies from '../RelatedPolicies';
 
 const PDF_HREF = `${import.meta.env.BASE_URL}legal/information-security-policy-v1.pdf`;
 const CANONICAL = `${PUBLIC_BASE_URL}/legal/information-security-policy`;
@@ -498,6 +499,7 @@ export default function InformationSecurityPolicyPage() {
           {s.body}
         </PolicySection>
       ))}
+      <RelatedPolicies currentPolicyId="infosec" />
       <PolicyFooter
         title={TITLE}
         version={META.version}

@@ -62,7 +62,7 @@ export const POLICY_INDEX = [
     title: 'Data Retention & Deletion Policy',
     summary:
       'How long we keep data, why, and how we dispose of it when the retention period ends.',
-    live: false,
+    live: true,
   },
   {
     id: 'accessControl',

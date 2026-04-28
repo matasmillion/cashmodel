@@ -16,6 +16,7 @@ import PolicyHeader from '../PolicyHeader';
 import PolicyTOC from '../PolicyTOC';
 import PolicySection from '../PolicySection';
 import PolicyFooter from '../PolicyFooter';
+import RelatedPolicies from '../RelatedPolicies';
 
 const PDF_HREF = `${import.meta.env.BASE_URL}legal/data-retention-and-deletion-policy-v1-1.pdf`;
 const CANONICAL = `${PUBLIC_BASE_URL}/legal/data-retention-and-deletion-policy`;
@@ -446,6 +447,7 @@ export default function DataRetentionAndDeletionPolicyPage() {
           {s.body}
         </PolicySection>
       ))}
+      <RelatedPolicies currentPolicyId="dataRetention" />
       <PolicyFooter
         title={TITLE}
         version={META.version}
