@@ -30,7 +30,7 @@ export const POLICY_META = {
     iso: '2026-04-27',
   },
   accessControl: {
-    version: '1.0',
+    version: '1.1',
     effective: 'April 27, 2026',
     lastReviewed: 'April 27, 2026',
     iso: '2026-04-27',
