@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-28T06:48:37.681Z",
+  "lastUpdated": "2026-04-28T06:57:38.652Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,21 @@
   ],
   "changelog": [
     {
+      "sha": "0809a2b",
+      "date": "2026-04-28T06:56:46+00:00",
+      "message": "13-week (58-wk) cashflow on Dashboard, ported from xlsx"
+    },
+    {
+      "sha": "a867262",
+      "date": "2026-04-28T09:22:13+03:00",
+      "message": "Add files via upload"
+    },
+    {
+      "sha": "99d925e",
+      "date": "2026-04-28T09:51:25+03:00",
+      "message": "fix(legal): tighten SiteFooter alignment + visual hierarchy (#8)"
+    },
+    {
       "sha": "98409d5",
       "date": "2026-04-28T09:34:48+03:00",
       "message": "feat(legal): add /legal scaffold and Information Security Policy v1.0 (#7)"
@@ -1077,21 +1092,6 @@
       "sha": "c246259",
       "date": "2026-04-27T16:57:19+03:00",
       "message": "feat(plm): grid/kanban view + 2:3 cover images for every atom library (#2)"
-    },
-    {
-      "sha": "98e7e90",
-      "date": "2026-04-27T16:39:16+03:00",
-      "message": "feat(plm): make Patterns, Fabrics, and Embellishments tabs functional (#1)"
-    },
-    {
-      "sha": "7e74ee1",
-      "date": "2026-04-27T12:38:57+00:00",
-      "message": "fix(plm): hoist driftPct above its use sites in TreatmentBuilder"
-    },
-    {
-      "sha": "3c5e208",
-      "date": "2026-04-27T11:12:53+00:00",
-      "message": "feat(plm): seed one demo PO walked through full lifecycle"
     }
   ]
 }
