@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-27T17:54:26.785Z",
+  "lastUpdated": "2026-04-28T06:29:21.288Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "debb36e",
+      "date": "2026-04-27T17:54:51+00:00",
+      "message": "remove dashboard charts, leave 13-week cashflow on top"
+    },
+    {
       "sha": "e97021c",
       "date": "2026-04-27T20:15:32+03:00",
       "message": "fix(plm): use window.history.back() for PO detail Back button (#6)"
@@ -1087,11 +1092,6 @@
       "sha": "54d7695",
       "date": "2026-04-27T11:09:35+00:00",
       "message": "feat(plm): wire real production rollups into treatment builder"
-    },
-    {
-      "sha": "5d96ad6",
-      "date": "2026-04-27T11:01:22+00:00",
-      "message": "feat(plm): writeback engine — placePO snapshot + closePO atom usage + rolling averages"
     }
   ]
 }

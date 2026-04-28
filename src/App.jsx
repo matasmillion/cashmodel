@@ -1,3 +1,4 @@
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import KPICards from './components/KPICards';
@@ -13,6 +14,8 @@ import AdUnitModel from './components/AdUnitModel';
 import RateCardManager from './components/RateCardManager';
 import PLMView from './components/techpack/PLMView';
 import AuthGate from './auth/AuthGate';
+import SiteFooter from './components/SiteFooter';
+import LegalRoutes from './components/legal/LegalRoutes';
 import { supabase, IS_SUPABASE_ENABLED } from './lib/supabase';
 import { LayoutDashboard, Table2, Calculator, Package, Receipt, Sliders, Plug, TrendingUp, Film, CalendarRange, Truck, LogOut, Shirt, RefreshCw, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 
@@ -151,18 +154,41 @@ function Dashboard() {
         {state.activeTab === 'scenarios' && <ScenarioManager />}
         {state.activeTab === 'integrations' && <IntegrationsPanel />}
       </main>
+
+      <SiteFooter />
     </div>
   );
 }
 
+// Vite serves the SPA from `/cashmodel/`, so React Router's basename
+// must match. import.meta.env.BASE_URL ends in a slash — strip it so
+// the basename is `/cashmodel` (no trailing slash) per react-router-dom
+// expectations.
+const ROUTER_BASENAME = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+
 function App() {
   return (
     <ErrorBoundary>
-      <AuthGate>
-        <AppProvider>
-          <Dashboard />
-        </AppProvider>
-      </AuthGate>
+      <BrowserRouter basename={ROUTER_BASENAME}>
+        <Routes>
+          {/* /legal/* renders standalone, outside the FR app dashboard
+              chrome, with no AuthGate — these pages are publicly
+              accessible per the rollout spec. */}
+          <Route path="/legal/*" element={<LegalRoutes />} />
+          {/* Everything else falls through to the existing FR dashboard
+              shell, which keeps its tab nav and AuthGate intact. */}
+          <Route
+            path="*"
+            element={
+              <AuthGate>
+                <AppProvider>
+                  <Dashboard />
+                </AppProvider>
+              </AuthGate>
+            }
+          />
+        </Routes>
+      </BrowserRouter>
     </ErrorBoundary>
   );
 }
