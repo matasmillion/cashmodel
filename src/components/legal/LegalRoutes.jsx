@@ -8,6 +8,7 @@ import { Routes, Route } from 'react-router-dom';
 import LegalLayout from './LegalLayout';
 import LegalIndexPage from './LegalIndexPage';
 import InformationSecurityPolicyPage from './pages/InformationSecurityPolicyPage';
+import DataRetentionAndDeletionPolicyPage from './pages/DataRetentionAndDeletionPolicyPage';
 import VersionHistoryPage from './pages/VersionHistoryPage';
 
 export default function LegalRoutes() {
@@ -16,6 +17,7 @@ export default function LegalRoutes() {
       <Routes>
         <Route index element={<LegalIndexPage />} />
         <Route path="information-security-policy" element={<InformationSecurityPolicyPage />} />
+        <Route path="data-retention-and-deletion-policy" element={<DataRetentionAndDeletionPolicyPage />} />
         <Route path="version-history" element={<VersionHistoryPage />} />
         {/* Per-policy routes mount here as each prompt lands. */}
       </Routes>

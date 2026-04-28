@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-28T06:57:38.652Z",
+  "lastUpdated": "2026-04-28T07:09:51.668Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,14 +1044,14 @@
   ],
   "changelog": [
     {
-      "sha": "0809a2b",
-      "date": "2026-04-28T06:56:46+00:00",
-      "message": "13-week (58-wk) cashflow on Dashboard, ported from xlsx"
+      "sha": "42d7705",
+      "date": "2026-04-28T07:07:41+00:00",
+      "message": "feat(legal): cross-link DR + InfoSec, flip DR live (P2/C3)"
     },
     {
-      "sha": "a867262",
-      "date": "2026-04-28T09:22:13+03:00",
-      "message": "Add files via upload"
+      "sha": "693bb22",
+      "date": "2026-04-28T07:04:38+00:00",
+      "message": "feat(legal): Data Retention & Deletion Policy page (P2/C2)"
     },
     {
       "sha": "99d925e",
