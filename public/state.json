@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-28T14:01:02.586Z",
+  "lastUpdated": "2026-04-28T14:16:18.936Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "52a1ac3",
+      "date": "2026-04-28T14:03:04+00:00",
+      "message": "feat(auth): /account/security + Clerk webhook + users migration (P4/C4)"
+    },
+    {
       "sha": "302671c",
       "date": "2026-04-28T13:38:56+00:00",
       "message": "feat(auth): wire Clerk + replace Supabase Auth (P4/C3)"
@@ -1087,11 +1092,6 @@
       "sha": "98409d5",
       "date": "2026-04-28T09:34:48+03:00",
       "message": "feat(legal): add /legal scaffold and Information Security Policy v1.0 (#7)"
-    },
-    {
-      "sha": "debb36e",
-      "date": "2026-04-27T17:54:51+00:00",
-      "message": "remove dashboard charts, leave 13-week cashflow on top"
     }
   ]
 }

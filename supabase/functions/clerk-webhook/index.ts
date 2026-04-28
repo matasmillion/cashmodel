@@ -48,7 +48,18 @@ type ClerkUser = {
 
 type ClerkEvent =
   | { type: 'user.created' | 'user.updated'; data: ClerkUser }
-  | { type: 'user.deleted'; data: { id: string; deleted: boolean } };
+  | { type: 'user.deleted'; data: { id: string; deleted: boolean } }
+  | { type: 'session.created' | 'session.ended' | 'session.removed' | 'session.revoked'; data: ClerkSession };
+
+type ClerkSession = {
+  id: string;
+  user_id: string;
+  client_id?: string;
+  status?: string;
+  created_at?: number;
+  updated_at?: number;
+  last_active_at?: number;
+};
 
 const SIGNING_SECRET = Deno.env.get('CLERK_WEBHOOK_SIGNING_SECRET') ?? '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
@@ -95,6 +106,77 @@ function mfaEnabled(u: ClerkUser): boolean {
   return (u.passkeys?.length ?? 0) > 0 || !!u.totp_enabled;
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// auth_events — append-only audit log writes. Service role bypasses
+// RLS so these inserts always succeed regardless of who's signed in.
+// ─────────────────────────────────────────────────────────────────────
+
+type AuthEventName =
+  | 'sign_in_success' | 'sign_out'
+  | 'mfa_enrolled' | 'mfa_removed'
+  | 'session_revoked' | 'password_reset_completed';
+
+async function writeAuthEvent(
+  userId: string,
+  eventName: AuthEventName,
+  metadata: Record<string, unknown>,
+) {
+  if (!userId) return;
+  const { error } = await supabase
+    .from('auth_events')
+    .insert({ user_id: userId, event: eventName, metadata });
+  if (error) {
+    // Don't fail the webhook over an audit-log miss; log + continue.
+    console.warn('clerk-webhook: auth_events insert failed', error);
+  }
+}
+
+// Set-diff helper for detecting MFA factor changes between an old and
+// new Clerk user payload. Returns { enrolled, removed } string arrays
+// of factor types that changed.
+function diffMfaFactors(prev: ClerkUser | null, next: ClerkUser): {
+  enrolled: string[]; removed: string[];
+} {
+  const prevTypes = new Set<string>();
+  const nextTypes = new Set<string>();
+  if (prev) {
+    for (const pk of prev.passkeys ?? []) prevTypes.add(`passkey:${pk.name || ''}`);
+    if (prev.totp_enabled) prevTypes.add('totp');
+    if (prev.backup_code_enabled) prevTypes.add('backup_code');
+  }
+  for (const pk of next.passkeys ?? []) nextTypes.add(`passkey:${pk.name || ''}`);
+  if (next.totp_enabled) nextTypes.add('totp');
+  if (next.backup_code_enabled) nextTypes.add('backup_code');
+  const enrolled: string[] = [];
+  const removed: string[] = [];
+  for (const t of nextTypes) if (!prevTypes.has(t)) enrolled.push(t);
+  for (const t of prevTypes) if (!nextTypes.has(t)) removed.push(t);
+  return { enrolled, removed };
+}
+
+// Pull the existing public.users row so we can diff MFA factors on
+// user.updated and emit mfa_enrolled / mfa_removed events as needed.
+async function readUserMfaSnapshot(clerkUserId: string): Promise<ClerkUser | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('mfa_factors')
+    .eq('clerk_user_id', clerkUserId)
+    .maybeSingle();
+  if (error || !data) return null;
+  // Reconstruct enough of a ClerkUser shape that diffMfaFactors can
+  // compare — we only need passkeys + totp + backup_code flags.
+  const factors: Array<{ type: string; label?: string }> = data.mfa_factors || [];
+  const passkeys: Array<{ name?: string }> = factors
+    .filter(f => f.type === 'passkey')
+    .map(f => ({ name: f.label }));
+  return {
+    id: clerkUserId,
+    passkeys,
+    totp_enabled: factors.some(f => f.type === 'totp'),
+    backup_code_enabled: factors.some(f => f.type === 'backup_code'),
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
     return new Response('method not allowed', { status: 405 });
@@ -127,6 +209,12 @@ Deno.serve(async (req) => {
   try {
     if (event.type === 'user.created' || event.type === 'user.updated') {
       const u = event.data;
+      // For user.updated, snapshot the prior MFA state so we can diff
+      // and emit mfa_enrolled / mfa_removed audit events.
+      const prevSnapshot = event.type === 'user.updated'
+        ? await readUserMfaSnapshot(u.id)
+        : null;
+
       const { error } = await supabase
         .from('users')
         .upsert(
@@ -145,8 +233,23 @@ Deno.serve(async (req) => {
         console.error('clerk-webhook: upsert failed', error);
         return new Response('db write failed', { status: 500 });
       }
+
+      if (event.type === 'user.updated') {
+        const { enrolled, removed } = diffMfaFactors(prevSnapshot, u);
+        for (const factorKey of enrolled) {
+          const [factor_type, label] = factorKey.split(':');
+          await writeAuthEvent(u.id, 'mfa_enrolled', { factor_type, label });
+        }
+        for (const factorKey of removed) {
+          const [factor_type, label] = factorKey.split(':');
+          await writeAuthEvent(u.id, 'mfa_removed', { factor_type, label });
+        }
+      }
     } else if (event.type === 'user.deleted') {
       const id = event.data.id;
+      // FK on auth_events cascades — deleting the user removes their
+      // event history. That matches the published Data Retention
+      // Policy §4 "User accounts (internal)" row.
       const { error } = await supabase
         .from('users')
         .delete()
@@ -155,6 +258,20 @@ Deno.serve(async (req) => {
         console.error('clerk-webhook: delete failed', error);
         return new Response('db delete failed', { status: 500 });
       }
+    } else if (event.type === 'session.created') {
+      await writeAuthEvent(event.data.user_id, 'sign_in_success', {
+        session_id: event.data.id,
+        client_id: event.data.client_id,
+      });
+    } else if (event.type === 'session.ended' || event.type === 'session.removed') {
+      await writeAuthEvent(event.data.user_id, 'sign_out', {
+        session_id: event.data.id,
+        end_reason: event.type,
+      });
+    } else if (event.type === 'session.revoked') {
+      await writeAuthEvent(event.data.user_id, 'session_revoked' as never, {
+        session_id: event.data.id,
+      });
     } else {
       // Unhandled event type — ack so Clerk doesn't retry forever.
       return new Response('ok (unhandled event)', { status: 200 });

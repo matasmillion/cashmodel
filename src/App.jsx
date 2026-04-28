@@ -19,6 +19,7 @@ import Header from './components/auth/Header';
 import SignInPage from './components/auth/SignInPage';
 import SignUpPage from './components/auth/SignUpPage';
 import AccountSecurityPage from './components/auth/AccountSecurityPage';
+import AccountActivityPage from './components/auth/AccountActivityPage';
 import UserProfilePage from './components/auth/UserProfilePage';
 import SiteFooter from './components/SiteFooter';
 import LegalRoutes from './components/legal/LegalRoutes';
@@ -196,6 +197,10 @@ function RoutedApp() {
         <Route
           path="/account/security/manage/*"
           element={<RequireAuth><UserProfilePage /></RequireAuth>}
+        />
+        <Route
+          path="/account/security/activity"
+          element={<RequireAuth><AccountActivityPage /></RequireAuth>}
         />
         <Route
           path="/account/security"

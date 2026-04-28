@@ -14,7 +14,7 @@
 //     POLICY_META.accessControl — single source of truth.
 
 import { Link } from 'react-router-dom';
-import { ShieldCheck, KeyRound, Smartphone, MessageSquareWarning, Plus, ArrowRight, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, KeyRound, Smartphone, MessageSquareWarning, Plus, ArrowRight, AlertTriangle, History } from 'lucide-react';
 import { useCurrentUser } from '../../lib/auth';
 import { POLICY_META, PUBLIC_BASE_URL } from '../../lib/legal/constants';
 import { usePageMeta } from '../../hooks/usePageMeta';
@@ -217,7 +217,7 @@ export default function AccountSecurityPage() {
           <Status text="Not used as primary" tone="muted" />
         </FactorBlock>
 
-        <div style={{ marginTop: 18, paddingTop: 14, borderTop: '0.5px solid rgba(58,58,58,0.08)' }}>
+        <div style={{ marginTop: 18, paddingTop: 14, borderTop: '0.5px solid rgba(58,58,58,0.08)', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <Link
             to="/account/security/manage"
             style={{
@@ -234,6 +234,24 @@ export default function AccountSecurityPage() {
             }}
           >
             Manage account &amp; factors <ArrowRight size={13} />
+          </Link>
+          <Link
+            to="/account/security/activity"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 14px',
+              background: 'transparent',
+              color: '#3A3A3A',
+              border: '0.5px solid rgba(58,58,58,0.2)',
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            <History size={13} /> View activity
           </Link>
         </div>
       </section>
