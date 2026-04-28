@@ -18,6 +18,8 @@ import RequireAuth from './components/auth/RequireAuth';
 import Header from './components/auth/Header';
 import SignInPage from './components/auth/SignInPage';
 import SignUpPage from './components/auth/SignUpPage';
+import AccountSecurityPage from './components/auth/AccountSecurityPage';
+import UserProfilePage from './components/auth/UserProfilePage';
 import SiteFooter from './components/SiteFooter';
 import LegalRoutes from './components/legal/LegalRoutes';
 import { LayoutDashboard, Table2, Calculator, Package, Receipt, Sliders, Plug, TrendingUp, Film, CalendarRange, Truck, Shirt, RefreshCw, CheckCircle, AlertCircle, Loader } from 'lucide-react';
@@ -188,6 +190,17 @@ function RoutedApp() {
             mode enforces the invite gate at /sign-up. */}
         <Route path="/sign-in/*" element={<SignInPage />} />
         <Route path="/sign-up/*" element={<SignUpPage />} />
+        {/* /account/* — gated. Custom security overview at the top
+            level; Clerk's <UserProfile /> mounts at /manage for the
+            full ongoing-management flow. */}
+        <Route
+          path="/account/security/manage/*"
+          element={<RequireAuth><UserProfilePage /></RequireAuth>}
+        />
+        <Route
+          path="/account/security"
+          element={<RequireAuth><AccountSecurityPage /></RequireAuth>}
+        />
         {/* Everything else falls through to the existing FR dashboard
             shell, gated by <RequireAuth> which redirects unauthed
             users to /sign-in. */}
