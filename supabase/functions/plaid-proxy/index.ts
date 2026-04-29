@@ -141,7 +141,10 @@ serve(async (req) => {
     if (PLAID_REDIRECT_URI) linkPayload.redirect_uri = PLAID_REDIRECT_URI;
 
     const { ok, status, data } = await plaid('/link/token/create', linkPayload);
-    if (!ok) return json({ error: 'link_token creation failed', plaid: data }, status, origin);
+    if (!ok) {
+      console.error('[plaid] link/token/create failed', JSON.stringify(data));
+      return json({ error: 'link_token creation failed', plaid: data }, status, origin);
+    }
     return json({ link_token: data.link_token, expiration: data.expiration }, 200, origin);
   }
 
