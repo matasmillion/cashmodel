@@ -6,7 +6,7 @@
 
 import { LogOut } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useCurrentUser, useSignOut } from '../../lib/auth';
+import { useCurrentUser, useSignOut, useCurrentOrg } from '../../lib/auth';
 
 const ROLE_PILL = {
   admin:    { bg: 'rgba(99,153,34,0.12)',   fg: '#3B6D11', label: 'Admin' },
@@ -16,6 +16,7 @@ const ROLE_PILL = {
 
 export default function Header() {
   const user = useCurrentUser();
+  const org = useCurrentOrg();
   const signOut = useSignOut();
 
   if (!user) return null;
@@ -29,6 +30,11 @@ export default function Header() {
       gap: 10,
       fontFamily: "'Inter', sans-serif",
     }}>
+      {org && (
+        <span style={{ fontSize: 12, color: '#716F70', fontWeight: 500 }}>
+          {org.name}
+        </span>
+      )}
       <Link
         to="/account/security"
         title="Account & security"

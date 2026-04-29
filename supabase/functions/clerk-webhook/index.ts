@@ -46,10 +46,20 @@ type ClerkUser = {
   updated_at?: number;
 };
 
+type ClerkOrg = { id: string; name: string; slug?: string | null };
+type ClerkOrgMembership = {
+  organization: ClerkOrg;
+  public_user_data: { user_id: string };
+  role: string;
+};
+
 type ClerkEvent =
   | { type: 'user.created' | 'user.updated'; data: ClerkUser }
   | { type: 'user.deleted'; data: { id: string; deleted: boolean } }
-  | { type: 'session.created' | 'session.ended' | 'session.removed' | 'session.revoked'; data: ClerkSession };
+  | { type: 'session.created' | 'session.ended' | 'session.removed' | 'session.revoked'; data: ClerkSession }
+  | { type: 'organization.created' | 'organization.updated'; data: ClerkOrg }
+  | { type: 'organization.deleted'; data: { id: string } }
+  | { type: 'organizationMembership.created' | 'organizationMembership.deleted'; data: ClerkOrgMembership };
 
 type ClerkSession = {
   id: string;
@@ -272,6 +282,48 @@ Deno.serve(async (req) => {
       await writeAuthEvent(event.data.user_id, 'session_revoked' as never, {
         session_id: event.data.id,
       });
+    } else if (event.type === 'organization.created' || event.type === 'organization.updated') {
+      const o = event.data as ClerkOrg;
+      const { error } = await supabase
+        .from('organizations')
+        .upsert({ id: o.id, name: o.name, slug: o.slug ?? null }, { onConflict: 'id' });
+      if (error) {
+        console.error('clerk-webhook: org upsert failed', error);
+        return new Response('db error', { status: 500 });
+      }
+    } else if (event.type === 'organization.deleted') {
+      const { error } = await supabase
+        .from('organizations')
+        .delete()
+        .eq('id', (event.data as { id: string }).id);
+      if (error) {
+        console.error('clerk-webhook: org delete failed', error);
+        return new Response('db error', { status: 500 });
+      }
+    } else if (event.type === 'organizationMembership.created') {
+      const m = event.data as ClerkOrgMembership;
+      const { error } = await supabase
+        .from('user_org_memberships')
+        .upsert({
+          user_id: m.public_user_data.user_id,
+          org_id: m.organization.id,
+          role: m.role === 'org:admin' ? 'admin' : 'member',
+        }, { onConflict: 'user_id,org_id' });
+      if (error) {
+        console.error('clerk-webhook: membership upsert failed', error);
+        return new Response('db error', { status: 500 });
+      }
+    } else if (event.type === 'organizationMembership.deleted') {
+      const m = event.data as ClerkOrgMembership;
+      const { error } = await supabase
+        .from('user_org_memberships')
+        .delete()
+        .eq('user_id', m.public_user_data.user_id)
+        .eq('org_id', m.organization.id);
+      if (error) {
+        console.error('clerk-webhook: membership delete failed', error);
+        return new Response('db error', { status: 500 });
+      }
     } else {
       // Unhandled event type — ack so Clerk doesn't retry forever.
       return new Response('ok (unhandled event)', { status: 200 });

@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
-import { ClerkProvider } from '@clerk/clerk-react';
+import { ClerkProvider, useOrganization, CreateOrganization } from '@clerk/clerk-react';
 import { AppProvider, useApp } from './context/AppContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import KPICards from './components/KPICards';
@@ -82,6 +82,19 @@ function SyncIndicator() {
       <span>{cfg.label}</span>
     </button>
   );
+}
+
+function OrgGate({ children }) {
+  const { isLoaded, organization } = useOrganization();
+  if (!isLoaded) return null;
+  if (!organization) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#F5F0E8' }}>
+        <CreateOrganization afterCreateOrganizationUrl="/" />
+      </div>
+    );
+  }
+  return children;
 }
 
 function Dashboard() {
@@ -208,14 +221,17 @@ function RoutedApp() {
         />
         {/* Everything else falls through to the existing FR dashboard
             shell, gated by <RequireAuth> which redirects unauthed
-            users to /sign-in. */}
+            users to /sign-in. The OrgGate ensures an org exists before
+            the app mounts — first-time users complete CreateOrganization. */}
         <Route
           path="*"
           element={
             <RequireAuth>
-              <AppProvider>
-                <Dashboard />
-              </AppProvider>
+              <OrgGate>
+                <AppProvider>
+                  <Dashboard />
+                </AppProvider>
+              </OrgGate>
             </RequireAuth>
           }
         />
