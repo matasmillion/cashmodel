@@ -1,7 +1,7 @@
 // Live data sync utilities — Shopify, Meta Ads, Mercury
 
-import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
-import { getCurrentUserIdSync, getClerkToken } from '../lib/auth';
+import { supabase, IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
+import { getCurrentUserIdSync, getCurrentOrgIdSync, getClerkToken } from '../lib/auth';
 
 // ─── Week helpers ─────────────────────────────────────────────────────────────
 
@@ -46,21 +46,22 @@ function toISO(d) {
  * RLS ensures the row is scoped to the caller; each user only ever writes their own.
  */
 export async function saveShopifyCredentials({ domain, token }) {
-  if (!IS_SUPABASE_ENABLED || !supabase) throw new Error('Supabase not configured');
-  const userId = getCurrentUserIdSync();
-  if (!userId) throw new Error('Sign in first');
+  if (!IS_SUPABASE_ENABLED) throw new Error('Supabase not configured');
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) throw new Error('No active organization');
 
   const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
-  const { error } = await supabase
+  const db = await getAuthedSupabase();
+  const { error } = await db
     .from('user_integrations')
     .upsert(
       {
-        user_id: userId,
+        org_id: orgId,
         provider: 'shopify',
         token,
         metadata: { domain: cleanDomain },
       },
-      { onConflict: 'user_id,provider' },
+      { onConflict: 'org_id,provider' },
     );
   if (error) throw new Error(`Failed to save credentials: ${error.message}`);
 }
@@ -69,12 +70,14 @@ export async function saveShopifyCredentials({ domain, token }) {
  * Returns the Shopify integration row for the signed-in user, or null.
  */
 export async function loadShopifyIntegration() {
-  if (!IS_SUPABASE_ENABLED || !supabase) return null;
-  const userId = getCurrentUserIdSync();
-  if (!userId) return null;
-  const { data, error } = await supabase
+  if (!IS_SUPABASE_ENABLED) return null;
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) return null;
+  const db = await getAuthedSupabase();
+  const { data, error } = await db
     .from('user_integrations')
     .select('metadata, updated_at')
+    .eq('org_id', orgId)
     .eq('provider', 'shopify')
     .maybeSingle();
   if (error || !data) return null;
@@ -82,11 +85,14 @@ export async function loadShopifyIntegration() {
 }
 
 /**
- * Remove the signed-in user's Shopify credentials.
+ * Remove the org's Shopify credentials.
  */
 export async function deleteShopifyCredentials() {
-  if (!IS_SUPABASE_ENABLED || !supabase) return;
-  await supabase.from('user_integrations').delete().eq('provider', 'shopify');
+  if (!IS_SUPABASE_ENABLED) return;
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) return;
+  const db = await getAuthedSupabase();
+  await db.from('user_integrations').delete().eq('org_id', orgId).eq('provider', 'shopify');
 }
 
 /**
@@ -311,26 +317,29 @@ export async function syncMetaActuals(creds) {
  * Save Mercury API key for the signed-in user to user_integrations (RLS-scoped).
  */
 export async function saveMercuryCredentials({ token }) {
-  if (!IS_SUPABASE_ENABLED || !supabase) throw new Error('Supabase not configured');
-  const userId = getCurrentUserIdSync();
-  if (!userId) throw new Error('Sign in first');
+  if (!IS_SUPABASE_ENABLED) throw new Error('Supabase not configured');
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) throw new Error('No active organization');
 
-  const { error } = await supabase
+  const db = await getAuthedSupabase();
+  const { error } = await db
     .from('user_integrations')
     .upsert(
-      { user_id: userId, provider: 'mercury', token, metadata: {} },
-      { onConflict: 'user_id,provider' },
+      { org_id: orgId, provider: 'mercury', token, metadata: {} },
+      { onConflict: 'org_id,provider' },
     );
   if (error) throw new Error(`Failed to save credentials: ${error.message}`);
 }
 
 export async function loadMercuryIntegration() {
-  if (!IS_SUPABASE_ENABLED || !supabase) return null;
-  const userId = getCurrentUserIdSync();
-  if (!userId) return null;
-  const { data, error } = await supabase
+  if (!IS_SUPABASE_ENABLED) return null;
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) return null;
+  const db = await getAuthedSupabase();
+  const { data, error } = await db
     .from('user_integrations')
     .select('metadata, updated_at')
+    .eq('org_id', orgId)
     .eq('provider', 'mercury')
     .maybeSingle();
   if (error || !data) return null;
@@ -338,8 +347,11 @@ export async function loadMercuryIntegration() {
 }
 
 export async function deleteMercuryCredentials() {
-  if (!IS_SUPABASE_ENABLED || !supabase) return;
-  await supabase.from('user_integrations').delete().eq('provider', 'mercury');
+  if (!IS_SUPABASE_ENABLED) return;
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) return;
+  const db = await getAuthedSupabase();
+  await db.from('user_integrations').delete().eq('org_id', orgId).eq('provider', 'mercury');
 }
 
 /**

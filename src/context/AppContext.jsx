@@ -2,8 +2,8 @@ import { createContext, useContext, useReducer, useMemo, useEffect, useRef, useS
 import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, OPEX_WAREHOUSE, CREDIT_CARDS, LOANS, AD_UNIT_TYPES, DEFAULT_EVENTS } from '../data/seedData';
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
 import { syncShopifyActuals, syncMetaActuals, syncMercuryActuals, syncPlaidActuals, listPlaidItems } from '../utils/liveDataSync';
-import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
-import { useCurrentUser } from '../lib/auth';
+import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
+import { useCurrentUser, useCurrentOrg } from '../lib/auth';
 
 const LOCAL_STORAGE_KEY = 'cashmodel_state';
 const INTEGRATIONS_KEY = 'cashmodel_integrations';
@@ -370,7 +370,8 @@ export function AppProvider({ children }) {
   // cloud seed. Source of truth for "who's signed in" moved to
   // src/lib/auth (Clerk-backed) when we replaced Supabase Auth.
   const currentUser = useCurrentUser();
-  const currentUserId = currentUser?.id || null;
+  const currentOrg = useCurrentOrg();
+  const orgId = currentOrg?.id || null;
 
   useEffect(() => {
     if (!IS_SUPABASE_ENABLED) {
@@ -378,29 +379,27 @@ export function AppProvider({ children }) {
       return;
     }
 
-    async function loadCloudState(userId) {
-      const { data, error } = await supabase
-        .from('user_state')
+    async function loadCloudState(id) {
+      const db = await getAuthedSupabase();
+      if (!db) return;
+      const { data, error } = await db
+        .from('app_state')
         .select('state')
-        .eq('user_id', userId)
+        .eq('org_id', id)
         .maybeSingle();
       if (!error && data?.state) {
         dispatch({ type: 'LOAD_CLOUD_STATE', payload: data.state });
       }
     }
 
-    userIdRef.current = currentUserId;
-    if (currentUserId) {
-      loadCloudState(currentUserId).then(() => triggerAutoSync());
+    userIdRef.current = orgId;
+    if (orgId) {
+      loadCloudState(orgId).then(() => triggerAutoSync());
     } else {
-      // Signed out (or Clerk still loading) — surface whatever cached
-      // local-only data exists by kicking the auto-sync regardless.
       triggerAutoSync();
     }
-    // Re-fire whenever the signed-in user id changes — handles sign-in,
-    // sign-out, and provider switches.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUserId]);
+  }, [orgId]);
 
   // Auto-save: localStorage always, Supabase when signed in (debounced 500ms)
   useEffect(() => {
@@ -414,11 +413,14 @@ export function AppProvider({ children }) {
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(toSave));
 
         if (IS_SUPABASE_ENABLED && userIdRef.current) {
-          await supabase.from('user_state').upsert({
-            user_id: userIdRef.current,
-            state: toSave,
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'user_id' });
+          const db = await getAuthedSupabase();
+          if (db) {
+            await db.from('app_state').upsert({
+              org_id: userIdRef.current,
+              state: toSave,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'org_id' });
+          }
         }
       } catch (err) {
         console.error('Failed to save state:', err);

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatCurrency } from '../utils/calculations';
+import { getOrgSettings, saveOrgSettings } from '../utils/orgSettingsStore';
 import { Upload, FileText, Trash2, Plus, Sparkles, Check, AlertCircle, Edit3, Key, X } from 'lucide-react';
 
 const FR = { slate: '#3A3A3A', salt: '#F5F0E8', sand: '#EBE5D5', stone: '#716F70', soil: '#9A816B', sea: '#B5C7D3', sage: '#ADBDA3', sienna: '#D4956A' };
@@ -32,22 +33,27 @@ export default function RateCardManager() {
   const [showAddSurcharge, setShowAddSurcharge] = useState(false);
   const [newSurcharge, setNewSurcharge] = useState({ name: '', amount: 0, per: 'order' });
   const [pendingFiles, setPendingFiles] = useState([]);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('anthropic_api_key') || '');
+  const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
-  const [parseInstructions, setParseInstructions] = useState(() => localStorage.getItem('rate_card_instructions') || '');
+  const [parseInstructions, setParseInstructions] = useState('');
 
   const rateCard = state.rateCard;
 
+  useEffect(() => {
+    getOrgSettings().then(s => {
+      if (s.anthropic_api_key) setApiKey(s.anthropic_api_key);
+      if (s.rate_card_instructions) setParseInstructions(s.rate_card_instructions);
+    });
+  }, []);
+
   const saveApiKey = (key) => {
     setApiKey(key);
-    if (key) localStorage.setItem('anthropic_api_key', key);
-    else localStorage.removeItem('anthropic_api_key');
+    saveOrgSettings({ anthropic_api_key: key });
   };
 
   const saveInstructions = (text) => {
     setParseInstructions(text);
-    if (text) localStorage.setItem('rate_card_instructions', text);
-    else localStorage.removeItem('rate_card_instructions');
+    saveOrgSettings({ rate_card_instructions: text });
   };
 
   const handleFilesSelected = (e) => {
