@@ -6,34 +6,8 @@
 // This is the SPA equivalent of Next.js's middleware.ts protection:
 // every route under the catch-all in App.jsx wraps in <RequireAuth>,
 // while public surfaces (/legal/*, /sign-in, /sign-up) sit outside.
-//
-// UserDataGuard runs once per sign-in: if the Clerk user ID stored in
-// localStorage doesn't match the current user, every cashmodel_* key is
-// wiped so the incoming user starts with a clean slate. This prevents
-// any data leakage between accounts on the same device.
 
-import { useEffect } from 'react';
-import { useUser, SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react';
-
-const OWNER_KEY = 'cashmodel_owner_uid';
-
-function UserDataGuard({ children }) {
-  const { isLoaded, user } = useUser();
-
-  useEffect(() => {
-    if (!isLoaded || !user) return;
-    const storedUid = localStorage.getItem(OWNER_KEY);
-    if (storedUid !== user.id) {
-      // Different user (or first sign-in on this device) — clear all app data
-      // so the incoming user starts blank, not inheriting another account's data.
-      const keysToRemove = Object.keys(localStorage).filter(k => k.startsWith('cashmodel_'));
-      keysToRemove.forEach(k => localStorage.removeItem(k));
-      localStorage.setItem(OWNER_KEY, user.id);
-    }
-  }, [isLoaded, user?.id]);
-
-  return children;
-}
+import { SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react';
 
 /**
  * @param {{ children: any }} props
@@ -48,9 +22,7 @@ export default function RequireAuth({ children }) {
 
   return (
     <>
-      <SignedIn>
-        <UserDataGuard>{children}</UserDataGuard>
-      </SignedIn>
+      <SignedIn>{children}</SignedIn>
       <SignedOut>
         <RedirectToSignIn redirectUrl={redirectUrl} />
       </SignedOut>
