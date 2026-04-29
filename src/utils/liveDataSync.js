@@ -476,8 +476,10 @@ export async function exchangePlaidPublicToken(publicToken) {
 
 /** List every Plaid item the signed-in user has connected. */
 export async function listPlaidItems() {
-  if (!IS_SUPABASE_ENABLED || !supabase) return [];
-  const { data, error } = await supabase
+  if (!IS_SUPABASE_ENABLED) return [];
+  const db = await getAuthedSupabase();
+  if (!db) return [];
+  const { data, error } = await db
     .from('user_plaid_items')
     .select('item_id, institution_id, institution_name, accounts, updated_at')
     .order('created_at', { ascending: true });

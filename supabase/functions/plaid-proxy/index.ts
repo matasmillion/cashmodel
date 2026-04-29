@@ -99,6 +99,14 @@ serve(async (req) => {
   }
   const userId = userData.user.id;
 
+  // Extract org_id from Clerk JWT payload (set by the "supabase" JWT template).
+  let orgId: string | null = null;
+  try {
+    const payload = JSON.parse(atob(jwt.split('.')[1]));
+    orgId = payload.org_id || null;
+  } catch { /* malformed JWT — orgId stays null */ }
+  if (!orgId) return json({ error: 'No active organization — create one first' }, 403, origin);
+
   // ── 2. Parse body ───────────────────────────────────────────────────────
   let body: {
     action?: string;
@@ -160,6 +168,7 @@ serve(async (req) => {
       .upsert(
         {
           item_id: itemId,
+          org_id: orgId,
           user_id: userId,
           access_token: accessToken,
           institution_id: institutionId || null,
@@ -172,7 +181,7 @@ serve(async (req) => {
             subtype: a.subtype,
           })),
         },
-        { onConflict: 'item_id' },
+        { onConflict: 'org_id,item_id' },
       );
     if (upErr) return json({ error: `Save failed: ${upErr.message}` }, 500, origin);
 
