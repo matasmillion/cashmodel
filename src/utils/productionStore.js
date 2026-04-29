@@ -588,6 +588,7 @@ function ensureSeedStyle() {
 }
 
 export async function seedProductionIfEmpty() {
+  if (localStorage.getItem('cashmodel_seeded')) return null;
   if (readLocal(PO_KEY).length > 0) return null;
   const { getTreatment } = await import('./treatmentStore');
   const stoneWash = await getTreatment(SEED_TREATMENT_ID);

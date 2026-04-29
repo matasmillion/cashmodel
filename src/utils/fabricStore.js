@@ -167,6 +167,7 @@ export async function duplicateFabric(id) {
 }
 
 export async function seedFabricsIfEmpty() {
+  if (localStorage.getItem('cashmodel_seeded')) return [];
   const local = readLocal();
   if (local.length > 0) return [];
   const now = new Date().toISOString();

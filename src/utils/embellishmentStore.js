@@ -169,6 +169,7 @@ export async function duplicateEmbellishment(id) {
 }
 
 export async function seedEmbellishmentsIfEmpty() {
+  if (localStorage.getItem('cashmodel_seeded')) return [];
   const local = readLocal();
   if (local.length > 0) return [];
   const now = new Date().toISOString();

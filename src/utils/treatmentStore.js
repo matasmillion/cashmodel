@@ -355,6 +355,7 @@ function seedSeedVendors() {
 // only fires when there are zero local rows. Numbers and copy match the
 // reference mockup so the UI lands populated.
 export async function seedTreatmentsIfEmpty() {
+  if (localStorage.getItem('cashmodel_seeded')) return [];
   // Vendor seeds are idempotent on their own and need to be present even when
   // treatments are already seeded (e.g. data migrated in from another device).
   try { seedSeedVendors(); } catch (err) { console.error('seedSeedVendors:', err); }

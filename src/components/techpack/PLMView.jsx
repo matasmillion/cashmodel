@@ -58,6 +58,7 @@ export default function PLMView() {
       .then(() => seedFabricsIfEmpty())
       .then(() => seedEmbellishmentsIfEmpty())
       .then(() => seedProductionIfEmpty())
+      .then(() => localStorage.setItem('cashmodel_seeded', '1'))
       .catch(err => console.error('PLM seed:', err));
   }, []);
 

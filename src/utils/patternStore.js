@@ -177,6 +177,7 @@ export async function duplicatePattern(id) {
 // Three seed patterns mirror the visual rhythm of seedTreatmentsIfEmpty —
 // a hoodie sloper, a tee sloper, and a sweatpant block. Idempotent.
 export async function seedPatternsIfEmpty() {
+  if (localStorage.getItem('cashmodel_seeded')) return [];
   const local = readLocal();
   if (local.length > 0) return [];
   const now = new Date().toISOString();
