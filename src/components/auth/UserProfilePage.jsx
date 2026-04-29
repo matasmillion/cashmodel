@@ -19,8 +19,7 @@ export default function UserProfilePage() {
     <AccountShell heading="Manage your account" eyebrow="Account & security">
       <div style={{ display: 'flex', justifyContent: 'center' }}>
         <UserProfile
-          path={`${(import.meta.env.BASE_URL || '/').replace(/\/$/, '')}/account/security/manage`}
-          routing="path"
+          routing="virtual"
           appearance={CLERK_APPEARANCE}
         />
       </div>
