@@ -250,17 +250,19 @@ export default function TopBar() {
 
           {/* Right: primary nav + settings gear. */}
           <nav className="flex items-center gap-1">
-            {PRIMARY_NAV.map(item => {
+            {PRIMARY_NAV.map((item, idx) => {
               const active = isItemActive(item);
               if (!item.children) {
                 return (
-                  <button
-                    key={item.id}
-                    onClick={() => setTab(item.tabId)}
-                    style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
-                  >
-                    <PrimaryTrigger label={item.label} active={active} hasChildren={false} open={false} />
-                  </button>
+                  <div key={item.id} style={{ display: 'flex', alignItems: 'center' }}>
+                    {idx === 0 && <SyncIndicator />}
+                    <button
+                      onClick={() => setTab(item.tabId)}
+                      style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+                    >
+                      <PrimaryTrigger label={item.label} active={active} hasChildren={false} open={false} />
+                    </button>
+                  </div>
                 );
               }
               return (
@@ -283,8 +285,7 @@ export default function TopBar() {
               );
             })}
 
-            {/* Sync pill + divider + settings gear */}
-            <div style={{ marginLeft: 12 }}><SyncIndicator /></div>
+            {/* Divider + settings gear */}
             <div style={{ width: 1, height: 18, background: 'rgba(58,58,58,0.12)', margin: '0 8px' }} />
             <HoverMenu
               align="right"

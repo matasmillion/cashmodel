@@ -47,6 +47,18 @@ input[type="number"] { -moz-appearance: textfield; }
 }
 .animate-fade-in { animation: fadeIn 0.3s ease-out; }
 
+@keyframes syncPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.45; transform: scale(0.75); }
+}
+.sync-dot-pulse { animation: syncPulse 2.4s ease-in-out infinite; }
+
+@keyframes syncSpin {
+  from { opacity: 0.5; }
+  to   { opacity: 1; }
+}
+.sync-dot-spin { animation: syncPulse 0.8s ease-in-out infinite; }
+
 /* FR brand utility classes */
 .font-display { font-family: 'Cormorant Garamond', Georgia, serif; }
 .font-body { font-family: 'Inter', 'General Sans', system-ui, sans-serif; }
