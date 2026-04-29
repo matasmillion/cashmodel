@@ -89,23 +89,22 @@ serve(async (req) => {
   }
   const jwt = authHeader.slice('Bearer '.length);
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: `Bearer ${jwt}` } },
-  });
-
-  const { data: userData, error: userErr } = await supabase.auth.getUser(jwt);
-  if (userErr || !userData?.user) {
-    return json({ error: 'Invalid session token' }, 401, origin);
-  }
-  const userId = userData.user.id;
-
-  // Extract org_id from Clerk JWT payload (set by the "supabase" JWT template).
+  // Decode Clerk JWT directly — we use Clerk auth, not Supabase native auth.
+  let userId: string | null = null;
   let orgId: string | null = null;
   try {
     const payload = JSON.parse(atob(jwt.split('.')[1]));
+    userId = payload.sub || null;
     orgId = payload.org_id || null;
-  } catch { /* malformed JWT — orgId stays null */ }
+  } catch {
+    return json({ error: 'Invalid session token' }, 401, origin);
+  }
+  if (!userId) return json({ error: 'Invalid session token' }, 401, origin);
   if (!orgId) return json({ error: 'No active organization — create one first' }, 403, origin);
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${jwt}` } },
+  });
 
   // ── 2. Parse body ───────────────────────────────────────────────────────
   let body: {
