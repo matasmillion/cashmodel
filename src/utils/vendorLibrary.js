@@ -21,6 +21,8 @@
 // eslint-disable-next-line no-unused-vars
 import * as _atomTypes from '../types/atoms';
 import { listAllSuppliers } from './plmDirectory';
+import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
+import { getCurrentOrgIdSync } from '../lib/auth';
 
 const LS_KEY = 'cashmodel_vendors';
 const LEGACY_LS_KEY = 'cashmodel_factories';
@@ -66,6 +68,43 @@ function readStore() {
 function writeStore(store) {
   try { localStorage.setItem(LS_KEY, JSON.stringify(store)); }
   catch (err) { console.error('vendorLibrary write:', err); }
+}
+
+function syncVendorToCloud(name, entry) {
+  const orgId = getCurrentOrgIdSync();
+  if (!IS_SUPABASE_ENABLED || !orgId) return;
+  getAuthedSupabase().then(db => {
+    if (!db) return;
+    db.from('vendors').upsert({
+      organization_id: orgId,
+      name,
+      country: entry.country || '',
+      city: entry.city || '',
+      primary_contact: entry.primaryContact || '',
+      email: entry.email || '',
+      phone: entry.phone || '',
+      website: entry.website || '',
+      moq: entry.moq || '',
+      lead_time_days: Number(entry.lead_time_days) || 0,
+      specialties: entry.specialties || '',
+      notes: entry.notes || '',
+      logo_image: entry.logoImage || null,
+      capabilities: entry.capabilities || [],
+      payment_terms: entry.payment_terms || '',
+      rating: Number(entry.rating) || 0,
+    }, { onConflict: 'organization_id,name' })
+    .then(({ error }) => { if (error) console.error('vendorLibrary sync:', error); });
+  });
+}
+
+function deleteVendorFromCloud(name) {
+  const orgId = getCurrentOrgIdSync();
+  if (!IS_SUPABASE_ENABLED || !orgId) return;
+  getAuthedSupabase().then(db => {
+    if (!db) return;
+    db.from('vendors').delete().eq('organization_id', orgId).eq('name', name)
+      .then(({ error }) => { if (error) console.error('vendorLibrary delete:', error); });
+  });
 }
 
 const emptyEntry = (name) => ({
@@ -168,6 +207,7 @@ export function updateVendor(name, patch) {
   });
   store[name] = next;
   writeStore(store);
+  syncVendorToCloud(name, next);
 }
 
 // Clear a specific field (used when removing the logo image).
@@ -178,6 +218,7 @@ export function clearVendorField(name, field) {
   const { [field]: _, ...rest } = store[name];
   store[name] = rest;
   writeStore(store);
+  syncVendorToCloud(name, rest);
 }
 
 // Create a new vendor. Returns { ok: true } on success or
@@ -194,6 +235,7 @@ export function addVendor(name, patch = {}) {
   });
   store[clean] = entry;
   writeStore(store);
+  syncVendorToCloud(clean, entry);
   return { ok: true };
 }
 
@@ -207,5 +249,6 @@ export function deleteVendor(name) {
   if (!store[name]) return { ok: false, reason: 'No such vendor.' };
   const { [name]: _, ...rest } = store;
   writeStore(rest);
+  deleteVendorFromCloud(name);
   return { ok: true };
 }

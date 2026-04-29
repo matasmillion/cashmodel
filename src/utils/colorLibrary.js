@@ -4,12 +4,12 @@
 // pack's colorway card is written back here so the same color in any other
 // pack immediately picks up the change.
 //
-// Storage is localStorage-only for now. Supabase sync can follow later in
-// the same dual-write pattern used by the pack stores; until then a user
-// editing on device A sees the update on device B after importing/opening
-// any pack that references the color.
+// localStorage is primary (sync reads). Supabase is a fire-and-forget
+// write-through mirror — writes go to both stores; reads come from local.
 
 import { FR_COLOR_OPTIONS } from '../components/techpack/techPackConstants';
+import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
+import { getCurrentOrgIdSync } from '../lib/auth';
 
 const LS_KEY = 'cashmodel_fr_colors';
 
@@ -25,6 +25,47 @@ function readStore() {
 function writeStore(store) {
   try { localStorage.setItem(LS_KEY, JSON.stringify(store)); }
   catch (err) { console.error('colorLibrary write:', err); }
+}
+
+function toSupabaseRow(orgId, name, entry) {
+  return {
+    organization_id: orgId,
+    name,
+    hex: entry.hex || '',
+    rgb: entry.rgb || '',
+    pantone_tcx: entry.pantoneTCX || '',
+    pantone_tpg: entry.pantoneTPG || '',
+    pantone_c: entry.pantoneC || '',
+    card_image: entry.cardImage || null,
+    usage_notes: entry.usageNotes || '',
+    cost_per_unit: entry.costPerUnit || '',
+    currency: entry.currency || 'USD',
+    adobe_ase_url: entry.adobeAseUrl || '',
+    adobe_ace_url: entry.adobeAceUrl || '',
+    clo3d_color_url: entry.clo3dColorUrl || '',
+    is_seeded: isSeededFRColor(name),
+  };
+}
+
+function syncColorToCloud(name, entry) {
+  const orgId = getCurrentOrgIdSync();
+  if (!IS_SUPABASE_ENABLED || !orgId) return;
+  getAuthedSupabase().then(db => {
+    if (!db) return;
+    db.from('colors')
+      .upsert(toSupabaseRow(orgId, name, entry), { onConflict: 'organization_id,name' })
+      .then(({ error }) => { if (error) console.error('colorLibrary sync:', error); });
+  });
+}
+
+function deleteColorFromCloud(name) {
+  const orgId = getCurrentOrgIdSync();
+  if (!IS_SUPABASE_ENABLED || !orgId) return;
+  getAuthedSupabase().then(db => {
+    if (!db) return;
+    db.from('colors').delete().eq('organization_id', orgId).eq('name', name)
+      .then(({ error }) => { if (error) console.error('colorLibrary delete:', error); });
+  });
 }
 
 const emptyEntry = (name, hex) => ({
@@ -90,6 +131,7 @@ export function updateFRColor(name, patch) {
   });
   store[name] = next;
   writeStore(store);
+  syncColorToCloud(name, next);
 }
 
 // Clear a specific field on a color (used when removing the Pantone card image).
@@ -100,6 +142,7 @@ export function clearFRColorField(name, field) {
   const { [field]: _, ...rest } = store[name];
   store[name] = rest;
   writeStore(store);
+  syncColorToCloud(name, rest);
 }
 
 // The 9 FR staples cannot be renamed or deleted from the UI — they're the
@@ -132,6 +175,7 @@ export function addFRColor(name, patch = {}) {
   });
   store[clean] = entry;
   writeStore(store);
+  syncColorToCloud(clean, entry);
   return { ok: true };
 }
 
@@ -143,5 +187,6 @@ export function deleteFRColor(name) {
   if (!store[name]) return { ok: false, reason: 'No such color.' };
   const { [name]: _, ...rest } = store;
   writeStore(rest);
+  deleteColorFromCloud(name);
   return { ok: true };
 }

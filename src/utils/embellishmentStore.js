@@ -7,8 +7,8 @@
 // status to 'archived'; the record stays so any tech pack that referenced
 // it still resolves.
 
-import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
-import { getCurrentUserIdSync } from '../lib/auth';
+import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
+import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
 import { emptyEmbellishment, EMBELLISHMENT_TYPE_CODE } from './embellishmentLibrary';
 
 const LOCAL_KEY = 'cashmodel_embellishments';
@@ -26,12 +26,6 @@ function writeLocal(rows) {
   try { localStorage.setItem(LOCAL_KEY, JSON.stringify(rows)); }
   catch (err) { console.error('embellishmentStore write:', err); }
 }
-
-// Read the current user id synchronously from the Clerk global. Used
-// when persisting rows to Supabase so the row's user_id matches the
-// signed-in caller. Returns null while Clerk is still loading or when
-// no user is signed in (in which case Supabase writes are skipped).
-const currentUserId = getCurrentUserIdSync;
 
 function newId() {
   return (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());
@@ -58,34 +52,38 @@ function filterRows(rows, { includeArchived = false, status = null, type = null 
 }
 
 export async function listEmbellishments({ includeArchived = false, status = null, type = null } = {}) {
-  const local = readLocal();
   const filterOpts = { includeArchived, status, type };
-  if (IS_SUPABASE_ENABLED) {
-    const { data, error } = await supabase
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { data, error } = await db
       .from('embellishments')
       .select('*')
+      .eq('organization_id', orgId)
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) {
-      const remoteIds = new Set(data.map(r => r.id));
-      const merged = [...data, ...local.filter(r => !remoteIds.has(r.id))];
-      return filterRows(merged, filterOpts)
+      return filterRows(data, filterOpts)
         .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
     }
     if (error) console.error('listEmbellishments:', error);
   }
-  return filterRows(local, filterOpts)
+  return filterRows(readLocal(), filterOpts)
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
 
 export async function getEmbellishment(id) {
   if (!id) return null;
-  if (IS_SUPABASE_ENABLED) {
-    const { data, error } = await supabase
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { data, error } = await db
       .from('embellishments')
       .select('*')
       .eq('id', id)
+      .eq('organization_id', orgId)
       .maybeSingle();
     if (!error && data) return data;
+    if (error) console.error('getEmbellishment:', error);
   }
   return readLocal().find(r => r.id === id) || null;
 }
@@ -99,12 +97,12 @@ export async function createEmbellishment({ type = 'embroidery', ...overrides } 
   local.push(row);
   writeLocal(local);
 
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('embellishments').insert({ ...row, user_id: userId });
-      if (error) console.error('createEmbellishment:', error);
-    }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('embellishments').insert({ ...row, user_id: userId, organization_id: orgId });
+    if (error) console.error('createEmbellishment:', error);
   }
   return row;
 }
@@ -120,11 +118,14 @@ export async function saveEmbellishment(id, updates) {
     local[idx] = merged;
     writeLocal(local);
   }
-  if (IS_SUPABASE_ENABLED) {
-    const { error } = await supabase
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { error } = await db
       .from('embellishments')
       .update({ ...updates, updated_at: now })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('organization_id', orgId);
     if (error) console.error('saveEmbellishment:', error);
   }
   return merged;
@@ -156,14 +157,16 @@ export async function duplicateEmbellishment(id) {
     created_at: now,
     updated_at: now,
   };
+  delete copy.user_id;
+  delete copy.organization_id;
   local.push(copy);
   writeLocal(local);
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('embellishments').insert({ ...copy, user_id: userId });
-      if (error) console.error('duplicateEmbellishment:', error);
-    }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('embellishments').insert({ ...copy, user_id: userId, organization_id: orgId });
+    if (error) console.error('duplicateEmbellishment:', error);
   }
   return copy;
 }
@@ -217,14 +220,14 @@ export async function seedEmbellishmentsIfEmpty() {
   ];
   const filled = seeds.map(s => ({ ...emptyEmbellishment(s), updated_at: s.updated_at || now, created_at: s.created_at || now }));
   writeLocal(filled);
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('embellishments').insert(
-        filled.map(r => ({ ...r, user_id: userId }))
-      );
-      if (error) console.error('seedEmbellishments:', error);
-    }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('embellishments').insert(
+      filled.map(r => ({ ...r, user_id: userId, organization_id: orgId }))
+    );
+    if (error) console.error('seedEmbellishments:', error);
   }
   return filled;
 }

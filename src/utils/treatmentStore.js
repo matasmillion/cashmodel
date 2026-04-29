@@ -13,8 +13,8 @@
 // record stays so any production order that referenced it still resolves.
 // Restoring just flips the status back.
 
-import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
-import { getCurrentUserIdSync } from '../lib/auth';
+import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
+import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
 import { emptyTreatment, TREATMENT_TYPE_CODE } from './treatmentLibrary';
 import { addVendor } from './vendorLibrary';
 
@@ -33,9 +33,6 @@ function writeLocal(rows) {
   try { localStorage.setItem(LOCAL_KEY, JSON.stringify(rows)); }
   catch (err) { console.error('treatmentStore write:', err); }
 }
-
-// Synchronous reader; null if Clerk is still loading or no user signed in.
-const currentUserId = getCurrentUserIdSync;
 
 function newId() {
   return (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());
@@ -67,41 +64,40 @@ function filterRows(rows, { includeArchived = false, status = null, type = null 
 }
 
 // List every treatment (most recent first). Pulls from Supabase when
-// configured, falls back to localStorage. Reads merge — Supabase rows for
-// records the local store hasn't seen, local rows for the offline path.
+// configured and org is active, falls back to localStorage.
 export async function listTreatments({ includeArchived = false, status = null, type = null } = {}) {
-  const local = readLocal();
   const filterOpts = { includeArchived, status, type };
-  if (IS_SUPABASE_ENABLED) {
-    const { data, error } = await supabase
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { data, error } = await db
       .from('treatments')
       .select('*')
+      .eq('organization_id', orgId)
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) {
-      // Supabase wins for any id present remotely; local-only rows tag along.
-      const remoteIds = new Set(data.map(r => r.id));
-      const merged = [
-        ...data,
-        ...local.filter(r => !remoteIds.has(r.id)),
-      ];
-      return filterRows(merged, filterOpts)
+      return filterRows(data, filterOpts)
         .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
     }
     if (error) console.error('listTreatments:', error);
   }
-  return filterRows(local, filterOpts)
+  return filterRows(readLocal(), filterOpts)
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
 
 export async function getTreatment(id) {
   if (!id) return null;
-  if (IS_SUPABASE_ENABLED) {
-    const { data, error } = await supabase
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { data, error } = await db
       .from('treatments')
       .select('*')
       .eq('id', id)
+      .eq('organization_id', orgId)
       .maybeSingle();
     if (!error && data) return data;
+    if (error) console.error('getTreatment:', error);
   }
   return readLocal().find(r => r.id === id) || null;
 }
@@ -117,12 +113,12 @@ export async function createTreatment({ type = 'wash', ...overrides } = {}) {
   local.push(row);
   writeLocal(local);
 
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('treatments').insert({ ...row, user_id: userId });
-      if (error) console.error('createTreatment:', error);
-    }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('treatments').insert({ ...row, user_id: userId, organization_id: orgId });
+    if (error) console.error('createTreatment:', error);
   }
   return row;
 }
@@ -141,20 +137,19 @@ export async function saveTreatment(id, updates) {
     local[idx] = merged;
     writeLocal(local);
   }
-  if (IS_SUPABASE_ENABLED) {
-    const { error } = await supabase
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { error } = await db
       .from('treatments')
       .update({ ...updates, updated_at: now })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('organization_id', orgId);
     if (error) console.error('saveTreatment:', error);
   }
   return merged;
 }
 
-// Soft-delete: flip status to 'archived'. Records stay in the store so any
-// production order or BOM line that references them still resolves.
-// Public alias matching the prompt-spec signature. `saveTreatment` was the
-// initial name; `updateTreatment` is the canonical public verb.
 export const updateTreatment = saveTreatment;
 
 // Production log for a treatment. Joins `atom_usage` rows with the
@@ -219,14 +214,16 @@ export async function duplicateTreatment(id) {
     created_at: now,
     updated_at: now,
   };
+  delete copy.user_id;
+  delete copy.organization_id;
   local.push(copy);
   writeLocal(local);
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('treatments').insert({ ...copy, user_id: userId });
-      if (error) console.error('duplicateTreatment:', error);
-    }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('treatments').insert({ ...copy, user_id: userId, organization_id: orgId });
+    if (error) console.error('duplicateTreatment:', error);
   }
   return copy;
 }
@@ -469,14 +466,14 @@ export async function seedTreatmentsIfEmpty() {
   // Use empty defaults for any field a seed left out.
   const filled = seeds.map(s => ({ ...emptyTreatment(s), updated_at: s.updated_at || now, created_at: s.created_at || now }));
   writeLocal(filled);
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('treatments').insert(
-        filled.map(r => ({ ...r, user_id: userId }))
-      );
-      if (error) console.error('seedTreatments:', error);
-    }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('treatments').insert(
+      filled.map(r => ({ ...r, user_id: userId, organization_id: orgId }))
+    );
+    if (error) console.error('seedTreatments:', error);
   }
   return filled;
 }

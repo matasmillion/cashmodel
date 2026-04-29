@@ -8,8 +8,8 @@
 // to 'archived'; the record stays so any tech pack that referenced it
 // still resolves.
 
-import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
-import { getCurrentUserIdSync } from '../lib/auth';
+import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
+import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
 import { emptyFabric, FABRIC_WEAVE_CODE } from './fabricLibrary';
 
 const LOCAL_KEY = 'cashmodel_fabrics';
@@ -27,9 +27,6 @@ function writeLocal(rows) {
   try { localStorage.setItem(LOCAL_KEY, JSON.stringify(rows)); }
   catch (err) { console.error('fabricStore write:', err); }
 }
-
-// Synchronous reader; null if Clerk is still loading or no user signed in.
-const currentUserId = getCurrentUserIdSync;
 
 function newId() {
   return (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());
@@ -56,34 +53,38 @@ function filterRows(rows, { includeArchived = false, status = null, weave = null
 }
 
 export async function listFabrics({ includeArchived = false, status = null, weave = null } = {}) {
-  const local = readLocal();
   const filterOpts = { includeArchived, status, weave };
-  if (IS_SUPABASE_ENABLED) {
-    const { data, error } = await supabase
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { data, error } = await db
       .from('fabrics')
       .select('*')
+      .eq('organization_id', orgId)
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) {
-      const remoteIds = new Set(data.map(r => r.id));
-      const merged = [...data, ...local.filter(r => !remoteIds.has(r.id))];
-      return filterRows(merged, filterOpts)
+      return filterRows(data, filterOpts)
         .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
     }
     if (error) console.error('listFabrics:', error);
   }
-  return filterRows(local, filterOpts)
+  return filterRows(readLocal(), filterOpts)
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
 
 export async function getFabric(id) {
   if (!id) return null;
-  if (IS_SUPABASE_ENABLED) {
-    const { data, error } = await supabase
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { data, error } = await db
       .from('fabrics')
       .select('*')
       .eq('id', id)
+      .eq('organization_id', orgId)
       .maybeSingle();
     if (!error && data) return data;
+    if (error) console.error('getFabric:', error);
   }
   return readLocal().find(r => r.id === id) || null;
 }
@@ -97,12 +98,12 @@ export async function createFabric({ weave = 'jersey', ...overrides } = {}) {
   local.push(row);
   writeLocal(local);
 
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('fabrics').insert({ ...row, user_id: userId });
-      if (error) console.error('createFabric:', error);
-    }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('fabrics').insert({ ...row, user_id: userId, organization_id: orgId });
+    if (error) console.error('createFabric:', error);
   }
   return row;
 }
@@ -118,11 +119,14 @@ export async function saveFabric(id, updates) {
     local[idx] = merged;
     writeLocal(local);
   }
-  if (IS_SUPABASE_ENABLED) {
-    const { error } = await supabase
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { error } = await db
       .from('fabrics')
       .update({ ...updates, updated_at: now })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('organization_id', orgId);
     if (error) console.error('saveFabric:', error);
   }
   return merged;
@@ -154,14 +158,16 @@ export async function duplicateFabric(id) {
     created_at: now,
     updated_at: now,
   };
+  delete copy.user_id;
+  delete copy.organization_id;
   local.push(copy);
   writeLocal(local);
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('fabrics').insert({ ...copy, user_id: userId });
-      if (error) console.error('duplicateFabric:', error);
-    }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('fabrics').insert({ ...copy, user_id: userId, organization_id: orgId });
+    if (error) console.error('duplicateFabric:', error);
   }
   return copy;
 }
@@ -244,14 +250,14 @@ export async function seedFabricsIfEmpty() {
   ];
   const filled = seeds.map(s => ({ ...emptyFabric(s), updated_at: s.updated_at || now, created_at: s.created_at || now }));
   writeLocal(filled);
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('fabrics').insert(
-        filled.map(r => ({ ...r, user_id: userId }))
-      );
-      if (error) console.error('seedFabrics:', error);
-    }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('fabrics').insert(
+      filled.map(r => ({ ...r, user_id: userId, organization_id: orgId }))
+    );
+    if (error) console.error('seedFabrics:', error);
   }
   return filled;
 }

@@ -3,83 +3,21 @@
 // Mirrors treatmentStore.js: localStorage primary, optional Supabase mirror
 // behind IS_SUPABASE_ENABLED.
 //
-// Append-only collections (per CLAUDE.md and Prompt 3): `atom_usage`,
-// `drift_log`, and `bom_snapshot`. Helpers below throw if a caller tries to
-// update or delete a row in any of them. There is no `delete*` export at all
-// for those collections.
+// Append-only collections (per CLAUDE.md): `atom_usage`, `drift_log`, and
+// `bom_snapshot`. Helpers below throw if a caller tries to update or delete
+// a row in any of them.
 //
-// State machine for POs lives in `transitionPO`. Legal arrows:
-//   draft → placed
-//   placed → in_production
-//   in_production → received
-//   received → closed
+// State machine for POs:
+//   draft → placed → in_production → received → closed
 //   any-non-cancelled → cancelled
-// Anything else throws so a buggy caller can't quietly skip a state.
-//
-// Codes: POs are issued `PO-{YYYY}-{SEQ}` at create time, padded to 4 digits,
-// scoped to the calendar year of creation. Lots, drift entries, and atom-usage
-// rows use uuids — they're internal and don't need a human-friendly handle.
 
-import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
-import { getCurrentUserIdSync } from '../lib/auth';
+import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
+import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
 
 const PO_KEY        = 'cashmodel_pos';
 const BOM_SNAP_KEY  = 'cashmodel_bom_snapshots';
 const ATOM_USAGE_KEY = 'cashmodel_atom_usage';
 const DRIFT_LOG_KEY = 'cashmodel_drift_logs';
-
-/**
- * @typedef {Object} PurchaseOrder
- * @property {string} id
- * @property {string} code                                  // PO-2026-0024
- * @property {'draft'|'placed'|'in_production'|'received'|'closed'|'cancelled'} status
- * @property {string} vendor_id
- * @property {string} style_id
- * @property {number} units
- * @property {number} unit_cost_usd
- * @property {number} lead_days                             // expected, set at placement
- * @property {string=} placed_at
- * @property {string=} received_at
- * @property {string=} closed_at
- * @property {string=} cancelled_at
- * @property {string=} notes
- * @property {string} created_at
- * @property {string} updated_at
- */
-
-/**
- * @typedef {Object} BOMSnapshot
- * @property {string} id
- * @property {string} po_id
- * @property {string} snapshot_at                           // when frozen — at PO placement
- * @property {Array<Object>} bom                            // frozen copy of the pack's BOM
- * @property {Object=} pack                                 // frozen copy of pack metadata (style_name, version, …)
- */
-
-/**
- * @typedef {Object} AtomUsage
- * @property {string} id
- * @property {string} po_id
- * @property {'treatment'|'fabric'|'color'|'trim'|'embellishment'|'pattern'} atom_type
- * @property {string} atom_id
- * @property {number=} units
- * @property {number=} unit_cost_usd
- * @property {number=} lead_days                            // actual
- * @property {number=} defect_pct                           // actual
- * @property {string} recorded_at
- */
-
-/**
- * @typedef {Object} DriftLog
- * @property {string} id
- * @property {string} treatment_id
- * @property {string} po_id
- * @property {number} score_pct
- * @property {boolean=} retrained
- * @property {string[]=} predicted_grad                     // hex pair
- * @property {string[]=} actual_grad                        // hex pair
- * @property {string} recorded_at
- */
 
 // ── Storage primitives ─────────────────────────────────────────────────────
 
@@ -96,8 +34,6 @@ function writeLocal(key, rows) {
 function newId() {
   return (crypto.randomUUID && crypto.randomUUID()) || `id-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
-// Synchronous reader; null if Clerk is still loading or no user signed in.
-const currentUserId = getCurrentUserIdSync;
 
 // ── PO codes ───────────────────────────────────────────────────────────────
 
@@ -118,8 +54,8 @@ const PO_TRANSITIONS = {
   placed:        new Set(['in_production', 'cancelled']),
   in_production: new Set(['received', 'cancelled']),
   received:      new Set(['closed', 'cancelled']),
-  closed:        new Set([]),                   // terminal
-  cancelled:     new Set([]),                   // terminal
+  closed:        new Set([]),
+  cancelled:     new Set([]),
 };
 
 function assertLegalTransition(from, to) {
@@ -132,12 +68,17 @@ function assertLegalTransition(from, to) {
 // ── POs ────────────────────────────────────────────────────────────────────
 
 export async function listPOs({ status = null, vendor_id = null, style_id = null } = {}) {
+  const orgId = getCurrentOrgIdSync();
   let rows = readLocal(PO_KEY);
-  if (IS_SUPABASE_ENABLED) {
-    const { data, error } = await supabase.from('purchase_orders').select('*').order('updated_at', { ascending: false });
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { data, error } = await db
+      .from('purchase_orders')
+      .select('*')
+      .eq('organization_id', orgId)
+      .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) {
-      const remoteIds = new Set(data.map(r => r.id));
-      rows = [...data, ...rows.filter(r => !remoteIds.has(r.id))];
+      rows = data;
     } else if (error) {
       console.error('listPOs:', error);
     }
@@ -151,9 +92,17 @@ export async function listPOs({ status = null, vendor_id = null, style_id = null
 
 export async function getPO(id) {
   if (!id) return null;
-  if (IS_SUPABASE_ENABLED) {
-    const { data, error } = await supabase.from('purchase_orders').select('*').eq('id', id).maybeSingle();
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { data, error } = await db
+      .from('purchase_orders')
+      .select('*')
+      .eq('id', id)
+      .eq('organization_id', orgId)
+      .maybeSingle();
     if (!error && data) return data;
+    if (error) console.error('getPO:', error);
   }
   return readLocal(PO_KEY).find(r => r.id === id) || null;
 }
@@ -172,8 +121,6 @@ export async function createPO(input = {}) {
     units: Number(input.units) || 0,
     unit_cost_usd: Number(input.unit_cost_usd) || 0,
     lead_days: Number(input.lead_days) || 0,
-    // Size break: { S: 30, M: 40, L: 50, XL: 30, … }. Sum should equal
-    // `units` but isn't enforced — vendors sometimes round odd totals.
     size_break: input.size_break || {},
     placed_at: null,
     received_at: null,
@@ -184,9 +131,7 @@ export async function createPO(input = {}) {
     updated_at: now,
     ...input,
   };
-  // Force the canonical fields even if the caller passed overrides above.
   row.id = id;
-  row.code = row.code; // already set
   row.status = 'draft';
   row.created_at = now;
   row.updated_at = now;
@@ -194,20 +139,18 @@ export async function createPO(input = {}) {
   rows.push(row);
   writeLocal(PO_KEY, rows);
 
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('purchase_orders').insert({ ...row, user_id: userId });
-      if (error) console.error('createPO:', error);
-    }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('purchase_orders').insert({ ...row, user_id: userId, organization_id: orgId });
+    if (error) console.error('createPO:', error);
   }
   return row;
 }
 
 const PO_EDITABLE_FIELDS = new Set(['units', 'unit_cost_usd', 'lead_days', 'notes', 'vendor_id', 'style_id', 'size_break']);
 
-// Only fields in PO_EDITABLE_FIELDS can change via updatePO. Status changes
-// are owned by transitionPO so the state-machine rules can't be bypassed.
 export async function updatePO(id, patch = {}) {
   if (!id) return null;
   if ('status' in patch) {
@@ -228,8 +171,14 @@ export async function updatePO(id, patch = {}) {
     rows[idx] = updated;
     writeLocal(PO_KEY, rows);
   }
-  if (IS_SUPABASE_ENABLED) {
-    const { error } = await supabase.from('purchase_orders').update({ ...allowed, updated_at: now }).eq('id', id);
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { error } = await db
+      .from('purchase_orders')
+      .update({ ...allowed, updated_at: now })
+      .eq('id', id)
+      .eq('organization_id', orgId);
     if (error) console.error('updatePO:', error);
   }
   return updated;
@@ -248,8 +197,6 @@ export async function transitionPO(id, newStatus, payload = {}) {
   if (newStatus === 'closed') stamp.closed_at = now;
   if (newStatus === 'cancelled') stamp.cancelled_at = now;
 
-  // Side effect: at PO placement, freeze a deep clone of the source style's
-  // BOM. Snapshot is immutable — later edits to the pack do NOT mutate it.
   if (current.status === 'draft' && newStatus === 'placed' && current.style_id) {
     try {
       const { getTechPack } = await import('./techPackStore');
@@ -276,8 +223,6 @@ export async function transitionPO(id, newStatus, payload = {}) {
     }
   }
 
-  // Side effect: on close, write append-only atom_usage rows from `payload.actuals`
-  // and recompute rolling averages on each touched atom record.
   let totalCostActual = 0;
   if (current.status === 'received' && newStatus === 'closed') {
     const actuals = Array.isArray(payload?.actuals) ? payload.actuals : [];
@@ -307,7 +252,6 @@ export async function transitionPO(id, newStatus, payload = {}) {
     await recomputeAtomRollups(actuals);
   }
 
-  // Strip side-effect-only fields from the payload before persisting onto the PO row.
   const payloadRest = { ...(payload || {}) };
   delete payloadRest.actuals;
 
@@ -318,17 +262,20 @@ export async function transitionPO(id, newStatus, payload = {}) {
   const rows = readLocal(PO_KEY);
   const idx = rows.findIndex(r => r.id === id);
   if (idx >= 0) { rows[idx] = next; writeLocal(PO_KEY, rows); }
-  if (IS_SUPABASE_ENABLED) {
-    const { error } = await supabase.from('purchase_orders').update(updates).eq('id', id);
+
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { error } = await db
+      .from('purchase_orders')
+      .update(updates)
+      .eq('id', id)
+      .eq('organization_id', orgId);
     if (error) console.error('transitionPO:', error);
   }
   return next;
 }
 
-// After a close, recompute rolling averages on each atom touched by the
-// payload. Treatments are the only atom type with a writeable store today;
-// other atom types are skipped silently and will pick up the same hook as
-// their stores ship in later sprints.
 async function recomputeAtomRollups(actuals) {
   const seen = new Map();
   for (const a of actuals) {
@@ -368,7 +315,6 @@ async function recomputeAtomRollups(actuals) {
         await updateTreatment(atom_id, patch);
       } catch (err) { console.error('recompute treatment rollup:', err); }
     }
-    // fabric/color/trim/embellishment/pattern: no writeable store yet — skip.
   }
 }
 
@@ -376,9 +322,12 @@ async function recomputeAtomRollups(actuals) {
 
 export async function listBOMSnapshots(po_id) {
   let rows = readLocal(BOM_SNAP_KEY);
-  if (IS_SUPABASE_ENABLED) {
-    const q = supabase.from('bom_snapshots').select('*');
-    const { data, error } = po_id ? await q.eq('po_id', po_id) : await q;
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    let q = db.from('bom_snapshots').select('*').eq('organization_id', orgId);
+    if (po_id) q = q.eq('po_id', po_id);
+    const { data, error } = await q;
     if (!error && Array.isArray(data)) {
       const remoteIds = new Set(data.map(r => r.id));
       rows = [...data, ...rows.filter(r => !remoteIds.has(r.id))];
@@ -403,17 +352,17 @@ export async function createBOMSnapshot({ po_id, bom = [], pack = null }) {
   const rows = readLocal(BOM_SNAP_KEY);
   rows.push(row);
   writeLocal(BOM_SNAP_KEY, rows);
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('bom_snapshots').insert({ ...row, user_id: userId });
-      if (error) console.error('createBOMSnapshot:', error);
-    }
+
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('bom_snapshots').insert({ ...row, user_id: userId, organization_id: orgId });
+    if (error) console.error('createBOMSnapshot:', error);
   }
   return row;
 }
 
-// Explicit refusals — wired so a misuse throws loudly instead of partial-failing.
 export function updateBOMSnapshot() {
   throw new Error('bom_snapshot is immutable. Inserts only.');
 }
@@ -425,8 +374,10 @@ export function deleteBOMSnapshot() {
 
 export async function listAtomUsage({ atom_type = null, atom_id = null, po_id = null } = {}) {
   let rows = readLocal(ATOM_USAGE_KEY);
-  if (IS_SUPABASE_ENABLED) {
-    let q = supabase.from('atom_usage').select('*');
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    let q = db.from('atom_usage').select('*').eq('organization_id', orgId);
     if (atom_type) q = q.eq('atom_type', atom_type);
     if (atom_id)   q = q.eq('atom_id', atom_id);
     if (po_id)     q = q.eq('po_id', po_id);
@@ -446,9 +397,6 @@ export async function appendAtomUsage(input) {
   if (!input || !input.po_id || !input.atom_type || !input.atom_id) {
     throw new Error('appendAtomUsage: po_id, atom_type, atom_id are required');
   }
-  // Pass through any caller-supplied display fields (atom_name, atom_code,
-  // atom_version, lot, notes, etc.) — the typedef calls out the validated
-  // numerics but the store doesn't strip extras.
   const row = {
     ...input,
     id: newId(),
@@ -464,12 +412,13 @@ export async function appendAtomUsage(input) {
   const rows = readLocal(ATOM_USAGE_KEY);
   rows.push(row);
   writeLocal(ATOM_USAGE_KEY, rows);
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('atom_usage').insert({ ...row, user_id: userId });
-      if (error) console.error('appendAtomUsage:', error);
-    }
+
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('atom_usage').insert({ ...row, user_id: userId, organization_id: orgId });
+    if (error) console.error('appendAtomUsage:', error);
   }
   return row;
 }
@@ -485,8 +434,10 @@ export function deleteAtomUsage() {
 
 export async function listDriftLogs({ treatment_id = null, po_id = null } = {}) {
   let rows = readLocal(DRIFT_LOG_KEY);
-  if (IS_SUPABASE_ENABLED) {
-    let q = supabase.from('drift_logs').select('*');
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    let q = db.from('drift_logs').select('*').eq('organization_id', orgId);
     if (treatment_id) q = q.eq('treatment_id', treatment_id);
     if (po_id)        q = q.eq('po_id', po_id);
     const { data, error } = await q;
@@ -517,12 +468,13 @@ export async function appendDriftLog(input) {
   const rows = readLocal(DRIFT_LOG_KEY);
   rows.push(row);
   writeLocal(DRIFT_LOG_KEY, rows);
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('drift_logs').insert({ ...row, user_id: userId });
-      if (error) console.error('appendDriftLog:', error);
-    }
+
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('drift_logs').insert({ ...row, user_id: userId, organization_id: orgId });
+    if (error) console.error('appendDriftLog:', error);
   }
   return row;
 }
@@ -535,13 +487,7 @@ export function deleteDriftLog() {
 }
 
 // ── Seed PO ────────────────────────────────────────────────────────────────
-// One closed PO so the Treatment detail page has live rollup data on the
-// very first load. Idempotent: returns immediately if any POs already exist.
-// Depends on `seedTreatmentsIfEmpty` having already run (we look up the
-// stone-wash treatment by id). Style is materialized directly into
-// `cashmodel_techpacks` localStorage so we get a stable, human-friendly
-// style_id (`AP-HD-STONE-01`) instead of a UUID — the production list and
-// the BOM snapshot tree both render the id verbatim.
+
 const SEED_STYLE_ID = 'AP-HD-STONE-01';
 const SEED_TREATMENT_ID = 'seed-stone-wash';
 const SEED_VENDOR_NAME = 'Guangdong Ocean Wash';

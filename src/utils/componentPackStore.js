@@ -1,8 +1,8 @@
 // Component Pack storage — dual-write to localStorage + Supabase
 // Mirrors techPackStore.js but for the `component_packs` table
 
-import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
-import { getCurrentUserIdSync } from '../lib/auth';
+import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
+import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
 
 const LOCAL_KEY = 'cashmodel_component_packs';
 
@@ -33,10 +33,6 @@ function readLocal() {
 function writeLocal(rows) {
   try { localStorage.setItem(LOCAL_KEY, JSON.stringify(rows)); } catch (err) { console.error(err); }
 }
-// Read the current user id synchronously from the Clerk global. Used
-// when persisting rows to Supabase so the row's user_id matches the
-// signed-in caller.
-const currentUserId = getCurrentUserIdSync;
 
 function extractCover(images) {
   const list = Array.isArray(images) ? images : [];
@@ -48,10 +44,13 @@ function extractCover(images) {
 // Supabase because it's the source of heavy lag when components have photos.
 // A dedicated cover_image text column gives us thumbnails without that cost.
 export async function listComponentPacks() {
-  if (IS_SUPABASE_ENABLED) {
-    const { data, error } = await supabase
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { data, error } = await db
       .from('component_packs')
       .select('id, component_name, component_category, status, supplier, cost_per_unit, currency, cover_image, updated_at, created_at')
+      .eq('organization_id', orgId)
       .order('updated_at', { ascending: false });
     if (!error && data) {
       // Until every row has had its cover_image + cost_per_unit backfilled
@@ -69,6 +68,7 @@ export async function listComponentPacks() {
         return row;
       });
     }
+    if (error) console.error('listComponentPacks:', error);
   }
   return readLocal()
     .map(p => ({
@@ -87,8 +87,15 @@ export async function listComponentPacks() {
 }
 
 export async function getComponentPack(id) {
-  if (IS_SUPABASE_ENABLED) {
-    const { data, error } = await supabase.from('component_packs').select('*').eq('id', id).maybeSingle();
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { data, error } = await db
+      .from('component_packs')
+      .select('*')
+      .eq('id', id)
+      .eq('organization_id', orgId)
+      .maybeSingle();
     if (!error && data) {
       // Lazy backfill: older rows predate the cover_image column; populate it
       // the first time they're opened so subsequent list views show the
@@ -96,13 +103,16 @@ export async function getComponentPack(id) {
       if (!data.cover_image) {
         const cover = extractCover(data.images);
         if (cover) {
-          supabase.from('component_packs').update({ cover_image: cover }).eq('id', id)
-            .then(({ error: upErr }) => { if (upErr) console.error('cover_image backfill:', upErr); });
+          getAuthedSupabase().then(authDb => {
+            if (authDb) authDb.from('component_packs').update({ cover_image: cover }).eq('id', id).eq('organization_id', orgId)
+              .then(({ error: upErr }) => { if (upErr) console.error('cover_image backfill:', upErr); });
+          });
           return migrateLegacyVendorKeys({ ...data, cover_image: cover });
         }
       }
       return migrateLegacyVendorKeys(data);
     }
+    if (error) console.error('getComponentPack:', error);
   }
   const local = readLocal().find(p => p.id === id);
   return local ? migrateLegacyVendorKeys(local) : null;
@@ -127,12 +137,12 @@ export async function createComponentPack(defaultData) {
 
   const rows = readLocal(); rows.push(row); writeLocal(rows);
 
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('component_packs').insert({ ...row, user_id: userId });
-      if (error) console.error('createComponentPack:', error);
-    }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('component_packs').insert({ ...row, user_id: userId, organization_id: orgId });
+    if (error) console.error('createComponentPack:', error);
   }
   return row;
 }
@@ -140,9 +150,6 @@ export async function createComponentPack(defaultData) {
 export async function saveComponentPack(id, updates) {
   const now = new Date().toISOString();
   const cover = updates.images !== undefined ? extractCover(updates.images) : undefined;
-  // cover_image is kept separate from the core patch: the Supabase migration
-  // that adds the column may not have been applied yet, and mixing them in
-  // one UPDATE would fail the entire save on a missing-column error.
   const corePatch = { ...updates, updated_at: now };
   const localPatch = cover !== undefined ? { ...corePatch, cover_image: cover } : corePatch;
 
@@ -150,9 +157,11 @@ export async function saveComponentPack(id, updates) {
   const idx = rows.findIndex(p => p.id === id);
   if (idx >= 0) { rows[idx] = { ...rows[idx], ...localPatch }; writeLocal(rows); }
 
-  if (!IS_SUPABASE_ENABLED) return { ok: true };
+  const orgId = getCurrentOrgIdSync();
+  if (!IS_SUPABASE_ENABLED || !orgId) return { ok: true };
 
-  const { error } = await supabase.from('component_packs').update(corePatch).eq('id', id);
+  const db = await getAuthedSupabase();
+  const { error } = await db.from('component_packs').update(corePatch).eq('id', id).eq('organization_id', orgId);
   if (error) {
     console.error('saveComponentPack:', error);
     return { ok: false, error };
@@ -160,10 +169,11 @@ export async function saveComponentPack(id, updates) {
 
   // Best-effort cover_image write — tolerates pre-migration schemas.
   if (cover !== undefined) {
-    const { error: coverErr } = await supabase
+    const { error: coverErr } = await db
       .from('component_packs')
       .update({ cover_image: cover })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('organization_id', orgId);
     if (coverErr && !/column .* does not exist|could not find.*column/i.test(coverErr.message || '')) {
       console.error('saveComponentPack cover:', coverErr);
     }
@@ -173,8 +183,10 @@ export async function saveComponentPack(id, updates) {
 
 export async function deleteComponentPack(id) {
   writeLocal(readLocal().filter(p => p.id !== id));
-  if (IS_SUPABASE_ENABLED) {
-    const { error } = await supabase.from('component_packs').delete().eq('id', id);
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('component_packs').delete().eq('id', id).eq('organization_id', orgId);
     if (error) console.error('deleteComponentPack:', error);
   }
 }
@@ -192,14 +204,15 @@ export async function duplicateComponentPack(id) {
     created_at: now, updated_at: now,
   };
   delete copy.user_id;
+  delete copy.organization_id;
 
   const rows = readLocal(); rows.push(copy); writeLocal(rows);
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('component_packs').insert({ ...copy, user_id: userId });
-      if (error) console.error('duplicateComponentPack:', error);
-    }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('component_packs').insert({ ...copy, user_id: userId, organization_id: orgId });
+    if (error) console.error('duplicateComponentPack:', error);
   }
   return copy;
 }

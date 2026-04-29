@@ -16,8 +16,8 @@
 // the time. The append-only constraint applies to atom_usage / state
 // transitions, not the atom records themselves.
 
-import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
-import { getCurrentUserIdSync } from '../lib/auth';
+import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
+import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
 import { emptyPattern, PATTERN_CATEGORIES, PATTERN_CATEGORY_CODE } from './patternLibrary';
 
 const LOCAL_KEY = 'cashmodel_patterns';
@@ -35,9 +35,6 @@ function writeLocal(rows) {
   try { localStorage.setItem(LOCAL_KEY, JSON.stringify(rows)); }
   catch (err) { console.error('patternStore write:', err); }
 }
-
-// Synchronous reader; null if Clerk is still loading or no user signed in.
-const currentUserId = getCurrentUserIdSync;
 
 function newId() {
   return (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());
@@ -64,34 +61,38 @@ function filterRows(rows, { includeArchived = false, status = null, category = n
 }
 
 export async function listPatterns({ includeArchived = false, status = null, category = null } = {}) {
-  const local = readLocal();
   const filterOpts = { includeArchived, status, category };
-  if (IS_SUPABASE_ENABLED) {
-    const { data, error } = await supabase
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { data, error } = await db
       .from('patterns')
       .select('*')
+      .eq('organization_id', orgId)
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) {
-      const remoteIds = new Set(data.map(r => r.id));
-      const merged = [...data, ...local.filter(r => !remoteIds.has(r.id))];
-      return filterRows(merged, filterOpts)
+      return filterRows(data, filterOpts)
         .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
     }
     if (error) console.error('listPatterns:', error);
   }
-  return filterRows(local, filterOpts)
+  return filterRows(readLocal(), filterOpts)
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
 
 export async function getPattern(id) {
   if (!id) return null;
-  if (IS_SUPABASE_ENABLED) {
-    const { data, error } = await supabase
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { data, error } = await db
       .from('patterns')
       .select('*')
       .eq('id', id)
+      .eq('organization_id', orgId)
       .maybeSingle();
     if (!error && data) return data;
+    if (error) console.error('getPattern:', error);
   }
   return readLocal().find(r => r.id === id) || null;
 }
@@ -105,12 +106,12 @@ export async function createPattern({ category = 'hoodie', ...overrides } = {}) 
   local.push(row);
   writeLocal(local);
 
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('patterns').insert({ ...row, user_id: userId });
-      if (error) console.error('createPattern:', error);
-    }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('patterns').insert({ ...row, user_id: userId, organization_id: orgId });
+    if (error) console.error('createPattern:', error);
   }
   return row;
 }
@@ -126,11 +127,14 @@ export async function savePattern(id, updates) {
     local[idx] = merged;
     writeLocal(local);
   }
-  if (IS_SUPABASE_ENABLED) {
-    const { error } = await supabase
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { error } = await db
       .from('patterns')
       .update({ ...updates, updated_at: now })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('organization_id', orgId);
     if (error) console.error('savePattern:', error);
   }
   return merged;
@@ -162,14 +166,16 @@ export async function duplicatePattern(id) {
     created_at: now,
     updated_at: now,
   };
+  delete copy.user_id;
+  delete copy.organization_id;
   local.push(copy);
   writeLocal(local);
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('patterns').insert({ ...copy, user_id: userId });
-      if (error) console.error('duplicatePattern:', error);
-    }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('patterns').insert({ ...copy, user_id: userId, organization_id: orgId });
+    if (error) console.error('duplicatePattern:', error);
   }
   return copy;
 }
@@ -242,14 +248,14 @@ export async function seedPatternsIfEmpty() {
   ];
   const filled = seeds.map(s => ({ ...emptyPattern(s), updated_at: s.updated_at || now, created_at: s.created_at || now }));
   writeLocal(filled);
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('patterns').insert(
-        filled.map(r => ({ ...r, user_id: userId }))
-      );
-      if (error) console.error('seedPatterns:', error);
-    }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('patterns').insert(
+      filled.map(r => ({ ...r, user_id: userId, organization_id: orgId }))
+    );
+    if (error) console.error('seedPatterns:', error);
   }
   return filled;
 }
