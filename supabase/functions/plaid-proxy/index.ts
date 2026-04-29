@@ -27,6 +27,10 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 const PLAID_CLIENT_ID = Deno.env.get('PLAID_CLIENT_ID');
 const PLAID_SECRET = Deno.env.get('PLAID_SECRET');
 const PLAID_ENV = (Deno.env.get('PLAID_ENV') || 'sandbox').toLowerCase();
+// Optional — only needed for OAuth institutions (Chase etc.).
+// Must also be registered in Plaid dashboard → API → Allowed redirect URIs.
+// Leave unset in sandbox unless you're testing OAuth redirect flows.
+const PLAID_REDIRECT_URI = Deno.env.get('PLAID_REDIRECT_URI') || null;
 
 const PLAID_HOST = (() => {
   switch (PLAID_ENV) {
@@ -125,15 +129,18 @@ serve(async (req) => {
 
   // ── 3a. Create a link_token for Plaid Link ──────────────────────────────
   if (action === 'link-token/create') {
-    const { ok, status, data } = await plaid('/link/token/create', {
+    const linkPayload: Record<string, unknown> = {
       user: { client_user_id: userId },
       client_name: 'Cashmodel',
       language: 'en',
       country_codes: ['US'],
-      products: ['auth', 'transactions'],
-      // OAuth redirect for Chase etc. Must be added to Plaid dashboard → API → Allowed redirect URIs.
-      redirect_uri: 'https://matasmillion.github.io/cashmodel/',
-    });
+      products: ['transactions'],
+    };
+    // Only send redirect_uri when explicitly configured — an unregistered URI causes
+    // Plaid to reject the entire request with INVALID_CONFIGURATION.
+    if (PLAID_REDIRECT_URI) linkPayload.redirect_uri = PLAID_REDIRECT_URI;
+
+    const { ok, status, data } = await plaid('/link/token/create', linkPayload);
     if (!ok) return json({ error: 'link_token creation failed', plaid: data }, status, origin);
     return json({ link_token: data.link_token, expiration: data.expiration }, 200, origin);
   }
