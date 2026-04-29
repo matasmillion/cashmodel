@@ -2,6 +2,7 @@
 // Used by the TechPack list and builder views
 
 import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
+import { getCurrentUserIdSync } from '../lib/auth';
 
 const LOCAL_KEY = 'cashmodel_techpacks';
 
@@ -44,17 +45,8 @@ function writeLocal(packs) {
   }
 }
 
-function currentUserId() {
-  // Supabase client caches the session; we read synchronously from localStorage-backed cache
-  try {
-    const raw = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
-    if (!raw) return null;
-    const session = JSON.parse(localStorage.getItem(raw));
-    return session?.user?.id ?? null;
-  } catch {
-    return null;
-  }
-}
+// Synchronous reader; null if Clerk is still loading or no user signed in.
+const currentUserId = getCurrentUserIdSync;
 
 // Pull the cover image (first entry with slot=cover) out of an images array
 function extractCover(images) {

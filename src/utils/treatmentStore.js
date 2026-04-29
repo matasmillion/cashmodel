@@ -14,6 +14,7 @@
 // Restoring just flips the status back.
 
 import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
+import { getCurrentUserIdSync } from '../lib/auth';
 import { emptyTreatment, TREATMENT_TYPE_CODE } from './treatmentLibrary';
 import { addVendor } from './vendorLibrary';
 
@@ -33,14 +34,8 @@ function writeLocal(rows) {
   catch (err) { console.error('treatmentStore write:', err); }
 }
 
-function currentUserId() {
-  try {
-    const raw = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
-    if (!raw) return null;
-    const session = JSON.parse(localStorage.getItem(raw));
-    return session?.user?.id ?? null;
-  } catch { return null; }
-}
+// Synchronous reader; null if Clerk is still loading or no user signed in.
+const currentUserId = getCurrentUserIdSync;
 
 function newId() {
   return (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());

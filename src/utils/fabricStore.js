@@ -9,6 +9,7 @@
 // still resolves.
 
 import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
+import { getCurrentUserIdSync } from '../lib/auth';
 import { emptyFabric, FABRIC_WEAVE_CODE } from './fabricLibrary';
 
 const LOCAL_KEY = 'cashmodel_fabrics';
@@ -27,14 +28,8 @@ function writeLocal(rows) {
   catch (err) { console.error('fabricStore write:', err); }
 }
 
-function currentUserId() {
-  try {
-    const raw = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
-    if (!raw) return null;
-    const session = JSON.parse(localStorage.getItem(raw));
-    return session?.user?.id ?? null;
-  } catch { return null; }
-}
+// Synchronous reader; null if Clerk is still loading or no user signed in.
+const currentUserId = getCurrentUserIdSync;
 
 function newId() {
   return (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());

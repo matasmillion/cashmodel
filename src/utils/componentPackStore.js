@@ -2,6 +2,7 @@
 // Mirrors techPackStore.js but for the `component_packs` table
 
 import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
+import { getCurrentUserIdSync } from '../lib/auth';
 
 const LOCAL_KEY = 'cashmodel_component_packs';
 
@@ -32,14 +33,10 @@ function readLocal() {
 function writeLocal(rows) {
   try { localStorage.setItem(LOCAL_KEY, JSON.stringify(rows)); } catch (err) { console.error(err); }
 }
-function currentUserId() {
-  try {
-    const key = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
-    if (!key) return null;
-    const session = JSON.parse(localStorage.getItem(key));
-    return session?.user?.id ?? null;
-  } catch { return null; }
-}
+// Read the current user id synchronously from the Clerk global. Used
+// when persisting rows to Supabase so the row's user_id matches the
+// signed-in caller.
+const currentUserId = getCurrentUserIdSync;
 
 function extractCover(images) {
   const list = Array.isArray(images) ? images : [];

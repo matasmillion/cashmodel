@@ -3,6 +3,7 @@ import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, O
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
 import { syncShopifyActuals, syncMetaActuals, syncMercuryActuals, syncPlaidActuals, listPlaidItems } from '../utils/liveDataSync';
 import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
+import { useCurrentUser } from '../lib/auth';
 
 const LOCAL_STORAGE_KEY = 'cashmodel_state';
 const INTEGRATIONS_KEY = 'cashmodel_integrations';
@@ -364,8 +365,13 @@ export function AppProvider({ children }) {
     };
   }, [state.activeTab]);
 
-  // Listen to Supabase auth state — load cloud data when user signs in,
-  // then kick off auto-sync so integration data overrides any stale cloud seed.
+  // Listen to the auth state — load cloud data when user signs in,
+  // then kick off auto-sync so integration data overrides any stale
+  // cloud seed. Source of truth for "who's signed in" moved to
+  // src/lib/auth (Clerk-backed) when we replaced Supabase Auth.
+  const currentUser = useCurrentUser();
+  const currentUserId = currentUser?.id || null;
+
   useEffect(() => {
     if (!IS_SUPABASE_ENABLED) {
       triggerAutoSync();
@@ -383,29 +389,18 @@ export function AppProvider({ children }) {
       }
     }
 
-    async function loadAndSync(userId) {
-      await loadCloudState(userId);
-      await triggerAutoSync();
+    userIdRef.current = currentUserId;
+    if (currentUserId) {
+      loadCloudState(currentUserId).then(() => triggerAutoSync());
+    } else {
+      // Signed out (or Clerk still loading) — surface whatever cached
+      // local-only data exists by kicking the auto-sync regardless.
+      triggerAutoSync();
     }
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        userIdRef.current = session.user.id;
-        loadAndSync(session.user.id);
-      } else {
-        triggerAutoSync();
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      userIdRef.current = session?.user?.id ?? null;
-      if (event === 'SIGNED_IN' && session?.user) {
-        loadAndSync(session.user.id);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+    // Re-fire whenever the signed-in user id changes — handles sign-in,
+    // sign-out, and provider switches.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUserId]);
 
   // Auto-save: localStorage always, Supabase when signed in (debounced 500ms)
   useEffect(() => {
