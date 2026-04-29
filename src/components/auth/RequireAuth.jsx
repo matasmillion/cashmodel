@@ -23,13 +23,14 @@ function UserDataGuard({ children }) {
   useEffect(() => {
     if (!isLoaded || !user) return;
     const storedUid = localStorage.getItem(OWNER_KEY);
-    if (storedUid !== user.id) {
-      // Different user (or first sign-in on this device) — clear all app data
-      // so the incoming user starts blank, not inheriting another account's data.
+    if (storedUid && storedUid !== user.id) {
+      // A different user was previously signed in on this device — wipe their
+      // data so the incoming user starts with a clean slate.
       const keysToRemove = Object.keys(localStorage).filter(k => k.startsWith('cashmodel_'));
       keysToRemove.forEach(k => localStorage.removeItem(k));
-      localStorage.setItem(OWNER_KEY, user.id);
     }
+    // Always stamp the current owner so future sign-ins can detect a switch.
+    localStorage.setItem(OWNER_KEY, user.id);
   }, [isLoaded, user?.id]);
 
   return children;
