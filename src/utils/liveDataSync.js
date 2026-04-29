@@ -441,7 +441,7 @@ export async function callPlaidProxy(action, payload = {}) {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-  const res = await fetch(`${supabaseUrl}/functions/v1/plaid-proxy`, {
+  const res = await fetch(`${supabaseUrl}/functions/v1/bright-api`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
