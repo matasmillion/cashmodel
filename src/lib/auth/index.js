@@ -105,6 +105,32 @@ export function getCurrentUserIdSync() {
 }
 
 /**
+ * Async — fetches a JWT issued by Clerk under the named template (the
+ * "supabase" template if not specified) for authenticating calls to
+ * Supabase Edge Functions or RLS-protected reads. Returns null if
+ * Clerk hasn't loaded or no user is signed in.
+ *
+ * Pair with the Clerk Dashboard "Supabase" JWT template — see
+ * https://clerk.com/docs/integrations/databases/supabase. Until that
+ * template is configured every call returns null and Supabase rejects
+ * the request as anon, which the call site should treat as
+ * "not-yet-wired" rather than an error.
+ *
+ * @param {string} [template]
+ * @returns {Promise<string | null>}
+ */
+export async function getClerkToken(template = 'supabase') {
+  if (typeof window === 'undefined') return null;
+  const clerk = /** @type {any} */ (window).Clerk;
+  if (!clerk?.session) return null;
+  try {
+    return await clerk.session.getToken({ template });
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Throws when the current user's role is below the required level.
  * Use inside route handlers / page components that demand a specific
  * role; pair with an error boundary to render a "not authorized" page.

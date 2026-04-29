@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-28T14:16:18.936Z",
+  "lastUpdated": "2026-04-29T07:38:26.352Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "e7b5589",
+      "date": "2026-04-28T14:18:00+00:00",
+      "message": "feat(auth): auth_events audit log + activity page (P4/C5)"
+    },
+    {
       "sha": "52a1ac3",
       "date": "2026-04-28T14:03:04+00:00",
       "message": "feat(auth): /account/security + Clerk webhook + users migration (P4/C4)"
@@ -1087,11 +1092,6 @@
       "sha": "99d925e",
       "date": "2026-04-28T09:51:25+03:00",
       "message": "fix(legal): tighten SiteFooter alignment + visual hierarchy (#8)"
-    },
-    {
-      "sha": "98409d5",
-      "date": "2026-04-28T09:34:48+03:00",
-      "message": "feat(legal): add /legal scaffold and Information Security Policy v1.0 (#7)"
     }
   ]
 }

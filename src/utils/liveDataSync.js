@@ -1,6 +1,7 @@
 // Live data sync utilities — Shopify, Meta Ads, Mercury
 
 import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
+import { getCurrentUserIdSync, getClerkToken } from '../lib/auth';
 
 // ─── Week helpers ─────────────────────────────────────────────────────────────
 
@@ -46,15 +47,15 @@ function toISO(d) {
  */
 export async function saveShopifyCredentials({ domain, token }) {
   if (!IS_SUPABASE_ENABLED || !supabase) throw new Error('Supabase not configured');
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Sign in first');
+  const userId = getCurrentUserIdSync();
+  if (!userId) throw new Error('Sign in first');
 
   const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
   const { error } = await supabase
     .from('user_integrations')
     .upsert(
       {
-        user_id: user.id,
+        user_id: userId,
         provider: 'shopify',
         token,
         metadata: { domain: cleanDomain },
@@ -69,8 +70,8 @@ export async function saveShopifyCredentials({ domain, token }) {
  */
 export async function loadShopifyIntegration() {
   if (!IS_SUPABASE_ENABLED || !supabase) return null;
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  const userId = getCurrentUserIdSync();
+  if (!userId) return null;
   const { data, error } = await supabase
     .from('user_integrations')
     .select('metadata, updated_at')
@@ -101,8 +102,8 @@ export async function callShopifyProxy(path, query = null, graphql = null) {
   if (!IS_SUPABASE_ENABLED || !supabase) {
     throw new Error('Supabase not configured — cannot reach the Shopify proxy');
   }
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('Sign in to use the Shopify proxy');
+  const token = await getClerkToken();
+  if (!token) throw new Error('Sign in to use the Shopify proxy');
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -110,7 +111,7 @@ export async function callShopifyProxy(path, query = null, graphql = null) {
   const res = await fetch(`${supabaseUrl}/functions/v1/shopify-proxy`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${session.access_token}`,
+      Authorization: `Bearer ${token}`,
       apikey: anonKey,
       'Content-Type': 'application/json',
     },
@@ -311,13 +312,13 @@ export async function syncMetaActuals(creds) {
  */
 export async function saveMercuryCredentials({ token }) {
   if (!IS_SUPABASE_ENABLED || !supabase) throw new Error('Supabase not configured');
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Sign in first');
+  const userId = getCurrentUserIdSync();
+  if (!userId) throw new Error('Sign in first');
 
   const { error } = await supabase
     .from('user_integrations')
     .upsert(
-      { user_id: user.id, provider: 'mercury', token, metadata: {} },
+      { user_id: userId, provider: 'mercury', token, metadata: {} },
       { onConflict: 'user_id,provider' },
     );
   if (error) throw new Error(`Failed to save credentials: ${error.message}`);
@@ -325,8 +326,8 @@ export async function saveMercuryCredentials({ token }) {
 
 export async function loadMercuryIntegration() {
   if (!IS_SUPABASE_ENABLED || !supabase) return null;
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  const userId = getCurrentUserIdSync();
+  if (!userId) return null;
   const { data, error } = await supabase
     .from('user_integrations')
     .select('metadata, updated_at')
@@ -350,8 +351,8 @@ export async function callMercuryProxy(path, query = null) {
   if (!IS_SUPABASE_ENABLED || !supabase) {
     throw new Error('Supabase not configured — cannot reach the Mercury proxy');
   }
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('Sign in to use the Mercury proxy');
+  const token = await getClerkToken();
+  if (!token) throw new Error('Sign in to use the Mercury proxy');
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -359,7 +360,7 @@ export async function callMercuryProxy(path, query = null) {
   const res = await fetch(`${supabaseUrl}/functions/v1/mercury-proxy`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${session.access_token}`,
+      Authorization: `Bearer ${token}`,
       apikey: anonKey,
       'Content-Type': 'application/json',
     },
@@ -422,8 +423,8 @@ export async function callPlaidProxy(action, payload = {}) {
   if (!IS_SUPABASE_ENABLED || !supabase) {
     throw new Error('Supabase not configured — cannot reach the Plaid proxy');
   }
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('Sign in to use the Plaid proxy');
+  const token = await getClerkToken();
+  if (!token) throw new Error('Sign in to use the Plaid proxy');
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -431,7 +432,7 @@ export async function callPlaidProxy(action, payload = {}) {
   const res = await fetch(`${supabaseUrl}/functions/v1/plaid-proxy`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${session.access_token}`,
+      Authorization: `Bearer ${token}`,
       apikey: anonKey,
       'Content-Type': 'application/json',
     },
