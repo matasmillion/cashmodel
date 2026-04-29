@@ -152,6 +152,18 @@ serve(async (req) => {
   if (action === 'public-token/exchange') {
     if (!body.public_token) return json({ error: 'Missing public_token' }, 400, origin);
 
+    // Ensure the org row exists. The clerk-webhook normally creates it on
+    // organization.created, but if that webhook wasn't wired up the row will
+    // be missing and every FK insert will fail. Use the service role key so
+    // this upsert bypasses RLS.
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (serviceKey) {
+      const admin = createClient(SUPABASE_URL!, serviceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      await admin.from('organizations').upsert({ id: orgId, name: orgId }, { onConflict: 'id', ignoreDuplicates: true });
+    }
+
     const exch = await plaid('/item/public_token/exchange', { public_token: body.public_token });
     if (!exch.ok) return json({ error: 'public_token exchange failed', plaid: exch.data }, exch.status, origin);
 
