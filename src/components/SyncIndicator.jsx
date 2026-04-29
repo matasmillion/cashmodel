@@ -12,11 +12,9 @@ export default function SyncIndicator() {
   const { autoSyncState, triggerAutoSync } = useApp();
   const { status, sources, errors, syncedAt } = autoSyncState;
 
-  if (status === 'idle' && sources.length === 0 && !syncedAt) return null;
-
   const isError  = status === 'error' || status === 'partial';
   const isSyncing = status === 'syncing';
-  const color = isError ? '#C0392B' : isSyncing ? '#D97706' : '#4CAF7D';
+  const color = isError ? '#C0392B' : '#4CAF7D';
 
   const tooltip = (() => {
     if (Object.keys(errors || {}).length)
