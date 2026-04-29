@@ -229,7 +229,7 @@ export default function TopBar() {
                 textTransform: 'uppercase',
               }}
             >
-              {org?.name || ' '}
+              Enterprise Resource Planning
             </h1>
             <p
               style={{
@@ -244,7 +244,7 @@ export default function TopBar() {
                 textTransform: 'uppercase',
               }}
             >
-              Enterprise Resource Planning
+              {org?.name || ' '}
             </p>
           </div>
 
