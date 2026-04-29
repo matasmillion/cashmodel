@@ -12,7 +12,7 @@
 //                                so utility code doesn't need a hook
 //                                context.
 
-import { useUser, useClerk } from '@clerk/clerk-react';
+import { useUser, useClerk, useOrganization } from '@clerk/clerk-react';
 import { normalizeRole, isAtLeast } from './roles';
 
 /** @typedef {import('./types').User} User */
@@ -141,4 +141,29 @@ export function requireRole(required, currentRole) {
   if (!isAtLeast(currentRole, required)) {
     throw new Error(`Access denied — requires '${required}' role, have '${currentRole || 'none'}'`);
   }
+}
+
+/**
+ * React hook — returns the current active organization, or null while
+ * Clerk is still loading or when no org is active.
+ * @returns {{ id: string, name: string, slug: string | null } | null}
+ */
+export function useCurrentOrg() {
+  const { isLoaded, organization } = useOrganization();
+  if (!isLoaded || !organization) return null;
+  return { id: organization.id, name: organization.name, slug: organization.slug ?? null };
+}
+
+/**
+ * Synchronous reader for non-React consumers (stores, utilities). Reads
+ * the active org id off the global Clerk instance. Returns null if no
+ * org is active or Clerk hasn't loaded.
+ *
+ * Use sparingly — prefer useCurrentOrg() in React components.
+ * @returns {string | null}
+ */
+export function getCurrentOrgIdSync() {
+  if (typeof window === 'undefined') return null;
+  const clerk = /** @type {any} */ (window).Clerk;
+  return clerk?.organization?.id ?? null;
 }

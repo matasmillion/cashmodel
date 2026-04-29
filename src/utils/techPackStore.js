@@ -1,8 +1,8 @@
 // Tech Pack storage — dual-write to localStorage + Supabase when available
 // Used by the TechPack list and builder views
 
-import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
-import { getCurrentUserIdSync } from '../lib/auth';
+import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
+import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
 
 const LOCAL_KEY = 'cashmodel_techpacks';
 
@@ -45,9 +45,6 @@ function writeLocal(packs) {
   }
 }
 
-// Synchronous reader; null if Clerk is still loading or no user signed in.
-const currentUserId = getCurrentUserIdSync;
-
 // Pull the cover image (first entry with slot=cover) out of an images array
 function extractCover(images) {
   const list = Array.isArray(images) ? images : [];
@@ -62,10 +59,13 @@ function extractCover(images) {
 // thumbnails; Supabase users get placeholder icons until a dedicated
 // cover_image column is migrated.
 export async function listTechPacks() {
-  if (IS_SUPABASE_ENABLED) {
-    const { data, error } = await supabase
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { data, error } = await db
       .from('tech_packs')
       .select('id, style_name, product_category, status, completion_pct, updated_at, created_at')
+      .eq('organization_id', orgId)
       .order('updated_at', { ascending: false });
     if (error) console.error('listTechPacks:', error);
     if (data) return data.map(r => ({ ...r, cover_image: null }));
@@ -91,11 +91,14 @@ export async function listTechPacks() {
 
 // Fetch one tech pack including data + images
 export async function getTechPack(id) {
-  if (IS_SUPABASE_ENABLED) {
-    const { data, error } = await supabase
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { data, error } = await db
       .from('tech_packs')
       .select('*')
       .eq('id', id)
+      .eq('organization_id', orgId)
       .maybeSingle();
     if (!error && data) return migrateLegacyVendorKeys(data);
   }
@@ -126,12 +129,12 @@ export async function createTechPack(defaultData, defaultLibrary) {
   writeLocal(packs);
 
   // Cloud if available
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('tech_packs').insert({ ...row, user_id: userId });
-      if (error) console.error('createTechPack:', error);
-    }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('tech_packs').insert({ ...row, user_id: userId, organization_id: orgId });
+    if (error) console.error('createTechPack:', error);
   }
   return row;
 }
@@ -146,11 +149,14 @@ export async function saveTechPack(id, updates) {
     writeLocal(packs);
   }
 
-  if (IS_SUPABASE_ENABLED) {
-    const { error } = await supabase
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { error } = await db
       .from('tech_packs')
       .update({ ...updates, updated_at: now })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('organization_id', orgId);
     if (error) console.error('saveTechPack:', error);
   }
 }
@@ -160,8 +166,10 @@ export async function deleteTechPack(id) {
   const packs = readLocal().filter(p => p.id !== id);
   writeLocal(packs);
 
-  if (IS_SUPABASE_ENABLED) {
-    const { error } = await supabase.from('tech_packs').delete().eq('id', id);
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('tech_packs').delete().eq('id', id).eq('organization_id', orgId);
     if (error) console.error('deleteTechPack:', error);
   }
 }
@@ -181,17 +189,18 @@ export async function duplicateTechPack(id) {
     updated_at: now,
   };
   delete copy.user_id;
+  delete copy.organization_id;
 
   const packs = readLocal();
   packs.push(copy);
   writeLocal(packs);
 
-  if (IS_SUPABASE_ENABLED) {
-    const userId = currentUserId();
-    if (userId) {
-      const { error } = await supabase.from('tech_packs').insert({ ...copy, user_id: userId });
-      if (error) console.error('duplicateTechPack:', error);
-    }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
+    const db = await getAuthedSupabase();
+    const { error } = await db.from('tech_packs').insert({ ...copy, user_id: userId, organization_id: orgId });
+    if (error) console.error('duplicateTechPack:', error);
   }
   return copy;
 }
