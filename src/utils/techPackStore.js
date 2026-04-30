@@ -58,8 +58,28 @@ function extractCover(images) {
 // browser. LocalStorage always has images inline so the fallback still shows
 // thumbnails; Supabase users get placeholder icons until a dedicated
 // cover_image column is migrated.
+//
+// Cloud + local always get unioned. Local-only rows (cloud insert failed
+// silently, RLS rejected, network blip, JWT/org not loaded yet) still
+// surface so the user never loses sight of their work.
 export async function listTechPacks() {
+  const { computeTotalUnitCost } = await import('../components/techpack/techPackConstants');
+  const { getFRColorCost } = await import('./colorLibrary');
+  const projectLocal = (p) => ({
+    id: p.id,
+    style_name: p.data?.styleName || p.style_name || '',
+    product_category: p.data?.productCategory || p.product_category || '',
+    status: p.data?.status || p.status || 'Development',
+    completion_pct: p.completion_pct || 0,
+    total_unit_cost: computeTotalUnitCost(p.data || {}, { getColorCost: getFRColorCost }),
+    currency: p.data?.currency || p.currency || 'USD',
+    updated_at: p.updated_at,
+    created_at: p.created_at,
+    cover_image: extractCover(p.images),
+  });
+
   const orgId = getCurrentOrgIdSync();
+  let cloudRows = null;
   if (IS_SUPABASE_ENABLED && orgId) {
     const db = await getAuthedSupabase();
     const { data, error } = await db
@@ -67,26 +87,34 @@ export async function listTechPacks() {
       .select('id, style_name, product_category, status, completion_pct, updated_at, created_at')
       .eq('organization_id', orgId)
       .order('updated_at', { ascending: false });
-    if (error) console.error('listTechPacks:', error);
-    if (data) return data.map(r => ({ ...r, cover_image: null }));
+    if (!error && Array.isArray(data)) cloudRows = data.map(r => ({ ...r, cover_image: null }));
+    else if (error) console.error('listTechPacks:', error);
   }
-  // Fallback — localStorage
-  const { computeTotalUnitCost } = await import('../components/techpack/techPackConstants');
-  const { getFRColorCost } = await import('./colorLibrary');
-  return readLocal()
-    .map(p => ({
-      id: p.id,
-      style_name: p.data?.styleName || '',
-      product_category: p.data?.productCategory || '',
-      status: p.data?.status || 'Development',
-      completion_pct: p.completion_pct || 0,
-      total_unit_cost: computeTotalUnitCost(p.data || {}, { getColorCost: getFRColorCost }),
-      currency: p.data?.currency || 'USD',
-      updated_at: p.updated_at,
-      created_at: p.created_at,
-      cover_image: extractCover(p.images),
-    }))
-    .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+
+  const local = readLocal();
+  const seen = new Set();
+  const out = [];
+  (cloudRows || []).forEach(r => {
+    if (!r || !r.id) return;
+    seen.add(r.id);
+    // Backfill cover_image / total_unit_cost from local mirror when cloud
+    // doesn't carry those projections.
+    const mirror = local.find(l => l.id === r.id);
+    let row = r;
+    if (mirror) {
+      const localCover = extractCover(mirror.images);
+      if (localCover && !row.cover_image) row = { ...row, cover_image: localCover };
+      if (row.total_unit_cost == null) {
+        row = { ...row, total_unit_cost: computeTotalUnitCost(mirror.data || {}, { getColorCost: getFRColorCost }) };
+      }
+    }
+    out.push(row);
+  });
+  local.forEach(p => {
+    if (!p || !p.id || seen.has(p.id)) return;
+    out.push(projectLocal(p));
+  });
+  return out.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
 
 // Fetch one tech pack including data + images

@@ -65,9 +65,21 @@ function filterRows(rows, { includeArchived = false, status = null, type = null 
 
 // List every treatment (most recent first). Pulls from Supabase when
 // configured and org is active, falls back to localStorage.
+// Cloud + local always get unioned at read time so local-only rows never
+// disappear from the list view (cloud insert failed silently, RLS rejected,
+// network blip, JWT/org not loaded yet).
+function unionByIdCloudFirst(cloudRows, localRows) {
+  const seen = new Set();
+  const out = [];
+  (cloudRows || []).forEach(r => { if (r && r.id && !seen.has(r.id)) { seen.add(r.id); out.push(r); } });
+  (localRows || []).forEach(r => { if (r && r.id && !seen.has(r.id)) { seen.add(r.id); out.push(r); } });
+  return out;
+}
+
 export async function listTreatments({ includeArchived = false, status = null, type = null } = {}) {
   const filterOpts = { includeArchived, status, type };
   const orgId = getCurrentOrgIdSync();
+  let cloudRows = null;
   if (IS_SUPABASE_ENABLED && orgId) {
     const db = await getAuthedSupabase();
     const { data, error } = await db
@@ -75,13 +87,11 @@ export async function listTreatments({ includeArchived = false, status = null, t
       .select('*')
       .eq('organization_id', orgId)
       .order('updated_at', { ascending: false });
-    if (!error && Array.isArray(data)) {
-      return filterRows(data, filterOpts)
-        .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
-    }
-    if (error) console.error('listTreatments:', error);
+    if (!error && Array.isArray(data)) cloudRows = data;
+    else if (error) console.error('listTreatments:', error);
   }
-  return filterRows(readLocal(), filterOpts)
+  const merged = unionByIdCloudFirst(cloudRows, readLocal());
+  return filterRows(merged, filterOpts)
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
 
@@ -96,7 +106,16 @@ export async function getTreatment(id) {
       .eq('id', id)
       .eq('organization_id', orgId)
       .maybeSingle();
-    if (!error && data) return data;
+    if (!error && data) {
+      try {
+        const local = readLocal();
+        const idx = local.findIndex(r => r.id === id);
+        if (idx >= 0) local[idx] = { ...local[idx], ...data };
+        else local.push(data);
+        writeLocal(local);
+      } catch (err) { console.error('getTreatment mirror:', err); }
+      return data;
+    }
     if (error) console.error('getTreatment:', error);
   }
   return readLocal().find(r => r.id === id) || null;
@@ -131,12 +150,16 @@ export async function saveTreatment(id, updates) {
   const now = new Date().toISOString();
   const local = readLocal();
   const idx = local.findIndex(r => r.id === id);
-  let merged = null;
+  let merged;
   if (idx >= 0) {
     merged = { ...local[idx], ...updates, updated_at: now };
     local[idx] = merged;
-    writeLocal(local);
+  } else {
+    merged = { id, ...updates, updated_at: now };
+    local.push(merged);
   }
+  writeLocal(local);
+
   const orgId = getCurrentOrgIdSync();
   if (IS_SUPABASE_ENABLED && orgId) {
     const db = await getAuthedSupabase();

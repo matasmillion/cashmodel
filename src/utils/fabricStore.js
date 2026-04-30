@@ -52,9 +52,22 @@ function filterRows(rows, { includeArchived = false, status = null, weave = null
   return out;
 }
 
+// Cloud + local always get unioned at read time so local-only rows
+// (cloud insert failed silently, RLS rejected, network blip, JWT/org not
+// loaded yet) never disappear from the list view. Cloud wins on conflict;
+// local fills in any rows the cloud doesn't have yet.
+function unionByIdLocalFirst(cloudRows, localRows) {
+  const seen = new Set();
+  const out = [];
+  (cloudRows || []).forEach(r => { if (r && r.id && !seen.has(r.id)) { seen.add(r.id); out.push(r); } });
+  (localRows || []).forEach(r => { if (r && r.id && !seen.has(r.id)) { seen.add(r.id); out.push(r); } });
+  return out;
+}
+
 export async function listFabrics({ includeArchived = false, status = null, weave = null } = {}) {
   const filterOpts = { includeArchived, status, weave };
   const orgId = getCurrentOrgIdSync();
+  let cloudRows = null;
   if (IS_SUPABASE_ENABLED && orgId) {
     const db = await getAuthedSupabase();
     const { data, error } = await db
@@ -62,13 +75,11 @@ export async function listFabrics({ includeArchived = false, status = null, weav
       .select('*')
       .eq('organization_id', orgId)
       .order('updated_at', { ascending: false });
-    if (!error && Array.isArray(data)) {
-      return filterRows(data, filterOpts)
-        .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
-    }
-    if (error) console.error('listFabrics:', error);
+    if (!error && Array.isArray(data)) cloudRows = data;
+    else if (error) console.error('listFabrics:', error);
   }
-  return filterRows(readLocal(), filterOpts)
+  const merged = unionByIdLocalFirst(cloudRows, readLocal());
+  return filterRows(merged, filterOpts)
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
 
@@ -83,7 +94,20 @@ export async function getFabric(id) {
       .eq('id', id)
       .eq('organization_id', orgId)
       .maybeSingle();
-    if (!error && data) return data;
+    if (!error && data) {
+      // Mirror cloud row into localStorage so subsequent saveFabric calls
+      // have a row to update — without this, a fabric created on another
+      // device or by another process saves to cloud only and disappears
+      // when listFabrics queries Supabase before the cloud row replicates.
+      try {
+        const local = readLocal();
+        const idx = local.findIndex(r => r.id === id);
+        if (idx >= 0) local[idx] = { ...local[idx], ...data };
+        else local.push(data);
+        writeLocal(local);
+      } catch (err) { console.error('getFabric mirror:', err); }
+      return data;
+    }
     if (error) console.error('getFabric:', error);
   }
   return readLocal().find(r => r.id === id) || null;
@@ -113,12 +137,19 @@ export async function saveFabric(id, updates) {
   const now = new Date().toISOString();
   const local = readLocal();
   const idx = local.findIndex(r => r.id === id);
-  let merged = null;
+  let merged;
   if (idx >= 0) {
     merged = { ...local[idx], ...updates, updated_at: now };
     local[idx] = merged;
-    writeLocal(local);
+  } else {
+    // Defend in depth: if no local row (e.g. cloud-only fabric, or this
+    // device hasn't run getFabric yet) insert a new row instead of
+    // silently skipping the local write.
+    merged = { id, ...updates, updated_at: now };
+    local.push(merged);
   }
+  writeLocal(local);
+
   const orgId = getCurrentOrgIdSync();
   if (IS_SUPABASE_ENABLED && orgId) {
     const db = await getAuthedSupabase();

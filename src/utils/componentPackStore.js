@@ -40,11 +40,34 @@ function extractCover(images) {
   return cover ? cover.data : null;
 }
 
+// Project a localStorage row into the same projected shape that the cloud
+// listing returns (id + scalar columns + cover_image, no images JSONB).
+function projectLocalRow(p) {
+  return {
+    id: p.id,
+    component_name: p.data?.componentName || p.component_name || '',
+    component_category: p.data?.componentCategory || p.component_category || '',
+    status: p.data?.status || p.status || 'Design',
+    supplier: p.data?.supplier || p.supplier || '',
+    cost_per_unit: (p.data?.costTiers?.[0]?.unitCost) || p.data?.targetUnitCost || p.data?.costPerUnit || p.cost_per_unit || '',
+    currency: p.data?.currency || p.currency || 'USD',
+    updated_at: p.updated_at,
+    created_at: p.created_at,
+    cover_image: p.cover_image || extractCover(p.images),
+  };
+}
+
 // See listTechPacks comment — avoid pulling the images JSONB column from
 // Supabase because it's the source of heavy lag when components have photos.
 // A dedicated cover_image text column gives us thumbnails without that cost.
+//
+// Cloud + local always get unioned. Cloud-only rows (canonical), local-only
+// rows (cloud insert failed silently, RLS, JWT/org not loaded), and rows in
+// both (cloud wins, but cover_image / cost_per_unit are filled in from
+// local when the cloud projection is still null) all surface in the list.
 export async function listComponentPacks() {
   const orgId = getCurrentOrgIdSync();
+  let cloudRows = null;
   if (IS_SUPABASE_ENABLED && orgId) {
     const db = await getAuthedSupabase();
     const { data, error } = await db
@@ -52,51 +75,44 @@ export async function listComponentPacks() {
       .select('id, component_name, component_category, status, supplier, cost_per_unit, currency, cover_image, updated_at, created_at')
       .eq('organization_id', orgId)
       .order('updated_at', { ascending: false });
-    if (!error && data) {
-      // Until every row has had its cover_image + cost_per_unit backfilled
-      // (pre-projection rows are null for both), lean on the dual-written
-      // local copy to fill in any missing projected fields.
-      const local = readLocal();
-      return data.map(r => {
-        let row = r;
-        const mirror = row.cover_image && row.cost_per_unit ? null : local.find(l => l.id === r.id);
-        // Prefer mirror.cover_image (saveComponentPack writes it directly)
-        // and fall back to extracting from images for older local rows.
-        if (!row.cover_image && mirror) {
-          const localCover = mirror.cover_image || extractCover(mirror.images);
-          if (localCover) row = { ...row, cover_image: localCover };
-        }
-        if (!row.cost_per_unit && mirror) {
-          const tier0 = mirror.data?.costTiers?.[0];
-          const cost = (tier0 && tier0.unitCost)
-            || mirror.data?.targetUnitCost
-            || mirror.data?.costPerUnit
-            || '';
-          if (cost) row = { ...row, cost_per_unit: cost };
-        }
-        return row;
-      });
-    }
-    if (error) console.error('listComponentPacks:', error);
+    if (!error && Array.isArray(data)) cloudRows = data;
+    else if (error) console.error('listComponentPacks:', error);
   }
-  return readLocal()
-    .map(p => ({
-      id: p.id,
-      component_name: p.data?.componentName || p.component_name || '',
-      component_category: p.data?.componentCategory || p.component_category || '',
-      status: p.data?.status || p.status || 'Design',
-      supplier: p.data?.supplier || p.supplier || '',
-      cost_per_unit: (p.data?.costTiers?.[0]?.unitCost) || p.data?.targetUnitCost || p.data?.costPerUnit || p.cost_per_unit || '',
-      currency: p.data?.currency || p.currency || 'USD',
-      updated_at: p.updated_at,
-      created_at: p.created_at,
-      // Prefer the directly-written cover_image (saveComponentPack writes it
-      // both to the projection field and inside the images JSONB). Falls
-      // back to extracting from images for older rows that predate the
-      // direct projection.
-      cover_image: p.cover_image || extractCover(p.images),
-    }))
-    .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+
+  const local = readLocal();
+  const localById = new Map(local.map(p => [p.id, p]));
+  const seen = new Set();
+  const out = [];
+
+  // Cloud rows first. Backfill cover_image / cost_per_unit from local
+  // mirror when the cloud projection columns aren't yet populated.
+  (cloudRows || []).forEach(r => {
+    if (!r || !r.id) return;
+    seen.add(r.id);
+    let row = r;
+    const mirror = (row.cover_image && row.cost_per_unit) ? null : localById.get(r.id);
+    if (!row.cover_image && mirror) {
+      const localCover = mirror.cover_image || extractCover(mirror.images);
+      if (localCover) row = { ...row, cover_image: localCover };
+    }
+    if (!row.cost_per_unit && mirror) {
+      const tier0 = mirror.data?.costTiers?.[0];
+      const cost = (tier0 && tier0.unitCost) || mirror.data?.targetUnitCost || mirror.data?.costPerUnit || '';
+      if (cost) row = { ...row, cost_per_unit: cost };
+    }
+    out.push(row);
+  });
+
+  // Local-only rows: project to the same shape and append. These are
+  // either fresh creates that haven't reached the cloud yet, cloud writes
+  // that failed silently, or rows from a prior session before cloud was
+  // accessible. Either way, the user shouldn't lose visibility on them.
+  local.forEach(p => {
+    if (!p || !p.id || seen.has(p.id)) return;
+    out.push(projectLocalRow(p));
+  });
+
+  return out.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
 
 export async function getComponentPack(id) {
