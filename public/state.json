@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-30T10:55:47.207Z",
+  "lastUpdated": "2026-04-30T11:10:08.546Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "654cf85",
+      "date": "2026-04-30T10:57:34+00:00",
+      "message": "chore: regenerate state.json"
+    },
+    {
+      "sha": "e1459aa",
+      "date": "2026-04-30T10:57:09+00:00",
+      "message": "fix(plm): cover image lost on cloud-only packs after save"
+    },
+    {
       "sha": "e0d918f",
       "date": "2026-04-30T10:30:06+00:00",
       "message": "feat(plm-trims): cover-page revamp — cost tiers, quote panel, FR color picker"
@@ -1082,16 +1092,6 @@
       "sha": "82d75ff",
       "date": "2026-04-29T19:53:39+00:00",
       "message": "fix(plaid): decode Clerk JWT directly instead of supabase.auth.getUser"
-    },
-    {
-      "sha": "ba0c0ff",
-      "date": "2026-04-29T19:30:12+00:00",
-      "message": "fix(plaid): call correct edge function slug (bright-api not plaid-proxy)"
-    },
-    {
-      "sha": "70c35b5",
-      "date": "2026-04-29T19:01:35+00:00",
-      "message": "fix(plaid): switch plaid-proxy and listPlaidItems to org_id scope"
     }
   ]
 }
