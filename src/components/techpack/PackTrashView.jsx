@@ -11,10 +11,23 @@ import { Trash2, RotateCcw, X, AlertTriangle } from 'lucide-react';
 import { FR } from './techPackConstants';
 import CoverThumb from './CoverThumb';
 
+const RETENTION_DAYS = 30;
+
 function formatDate(iso) {
   if (!iso) return '';
   try { return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
   catch { return ''; }
+}
+
+// Days remaining before this row is auto-purged. Rows are eligible for
+// purge once they've been in trash longer than RETENTION_DAYS.
+function daysUntilPurge(deletedAtIso) {
+  if (!deletedAtIso) return RETENTION_DAYS;
+  const deletedMs = new Date(deletedAtIso).getTime();
+  if (Number.isNaN(deletedMs)) return RETENTION_DAYS;
+  const ageMs = Date.now() - deletedMs;
+  const remainingMs = RETENTION_DAYS * 24 * 60 * 60 * 1000 - ageMs;
+  return Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
 }
 
 export default function PackTrashView({
@@ -35,7 +48,17 @@ export default function PackTrashView({
     setLoading(true);
     try {
       const data = await list();
-      setRows(Array.isArray(data) ? data : []);
+      const live = Array.isArray(data) ? data : [];
+
+      // Opportunistic purge: any row already past the retention window gets
+      // hard-deleted right now. The scheduled Edge Function (purge-plm-trash)
+      // is the canonical path; this is a best-effort fallback so an active
+      // user surfaces a Trash list that already reflects retention rules.
+      const expired = live.filter(r => daysUntilPurge(r.deleted_at) <= 0);
+      if (expired.length) {
+        await Promise.allSettled(expired.map(r => purge(r.id)));
+      }
+      setRows(live.filter(r => daysUntilPurge(r.deleted_at) > 0));
     } catch (err) {
       console.error('TrashView load:', err);
       setRows([]);
@@ -76,7 +99,7 @@ export default function PackTrashView({
               {title}
             </div>
             <div style={{ fontSize: 10, color: FR.stone, marginTop: 2, letterSpacing: 0.4 }}>
-              Restore brings it back to the active list. Delete forever cannot be undone.
+              Restore brings it back to the active list. Items auto-delete after {RETENTION_DAYS} days; Delete forever is immediate.
             </div>
           </div>
           <button onClick={onClose} aria-label="Close"
@@ -104,8 +127,11 @@ export default function PackTrashView({
                     <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 16, color: FR.slate, lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {nameOf(row) || 'Untitled'}
                     </div>
-                    <div style={{ fontSize: 10, color: FR.stone, marginTop: 4, letterSpacing: 0.3 }}>
-                      Deleted {formatDate(row.deleted_at)}
+                    <div style={{ fontSize: 10, color: FR.stone, marginTop: 4, letterSpacing: 0.3, display: 'flex', gap: 8 }}>
+                      <span>Deleted {formatDate(row.deleted_at)}</span>
+                      <span style={{ color: daysUntilPurge(row.deleted_at) <= 3 ? '#854F0B' : FR.stone }}>
+                        · auto-deletes in {daysUntilPurge(row.deleted_at)} day{daysUntilPurge(row.deleted_at) === 1 ? '' : 's'}
+                      </span>
                     </div>
                   </div>
                   {confirmingPurge === row.id ? (
