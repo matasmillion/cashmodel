@@ -67,8 +67,6 @@ function VersionViewer({ revision, onClose }) {
   const pageCount = COMPONENT_STEPS.length;
 
   const handlePrint = () => {
-    // Window.print targets the modal contents — they're styled to be the only
-    // thing visible when printed (see print CSS below).
     window.print();
   };
 
@@ -122,16 +120,9 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     const { packId, step } = parsePLMHash();
     return packId === pack.id ? Math.min(step, COMPONENT_STEPS.length - 1) : 0;
   });
-  // One-time migrations for legacy packs run on first open:
-  //   1. finalApproval.brandOwner → finalApproval.manager
-  //   2. status: Sampling/Testing/Pre-Production/Production/Released →
-  //      the new 3-stage set (Design / Sample / Production-Ready).
-  //   3. samples[].type: Proto/Fit/SMS/PP/TOP → new Design/Sample/
-  //      Production-Ready set.
   const [data, setData] = useState(() => {
     let next = pack.data || DEFAULT_COMPONENT_DATA;
 
-    // (1) brandOwner → manager
     const fa = next.finalApproval || {};
     if (fa.brandOwner) {
       const hasManagerData = fa.manager && (fa.manager.name || fa.manager.signature || fa.manager.date);
@@ -145,12 +136,10 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
       };
     }
 
-    // (2) Status migration
     if (next.status && LEGACY_STATUS_MIGRATION[next.status]) {
       next = { ...next, status: LEGACY_STATUS_MIGRATION[next.status] };
     }
 
-    // (3) Sample type migration
     if (Array.isArray(next.samples) && next.samples.length) {
       const migratedSamples = next.samples.map(s => {
         const mapped = LEGACY_SAMPLE_TYPE_MIGRATION[s?.type];
@@ -159,10 +148,6 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
       next = { ...next, samples: migratedSamples };
     }
 
-    // (4) Sanitise revision descriptions. Early snapshot code accidentally
-    // wrote an object into `description`, which rendered as "[object Object]"
-    // in the revision history. Coerce anything non-string back to a readable
-    // string so old rows render cleanly.
     if (Array.isArray(next.revisions) && next.revisions.length) {
       const sanitised = next.revisions.map(r => {
         if (r == null) return r;
@@ -188,14 +173,13 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
   });
   const [images, setImages] = useState(pack.images || []);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [viewingVersionIdx, setViewingVersionIdx] = useState(null);
-  const [exporting, setExporting] = useState(null); // 'pdf' | 'svg' | null
+  const [exporting, setExporting] = useState(null);
   const [exportError, setExportError] = useState(null);
   const saveTimerRef = useRef(null);
 
-  // Build a filename stem from the trim name + current revision so repeated
-  // exports across iterations don't overwrite each other in the browser.
   const exportFilename = useCallback(() => {
     const stem = sanitizeFilename(data.componentName || 'trimpack');
     const rev = (data.revisions || []).length + 1;
@@ -228,12 +212,10 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     setExporting(null);
   }, [data, images, exportFilename]);
 
-  // Push step into URL on every change so refresh keeps you on the same step.
   useEffect(() => {
     replacePLMHash({ section: 'components', packId: pack.id, step });
   }, [step, pack.id]);
 
-  // Sync from browser back/forward
   useEffect(() => {
     const sync = () => {
       const { packId, step: urlStep } = parsePLMHash();
@@ -267,6 +249,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
           setSaveError(result.error?.message || 'Cloud save failed');
         } else {
           setSaveError(null);
+          setSaved(true);
         }
       } catch (err) {
         console.error(err);
@@ -277,9 +260,6 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   }, [data, images, pack.id]);
 
-  // Every mutation stamps dateCreated with today's date — the UI renders
-  // this as "Date Last Updated" and the field is read-only so the only way
-  // it moves is through an actual edit.
   const todayStamp = () => new Date().toISOString().slice(0, 10);
   const stampDate = useCallback((p) => ({ ...p, dateCreated: todayStamp() }), []);
 
@@ -300,7 +280,6 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     setData(stampDate);
   }, [stampDate]);
 
-  // Auto-fill hex from the color library — picks up custom colors too.
   const pickFRColor = useCallback((colorName) => {
     set('frColor', colorName);
     const match = getFRColor(colorName);
@@ -311,10 +290,6 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     addPerson(name);
   }, []);
 
-  // Take a frozen snapshot of the current trim pack — data + images + derived
-  // revision number. The snapshot becomes the contents of "V{n}.0" when you
-  // re-open that version in the viewer. When a `presetNote` is supplied (e.g.
-  // from the Overview workflow buttons), skip the prompt and use it directly.
   const createSnapshot = useCallback((presetNote) => {
     setData(prev => {
       const existing = prev.revisions || [];
@@ -345,8 +320,6 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     });
   }, [images]);
 
-  // Stamp the clicked approval role with today's date. Vendor uses a
-  // separate dateChop key (per traditional vendor "chop" sign-off convention).
   const confirmRole = useCallback((role) => {
     const dateKey = role === 'vendor' ? 'dateChop' : 'date';
     setData(prev => {
@@ -354,10 +327,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
       const slot = fa[role] || {};
       return stampDate({
         ...prev,
-        finalApproval: {
-          ...fa,
-          [role]: { ...slot, [dateKey]: todayStamp() },
-        },
+        finalApproval: { ...fa, [role]: { ...slot, [dateKey]: todayStamp() } },
       });
     });
   }, [stampDate]);
@@ -369,10 +339,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
       const slot = fa[role] || {};
       return stampDate({
         ...prev,
-        finalApproval: {
-          ...fa,
-          [role]: { ...slot, [dateKey]: '' },
-        },
+        finalApproval: { ...fa, [role]: { ...slot, [dateKey]: '' } },
       });
     });
   }, [stampDate]);
@@ -387,7 +354,6 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     });
   }, [stampDate]);
 
-  // Samples on the trim pack — mirrors the Tech Pack panel wiring.
   const addSample = useCallback((sample) => {
     setData(prev => stampDate({ ...prev, samples: [...(prev.samples || []), sample] }));
   }, [stampDate]);
@@ -417,7 +383,6 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
       <VersionViewer revision={viewingRevision} onClose={() => setViewingVersionIdx(null)} />
     )}
     <div style={{ background: FR.salt, fontFamily: "'Helvetica Neue','Inter',sans-serif", borderRadius: 8, overflow: 'hidden', border: `1px solid ${FR.sand}` }}>
-      {/* Header */}
       <div style={{ background: FR.slate, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button onClick={onBack}
@@ -432,7 +397,10 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {saving && <span style={{ fontSize: 10, color: FR.sage }}>Saving…</span>}
+          {saving
+            ? <span style={{ fontSize: 10, color: FR.sage }}>Saving…</span>
+            : saved && !saveError && <span style={{ fontSize: 10, color: '#4CAF7D' }}>Saved ✓</span>
+          }
           {saveError && (
             <span title={saveError} style={{ fontSize: 10, color: '#D4956A', background: 'rgba(212,149,106,0.12)', padding: '2px 8px', borderRadius: 3 }}>
               ⚠︎ Cloud save failed — edits kept locally
@@ -459,9 +427,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
         </div>
       </div>
 
-      {/* Body */}
       <div style={{ display: 'flex' }}>
-        {/* Sidebar */}
         <div style={{ width: 220, minWidth: 220, borderRight: `1px solid ${FR.sand}`, background: FR.salt, display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '14px 0', flex: 1 }}>
             {COMPONENT_STEPS.map((s, i) => {
@@ -485,9 +451,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
             onOpenVersion={(idx) => setViewingVersionIdx(idx)} />
         </div>
 
-        {/* Main content */}
         <div style={{ flex: 1, minWidth: 0, padding: '20px 28px', maxHeight: '75vh', overflowY: 'auto' }}>
-          {/* Skip banner */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, padding: '9px 14px', background: isCurrentSkipped ? 'rgba(192,57,43,0.07)' : FR.salt, border: `1px solid ${isCurrentSkipped ? '#C0392B' : FR.sand}`, borderRadius: 6 }}>
             <div style={{ flex: 1, fontSize: 11, color: isCurrentSkipped ? '#C0392B' : FR.stone }}>
               {isCurrentSkipped ? 'This page is skipped — it will show a "PAGE NOT USED" slash in the export.' : 'Not using this page? Skip it and it will be crossed out in the export.'}
@@ -513,7 +477,6 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
           </div>
         </div>
 
-        {/* Live page preview */}
         <div style={{ flex: '1 1 560px', minWidth: 400, maxWidth: 820, borderLeft: `1px solid ${FR.sand}`, background: FR.sand, padding: '20px 20px', maxHeight: '75vh', overflowY: 'auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
             <div style={{ fontSize: 9, color: FR.stone, letterSpacing: 2, fontWeight: 600, textTransform: 'uppercase' }}>Live Preview</div>
