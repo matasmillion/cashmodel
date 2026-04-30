@@ -7,7 +7,7 @@
 // Twin-column spec, production log, drift, and used-in sections land in
 // chunks 08-10.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Edit2, Check, X } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { getFRColor } from '../../utils/colorLibrary';
@@ -19,6 +19,7 @@ import CoverImagePicker from './CoverImagePicker';
 import CoverThumb from './CoverThumb';
 import VendorPicker from './VendorPicker';
 import FileSlot from './FileSlot';
+import { migrateLegacyCoverIfNeeded, isLegacyDataUrl } from '../../utils/plmAssets';
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
@@ -199,6 +200,30 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
   const status = treatment.status || 'draft';
   const pill = STATUS_PILL[status] || STATUS_PILL.draft;
   const swatchHex = (treatment.base_color_id ? getFRColor(treatment.base_color_id)?.hex : null) || FR.sand;
+
+  // Lazy Storage migration on mount for pre-Phase-3 covers (data: URLs).
+  // Runs on the canonical `treatment` (not `draft`) so it applies even
+  // when the user never enters edit mode.
+  const migratedRef = useRef(false);
+  useEffect(() => {
+    if (migratedRef.current) return undefined;
+    if (!treatment?.id) return undefined;
+    if (!isLegacyDataUrl(treatment.cover_image)) return undefined;
+    migratedRef.current = true;
+    let cancelled = false;
+    (async () => {
+      const newPath = await migrateLegacyCoverIfNeeded(treatment.cover_image, { scope: 'treatments', ownerId: treatment.id });
+      if (cancelled || !newPath) return;
+      try {
+        const updated = await updateTreatment(treatment.id, { cover_image: newPath });
+        if (cancelled) return;
+        setTreatment(updated || { ...treatment, cover_image: newPath });
+      } catch (err) {
+        console.error('TreatmentBuilder lazy migration save:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [treatment?.id, treatment?.cover_image]);
 
   // Editable surface — mirrors `treatment` in view mode, holds in-flight edits
   // in edit mode. `setField`/`setDigitalField` write into the draft only.

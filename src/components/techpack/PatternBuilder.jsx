@@ -9,13 +9,14 @@
 // (code) are read-only — codes are issued at create time and never
 // regenerated.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { savePattern, archivePattern, restorePattern } from '../../utils/patternStore';
 import { PATTERN_CATEGORIES, PATTERN_CATEGORY_LABEL, PATTERN_STATUSES, STANDARD_SIZE_SETS } from '../../utils/patternLibrary';
 import CoverImagePicker from './CoverImagePicker';
 import FileSlot from './FileSlot';
+import { migrateLegacyCoverIfNeeded, isLegacyDataUrl } from '../../utils/plmAssets';
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
@@ -47,6 +48,24 @@ export default function PatternBuilder({ pattern, onBack }) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { setDraft(pattern); }, [pattern.id]);
+
+  // Lazy Storage migration on mount for pre-Phase-3 covers (data: URLs).
+  const migratedRef = useRef(false);
+  useEffect(() => {
+    if (migratedRef.current) return undefined;
+    if (!isLegacyDataUrl(draft?.cover_image)) return undefined;
+    if (!draft?.id) return undefined;
+    migratedRef.current = true;
+    let cancelled = false;
+    (async () => {
+      const newPath = await migrateLegacyCoverIfNeeded(draft.cover_image, { scope: 'patterns', ownerId: draft.id });
+      if (cancelled || !newPath) return;
+      setDraft(d => ({ ...d, cover_image: newPath }));
+      try { await savePattern(draft.id, { cover_image: newPath }); }
+      catch (err) { console.error('PatternBuilder lazy migration save:', err); }
+    })();
+    return () => { cancelled = true; };
+  }, [draft?.id, draft?.cover_image]);
 
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(pattern), [draft, pattern]);
 

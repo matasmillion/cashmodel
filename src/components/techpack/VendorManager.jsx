@@ -17,7 +17,7 @@ import {
   addVendor, deleteVendor,
 } from '../../utils/vendorLibrary';
 import { fileToDataUrl } from '../../utils/cropImage';
-import { uploadAsset, deleteAsset, isLegacyDataUrl } from '../../utils/plmAssets';
+import { uploadAsset, deleteAsset, isLegacyDataUrl, dataUrlToBlob } from '../../utils/plmAssets';
 import CoverThumb from './CoverThumb';
 
 export default function VendorManager() {
@@ -221,6 +221,37 @@ function VendorEditor({ name, onClose, onDeleted }) {
   const [entry, setEntry] = useState(() => getVendor(name) || { name });
   const fileRef = useRef(null);
   const hasRecord = !!entry._hasRecord;
+
+  // Lazy migration: if this vendor's logoImage is still a base64 data URL
+  // from before Phase 3, upload it to Storage in the background and save
+  // the path back. Renders fine either way; this just stops bloating the
+  // vendor row over time.
+  const migratedRef = useRef(false);
+  useEffect(() => {
+    if (migratedRef.current) return undefined;
+    if (!isLegacyDataUrl(entry.logoImage)) return undefined;
+    migratedRef.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const blob = dataUrlToBlob(entry.logoImage);
+        if (!blob) return;
+        const ref = await uploadAsset({
+          scope: 'vendors',
+          ownerId: encodeURIComponent(name),
+          slot: 'logo',
+          blob,
+          skipCompress: false,
+        });
+        if (cancelled || !ref?.path) return;
+        updateVendor(name, { logoImage: ref.path });
+        setEntry(prev => ({ ...prev, logoImage: ref.path }));
+      } catch (err) {
+        console.error('VendorEditor lazy migration:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [name, entry.logoImage]);
 
   const patch = (k, v) => {
     const next = { ...entry, [k]: v };

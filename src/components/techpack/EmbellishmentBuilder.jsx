@@ -3,7 +3,7 @@
 // `#product/library/embellishments/:id` deep link or by clicking a card
 // in EmbellishmentList. All edits write back through saveEmbellishment.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { saveEmbellishment, archiveEmbellishment, restoreEmbellishment } from '../../utils/embellishmentStore';
@@ -11,6 +11,7 @@ import { EMBELLISHMENT_TYPES, EMBELLISHMENT_TYPE_LABEL, EMBELLISHMENT_STATUSES, 
 import CoverImagePicker from './CoverImagePicker';
 import VendorPicker from './VendorPicker';
 import FileSlot from './FileSlot';
+import { migrateLegacyCoverIfNeeded, isLegacyDataUrl } from '../../utils/plmAssets';
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
@@ -42,6 +43,24 @@ export default function EmbellishmentBuilder({ embellishment, onBack }) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { setDraft(embellishment); }, [embellishment.id]);
+
+  // Lazy Storage migration on mount for pre-Phase-3 covers (data: URLs).
+  const migratedRef = useRef(false);
+  useEffect(() => {
+    if (migratedRef.current) return undefined;
+    if (!isLegacyDataUrl(draft?.cover_image)) return undefined;
+    if (!draft?.id) return undefined;
+    migratedRef.current = true;
+    let cancelled = false;
+    (async () => {
+      const newPath = await migrateLegacyCoverIfNeeded(draft.cover_image, { scope: 'embellishments', ownerId: draft.id });
+      if (cancelled || !newPath) return;
+      setDraft(d => ({ ...d, cover_image: newPath }));
+      try { await saveEmbellishment(draft.id, { cover_image: newPath }); }
+      catch (err) { console.error('EmbellishmentBuilder lazy migration save:', err); }
+    })();
+    return () => { cancelled = true; };
+  }, [draft?.id, draft?.cover_image]);
 
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(embellishment), [draft, embellishment]);
 

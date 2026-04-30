@@ -378,6 +378,20 @@ export async function resolveImageEntries(images = []) {
 }
 
 /**
+ * Lazy migration helper for atom libraries — if the current cover value
+ * is a legacy base64 data URL, upload it to Storage and return the new
+ * path. Returns null when nothing needs to migrate (already a path,
+ * empty, an http URL, etc.) so callers can early-exit without a save.
+ */
+export async function migrateLegacyCoverIfNeeded(value, { scope, ownerId, slot = 'cover' } = {}) {
+  if (!value || !ownerId || !isLegacyDataUrl(value)) return null;
+  const blob = dataUrlToBlob(value);
+  if (!blob) return null;
+  const ref = await uploadAsset({ scope, ownerId, slot, blob, skipCompress: false });
+  return ref?.path || null;
+}
+
+/**
  * For atom-library duplicates — copies the `cover_image` column value to a
  * new Storage path under the duplicate's owner so neither row's later
  * delete/replace can break the other. Returns the new path (or the

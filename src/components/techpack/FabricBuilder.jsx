@@ -2,7 +2,7 @@
 // Loaded via the `#product/library/fabrics/:id` deep link or by clicking
 // a card in FabricList. All edits write back through fabricStore.saveFabric.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import { FR, FR_COLOR_OPTIONS } from './techPackConstants';
 import { saveFabric, archiveFabric, restoreFabric } from '../../utils/fabricStore';
@@ -10,6 +10,7 @@ import { FABRIC_WEAVES, FABRIC_WEAVE_LABEL, FABRIC_STATUSES } from '../../utils/
 import CoverImagePicker from './CoverImagePicker';
 import VendorPicker from './VendorPicker';
 import FileSlot from './FileSlot';
+import { migrateLegacyCoverIfNeeded, isLegacyDataUrl } from '../../utils/plmAssets';
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
@@ -41,6 +42,26 @@ export default function FabricBuilder({ fabric, onBack }) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { setDraft(fabric); }, [fabric.id]);
+
+  // Lazy-migrate a pre-Phase-3 cover image (still a base64 data: URL)
+  // into Storage on mount. Saves silently — user keeps editing while
+  // this runs in the background. Once per fabric per session.
+  const migratedRef = useRef(false);
+  useEffect(() => {
+    if (migratedRef.current) return undefined;
+    if (!isLegacyDataUrl(draft?.cover_image)) return undefined;
+    if (!draft?.id) return undefined;
+    migratedRef.current = true;
+    let cancelled = false;
+    (async () => {
+      const newPath = await migrateLegacyCoverIfNeeded(draft.cover_image, { scope: 'fabrics', ownerId: draft.id });
+      if (cancelled || !newPath) return;
+      setDraft(d => ({ ...d, cover_image: newPath }));
+      try { await saveFabric(draft.id, { cover_image: newPath }); }
+      catch (err) { console.error('FabricBuilder lazy migration save:', err); }
+    })();
+    return () => { cancelled = true; };
+  }, [draft?.id, draft?.cover_image]);
 
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(fabric), [draft, fabric]);
 

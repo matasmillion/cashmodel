@@ -10,7 +10,7 @@ import { FR } from './techPackConstants';
 import { Input, Row, labelStyle, inputBase, CostPill, formatCost } from './TechPackPrimitives';
 import { listFRColors, getFRColor, updateFRColor, clearFRColorField, addFRColor, deleteFRColor, isSeededFRColor } from '../../utils/colorLibrary';
 import { fileToDataUrl } from '../../utils/cropImage';
-import { uploadAsset, deleteAsset, isLegacyDataUrl } from '../../utils/plmAssets';
+import { uploadAsset, deleteAsset, isLegacyDataUrl, dataUrlToBlob } from '../../utils/plmAssets';
 import CoverThumb from './CoverThumb';
 import FileSlot from './FileSlot';
 
@@ -172,6 +172,36 @@ function ColorEditor({ name, onClose, onDeleted }) {
   const [entry, setEntry] = useState(() => getFRColor(name) || { name });
   const fileRef = useRef(null);
   const seeded = isSeededFRColor(name);
+
+  // Lazy migration of pre-Phase-3 Pantone TCX cards (still base64 data
+  // URLs). Background upload + path replacement on first open of the
+  // color detail; renders fine either way.
+  const migratedRef = useRef(false);
+  useEffect(() => {
+    if (migratedRef.current) return undefined;
+    if (!isLegacyDataUrl(entry.cardImage)) return undefined;
+    migratedRef.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const blob = dataUrlToBlob(entry.cardImage);
+        if (!blob) return;
+        const ref = await uploadAsset({
+          scope: 'colors',
+          ownerId: encodeURIComponent(name),
+          slot: 'pantone-card',
+          blob,
+          skipCompress: false,
+        });
+        if (cancelled || !ref?.path) return;
+        updateFRColor(name, { cardImage: ref.path });
+        setEntry(prev => ({ ...prev, cardImage: ref.path }));
+      } catch (err) {
+        console.error('ColorEditor lazy migration:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [name, entry.cardImage]);
 
   const handleDelete = () => {
     if (seeded) return;
