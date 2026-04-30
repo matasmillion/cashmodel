@@ -10,8 +10,9 @@
 // was.
 
 import { useEffect, useState } from 'react';
-import { Library, Shirt, Package, Scissors, Palette, Layers, Sparkles, Building2, Boxes, PenTool } from 'lucide-react';
+import { Library, Shirt, Package, Scissors, Palette, Layers, Sparkles, Building2, Boxes, PenTool, Download } from 'lucide-react';
 import { FR } from './techPackConstants';
+import { exportAllPlmData } from '../../utils/plmBackup';
 import TechPackList from './TechPackList';
 import ComponentPackList from './ComponentPackList';
 import ColorPaletteManager from './ColorPaletteManager';
@@ -46,6 +47,22 @@ const LIBRARY_TABS = [
 ];
 
 export default function PLMView() {
+  const [backingUp, setBackingUp] = useState(false);
+  const [backupResult, setBackupResult] = useState(null);
+  const handleBackup = async () => {
+    setBackingUp(true);
+    setBackupResult(null);
+    try {
+      const { result } = await exportAllPlmData();
+      const total = Object.values(result.counts || {}).reduce((a, b) => a + b, 0);
+      setBackupResult({ ok: true, total, counts: result.counts });
+    } catch (err) {
+      console.error('PLM backup failed:', err);
+      setBackupResult({ ok: false, error: err?.message || 'Backup failed' });
+    }
+    setBackingUp(false);
+    setTimeout(() => setBackupResult(null), 4000);
+  };
   // Silently rewrite #product/... → #plm/... on first load so bookmarks and
   // share links upgrade to the canonical grammar without a reload.
   useEffect(() => {
@@ -138,6 +155,22 @@ export default function PLMView() {
             </button>
           );
         })}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {backupResult && (
+            backupResult.ok
+              ? <span style={{ fontSize: 10, color: '#3B6D11', letterSpacing: 0.3 }}>
+                  Backed up {backupResult.total.toLocaleString()} rows ✓
+                </span>
+              : <span title={backupResult.error} style={{ fontSize: 10, color: '#A32D2D' }}>
+                  Backup failed — see console
+                </span>
+          )}
+          <button onClick={handleBackup} disabled={backingUp}
+            title="Download every PLM row this org owns as a single JSON file. Image bytes are not included; their Storage paths are."
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 11px', borderRadius: 5, fontSize: 11, background: 'transparent', color: FR.stone, border: `0.5px solid ${FR.sand}`, cursor: backingUp ? 'wait' : 'pointer', letterSpacing: 0.3 }}>
+            <Download size={12} /> {backingUp ? 'Backing up…' : 'Backup'}
+          </button>
+        </div>
       </div>
 
       {route.layer === 'library' && (
