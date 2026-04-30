@@ -188,6 +188,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
   });
   const [images, setImages] = useState(pack.images || []);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [viewingVersionIdx, setViewingVersionIdx] = useState(null);
   const [exporting, setExporting] = useState(null); // 'pdf' | 'svg' | null
@@ -267,6 +268,8 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
           setSaveError(result.error?.message || 'Cloud save failed');
         } else {
           setSaveError(null);
+          setSaved(true);
+          setTimeout(() => setSaved(false), 2000);
         }
       } catch (err) {
         console.error(err);
@@ -433,6 +436,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {saving && <span style={{ fontSize: 10, color: FR.sage }}>Saving…</span>}
+          {!saving && saved && <span style={{ fontSize: 10, color: '#4CAF7D' }}>Saved ✓</span>}
           {saveError && (
             <span title={saveError} style={{ fontSize: 10, color: '#D4956A', background: 'rgba(212,149,106,0.12)', padding: '2px 8px', borderRadius: 3 }}>
               ⚠︎ Cloud save failed — edits kept locally
