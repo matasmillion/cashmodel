@@ -1,10 +1,71 @@
 // Reusable UI primitives for the Tech Pack builder — ported from the original artifact
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { FR, FR_COLOR_OPTIONS, resizeImage } from './techPackConstants';
 import { listFRColors } from '../../utils/colorLibrary';
 import { autoCropDataUrl } from '../../utils/autoCrop';
 import { fileToDataUrl } from '../../utils/cropImage';
+import { getAssetUrl } from '../../utils/plmAssets';
 import CropModal from './CropModal';
+
+// AssetImage — render an image entry that may be:
+//   • legacy:    { data: 'data:...' }                 → base64 inline
+//   • uploading: { _blobUrl: 'blob:...', _uploading } → transient object URL
+//   • persisted: { path: 'org/scope/owner/...uuid.ext' } → resolves to a
+//                signed Storage URL (cached for the page lifetime).
+//
+// Falls back to a neutral placeholder while a path is resolving so the slot
+// doesn't flash empty.
+export function AssetImage({ image, alt, style, onLoad, onError }) {
+  // Derive the synchronously-available src directly from props so we don't
+  // need a useState round-trip — only the async storage URL goes through
+  // state once it resolves.
+  const inlineSrc = image?.data || image?._blobUrl || '';
+  const [resolvedPathSrc, setResolvedPathSrc] = useState('');
+  useEffect(() => {
+    if (image?.data || image?._blobUrl || !image?.path) return undefined;
+    let cancelled = false;
+    getAssetUrl(image.path).then(url => { if (!cancelled && url) setResolvedPathSrc(url); });
+    return () => { cancelled = true; };
+  }, [image?.data, image?._blobUrl, image?.path]);
+
+  const src = inlineSrc || resolvedPathSrc;
+  const isUploading = image?._uploading;
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      {src ? (
+        <img src={src} alt={alt || ''} style={style} onLoad={onLoad} onError={onError} />
+      ) : (
+        <div style={{ width: '100%', height: '100%', background: FR.salt }} />
+      )}
+      {isUploading && (
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(245,240,232,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: FR.soil, letterSpacing: 0.5, fontWeight: 600 }}>
+          Uploading…
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Resolve a persisted/transient image entry to a usable data URL — used by
+// the auto-crop / re-crop flows that need to load the image into a canvas.
+async function entryToDataUrl(image) {
+  if (!image) return null;
+  if (image.data && image.data.startsWith('data:')) return image.data;
+  const src = image.data || image._blobUrl || (image.path ? await getAssetUrl(image.path) : null);
+  if (!src) return null;
+  try {
+    const resp = await fetch(src);
+    const blob = await resp.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
 
 // Aspect-ratio presets for the trim pack. Ratio is width/height.
 //   A4 landscape → technical drawings that will be exported from Illustrator.
@@ -152,7 +213,7 @@ export function PhotoUpload({ label, slotKey, images, onUpload, onRemove }) {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {slotImages.map((img, i) => (
               <div key={i} style={{ position: 'relative', width: 100, height: 100, borderRadius: 4, overflow: 'hidden', border: `1px solid ${FR.sand}` }}>
-                <img src={img.data} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <AssetImage image={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 <button onClick={e => { e.stopPropagation(); onRemove(slotKey, i); }}
                   style={{ position: 'absolute', top: 2, right: 2, width: 18, height: 18, borderRadius: 9, background: FR.slate, color: FR.salt, border: 'none', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
                 <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(58,58,58,0.7)', padding: '2px 4px', fontSize: 8, color: FR.salt, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{img.name || `Photo ${i + 1}`}</div>
@@ -191,8 +252,10 @@ export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height 
     if (!current || cropping) return;
     setCropping(true);
     try {
-      const cropped = await autoCropDataUrl(current.data);
-      if (cropped !== current.data) {
+      const sourceDataUrl = await entryToDataUrl(current);
+      if (!sourceDataUrl) return;
+      const cropped = await autoCropDataUrl(sourceDataUrl);
+      if (cropped && cropped !== sourceDataUrl) {
         onRemove(slotKey, 0);
         onUpload(slotKey, cropped, current.name);
       }
@@ -226,7 +289,7 @@ export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height 
           style={{ display: 'none' }} />
         {current ? (
           <>
-            <img src={current.data} alt={current.name || 'Cover'}
+            <AssetImage image={current} alt={current.name || 'Cover'}
               style={{ width: '100%', height: '100%', objectFit: 'contain', background: FR.white }} />
             <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
               <button onClick={e => { e.stopPropagation(); handleAutoCropExisting(); }} disabled={cropping}
@@ -275,8 +338,10 @@ export function AspectPhoto({ slotKey, aspect = ASPECTS.A4_LANDSCAPE, images, on
     setCropSrc(rawUrl);
   };
 
-  const recropCurrent = () => {
-    if (current) setCropSrc(current.data);
+  const recropCurrent = async () => {
+    if (!current) return;
+    const dataUrl = await entryToDataUrl(current);
+    if (dataUrl) setCropSrc(dataUrl);
   };
 
   const saveCropped = (dataUrl) => {
@@ -313,7 +378,7 @@ export function AspectPhoto({ slotKey, aspect = ASPECTS.A4_LANDSCAPE, images, on
 
         {current ? (
           <>
-            <img src={current.data} alt={current.name || slotKey}
+            <AssetImage image={current} alt={current.name || slotKey}
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
             <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
               <button onClick={e => { e.stopPropagation(); recropCurrent(); }}

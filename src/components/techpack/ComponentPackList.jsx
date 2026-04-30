@@ -13,6 +13,7 @@ import { CostPill } from './TechPackPrimitives';
 import { listComponentPacks, createComponentPack, getComponentPack, deleteComponentPack, duplicateComponentPack, saveComponentPack } from '../../utils/componentPackStore';
 import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
 import { listAllSuppliers, listAllPeople, listAllTrimTypes } from '../../utils/plmDirectory';
+import { resolveCoverImage } from '../../utils/plmAssets';
 
 const VIEW_STORAGE_KEY = 'cashmodel_trims_view';
 
@@ -30,9 +31,26 @@ function formatDate(iso) {
   catch { return ''; }
 }
 
+// cover_image column may hold a legacy data: URL (renders directly) or a
+// Storage path (resolves to a signed URL on demand). resolveCoverImage
+// handles both; the resolved URL is cached at the helper level so revisits
+// in the same session don't re-sign.
 function Thumb({ pack }) {
-  if (pack.cover_image) {
-    return <img src={pack.cover_image} alt={pack.component_name || 'Trim'}
+  const cover = pack.cover_image;
+  // Inline values (data: URLs and absolute URLs) are renderable directly —
+  // only Storage paths need the async signed-URL resolution below.
+  const inlineSrc = (typeof cover === 'string' && (cover.startsWith('data:') || /^https?:\/\//i.test(cover))) ? cover : '';
+  const [resolvedSrc, setResolvedSrc] = useState('');
+  useEffect(() => {
+    if (!cover || inlineSrc) return undefined;
+    let cancelled = false;
+    resolveCoverImage(cover).then(url => { if (!cancelled && url) setResolvedSrc(url); });
+    return () => { cancelled = true; };
+  }, [cover, inlineSrc]);
+  const src = inlineSrc || resolvedSrc;
+
+  if (src) {
+    return <img src={src} alt={pack.component_name || 'Trim'}
       style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
   }
   return (

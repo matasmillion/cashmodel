@@ -3,6 +3,7 @@
 
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
+import { persistableImages, deleteAssets, copyAsset } from './plmAssets';
 
 const LOCAL_KEY = 'cashmodel_component_packs';
 
@@ -34,10 +35,29 @@ function writeLocal(rows) {
   try { localStorage.setItem(LOCAL_KEY, JSON.stringify(rows)); } catch (err) { console.error(err); }
 }
 
+// Cover extraction handles both shapes:
+//   • legacy:    { slot: 'component-cover', data: 'data:image/...;base64,…' }
+//   • persisted: { slot: 'component-cover', path: 'org/component-packs/…webp' }
+// We persist whichever is present into the cover_image column. Renderers
+// detect data: URLs vs Storage paths and resolve accordingly.
 function extractCover(images) {
   const list = Array.isArray(images) ? images : [];
   const cover = list.find(img => img && img.slot === 'component-cover');
-  return cover ? cover.data : null;
+  if (!cover) return null;
+  return cover.path || cover.data || null;
+}
+
+// Compare two image arrays and return the Storage paths that disappeared
+// from `next` — those files should be removed from the bucket so we don't
+// accumulate orphans every time a slot is replaced.
+function orphanedPaths(prev, next) {
+  const prevPaths = new Set();
+  const nextPaths = new Set();
+  for (const img of prev || []) if (img?.path) prevPaths.add(img.path);
+  for (const img of next || []) if (img?.path) nextPaths.add(img.path);
+  const dropped = [];
+  for (const p of prevPaths) if (!nextPaths.has(p)) dropped.push(p);
+  return dropped;
 }
 
 // Project a localStorage row into the same projected shape that the cloud
@@ -194,14 +214,21 @@ export async function createComponentPack(defaultData) {
 
 export async function saveComponentPack(id, updates) {
   const now = new Date().toISOString();
-  const cover = updates.images !== undefined ? extractCover(updates.images) : undefined;
+
+  // Strip transient upload-state fields (_blobUrl, _uploading, _uploadError)
+  // before anything is persisted — they exist purely for the in-memory render
+  // of an upload in flight and must never end up in the DB or localStorage.
+  const cleanedUpdates = updates.images !== undefined
+    ? { ...updates, images: persistableImages(updates.images) }
+    : { ...updates };
+  const cover = cleanedUpdates.images !== undefined ? extractCover(cleanedUpdates.images) : undefined;
 
   // Fold cover_image into the main update so it travels in a single atomic
   // write. The previous two-update flow had a silent-failure path: if the
   // second `update({ cover_image })` call failed (e.g. payload size, transient
   // network), the function still reported ok=true and the card lost its
   // thumbnail. One write means one outcome.
-  const corePatch = { ...updates, updated_at: now };
+  const corePatch = { ...cleanedUpdates, updated_at: now };
   if (cover !== undefined) corePatch.cover_image = cover;
 
   // Belt-and-suspenders local mirror — also writes cover_image so the
@@ -209,9 +236,15 @@ export async function saveComponentPack(id, updates) {
   // having to re-extract from the (potentially stale) images JSONB.
   const localPatch = corePatch;
 
+  // Detect orphaned Storage paths so they can be GC'd from the bucket after
+  // the save lands. Only meaningful when images are part of this update.
+  let toGc = [];
   const rows = readLocal();
   const idx = rows.findIndex(p => p.id === id);
   if (idx >= 0) {
+    if (cleanedUpdates.images !== undefined) {
+      toGc = orphanedPaths(rows[idx].images, cleanedUpdates.images);
+    }
     rows[idx] = { ...rows[idx], ...localPatch };
   } else {
     // Insert when missing — happens when the pack was created on another
@@ -242,10 +275,21 @@ export async function saveComponentPack(id, updates) {
     console.error('saveComponentPack:', error);
     return { ok: false, error };
   }
+  // Fire-and-forget orphan cleanup. Failures are logged inside deleteAssets
+  // and don't affect save success — orphans are unreferenced files in a
+  // private bucket; a future scheduled sweep can also catch any missed.
+  if (toGc.length) deleteAssets(toGc);
   return { ok: true };
 }
 
 export async function deleteComponentPack(id) {
+  // Capture storage paths before we drop the row — once the row is gone the
+  // refs are unrecoverable and the files become permanent orphans.
+  const local = readLocal().find(p => p.id === id);
+  const paths = (local?.images || [])
+    .map(img => img && img.path)
+    .filter(Boolean);
+
   writeLocal(readLocal().filter(p => p.id !== id));
   const orgId = getCurrentOrgIdSync();
   if (IS_SUPABASE_ENABLED && orgId) {
@@ -253,6 +297,7 @@ export async function deleteComponentPack(id) {
     const { error } = await db.from('component_packs').delete().eq('id', id).eq('organization_id', orgId);
     if (error) console.error('deleteComponentPack:', error);
   }
+  if (paths.length) deleteAssets(paths);
 }
 
 export async function duplicateComponentPack(id) {
@@ -260,11 +305,29 @@ export async function duplicateComponentPack(id) {
   if (!source) return null;
   const newId = (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());
   const now = new Date().toISOString();
+
+  // Copy Storage files to new paths so the duplicate has its own assets and
+  // either pack can be edited/deleted without touching the other's files.
+  // Legacy entries (with `data` and no `path`) carry over as-is — they're
+  // self-contained base64 and don't share Storage state.
+  const sourceImages = Array.isArray(source.images) ? source.images : [];
+  const copiedImages = await Promise.all(sourceImages.map(async (img) => {
+    if (!img) return img;
+    if (img.path) {
+      const cloned = await copyAsset({ sourceRef: img, newOwnerId: newId, newScope: 'component-packs' });
+      // If copy failed (network, RLS), keep the original ref so the duplicate
+      // at least renders — orphan risk is acceptable vs blank slot.
+      return cloned || img;
+    }
+    return img;
+  }));
+
   const copy = {
     ...source, id: newId,
     component_name: (source.component_name || source.data?.componentName || '') + ' (Copy)',
     data: { ...source.data, componentName: (source.data?.componentName || '') + ' (Copy)' },
-    cover_image: extractCover(source.images),
+    images: copiedImages,
+    cover_image: extractCover(copiedImages),
     created_at: now, updated_at: now,
   };
   delete copy.user_id;

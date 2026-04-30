@@ -12,9 +12,10 @@ import ComponentPackPagePreview from './ComponentPackPagePreview';
 import { saveComponentPack } from '../../utils/componentPackStore';
 import { parsePLMHash, replacePLMHash } from '../../utils/plmRouting';
 import { addPerson } from '../../utils/plmDirectory';
-import { generateComponentPackPDF, generateComponentPackSVG, svgToBlob } from '../../utils/componentPackExport';
+import { generateComponentPackPDF, generateComponentPackSVGAsync, svgToBlob } from '../../utils/componentPackExport';
 import { downloadBlob } from '../../utils/downloadBlob';
 import { CostPill } from './TechPackPrimitives';
+import { uploadAsset, dataUrlToBlob, isLegacyDataUrl, useResolvedImageEntries } from '../../utils/plmAssets';
 
 function sanitizeFilename(s) {
   return (s || 'trimpack').replace(/[^\w\-]+/g, '_').slice(0, 60);
@@ -61,9 +62,12 @@ function VersionPanel({ revisions, onSnapshot, onOpenVersion }) {
 }
 
 function VersionViewer({ revision, onClose }) {
+  const snapshotData = revision?.dataSnapshot || {};
+  const snapshotImagesRaw = revision?.imagesSnapshot || [];
+  // Snapshots taken after Phase 2 may contain Storage paths instead of
+  // inline base64 — resolve to signed URLs for the read-only modal.
+  const snapshotImages = useResolvedImageEntries(snapshotImagesRaw);
   if (!revision) return null;
-  const snapshotData = revision.dataSnapshot || {};
-  const snapshotImages = revision.imagesSnapshot || [];
   const pageCount = COMPONENT_STEPS.length;
 
   const handlePrint = () => {
@@ -214,6 +218,19 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
   const firstRunRef = useRef(true);
   useEffect(() => { dataRef.current = data; imagesRef.current = images; }, [data, images]);
 
+  // Wait for all in-flight Storage uploads to settle (success or failure) so
+  // we never persist a placeholder that has no `path` yet. Bounded by a
+  // generous timeout so a stuck upload can't freeze the save indefinitely.
+  const waitForUploads = useCallback(async (timeoutMs = 20000) => {
+    if (pendingUploadsRef.current === 0) return true;
+    const start = Date.now();
+    while (pendingUploadsRef.current > 0) {
+      if (Date.now() - start > timeoutMs) return false;
+      await new Promise(r => setTimeout(r, 100));
+    }
+    return true;
+  }, []);
+
   // Flushes the debounced save right now. Returns the save result so callers
   // (manual Save button, Back-to-Trims handler) can react to failures instead
   // of silently dropping the user's edits.
@@ -224,6 +241,12 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     }
     if (!dirtyRef.current) return { ok: true };
     setSaving(true);
+    const uploadsSettled = await waitForUploads();
+    if (!uploadsSettled) {
+      setSaveError('Image upload still pending — try again in a moment');
+      setSaving(false);
+      return { ok: false, error: new Error('upload pending') };
+    }
     const d = dataRef.current;
     const imgs = imagesRef.current;
     // Card / pill shows the MOQ-tier unit cost (first row). Falls back to
@@ -260,7 +283,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
       setSaving(false);
       return { ok: false, error: err };
     }
-  }, [pack.id]);
+  }, [pack.id, waitForUploads]);
 
   const exportFilename = useCallback(() => {
     const stem = sanitizeFilename(data.componentName || 'trimpack');
@@ -285,7 +308,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     setExporting('svg');
     setExportError(null);
     try {
-      const svg = generateComponentPackSVG(data, images);
+      const svg = await generateComponentPackSVGAsync(data, images);
       await downloadBlob(svgToBlob(svg), `${exportFilename()}.svg`);
     } catch (err) {
       console.error('SVG export failed:', err);
@@ -359,6 +382,66 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     return () => window.removeEventListener('beforeunload', handler);
   }, []);
 
+  // Lazy migration of legacy base64 image entries into Storage. Runs once
+  // per pack mount, in the background. The user can keep editing while this
+  // runs — base64 entries render fine via AssetImage's `data` passthrough.
+  // When all uploads finish, we save the migrated images array silently
+  // (no dirty flag, no debounce) so subsequent payloads stop being huge.
+  const migratedRef = useRef(false);
+  useEffect(() => {
+    if (migratedRef.current) return;
+    const initialImages = pack.images || [];
+    const legacyEntries = initialImages
+      .map((img, i) => ({ img, i }))
+      .filter(({ img }) => img && isLegacyDataUrl(img.data) && !img.path);
+    if (legacyEntries.length === 0) {
+      migratedRef.current = true;
+      return;
+    }
+    let cancelled = false;
+    migratedRef.current = true;
+    (async () => {
+      const uploads = await Promise.allSettled(legacyEntries.map(async ({ img, i }) => {
+        const blob = dataUrlToBlob(img.data);
+        if (!blob) return { i, ref: null };
+        const ref = await uploadAsset({
+          scope: 'component-packs',
+          ownerId: pack.id,
+          slot: img.slot || `legacy-${i}`,
+          blob,
+          skipCompress: false, // re-compress legacy uploads while we're at it
+        });
+        return { i, ref };
+      }));
+      if (cancelled) return;
+      const replacements = new Map();
+      for (const r of uploads) {
+        if (r.status === 'fulfilled' && r.value?.ref) {
+          replacements.set(r.value.i, r.value.ref);
+        }
+      }
+      if (replacements.size === 0) return;
+      // Apply against the *current* state (the user may have edited since
+      // the migration started) by matching on the original entry identity.
+      setImages(prev => prev.map((img, i) => {
+        const ref = replacements.get(i);
+        // Only replace if it's still the same legacy entry at that index —
+        // avoids clobbering a user upload that landed at the same index.
+        if (!ref || !img || !isLegacyDataUrl(img.data) || img.path) return img;
+        return { ...ref, name: img.name };
+      }));
+      // Save the migration silently — saveComponentPack will pick up the
+      // current state via the next debounce tick (we just dirtied images).
+      // Setting dirtyRef directly + scheduling a flush avoids needing the
+      // user to make any edit to trigger persistence.
+      dirtyRef.current = true;
+      setIsDirty(true);
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => { flushPendingSave(); }, 600);
+    })();
+    return () => { cancelled = true; };
+  }, [pack.id, pack.images, flushPendingSave]);
+
   const handleBack = useCallback(async () => {
     const result = await flushPendingSave();
     if (result && result.ok === false) {
@@ -373,15 +456,84 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
 
   const set = useCallback((k, v) => setData(p => stampDate({ ...p, [k]: v })), [stampDate]);
 
-  const handleImgUpload = useCallback((slot, b64, name) => {
-    setImages(p => [...p, { slot, data: b64, name }]);
+  // Each upload is tracked by a unique tempId so the in-flight placeholder
+  // can be located and replaced atomically when the Storage upload returns.
+  // pendingUploadsRef counts uploads in flight so saves can wait for them
+  // (uploads must finish before we persist the images array — otherwise the
+  // saved row would point at a placeholder that has no path yet).
+  const pendingUploadsRef = useRef(0);
+  const [pendingUploads, setPendingUploads] = useState(0);
+  const bumpPending = useCallback((delta) => {
+    pendingUploadsRef.current = Math.max(0, pendingUploadsRef.current + delta);
+    setPendingUploads(pendingUploadsRef.current);
+  }, []);
+
+  // Async upload flow:
+  //   1. Convert the (compressed) data URL from the primitive into a Blob.
+  //   2. Insert a transient placeholder so the slot renders immediately
+  //      (uses a blob: object URL — fast, no decode).
+  //   3. Upload to Storage in the background.
+  //   4. Replace the placeholder with the persisted ref, OR mark it as
+  //      _uploadError so the user can see the failure (and remove/retry).
+  const handleImgUpload = useCallback(async (slot, b64, name) => {
+    const tempId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const blob = dataUrlToBlob(b64);
+    if (!blob) {
+      // Fallback: no parseable blob, behave like the legacy path so we
+      // never silently drop a user upload.
+      setImages(p => [...p, { slot, data: b64, name }]);
+      setData(stampDate);
+      return;
+    }
+    const blobUrl = URL.createObjectURL(blob);
+    setImages(p => [...p, { slot, name, _tempId: tempId, _blobUrl: blobUrl, _uploading: true }]);
     setData(stampDate);
-  }, [stampDate]);
+    bumpPending(+1);
+    try {
+      const ref = await uploadAsset({
+        scope: 'component-packs',
+        ownerId: pack.id,
+        slot,
+        blob,
+        skipCompress: true, // primitives already compressed via resizeImage
+      });
+      setImages(p => p.map(img => {
+        if (img && img._tempId === tempId) {
+          // Revoke the transient blob URL — the persisted ref takes over.
+          if (img._blobUrl) URL.revokeObjectURL(img._blobUrl);
+          return { ...ref, name: img.name };
+        }
+        return img;
+      }));
+    } catch (err) {
+      console.error('handleImgUpload:', err);
+      setImages(p => p.map(img => (
+        img && img._tempId === tempId
+          ? { ...img, _uploading: false, _uploadError: err?.message || String(err) }
+          : img
+      )));
+      setSaveError(err?.message || 'Image upload failed');
+    } finally {
+      bumpPending(-1);
+    }
+  }, [stampDate, pack.id, bumpPending]);
+
   const handleImgRemove = useCallback((slot, idx) => {
     setImages(p => {
       let c = 0;
       return p.filter(img => {
-        if (img.slot === slot) { if (c === idx) { c++; return false; } c++; }
+        if (img.slot === slot) {
+          if (c === idx) {
+            c++;
+            // Revoke the in-memory object URL when the user removes a
+            // still-uploading placeholder so we don't leak the blob.
+            if (img._blobUrl) URL.revokeObjectURL(img._blobUrl);
+            return false;
+          }
+          c++;
+        }
         return true;
       });
     });
@@ -475,6 +627,10 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
   const Comp = COMPONENT_STEP_FNS[step];
   const skippedSteps = data.skippedSteps || [];
   const isCurrentSkipped = skippedSteps.includes(step);
+  // Resolved view of `images` where every entry has a `data` field for the
+  // SVG live-preview (which can't async-resolve signed URLs itself). Path
+  // entries fill in once their signed URL is fetched.
+  const previewImages = useResolvedImageEntries(images);
   const stepProps = {
     data, set, images, onUpload: handleImgUpload, onRemove: handleImgRemove,
     pickFRColor, existingSuppliers, existingPeople, existingTrimTypes,
@@ -506,15 +662,17 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {saving
-            ? <span style={{ fontSize: 10, color: FR.sage }}>Saving…</span>
-            : isDirty
-              ? <span style={{ fontSize: 10, color: '#854F0B' }}>Unsaved changes</span>
-              : saved && !saveError && <span style={{ fontSize: 10, color: '#4CAF7D' }}>Saved ✓</span>
+          {pendingUploads > 0
+            ? <span style={{ fontSize: 10, color: FR.soil }}>Uploading {pendingUploads} image{pendingUploads === 1 ? '' : 's'}…</span>
+            : saving
+              ? <span style={{ fontSize: 10, color: FR.sage }}>Saving…</span>
+              : isDirty
+                ? <span style={{ fontSize: 10, color: '#854F0B' }}>Unsaved changes</span>
+                : saved && !saveError && <span style={{ fontSize: 10, color: '#4CAF7D' }}>Saved ✓</span>
           }
-          <button onClick={() => flushPendingSave()} disabled={saving || (!isDirty && !saveError)}
-            title={isDirty ? 'Save now' : 'No unsaved changes'}
-            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', background: (isDirty || saveError) ? FR.salt : 'rgba(255,255,255,0.1)', color: (isDirty || saveError) ? FR.slate : FR.sand, border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 10, fontWeight: 600, cursor: (saving || (!isDirty && !saveError)) ? 'default' : 'pointer' }}>
+          <button onClick={() => flushPendingSave()} disabled={saving || pendingUploads > 0 || (!isDirty && !saveError)}
+            title={pendingUploads > 0 ? 'Waiting for image uploads to finish' : isDirty ? 'Save now' : 'No unsaved changes'}
+            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', background: (isDirty || saveError) ? FR.salt : 'rgba(255,255,255,0.1)', color: (isDirty || saveError) ? FR.slate : FR.sand, border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 10, fontWeight: 600, cursor: (saving || pendingUploads > 0 || (!isDirty && !saveError)) ? 'default' : 'pointer' }}>
             <Save size={11} /> Save
           </button>
           {saveError && (
@@ -598,7 +756,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
             <div style={{ fontSize: 9, color: FR.stone, letterSpacing: 2, fontWeight: 600, textTransform: 'uppercase' }}>Live Preview</div>
             <div style={{ fontSize: 9, color: FR.stone }}>Page {step + 1} / {COMPONENT_STEPS.length}</div>
           </div>
-          <ComponentPackPagePreview data={data} images={images} step={step} skippedSteps={skippedSteps} />
+          <ComponentPackPagePreview data={data} images={previewImages} step={step} skippedSteps={skippedSteps} />
         </div>
       </div>
     </div>

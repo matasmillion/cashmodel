@@ -19,6 +19,7 @@
 // Resolve a reference to a usable URL via getAssetUrl(ref). URLs are signed
 // (1h TTL by default) and cached in memory for the life of the page.
 
+import { useEffect, useMemo, useState } from 'react';
 import { getAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync } from '../lib/auth';
 
@@ -247,6 +248,42 @@ export async function getAssetUrls(refsOrPaths = []) {
 // Delete
 // ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Copy an asset to a new path (used by pack duplication so the new pack has
+ * its own files instead of sharing the source's — otherwise either pack's
+ * "remove this image" cleanup would orphan-delete files the other still
+ * references). Returns the new asset reference, or null on failure.
+ *
+ *   sourceRef:    the original ref ({ slot, path, ... })
+ *   newOwnerId:   id of the destination pack/row
+ *   newScope:     usually the same scope as the source ('component-packs' etc.)
+ */
+export async function copyAsset({ sourceRef, newOwnerId, newScope } = {}) {
+  if (!sourceRef?.path) return null;
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) return null;
+  const supabase = await getAuthedSupabase();
+  if (!supabase) return null;
+
+  const ext = extFromContentType(sourceRef.content_type) || (sourceRef.path.split('.').pop() || 'bin');
+  const uuid = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const slot = sanitizeSlot(sourceRef.slot || 'asset');
+  const newPath = `${orgId}/${newScope}/${newOwnerId}/${slot}-${uuid}.${ext}`;
+
+  const { error } = await supabase.storage.from(BUCKET).copy(sourceRef.path, newPath);
+  if (error) {
+    console.error('copyAsset:', error);
+    return null;
+  }
+  return {
+    ...sourceRef,
+    path: newPath,
+    uploaded_at: new Date().toISOString(),
+  };
+}
+
 /** Delete a single asset. Soft-fails (returns { ok: false, error }) on failure. */
 export async function deleteAsset(refOrPath) {
   const path = pathOf(refOrPath);
@@ -300,6 +337,129 @@ export function isAssetRef(value) {
 /** True if the value is a legacy base64 data URL. */
 export function isLegacyDataUrl(value) {
   return typeof value === 'string' && value.startsWith('data:');
+}
+
+/**
+ * Resolve a "cover image" column value — which may be a legacy base64
+ * data URL, an absolute URL, or a Storage path — into a renderable URL.
+ */
+export async function resolveCoverImage(coverValue) {
+  if (!coverValue || typeof coverValue !== 'string') return null;
+  if (coverValue.startsWith('data:')) return coverValue;
+  if (/^https?:\/\//i.test(coverValue)) return coverValue;
+  return getAssetUrl(coverValue);
+}
+
+/**
+ * Take an `images` array (mix of legacy base64 entries, transient blob-URL
+ * placeholders, and persisted Storage refs) and return a parallel array
+ * where every entry has its `data` field populated with something the
+ * browser can render. Entries with `path` are resolved to signed URLs in a
+ * single batch round-trip; legacy `data` and transient `_blobUrl` pass
+ * through unchanged.
+ */
+export async function resolveImageEntries(images = []) {
+  const list = Array.isArray(images) ? images : [];
+  const pathsToFetch = [];
+  for (const img of list) {
+    if (!img) continue;
+    if (img.data) continue;
+    if (img._blobUrl) continue;
+    if (img.path) pathsToFetch.push(img.path);
+  }
+  const urlMap = pathsToFetch.length ? await getAssetUrls(pathsToFetch) : new Map();
+  return list.map(img => {
+    if (!img) return img;
+    if (img.data) return img;
+    if (img._blobUrl) return { ...img, data: img._blobUrl };
+    if (img.path) return { ...img, data: urlMap.get(img.path) || '' };
+    return img;
+  });
+}
+
+/**
+ * For exports — return an images array where every entry has a `data` field
+ * populated with a self-contained base64 data URL (no signed URLs that
+ * could expire). Fetches each Storage path once, converts to data URL via
+ * FileReader, and reuses the result. Legacy `data` entries pass through.
+ */
+export async function resolveImagesToDataUrls(images = []) {
+  const list = Array.isArray(images) ? images : [];
+  return Promise.all(list.map(async (img) => {
+    if (!img) return img;
+    if (img.data && img.data.startsWith('data:')) return img;
+    if (!img.path) return img;
+    try {
+      const url = await getAssetUrl(img.path);
+      if (!url) return img;
+      const resp = await fetch(url);
+      const blob = await resp.blob();
+      const dataUrl = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(blob);
+      });
+      return { ...img, data: dataUrl };
+    } catch (err) {
+      console.error('resolveImagesToDataUrls:', img.path, err);
+      return img;
+    }
+  }));
+}
+
+/**
+ * React hook for the live preview / read-only renderers — returns an
+ * images array where every entry has its `data` field populated with a
+ * signed Storage URL (path-based entries), the original data URL (legacy),
+ * or the in-flight blob URL (uploading). Path entries are batched into a
+ * single signed-URL request and resolve asynchronously.
+ */
+export function useResolvedImageEntries(images = []) {
+  // Synchronous baseline — legacy `data` and transient `_blobUrl` entries
+  // render immediately; path-only entries appear once their signed URL
+  // lands in the async map below.
+  const baseline = useMemo(() => (images || []).map(img => {
+    if (!img) return img;
+    if (img.data) return img;
+    if (img._blobUrl) return { ...img, data: img._blobUrl };
+    return img;
+  }), [images]);
+
+  const [pathUrls, setPathUrls] = useState(() => new Map());
+
+  useEffect(() => {
+    const list = images || [];
+    const paths = list.map(img => (img && img.path && !img.data ? img.path : null)).filter(Boolean);
+    if (!paths.length) return undefined;
+    let cancelled = false;
+    getAssetUrls(paths).then((urlMap) => { if (!cancelled) setPathUrls(urlMap); });
+    return () => { cancelled = true; };
+  }, [images]);
+
+  return useMemo(() => baseline.map(img => {
+    if (!img || img.data || img._blobUrl) return img;
+    if (img.path) {
+      const url = pathUrls.get(img.path);
+      return url ? { ...img, data: url } : img;
+    }
+    return img;
+  }), [baseline, pathUrls]);
+}
+
+/**
+ * Persistable image entry — drops transient fields (object URLs, upload
+ * status flags) so they don't end up in the DB.
+ */
+export function persistableImage(img) {
+  if (!img) return img;
+  const { _blobUrl, _uploading, _uploadError, ...rest } = img;
+  return rest;
+}
+
+/** Strip transient fields from every entry in an images array. */
+export function persistableImages(images = []) {
+  return (images || []).map(persistableImage).filter(Boolean);
 }
 
 // ─────────────────────────────────────────────────────────────────────

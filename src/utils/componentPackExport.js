@@ -12,6 +12,7 @@ import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ComponentPackPagePreview from '../components/techpack/ComponentPackPagePreview';
+import { resolveImagesToDataUrls } from './plmAssets';
 
 const PAGE_W = 1123;
 const PAGE_H = 794;
@@ -31,6 +32,9 @@ function renderPageMarkup(data, images, step) {
     : markup.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
 }
 
+// Sync wrapper kept for callers that already have data-URL images. Most
+// modern callers should use generateComponentPackSVGAsync (below) which
+// pre-resolves Storage refs into inline data URLs first.
 export function generateComponentPackSVG(data, images) {
   const gap = 24;
   const totalH = PAGE_H * TOTAL_PAGES + gap * (TOTAL_PAGES - 1);
@@ -56,6 +60,17 @@ export function generateComponentPackSVG(data, images) {
 
 export function svgToBlob(svg) {
   return new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+}
+
+// Resolve any Storage-backed image refs into inline data URLs so the
+// exported SVG/PDF is fully self-contained (signed URLs would expire).
+async function withResolvedImages(images) {
+  return resolveImagesToDataUrls(images);
+}
+
+export async function generateComponentPackSVGAsync(data, images) {
+  const resolved = await withResolvedImages(images);
+  return generateComponentPackSVG(data, resolved);
 }
 
 // ── PDF export ─────────────────────────────────────────────────────────────
@@ -94,6 +109,9 @@ function waitForImages(root) {
 }
 
 export async function generateComponentPackPDF(data, images) {
+  // Pre-resolve Storage refs to inline data URLs so html2canvas captures
+  // them on first paint instead of racing the network.
+  const resolvedImages = await withResolvedImages(images);
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const mmW = 297;
   const mmH = 210;
@@ -114,7 +132,7 @@ export async function generateComponentPackPDF(data, images) {
 
       // Render this page, wait for it to settle + images to load, then
       // rasterise.
-      root.render(createElement(ComponentPackPagePreview, { data, images, step: i, skippedSteps: data.skippedSteps || [] }));
+      root.render(createElement(ComponentPackPagePreview, { data, images: resolvedImages, step: i, skippedSteps: data.skippedSteps || [] }));
       await waitForFrame();
       await waitForImages(host);
       // Fonts may still be loading on the very first page — block once so
