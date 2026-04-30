@@ -100,7 +100,23 @@ export async function getTechPack(id) {
       .eq('id', id)
       .eq('organization_id', orgId)
       .maybeSingle();
-    if (!error && data) return migrateLegacyVendorKeys(data);
+    if (!error && data) {
+      // Mirror cloud row into localStorage so saveTechPack can find a row
+      // to patch — without this, packs created on another device save to
+      // cloud only, the local list-view fallback returns nothing, and
+      // newly uploaded cover images never appear on the card.
+      try {
+        const packs = readLocal();
+        const idx = packs.findIndex(p => p.id === id);
+        if (idx >= 0) packs[idx] = { ...packs[idx], ...data };
+        else packs.push(data);
+        writeLocal(packs);
+      } catch (err) {
+        console.error('getTechPack mirror:', err);
+      }
+      return migrateLegacyVendorKeys(data);
+    }
+    if (error) console.error('getTechPack:', error);
   }
   const local = readLocal().find(p => p.id === id);
   return local ? migrateLegacyVendorKeys(local) : null;
@@ -146,8 +162,12 @@ export async function saveTechPack(id, updates) {
   const idx = packs.findIndex(p => p.id === id);
   if (idx >= 0) {
     packs[idx] = { ...packs[idx], ...updates, updated_at: now };
-    writeLocal(packs);
+  } else {
+    // Defend in depth — getTechPack now mirrors on read, but if a save
+    // happens before that mirror lands we still want a local row.
+    packs.push({ id, ...updates, updated_at: now });
   }
+  writeLocal(packs);
 
   const orgId = getCurrentOrgIdSync();
   if (IS_SUPABASE_ENABLED && orgId) {

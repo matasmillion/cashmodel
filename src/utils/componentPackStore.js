@@ -60,7 +60,12 @@ export async function listComponentPacks() {
       return data.map(r => {
         let row = r;
         const mirror = row.cover_image && row.cost_per_unit ? null : local.find(l => l.id === r.id);
-        if (!row.cover_image && mirror) row = { ...row, cover_image: extractCover(mirror.images) };
+        // Prefer mirror.cover_image (saveComponentPack writes it directly)
+        // and fall back to extracting from images for older local rows.
+        if (!row.cover_image && mirror) {
+          const localCover = mirror.cover_image || extractCover(mirror.images);
+          if (localCover) row = { ...row, cover_image: localCover };
+        }
         if (!row.cost_per_unit && mirror) {
           const tier0 = mirror.data?.costTiers?.[0];
           const cost = (tier0 && tier0.unitCost)
@@ -77,15 +82,19 @@ export async function listComponentPacks() {
   return readLocal()
     .map(p => ({
       id: p.id,
-      component_name: p.data?.componentName || '',
-      component_category: p.data?.componentCategory || '',
-      status: p.data?.status || 'Design',
-      supplier: p.data?.supplier || '',
-      cost_per_unit: (p.data?.costTiers?.[0]?.unitCost) || p.data?.targetUnitCost || p.data?.costPerUnit || '',
-      currency: p.data?.currency || 'USD',
+      component_name: p.data?.componentName || p.component_name || '',
+      component_category: p.data?.componentCategory || p.component_category || '',
+      status: p.data?.status || p.status || 'Design',
+      supplier: p.data?.supplier || p.supplier || '',
+      cost_per_unit: (p.data?.costTiers?.[0]?.unitCost) || p.data?.targetUnitCost || p.data?.costPerUnit || p.cost_per_unit || '',
+      currency: p.data?.currency || p.currency || 'USD',
       updated_at: p.updated_at,
       created_at: p.created_at,
-      cover_image: extractCover(p.images),
+      // Prefer the directly-written cover_image (saveComponentPack writes it
+      // both to the projection field and inside the images JSONB). Falls
+      // back to extracting from images for older rows that predate the
+      // direct projection.
+      cover_image: p.cover_image || extractCover(p.images),
     }))
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
@@ -101,6 +110,22 @@ export async function getComponentPack(id) {
       .eq('organization_id', orgId)
       .maybeSingle();
     if (!error && data) {
+      // Mirror the cloud row into localStorage so subsequent
+      // saveComponentPack calls have a local row to update — without this,
+      // a pack opened from cloud-only state has nothing to update locally
+      // and the local cover_image / image fallback paths in
+      // listComponentPacks return nothing, causing the card to render
+      // without a thumbnail even though the user just uploaded one.
+      try {
+        const rows = readLocal();
+        const idx = rows.findIndex(p => p.id === id);
+        if (idx >= 0) rows[idx] = { ...rows[idx], ...data };
+        else rows.push(data);
+        writeLocal(rows);
+      } catch (err) {
+        console.error('getComponentPack mirror:', err);
+      }
+
       // Lazy backfill: older rows predate the cover_image column; populate it
       // the first time they're opened so subsequent list views show the
       // thumbnail without another edit.
@@ -154,12 +179,31 @@ export async function createComponentPack(defaultData) {
 export async function saveComponentPack(id, updates) {
   const now = new Date().toISOString();
   const cover = updates.images !== undefined ? extractCover(updates.images) : undefined;
+
+  // Fold cover_image into the main update so it travels in a single atomic
+  // write. The previous two-update flow had a silent-failure path: if the
+  // second `update({ cover_image })` call failed (e.g. payload size, transient
+  // network), the function still reported ok=true and the card lost its
+  // thumbnail. One write means one outcome.
   const corePatch = { ...updates, updated_at: now };
-  const localPatch = cover !== undefined ? { ...corePatch, cover_image: cover } : corePatch;
+  if (cover !== undefined) corePatch.cover_image = cover;
+
+  // Belt-and-suspenders local mirror — also writes cover_image so the
+  // listComponentPacks local-fallback path can read it directly without
+  // having to re-extract from the (potentially stale) images JSONB.
+  const localPatch = corePatch;
 
   const rows = readLocal();
   const idx = rows.findIndex(p => p.id === id);
-  if (idx >= 0) { rows[idx] = { ...rows[idx], ...localPatch }; writeLocal(rows); }
+  if (idx >= 0) {
+    rows[idx] = { ...rows[idx], ...localPatch };
+  } else {
+    // Insert when missing — happens when the pack was created on another
+    // device and this device's localStorage hasn't been backfilled yet
+    // (getComponentPack now mirrors on read, but we still defend in depth).
+    rows.push({ id, ...localPatch });
+  }
+  writeLocal(rows);
 
   const orgId = getCurrentOrgIdSync();
   if (!IS_SUPABASE_ENABLED || !orgId) return { ok: true };
@@ -167,20 +211,20 @@ export async function saveComponentPack(id, updates) {
   const db = await getAuthedSupabase();
   const { error } = await db.from('component_packs').update(corePatch).eq('id', id).eq('organization_id', orgId);
   if (error) {
+    // Tolerate pre-migration schemas that don't have the cover_image column
+    // yet — retry without it so the rest of the patch still lands.
+    if (cover !== undefined && /column .* does not exist|could not find.*column/i.test(error.message || '')) {
+      const patchWithoutCover = { ...corePatch };
+      delete patchWithoutCover.cover_image;
+      const retry = await db.from('component_packs').update(patchWithoutCover).eq('id', id).eq('organization_id', orgId);
+      if (retry.error) {
+        console.error('saveComponentPack retry:', retry.error);
+        return { ok: false, error: retry.error };
+      }
+      return { ok: true };
+    }
     console.error('saveComponentPack:', error);
     return { ok: false, error };
-  }
-
-  // Best-effort cover_image write — tolerates pre-migration schemas.
-  if (cover !== undefined) {
-    const { error: coverErr } = await db
-      .from('component_packs')
-      .update({ cover_image: cover })
-      .eq('id', id)
-      .eq('organization_id', orgId);
-    if (coverErr && !/column .* does not exist|could not find.*column/i.test(coverErr.message || '')) {
-      console.error('saveComponentPack cover:', coverErr);
-    }
   }
   return { ok: true };
 }
