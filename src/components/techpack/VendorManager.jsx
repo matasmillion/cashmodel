@@ -17,6 +17,8 @@ import {
   addVendor, deleteVendor,
 } from '../../utils/vendorLibrary';
 import { fileToDataUrl } from '../../utils/cropImage';
+import { uploadAsset, deleteAsset, isLegacyDataUrl } from '../../utils/plmAssets';
+import CoverThumb from './CoverThumb';
 
 export default function VendorManager() {
   const [vendors, setVendors] = useState(() => listVendorsLocal());
@@ -114,8 +116,9 @@ function VendorCard({ vendor, onClick }) {
 
       <div style={{ padding: '14px 14px 10px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
         {f.logoImage ? (
-          <img src={f.logoImage} alt={`${f.name} logo`}
-            style={{ width: 44, height: 44, objectFit: 'cover', border: `1px solid ${FR.sand}`, borderRadius: 4, flexShrink: 0 }} />
+          <div style={{ width: 44, height: 44, border: `1px solid ${FR.sand}`, borderRadius: 4, flexShrink: 0, overflow: 'hidden' }}>
+            <CoverThumb src={f.logoImage} alt={`${f.name} logo`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          </div>
         ) : (
           <div style={{ width: 44, height: 44, background: FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 4, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: FR.sand, fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
             {(f.name || '?').charAt(0).toUpperCase()}
@@ -232,14 +235,36 @@ function VendorEditor({ name, onClose, onDeleted }) {
 
   const uploadLogo = async (file) => {
     if (!file || !file.type.startsWith('image/')) return;
-    const dataUri = await fileToDataUrl(file);
-    updateVendor(name, { logoImage: dataUri });
-    setEntry({ ...getVendor(name), _hasRecord: true });
+    try {
+      const ref = await uploadAsset({
+        scope: 'vendors',
+        ownerId: encodeURIComponent(name),
+        slot: 'logo',
+        blob: file,
+      });
+      const previousLogo = entry.logoImage;
+      updateVendor(name, { logoImage: ref.path });
+      setEntry({ ...getVendor(name), _hasRecord: true });
+      if (previousLogo && !isLegacyDataUrl(previousLogo) && previousLogo !== ref.path) {
+        deleteAsset(previousLogo);
+      }
+    } catch (err) {
+      console.error('uploadLogo failed:', err);
+      // Fall back to legacy base64 path so the user keeps the image even
+      // if Storage is unreachable (offline, RLS misconfig, etc.).
+      const dataUri = await fileToDataUrl(file);
+      updateVendor(name, { logoImage: dataUri });
+      setEntry({ ...getVendor(name), _hasRecord: true });
+    }
   };
 
   const removeLogo = () => {
+    const previousLogo = entry.logoImage;
     clearVendorField(name, 'logoImage');
     setEntry(getVendor(name));
+    if (previousLogo && !isLegacyDataUrl(previousLogo)) {
+      deleteAsset(previousLogo);
+    }
   };
 
   const handleDelete = () => {
@@ -303,8 +328,7 @@ function VendorEditor({ name, onClose, onDeleted }) {
                   style={{ display: 'none' }} />
                 {entry.logoImage ? (
                   <>
-                    <img src={entry.logoImage} alt={`${name} logo`}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <CoverThumb src={entry.logoImage} alt={`${name} logo`} />
                     <button onClick={e => { e.stopPropagation(); removeLogo(); }}
                       style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: 10, background: FR.slate, color: FR.salt, border: 'none', fontSize: 11, cursor: 'pointer' }}>×</button>
                   </>

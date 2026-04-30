@@ -65,6 +65,9 @@ function pageFrame(title, subtitle, pageNum, totalPages, styleInfo) {
   `;
 }
 
+// Sync export — assumes images already have inline `data` fields. Use
+// generateTechPackSVGAsync (below) when starting from a pack that may
+// contain Supabase Storage refs.
 export function generateTechPackSVG(pack) {
   const d = pack.data || {};
   const images = pack.images || [];
@@ -191,4 +194,13 @@ export function generateTechPackSVG(pack) {
 
 export function svgToBlob(svgString) {
   return new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+}
+
+// Storage-aware variant: pre-resolves any { path } image refs into inline
+// data URLs so the exported SVG is fully self-contained (signed URLs would
+// expire and break the file when the recipient opens it later).
+export async function generateTechPackSVGAsync(pack) {
+  const { resolveImagesToDataUrls } = await import('./plmAssets');
+  const resolvedImages = await resolveImagesToDataUrls(pack.images || []);
+  return generateTechPackSVG({ ...pack, images: resolvedImages });
 }

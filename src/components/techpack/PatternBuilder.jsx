@@ -133,9 +133,11 @@ export default function PatternBuilder({ pattern, onBack }) {
       <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
         <CoverImagePicker
           value={draft.cover_image}
-          onChange={dataUrl => set({ cover_image: dataUrl })}
+          onChange={pathOrDataUrl => set({ cover_image: pathOrDataUrl })}
           label="Cover image"
           hint="Drop a photo of the block"
+          assetScope="patterns"
+          assetOwnerId={draft.id}
         />
         <div style={{ flex: 1, minWidth: 280 }}>
           <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Identity</h4>

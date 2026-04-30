@@ -16,6 +16,7 @@ import { getTreatment, getTreatmentRollups, getProductionLog, getUsedInForTreatm
 import { listDriftLogs } from '../../utils/productionStore';
 import { TREATMENT_TYPE_LABEL, LORA_BASE_MODELS } from '../../utils/treatmentLibrary';
 import CoverImagePicker from './CoverImagePicker';
+import CoverThumb from './CoverThumb';
 import VendorPicker from './VendorPicker';
 import FileSlot from './FileSlot';
 
@@ -319,14 +320,16 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
           {editing ? (
             <CoverImagePicker
               value={view.cover_image}
-              onChange={dataUrl => setField('cover_image', dataUrl)}
+              onChange={pathOrDataUrl => setField('cover_image', pathOrDataUrl)}
               label="Cover image"
               hint="Drop a swatch photo"
               width={120}
+              assetScope="treatments"
+              assetOwnerId={view.id}
             />
           ) : view.cover_image ? (
             <div style={{ width: 120, height: 180, borderRadius: 8, overflow: 'hidden', boxShadow: 'inset 0 0 0 0.5px rgba(0,0,0,0.1)' }}>
-              <img src={view.cover_image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <CoverThumb src={view.cover_image} alt="" />
             </div>
           ) : (
             <div style={{ width: 120, height: 180, borderRadius: 8, background: swatchHex, boxShadow: 'inset 0 0 0 0.5px rgba(0,0,0,0.1)' }} />

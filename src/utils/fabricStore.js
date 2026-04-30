@@ -11,6 +11,7 @@
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
 import { emptyFabric, FABRIC_WEAVE_CODE } from './fabricLibrary';
+import { copyCoverImage } from './plmAssets';
 
 const LOCAL_KEY = 'cashmodel_fabrics';
 
@@ -179,13 +180,19 @@ export async function duplicateFabric(id) {
   const local = readLocal();
   const newCode = nextCodeFor(source.weave, local);
   const now = new Date().toISOString();
+  const dupId = newId();
+  // Copy the cover image to a fresh Storage path under the new fabric's id
+  // so either fabric can be edited or have its cover replaced without
+  // breaking the other (CoverImagePicker deletes the prior path on replace).
+  const dupCover = await copyCoverImage(source.cover_image, { newOwnerId: dupId, newScope: 'fabrics' });
   const copy = {
     ...source,
-    id: newId(),
+    id: dupId,
     code: newCode,
     name: source.name ? `${source.name} (Copy)` : 'Copy',
     status: 'draft',
     version: 'v1.0',
+    cover_image: dupCover,
     created_at: now,
     updated_at: now,
   };

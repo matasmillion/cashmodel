@@ -6,11 +6,12 @@ import { STEP_FNS } from './TechPackSteps';
 import TechPackPagePreview from './TechPackPagePreview';
 import { saveTechPack } from '../../utils/techPackStore';
 import { generateTechPackPDF } from '../../utils/techPackPDF';
-import { generateTechPackSVG, svgToBlob } from '../../utils/techPackSVG';
+import { generateTechPackSVGAsync, svgToBlob } from '../../utils/techPackSVG';
 import { resizeImage } from './techPackConstants';
 import { parsePLMHash, replacePLMHash } from '../../utils/plmRouting';
 import { getFRColorCost } from '../../utils/colorLibrary';
 import { formatCost } from './TechPackPrimitives';
+import { uploadAsset, dataUrlToBlob, isLegacyDataUrl, useResolvedImageEntries } from '../../utils/plmAssets';
 
 function sanitizeFilename(s) {
   return (s || 'techpack').replace(/[^\w\-]+/g, '_').slice(0, 60);
@@ -140,9 +141,29 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   const [images, setImages] = useState(pack.images || []);
   const [library, setLibrary] = useState(pack.library || DEFAULT_LIBRARY);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState(null);
   const saveTimerRef = useRef(null);
+
+  // Mirror the ComponentPackBuilder pattern: track in-flight uploads so the
+  // debounced save waits for them, instead of persisting placeholder rows
+  // that have no Storage path yet.
+  const pendingUploadsRef = useRef(0);
+  const [pendingUploads, setPendingUploads] = useState(0);
+  const bumpPending = useCallback((delta) => {
+    pendingUploadsRef.current = Math.max(0, pendingUploadsRef.current + delta);
+    setPendingUploads(pendingUploadsRef.current);
+  }, []);
+  const waitForUploads = useCallback(async (timeoutMs = 20000) => {
+    if (pendingUploadsRef.current === 0) return true;
+    const start = Date.now();
+    while (pendingUploadsRef.current > 0) {
+      if (Date.now() - start > timeoutMs) return false;
+      await new Promise(r => setTimeout(r, 100));
+    }
+    return true;
+  }, []);
 
   // Push step into URL on every change (replaceState — flicking through
   // 14 steps shouldn't pollute the back stack).
@@ -175,30 +196,148 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   const targetFOB = parseFloat(data.targetFOB) || 0;
   const costVariance = targetFOB > 0 ? totalUnitCost - targetFOB : 0;
 
-  // Debounced auto-save
+  // Debounced auto-save. Waits for any in-flight Storage uploads before
+  // persisting so we never save a placeholder image entry without a path.
   useEffect(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
       setSaving(true);
+      const uploadsSettled = await waitForUploads();
+      if (!uploadsSettled) {
+        setSaveError('Image upload still pending — try again in a moment');
+        setSaving(false);
+        return;
+      }
       try {
-        await saveTechPack(pack.id, {
+        const result = await saveTechPack(pack.id, {
           data, images, library,
           style_name: data.styleName || '',
           product_category: data.productCategory || '',
           status: data.status || 'Design',
           completion_pct: computeCompletion(data),
         });
-      } catch (err) { console.error('Auto-save failed:', err); }
+        if (result && result.ok === false) {
+          setSaveError(result.error?.message || 'Cloud save failed');
+        } else {
+          setSaveError(null);
+        }
+      } catch (err) {
+        console.error('Auto-save failed:', err);
+        setSaveError(err?.message || String(err));
+      }
       setTimeout(() => setSaving(false), 300);
     }, 600);
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [data, images, library, pack.id]);
+  }, [data, images, library, pack.id, waitForUploads]);
 
   const set = useCallback((k, v) => setData(p => ({ ...p, [k]: v })), []);
-  const handleImgUpload = useCallback((slot, b64, name) => setImages(p => [...p, { slot, data: b64, name }]), []);
+
+  // Async upload: insert a transient blob: placeholder so the slot renders
+  // immediately, upload to Storage in the background, then atomically
+  // replace the placeholder with the persisted ref. Failures mark the
+  // entry with _uploadError so the user can see/retry.
+  const handleImgUpload = useCallback(async (slot, b64, name) => {
+    const tempId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const blob = dataUrlToBlob(b64);
+    if (!blob) {
+      setImages(p => [...p, { slot, data: b64, name }]);
+      return;
+    }
+    const blobUrl = URL.createObjectURL(blob);
+    setImages(p => [...p, { slot, name, _tempId: tempId, _blobUrl: blobUrl, _uploading: true }]);
+    bumpPending(+1);
+    try {
+      const ref = await uploadAsset({
+        scope: 'tech-packs',
+        ownerId: pack.id,
+        slot,
+        blob,
+        skipCompress: true,
+      });
+      setImages(p => p.map(img => {
+        if (img && img._tempId === tempId) {
+          if (img._blobUrl) URL.revokeObjectURL(img._blobUrl);
+          return { ...ref, name: img.name };
+        }
+        return img;
+      }));
+    } catch (err) {
+      console.error('handleImgUpload (techpack):', err);
+      setImages(p => p.map(img => (
+        img && img._tempId === tempId
+          ? { ...img, _uploading: false, _uploadError: err?.message || String(err) }
+          : img
+      )));
+      setSaveError(err?.message || 'Image upload failed');
+    } finally {
+      bumpPending(-1);
+    }
+  }, [pack.id, bumpPending]);
+
   const handleImgRemove = useCallback((slot, idx) => {
-    setImages(p => { let c = 0; return p.filter(img => { if (img.slot === slot) { if (c === idx) { c++; return false; } c++; } return true; }); });
+    setImages(p => {
+      let c = 0;
+      return p.filter(img => {
+        if (img.slot === slot) {
+          if (c === idx) {
+            c++;
+            if (img._blobUrl) URL.revokeObjectURL(img._blobUrl);
+            return false;
+          }
+          c++;
+        }
+        return true;
+      });
+    });
   }, []);
+
+  // Lazy migration of legacy base64 image entries → Supabase Storage.
+  // Runs once per pack mount; user can keep editing while it works in the
+  // background. AssetImage renders both shapes so nothing flickers.
+  const migratedRef = useRef(false);
+  useEffect(() => {
+    if (migratedRef.current) return;
+    const initialImages = pack.images || [];
+    const legacyEntries = initialImages
+      .map((img, i) => ({ img, i }))
+      .filter(({ img }) => img && isLegacyDataUrl(img.data) && !img.path);
+    if (legacyEntries.length === 0) {
+      migratedRef.current = true;
+      return;
+    }
+    let cancelled = false;
+    migratedRef.current = true;
+    (async () => {
+      const uploads = await Promise.allSettled(legacyEntries.map(async ({ img, i }) => {
+        const blob = dataUrlToBlob(img.data);
+        if (!blob) return { i, ref: null };
+        const ref = await uploadAsset({
+          scope: 'tech-packs',
+          ownerId: pack.id,
+          slot: img.slot || `legacy-${i}`,
+          blob,
+          skipCompress: false,
+        });
+        return { i, ref };
+      }));
+      if (cancelled) return;
+      const replacements = new Map();
+      for (const r of uploads) {
+        if (r.status === 'fulfilled' && r.value?.ref) {
+          replacements.set(r.value.i, r.value.ref);
+        }
+      }
+      if (replacements.size === 0) return;
+      setImages(prev => prev.map((img, i) => {
+        const ref = replacements.get(i);
+        if (!ref || !img || !isLegacyDataUrl(img.data) || img.path) return img;
+        return { ...ref, name: img.name };
+      }));
+    })();
+    return () => { cancelled = true; };
+  }, [pack.id, pack.images]);
   const saveToLibrary = useCallback((category, item) => {
     setLibrary(p => {
       const existing = p[category] || [];
@@ -259,7 +398,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       const fullPack = { ...pack, data, images, library };
       const pdfBlob = await generateTechPackPDF(fullPack);
       downloadBlob(pdfBlob, `${filename}_v${(data.revisions || []).length || 1}.pdf`);
-      const svgString = generateTechPackSVG(fullPack);
+      const svgString = await generateTechPackSVGAsync(fullPack);
       downloadBlob(svgToBlob(svgString), `${filename}_v${(data.revisions || []).length || 1}.svg`);
       await saveTechPack(pack.id, {
         data, images, library,
@@ -280,6 +419,9 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   const skippedSteps = data.skippedSteps || [];
   const isCurrentSkipped = skippedSteps.includes(step);
   const libCount = (library.bom || []).length + (library.trims || []).length;
+  // Resolved view for the SVG live preview — path-only entries get a
+  // signed URL so <image href> renders. Legacy/blob entries pass through.
+  const previewImages = useResolvedImageEntries(images);
   const stepProps = {
     data, set, images, onUpload: handleImgUpload, onRemove: handleImgRemove,
     library, saveToLibrary,
@@ -309,7 +451,11 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          {saving && <span style={{ fontSize: 10, color: FR.sage }}>Saving…</span>}
+          {pendingUploads > 0
+            ? <span style={{ fontSize: 10, color: FR.soil }}>Uploading {pendingUploads} image{pendingUploads === 1 ? '' : 's'}…</span>
+            : saving
+              ? <span style={{ fontSize: 10, color: FR.sage }}>Saving…</span>
+              : saveError && <span title={saveError} style={{ fontSize: 10, color: '#A32D2D' }}>⚠︎ Save failed — kept locally</span>}
           {/* Cost roll-up — BOM + colorway (wash/dye). */}
           <div style={{ textAlign: 'right' }} title={`BOM ${formatCost(bomCost)}  ·  Colorways ${formatCost(colorwayCost)}`}>
             <div style={{ fontSize: 9, color: FR.stone }}>Total Unit Cost</div>
@@ -400,7 +546,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
             <div style={{ fontSize: 9, color: FR.stone, letterSpacing: 2, fontWeight: 600, textTransform: 'uppercase' }}>Live Preview</div>
             <div style={{ fontSize: 9, color: FR.stone }}>Page {step + 1} / {STEPS.length}</div>
           </div>
-          <TechPackPagePreview data={data} images={images} step={step} skippedSteps={skippedSteps} />
+          <TechPackPagePreview data={data} images={previewImages} step={step} skippedSteps={skippedSteps} />
         </div>
       </div>
     </div>

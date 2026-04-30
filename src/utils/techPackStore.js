@@ -3,6 +3,7 @@
 
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
+import { persistableImages, deleteAssets, copyAsset } from './plmAssets';
 
 const LOCAL_KEY = 'cashmodel_techpacks';
 
@@ -45,11 +46,25 @@ function writeLocal(packs) {
   }
 }
 
-// Pull the cover image (first entry with slot=cover) out of an images array
+// Pull the cover image (first entry with slot=cover) out of an images array.
+// Handles both legacy { data: 'data:...' } and persisted { path: '...' }.
 function extractCover(images) {
   const list = Array.isArray(images) ? images : [];
   const cover = list.find(img => img && img.slot === 'cover');
-  return cover ? cover.data : null;
+  if (!cover) return null;
+  return cover.path || cover.data || null;
+}
+
+// Storage paths that disappeared between two image arrays — used to GC
+// orphaned files from the bucket on save.
+function orphanedPaths(prev, next) {
+  const prevPaths = new Set();
+  const nextPaths = new Set();
+  for (const img of prev || []) if (img?.path) prevPaths.add(img.path);
+  for (const img of next || []) if (img?.path) nextPaths.add(img.path);
+  const dropped = [];
+  for (const p of prevPaths) if (!nextPaths.has(p)) dropped.push(p);
+  return dropped;
 }
 
 // List all tech packs. Deliberately do NOT fetch the images JSONB column from
@@ -183,36 +198,72 @@ export async function createTechPack(defaultData, defaultLibrary) {
   return row;
 }
 
-// Save full tech pack (used for debounced auto-save)
+// Save full tech pack (used for debounced auto-save). Returns { ok, error }
+// so callers can surface failures instead of silently dropping edits.
 export async function saveTechPack(id, updates) {
   const now = new Date().toISOString();
+
+  // Strip transient upload-state fields so they never reach the DB.
+  const cleanedUpdates = updates.images !== undefined
+    ? { ...updates, images: persistableImages(updates.images) }
+    : { ...updates };
+  const cover = cleanedUpdates.images !== undefined ? extractCover(cleanedUpdates.images) : undefined;
+
+  // Atomic write: cover_image rides along with the main patch so a single
+  // failure can't leave the row half-updated (cover lost, data saved).
+  const corePatch = { ...cleanedUpdates, updated_at: now };
+  if (cover !== undefined) corePatch.cover_image = cover;
+
+  let toGc = [];
   const packs = readLocal();
   const idx = packs.findIndex(p => p.id === id);
   if (idx >= 0) {
-    packs[idx] = { ...packs[idx], ...updates, updated_at: now };
+    if (cleanedUpdates.images !== undefined) {
+      toGc = orphanedPaths(packs[idx].images, cleanedUpdates.images);
+    }
+    packs[idx] = { ...packs[idx], ...corePatch };
   } else {
-    // Defend in depth — getTechPack now mirrors on read, but if a save
-    // happens before that mirror lands we still want a local row.
-    packs.push({ id, ...updates, updated_at: now });
+    packs.push({ id, ...corePatch });
   }
   writeLocal(packs);
 
   const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const db = await getAuthedSupabase();
-    const { error } = await db
-      .from('tech_packs')
-      .update({ ...updates, updated_at: now })
-      .eq('id', id)
-      .eq('organization_id', orgId);
-    if (error) console.error('saveTechPack:', error);
+  if (!IS_SUPABASE_ENABLED || !orgId) return { ok: true };
+
+  const db = await getAuthedSupabase();
+  const { error } = await db
+    .from('tech_packs')
+    .update(corePatch)
+    .eq('id', id)
+    .eq('organization_id', orgId);
+  if (error) {
+    if (cover !== undefined && /column .* does not exist|could not find.*column/i.test(error.message || '')) {
+      const patchWithoutCover = { ...corePatch };
+      delete patchWithoutCover.cover_image;
+      const retry = await db.from('tech_packs').update(patchWithoutCover).eq('id', id).eq('organization_id', orgId);
+      if (retry.error) {
+        console.error('saveTechPack retry:', retry.error);
+        return { ok: false, error: retry.error };
+      }
+      if (toGc.length) deleteAssets(toGc);
+      return { ok: true };
+    }
+    console.error('saveTechPack:', error);
+    return { ok: false, error };
   }
+  if (toGc.length) deleteAssets(toGc);
+  return { ok: true };
 }
 
-// Delete a tech pack
+// Delete a tech pack — also cleans up its Storage files.
 export async function deleteTechPack(id) {
-  const packs = readLocal().filter(p => p.id !== id);
-  writeLocal(packs);
+  // Capture image paths before dropping the row so we can GC the bucket.
+  const local = readLocal().find(p => p.id === id);
+  const paths = (local?.images || [])
+    .map(img => img && img.path)
+    .filter(Boolean);
+
+  writeLocal(readLocal().filter(p => p.id !== id));
 
   const orgId = getCurrentOrgIdSync();
   if (IS_SUPABASE_ENABLED && orgId) {
@@ -220,19 +271,35 @@ export async function deleteTechPack(id) {
     const { error } = await db.from('tech_packs').delete().eq('id', id).eq('organization_id', orgId);
     if (error) console.error('deleteTechPack:', error);
   }
+  if (paths.length) deleteAssets(paths);
 }
 
-// Duplicate a tech pack — returns the new row
+// Duplicate a tech pack — returns the new row. Storage files are copied to
+// new paths under the duplicate's owner_id so neither pack can break the
+// other by deleting "their" image.
 export async function duplicateTechPack(id) {
   const source = await getTechPack(id);
   if (!source) return null;
   const newId = (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());
   const now = new Date().toISOString();
+
+  const sourceImages = Array.isArray(source.images) ? source.images : [];
+  const copiedImages = await Promise.all(sourceImages.map(async (img) => {
+    if (!img) return img;
+    if (img.path) {
+      const cloned = await copyAsset({ sourceRef: img, newOwnerId: newId, newScope: 'tech-packs' });
+      return cloned || img;
+    }
+    return img;
+  }));
+
   const copy = {
     ...source,
     id: newId,
     style_name: (source.style_name || source.data?.styleName || '') + ' (Copy)',
     data: { ...source.data, styleName: (source.data?.styleName || '') + ' (Copy)' },
+    images: copiedImages,
+    cover_image: extractCover(copiedImages),
     created_at: now,
     updated_at: now,
   };

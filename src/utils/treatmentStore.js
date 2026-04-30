@@ -17,6 +17,7 @@ import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
 import { emptyTreatment, TREATMENT_TYPE_CODE } from './treatmentLibrary';
 import { addVendor } from './vendorLibrary';
+import { copyCoverImage } from './plmAssets';
 
 const LOCAL_KEY = 'cashmodel_treatments';
 
@@ -227,13 +228,16 @@ export async function duplicateTreatment(id) {
   const local = readLocal();
   const newCode = nextCodeFor(source.type, local);
   const now = new Date().toISOString();
+  const dupId = newId();
+  const dupCover = await copyCoverImage(source.cover_image, { newOwnerId: dupId, newScope: 'treatments' });
   const copy = {
     ...source,
-    id: newId(),
+    id: dupId,
     code: newCode,
     name: source.name ? `${source.name} (Copy)` : 'Copy',
     status: 'draft',
     version: 'v1.0',
+    cover_image: dupCover,
     created_at: now,
     updated_at: now,
   };

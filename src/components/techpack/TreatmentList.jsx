@@ -27,6 +27,7 @@ import {
 } from '../../utils/treatmentStore';
 import { TREATMENT_TYPES, TREATMENT_TYPE_LABEL } from '../../utils/treatmentLibrary';
 import TreatmentBuilder from './TreatmentBuilder';
+import CoverThumb from './CoverThumb';
 
 const VIEW_STORAGE_KEY = 'cashmodel_treatments_view';
 
@@ -75,7 +76,7 @@ function Hero({ treatment }) {
   if (treatment.cover_image) {
     return (
       <div style={{ width: '100%', aspectRatio: '2 / 3', overflow: 'hidden' }}>
-        <img src={treatment.cover_image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        <CoverThumb src={treatment.cover_image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
       </div>
     );
   }
@@ -189,7 +190,7 @@ function KanbanCard({ treatment, onOpen, onDragStart, onDragEnd }) {
     >
       <div style={{ display: 'flex', gap: 10 }}>
         <div style={{ width: 44, height: 66, flexShrink: 0, background: swatchHex, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `0.5px solid ${FR.sand}` }}>
-          {treatment.cover_image && <img src={treatment.cover_image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+          {treatment.cover_image && <CoverThumb src={treatment.cover_image} alt="" />}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: FR.slate, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

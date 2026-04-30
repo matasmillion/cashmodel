@@ -10,6 +10,8 @@ import { FR } from './techPackConstants';
 import { Input, Row, labelStyle, inputBase, CostPill, formatCost } from './TechPackPrimitives';
 import { listFRColors, getFRColor, updateFRColor, clearFRColorField, addFRColor, deleteFRColor, isSeededFRColor } from '../../utils/colorLibrary';
 import { fileToDataUrl } from '../../utils/cropImage';
+import { uploadAsset, deleteAsset, isLegacyDataUrl } from '../../utils/plmAssets';
+import CoverThumb from './CoverThumb';
 import FileSlot from './FileSlot';
 
 // Pick a readable text color for overlay on a hex swatch.
@@ -140,8 +142,9 @@ function ColorCard({ color, onClick }) {
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
       <div style={{ background: c.hex || FR.salt, height: 132, position: 'relative' }}>
         {c.cardImage && (
-          <img src={c.cardImage} alt={`${c.name} TCX card`}
-            style={{ position: 'absolute', bottom: 40, left: 12, width: 28, height: 42, objectFit: 'cover', border: `1px solid rgba(255,255,255,0.4)`, borderRadius: 2 }} />
+          <div style={{ position: 'absolute', bottom: 40, left: 12, width: 28, height: 42, border: `1px solid rgba(255,255,255,0.4)`, borderRadius: 2, overflow: 'hidden' }}>
+            <CoverThumb src={c.cardImage} alt={`${c.name} TCX card`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          </div>
         )}
         <div style={{ position: 'absolute', bottom: 10, left: 12, color: textColor, fontFamily: "'Cormorant Garamond', serif", fontSize: 22, lineHeight: 1 }}>
           {c.name}
@@ -193,14 +196,34 @@ function ColorEditor({ name, onClose, onDeleted }) {
 
   const uploadCard = async (file) => {
     if (!file || !file.type.startsWith('image/')) return;
-    const dataUri = await fileToDataUrl(file);
-    updateFRColor(name, { cardImage: dataUri });
-    setEntry(getFRColor(name));
+    try {
+      const ref = await uploadAsset({
+        scope: 'colors',
+        ownerId: encodeURIComponent(name),
+        slot: 'pantone-card',
+        blob: file,
+      });
+      const previousCard = entry.cardImage;
+      updateFRColor(name, { cardImage: ref.path });
+      setEntry(getFRColor(name));
+      if (previousCard && !isLegacyDataUrl(previousCard) && previousCard !== ref.path) {
+        deleteAsset(previousCard);
+      }
+    } catch (err) {
+      console.error('uploadCard failed:', err);
+      const dataUri = await fileToDataUrl(file);
+      updateFRColor(name, { cardImage: dataUri });
+      setEntry(getFRColor(name));
+    }
   };
 
   const removeCard = () => {
+    const previousCard = entry.cardImage;
     clearFRColorField(name, 'cardImage');
     setEntry(getFRColor(name));
+    if (previousCard && !isLegacyDataUrl(previousCard)) {
+      deleteAsset(previousCard);
+    }
   };
 
   const seededHex = entry.hex || '';
@@ -277,8 +300,7 @@ function ColorEditor({ name, onClose, onDeleted }) {
                   style={{ display: 'none' }} />
                 {entry.cardImage ? (
                   <>
-                    <img src={entry.cardImage} alt={`${name} TCX card`}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <CoverThumb src={entry.cardImage} alt={`${name} TCX card`} />
                     <button onClick={e => { e.stopPropagation(); removeCard(); }}
                       style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: 10, background: FR.slate, color: FR.salt, border: 'none', fontSize: 11, cursor: 'pointer' }}>×</button>
                   </>

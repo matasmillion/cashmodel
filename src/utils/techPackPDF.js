@@ -2,6 +2,7 @@
 // A4 landscape, FR brand-styled, functional (not pixel-match to the reportlab template yet)
 
 import { jsPDF } from 'jspdf';
+import { resolveImagesToDataUrls } from './plmAssets';
 
 const FR = {
   slate: '#3A3A3A', salt: '#F5F0E8', sand: '#EBE5D5', stone: '#716F70',
@@ -15,7 +16,10 @@ const hex = (h) => {
 
 export async function generateTechPackPDF(pack) {
   const d = pack.data || {};
-  const images = pack.images || [];
+  // Pre-resolve any Storage-backed image refs into inline data URLs so jsPDF
+  // can addImage() them synchronously below — signed URLs would 401 for the
+  // recipient, and addImage doesn't fetch.
+  const images = await resolveImagesToDataUrls(pack.images || []);
   const skippedSteps = Array.isArray(d.skippedSteps) ? d.skippedSteps : [];
 
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });

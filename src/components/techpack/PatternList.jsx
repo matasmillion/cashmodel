@@ -24,6 +24,7 @@ import {
 } from '../../utils/patternStore';
 import { PATTERN_CATEGORIES, PATTERN_CATEGORY_LABEL, PATTERN_STATUSES } from '../../utils/patternLibrary';
 import PatternBuilder from './PatternBuilder';
+import CoverThumb from './CoverThumb';
 
 const VIEW_STORAGE_KEY = 'cashmodel_patterns_view';
 
@@ -68,7 +69,7 @@ function Hero({ src, height = 'auto' }) {
   if (src) {
     return (
       <div style={{ width: '100%', aspectRatio: '2 / 3', overflow: 'hidden' }}>
-        <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        <CoverThumb src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
       </div>
     );
   }
@@ -171,7 +172,7 @@ function KanbanCard({ pattern, onOpen, onDragStart, onDragEnd }) {
       <div style={{ display: 'flex', gap: 10 }}>
         <div style={{ width: 44, height: 66, flexShrink: 0, background: FR.salt, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `0.5px solid ${FR.sand}` }}>
           {pattern.cover_image
-            ? <img src={pattern.cover_image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ? <CoverThumb src={pattern.cover_image} alt="" />
             : <PenTool size={18} style={{ color: FR.sand }} />}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>

@@ -19,6 +19,7 @@
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
 import { emptyPattern, PATTERN_CATEGORIES, PATTERN_CATEGORY_CODE } from './patternLibrary';
+import { copyCoverImage } from './plmAssets';
 
 const LOCAL_KEY = 'cashmodel_patterns';
 
@@ -181,13 +182,16 @@ export async function duplicatePattern(id) {
   const local = readLocal();
   const newCode = nextCodeFor(source.category, local);
   const now = new Date().toISOString();
+  const dupId = newId();
+  const dupCover = await copyCoverImage(source.cover_image, { newOwnerId: dupId, newScope: 'patterns' });
   const copy = {
     ...source,
-    id: newId(),
+    id: dupId,
     code: newCode,
     name: source.name ? `${source.name} (Copy)` : 'Copy',
     status: 'draft',
     version: 'v1.0',
+    cover_image: dupCover,
     created_at: now,
     updated_at: now,
   };

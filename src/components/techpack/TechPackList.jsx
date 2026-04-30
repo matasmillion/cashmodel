@@ -12,6 +12,7 @@ import { listTechPacks, createTechPack, getTechPack, deleteTechPack, duplicateTe
 import { listComponentPacks } from '../../utils/componentPackStore';
 import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
 import { listAllSuppliers } from '../../utils/plmDirectory';
+import CoverThumb from './CoverThumb';
 
 const VIEW_STORAGE_KEY = 'cashmodel_styles_view';
 
@@ -53,7 +54,7 @@ function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onCreateVariant, onDr
       <div style={{ display: 'flex', gap: 8 }}>
         <div style={{ width: 48, height: 48, flexShrink: 0, background: FR.salt, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${FR.sand}` }}>
           {pack.cover_image
-            ? <img src={pack.cover_image} alt={pack.style_name || 'Cover'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ? <CoverThumb src={pack.cover_image} alt={pack.style_name || 'Cover'} />
             : <Shirt size={18} style={{ color: FR.sand }} />}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>

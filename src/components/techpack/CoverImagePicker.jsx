@@ -1,17 +1,28 @@
 // CoverImagePicker — small dropzone that opens CropModal and stores the
-// resulting data URL via onChange. Used by every PLM atom card detail
-// page so each library entry can carry a 2:3 hero image.
+// resulting cover image. Used by every PLM atom card detail page so each
+// library entry can carry a 2:3 hero image.
+//
+// Two modes:
+//   • Legacy (no assetScope/assetOwnerId): emits a base64 data URL via
+//     onChange. Same as before. Used until all callers are migrated.
+//   • Storage-backed (with assetScope + assetOwnerId): uploads the cropped
+//     image to Supabase Storage and emits the file PATH via onChange.
+//     The caller stores that path string in their cover_image column.
+//
+// `value` may be either a base64 data URL or a Storage path; the picker
+// resolves a Storage path into a signed URL for rendering.
 //
 // Locked to a 2:3 portrait crop by default (matches a 4×6 fashion crop)
 // so cards across Patterns / Fabrics / Treatments / Embellishments have
 // a consistent visual rhythm. Aspect can still be overridden by the
 // caller for one-off uses.
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Camera, X, RotateCw } from 'lucide-react';
 import { FR } from './techPackConstants';
 import CropModal from './CropModal';
 import { resizeImage } from './techPackConstants';
+import { uploadAsset, deleteAsset, getAssetUrl, dataUrlToBlob, isLegacyDataUrl } from '../../utils/plmAssets';
 
 const DEFAULT_ASPECT = 2 / 3;
 
@@ -22,9 +33,33 @@ export default function CoverImagePicker({
   label = 'Cover image',
   hint = 'Drop a photo · cropped to 2:3 portrait',
   width = 240,
+  // Storage-backed mode (Phase 3+). When both are set, uploads go to the
+  // `plm-assets` bucket under {org}/{assetScope}/{assetOwnerId}/cover-… and
+  // onChange receives the path. When omitted, falls back to data URL mode.
+  assetScope,
+  assetOwnerId,
+  assetSlot = 'cover',
 }) {
   const fileRef = useRef(null);
   const [cropSrc, setCropSrc] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+  const [resolvedSrc, setResolvedSrc] = useState('');
+
+  const storageMode = !!(assetScope && assetOwnerId);
+
+  // Render src — handles all three shapes value can take:
+  //   • null/empty → no preview
+  //   • data: URL  → render directly
+  //   • path       → resolve to signed URL (cached at the helper level)
+  const inlineSrc = isLegacyDataUrl(value) || (typeof value === 'string' && /^https?:\/\//i.test(value)) ? value : '';
+  useEffect(() => {
+    if (!value || inlineSrc) { setResolvedSrc(''); return undefined; }
+    let cancelled = false;
+    getAssetUrl(value).then(url => { if (!cancelled && url) setResolvedSrc(url); });
+    return () => { cancelled = true; };
+  }, [value, inlineSrc]);
+  const previewSrc = inlineSrc || resolvedSrc;
 
   const openCropFor = async (file) => {
     if (!file) return;
@@ -46,18 +81,66 @@ export default function CoverImagePicker({
     e.target.value = '';
   };
 
-  const handleConfirm = (dataUrl) => {
-    onChange(dataUrl);
+  const handleConfirm = async (dataUrl) => {
     setCropSrc(null);
+    if (!storageMode) {
+      onChange(dataUrl);
+      return;
+    }
+    // Storage mode: upload the cropped output, hand the path to the caller,
+    // and best-effort delete the previous file so the bucket doesn't fill
+    // with orphan crops every time the user retries.
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const blob = dataUrlToBlob(dataUrl);
+      if (!blob) throw new Error('Could not decode cropped image');
+      const ref = await uploadAsset({
+        scope: assetScope,
+        ownerId: assetOwnerId,
+        slot: assetSlot,
+        blob,
+        skipCompress: true, // already resized + cropped client-side
+      });
+      const previousValue = value;
+      onChange(ref.path);
+      if (previousValue && !isLegacyDataUrl(previousValue) && previousValue !== ref.path) {
+        deleteAsset(previousValue);
+      }
+    } catch (err) {
+      console.error('CoverImagePicker upload:', err);
+      setUploadError(err?.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
   };
 
-  const recrop = () => {
+  const recrop = async () => {
     if (!value) return;
-    setCropSrc(value);
+    if (isLegacyDataUrl(value)) {
+      setCropSrc(value);
+      return;
+    }
+    // Path-based: fetch the signed URL → blob → data URL so the cropper
+    // can manipulate it without re-uploading on cancel.
+    if (!previewSrc) return;
+    try {
+      const resp = await fetch(previewSrc);
+      const blob = await resp.blob();
+      const r = new FileReader();
+      r.onload = () => setCropSrc(r.result);
+      r.readAsDataURL(blob);
+    } catch (err) {
+      console.error('CoverImagePicker recrop fetch:', err);
+    }
   };
 
   const remove = () => {
+    const previousValue = value;
     onChange(null);
+    if (storageMode && previousValue && !isLegacyDataUrl(previousValue)) {
+      deleteAsset(previousValue);
+    }
   };
 
   // height derived from aspect — for 2:3 portrait at width=240, height=360.
@@ -88,7 +171,14 @@ export default function CoverImagePicker({
         <input ref={fileRef} type="file" accept="image/*" onChange={onPick} style={{ display: 'none' }} />
         {value ? (
           <>
-            <img src={value} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            {previewSrc && (
+              <img src={previewSrc} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            )}
+            {(uploading || (!previewSrc && !inlineSrc)) && (
+              <div style={{ position: 'absolute', inset: 0, background: 'rgba(245,240,232,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: FR.soil, fontWeight: 600, letterSpacing: 0.5 }}>
+                {uploading ? 'Uploading…' : 'Loading…'}
+              </div>
+            )}
             <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
               <button onClick={e => { e.stopPropagation(); recrop(); }}
                 title="Recrop"
@@ -110,6 +200,9 @@ export default function CoverImagePicker({
           </div>
         )}
       </div>
+      {uploadError && (
+        <div style={{ fontSize: 10, color: '#A32D2D', marginTop: 4 }}>{uploadError}</div>
+      )}
 
       {cropSrc && (
         <CropModal

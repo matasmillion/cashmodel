@@ -378,6 +378,23 @@ export async function resolveImageEntries(images = []) {
 }
 
 /**
+ * For atom-library duplicates — copies the `cover_image` column value to a
+ * new Storage path under the duplicate's owner so neither row's later
+ * delete/replace can break the other. Returns the new path (or the
+ * original value untouched if it's a base64 / HTTP URL / null).
+ */
+export async function copyCoverImage(coverValue, { newOwnerId, newScope, slot = 'cover' } = {}) {
+  if (!coverValue || typeof coverValue !== 'string') return coverValue;
+  if (coverValue.startsWith('data:') || /^https?:\/\//i.test(coverValue)) return coverValue;
+  const cloned = await copyAsset({
+    sourceRef: { path: coverValue, slot, content_type: 'image/webp' },
+    newOwnerId,
+    newScope,
+  });
+  return cloned?.path || coverValue;
+}
+
+/**
  * For exports — return an images array where every entry has a `data` field
  * populated with a self-contained base64 data URL (no signed URLs that
  * could expire). Fetches each Storage path once, converts to data URL via
