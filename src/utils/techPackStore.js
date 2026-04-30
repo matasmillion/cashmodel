@@ -238,17 +238,6 @@ export async function saveTechPack(id, updates) {
     .eq('id', id)
     .eq('organization_id', orgId);
   if (error) {
-    if (cover !== undefined && /column .* does not exist|could not find.*column/i.test(error.message || '')) {
-      const patchWithoutCover = { ...corePatch };
-      delete patchWithoutCover.cover_image;
-      const retry = await db.from('tech_packs').update(patchWithoutCover).eq('id', id).eq('organization_id', orgId);
-      if (retry.error) {
-        console.error('saveTechPack retry:', retry.error);
-        return { ok: false, error: retry.error };
-      }
-      if (toGc.length) deleteAssets(toGc);
-      return { ok: true };
-    }
     console.error('saveTechPack:', error);
     return { ok: false, error };
   }

@@ -261,18 +261,6 @@ export async function saveComponentPack(id, updates) {
   const db = await getAuthedSupabase();
   const { error } = await db.from('component_packs').update(corePatch).eq('id', id).eq('organization_id', orgId);
   if (error) {
-    // Tolerate pre-migration schemas that don't have the cover_image column
-    // yet — retry without it so the rest of the patch still lands.
-    if (cover !== undefined && /column .* does not exist|could not find.*column/i.test(error.message || '')) {
-      const patchWithoutCover = { ...corePatch };
-      delete patchWithoutCover.cover_image;
-      const retry = await db.from('component_packs').update(patchWithoutCover).eq('id', id).eq('organization_id', orgId);
-      if (retry.error) {
-        console.error('saveComponentPack retry:', retry.error);
-        return { ok: false, error: retry.error };
-      }
-      return { ok: true };
-    }
     console.error('saveComponentPack:', error);
     return { ok: false, error };
   }

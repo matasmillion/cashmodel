@@ -15,7 +15,7 @@ import { addPerson } from '../../utils/plmDirectory';
 import { generateComponentPackPDF, generateComponentPackSVGAsync, svgToBlob } from '../../utils/componentPackExport';
 import { downloadBlob } from '../../utils/downloadBlob';
 import { CostPill } from './TechPackPrimitives';
-import { uploadAsset, dataUrlToBlob, isLegacyDataUrl, useResolvedImageEntries } from '../../utils/plmAssets';
+import { uploadAsset, dataUrlToBlob, isLegacyDataUrl, useResolvedImageEntries, persistableImages } from '../../utils/plmAssets';
 
 function sanitizeFilename(s) {
   return (s || 'trimpack').replace(/[^\w\-]+/g, '_').slice(0, 60);
@@ -569,7 +569,10 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
         changedBy: fa.designer?.name || '',
         approvedBy: fa.manager?.name || '',
         dataSnapshot: JSON.parse(JSON.stringify(prev)),
-        imagesSnapshot: JSON.parse(JSON.stringify(images)),
+        // persistableImages strips _blobUrl / _uploading / _uploadError so a
+        // snapshot taken mid-upload never freezes a transient placeholder
+        // into the revision history.
+        imagesSnapshot: persistableImages(images),
       };
       return {
         ...prev,
