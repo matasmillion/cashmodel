@@ -7,10 +7,11 @@
 
 import { useEffect, useState } from 'react';
 import { Plus, Boxes, Copy, Trash2, Search, Package, LayoutGrid, Columns3 } from 'lucide-react';
+import PackTrashView from './PackTrashView';
 import { FR, DEFAULT_COMPONENT_DATA, STATUSES, LEGACY_STATUS_MIGRATION } from './componentPackConstants';
 import ComponentPackBuilder from './ComponentPackBuilder';
 import { CostPill } from './TechPackPrimitives';
-import { listComponentPacks, createComponentPack, getComponentPack, deleteComponentPack, duplicateComponentPack, saveComponentPack } from '../../utils/componentPackStore';
+import { listComponentPacks, createComponentPack, getComponentPack, deleteComponentPack, duplicateComponentPack, saveComponentPack, listDeletedComponentPacks, restoreComponentPack, purgeComponentPack } from '../../utils/componentPackStore';
 import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
 import { listAllSuppliers, listAllPeople, listAllTrimTypes } from '../../utils/plmDirectory';
 import { resolveCoverImage } from '../../utils/plmAssets';
@@ -203,6 +204,7 @@ export default function ComponentPackList() {
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverStatus, setDragOverStatus] = useState(null);
   const [duplicatingId, setDuplicatingId] = useState(null);
+  const [showTrash, setShowTrash] = useState(false);
 
   // Default view = grid. Persist the user's choice so the tab remembers it.
   const [view, setView] = useState(() => {
@@ -380,6 +382,11 @@ export default function ComponentPackList() {
               <Columns3 size={12} /> Kanban
             </button>
           </div>
+          <button onClick={() => setShowTrash(true)}
+            title="Recently deleted trims"
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', borderRadius: 6, fontSize: 11, background: 'transparent', color: FR.stone, border: `0.5px solid ${FR.sand}`, cursor: 'pointer' }}>
+            <Trash2 size={12} /> Trash
+          </button>
           <button onClick={createNew}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, fontSize: 11, background: FR.slate, color: FR.salt, border: 'none', cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
             <Plus size={14} /> New Trim
@@ -438,6 +445,17 @@ export default function ComponentPackList() {
               duplicatingId={duplicatingId} />
           ))}
         </div>
+      )}
+      {showTrash && (
+        <PackTrashView
+          title="Trash · Recently deleted trims"
+          emptyHint="No trims in the trash. Anything you delete will land here."
+          list={listDeletedComponentPacks}
+          restore={restoreComponentPack}
+          purge={purgeComponentPack}
+          nameOf={r => r.component_name}
+          onClose={() => { setShowTrash(false); refresh(); }}
+        />
       )}
     </div>
   );

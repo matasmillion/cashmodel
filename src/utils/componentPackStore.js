@@ -94,12 +94,13 @@ export async function listComponentPacks() {
       .from('component_packs')
       .select('id, component_name, component_category, status, supplier, cost_per_unit, currency, cover_image, updated_at, created_at')
       .eq('organization_id', orgId)
+      .is('deleted_at', null)
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) cloudRows = data;
     else if (error) console.error('listComponentPacks:', error);
   }
 
-  const local = readLocal();
+  const local = readLocal().filter(p => !p?.deleted_at);
   const localById = new Map(local.map(p => [p.id, p]));
   const seen = new Set();
   const out = [];
@@ -282,9 +283,57 @@ export async function saveComponentPack(id, updates) {
   return { ok: true };
 }
 
+// Soft delete — moves a pack to Trash. Storage files are intentionally
+// kept so a Restore can put the pack back exactly as it was. A future
+// purgeComponentPack (called from the Trash view's "Delete forever") is
+// what actually removes Storage objects.
 export async function deleteComponentPack(id) {
-  // Capture storage paths before we drop the row — once the row is gone the
-  // refs are unrecoverable and the files become permanent orphans.
+  const now = new Date().toISOString();
+  const rows = readLocal();
+  const idx = rows.findIndex(p => p.id === id);
+  if (idx >= 0) {
+    rows[idx] = { ...rows[idx], deleted_at: now, updated_at: now };
+    writeLocal(rows);
+  }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { error } = await db
+      .from('component_packs')
+      .update({ deleted_at: now, updated_at: now })
+      .eq('id', id)
+      .eq('organization_id', orgId);
+    if (error) console.error('deleteComponentPack:', error);
+  }
+}
+
+// Restore a pack from Trash — clears deleted_at and surfaces it again
+// in the active list view.
+export async function restoreComponentPack(id) {
+  const now = new Date().toISOString();
+  const rows = readLocal();
+  const idx = rows.findIndex(p => p.id === id);
+  if (idx >= 0) {
+    const next = { ...rows[idx], updated_at: now };
+    delete next.deleted_at;
+    rows[idx] = next;
+    writeLocal(rows);
+  }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { error } = await db
+      .from('component_packs')
+      .update({ deleted_at: null, updated_at: now })
+      .eq('id', id)
+      .eq('organization_id', orgId);
+    if (error) console.error('restoreComponentPack:', error);
+  }
+}
+
+// Permanent delete — invoked from the Trash view's "Delete forever".
+// This is the only path that hard-deletes the row + cleans up Storage.
+export async function purgeComponentPack(id) {
   const local = readLocal().find(p => p.id === id);
   const paths = (local?.images || [])
     .map(img => img && img.path)
@@ -295,9 +344,53 @@ export async function deleteComponentPack(id) {
   if (IS_SUPABASE_ENABLED && orgId) {
     const db = await getAuthedSupabase();
     const { error } = await db.from('component_packs').delete().eq('id', id).eq('organization_id', orgId);
-    if (error) console.error('deleteComponentPack:', error);
+    if (error) console.error('purgeComponentPack:', error);
   }
   if (paths.length) deleteAssets(paths);
+}
+
+// List trashed packs — same projection shape as listComponentPacks so the
+// Trash view can render the same card-style rows.
+export async function listDeletedComponentPacks() {
+  const orgId = getCurrentOrgIdSync();
+  let cloudRows = null;
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { data, error } = await db
+      .from('component_packs')
+      .select('id, component_name, component_category, status, supplier, cost_per_unit, currency, cover_image, updated_at, created_at, deleted_at')
+      .eq('organization_id', orgId)
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false });
+    if (!error && Array.isArray(data)) cloudRows = data;
+    else if (error) console.error('listDeletedComponentPacks:', error);
+  }
+
+  const local = readLocal().filter(p => p?.deleted_at);
+  const seen = new Set();
+  const out = [];
+  (cloudRows || []).forEach(r => {
+    if (!r || !r.id) return;
+    seen.add(r.id);
+    out.push(r);
+  });
+  local.forEach(p => {
+    if (!p || !p.id || seen.has(p.id)) return;
+    out.push({
+      id: p.id,
+      component_name: p.data?.componentName || p.component_name || '',
+      component_category: p.data?.componentCategory || p.component_category || '',
+      status: p.data?.status || p.status || 'Design',
+      supplier: p.data?.supplier || p.supplier || '',
+      cost_per_unit: (p.data?.costTiers?.[0]?.unitCost) || p.data?.targetUnitCost || p.cost_per_unit || '',
+      currency: p.data?.currency || p.currency || 'USD',
+      updated_at: p.updated_at,
+      created_at: p.created_at,
+      deleted_at: p.deleted_at,
+      cover_image: p.cover_image || extractCover(p.images),
+    });
+  });
+  return out.sort((a, b) => (b.deleted_at || '').localeCompare(a.deleted_at || ''));
 }
 
 export async function duplicateComponentPack(id) {

@@ -101,12 +101,13 @@ export async function listTechPacks() {
       .from('tech_packs')
       .select('id, style_name, product_category, status, completion_pct, updated_at, created_at')
       .eq('organization_id', orgId)
+      .is('deleted_at', null)
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) cloudRows = data.map(r => ({ ...r, cover_image: null }));
     else if (error) console.error('listTechPacks:', error);
   }
 
-  const local = readLocal();
+  const local = readLocal().filter(p => !p?.deleted_at);
   const seen = new Set();
   const out = [];
   (cloudRows || []).forEach(r => {
@@ -255,9 +256,55 @@ export async function saveTechPack(id, updates) {
   return { ok: true };
 }
 
-// Delete a tech pack — also cleans up its Storage files.
+// Soft delete — moves a tech pack to Trash. Storage files stay so a
+// Restore can put the pack back exactly as it was. Hard delete (and the
+// associated Storage cleanup) only happens via purgeTechPack.
 export async function deleteTechPack(id) {
-  // Capture image paths before dropping the row so we can GC the bucket.
+  const now = new Date().toISOString();
+  const packs = readLocal();
+  const idx = packs.findIndex(p => p.id === id);
+  if (idx >= 0) {
+    packs[idx] = { ...packs[idx], deleted_at: now, updated_at: now };
+    writeLocal(packs);
+  }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { error } = await db
+      .from('tech_packs')
+      .update({ deleted_at: now, updated_at: now })
+      .eq('id', id)
+      .eq('organization_id', orgId);
+    if (error) console.error('deleteTechPack:', error);
+  }
+}
+
+// Restore from Trash — clears deleted_at.
+export async function restoreTechPack(id) {
+  const now = new Date().toISOString();
+  const packs = readLocal();
+  const idx = packs.findIndex(p => p.id === id);
+  if (idx >= 0) {
+    const next = { ...packs[idx], updated_at: now };
+    delete next.deleted_at;
+    packs[idx] = next;
+    writeLocal(packs);
+  }
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { error } = await db
+      .from('tech_packs')
+      .update({ deleted_at: null, updated_at: now })
+      .eq('id', id)
+      .eq('organization_id', orgId);
+    if (error) console.error('restoreTechPack:', error);
+  }
+}
+
+// Permanent delete — invoked from the Trash view's "Delete forever".
+// Removes the row + every Storage object the pack referenced.
+export async function purgeTechPack(id) {
   const local = readLocal().find(p => p.id === id);
   const paths = (local?.images || [])
     .map(img => img && img.path)
@@ -269,9 +316,63 @@ export async function deleteTechPack(id) {
   if (IS_SUPABASE_ENABLED && orgId) {
     const db = await getAuthedSupabase();
     const { error } = await db.from('tech_packs').delete().eq('id', id).eq('organization_id', orgId);
-    if (error) console.error('deleteTechPack:', error);
+    if (error) console.error('purgeTechPack:', error);
   }
   if (paths.length) deleteAssets(paths);
+}
+
+// List trashed tech packs for the Trash view. Same projection as listTechPacks
+// but only returns rows with deleted_at set, ordered by recency-of-deletion.
+export async function listDeletedTechPacks() {
+  const { computeTotalUnitCost } = await import('../components/techpack/techPackConstants');
+  const { getFRColorCost } = await import('./colorLibrary');
+  const projectLocal = (p) => ({
+    id: p.id,
+    style_name: p.data?.styleName || p.style_name || '',
+    product_category: p.data?.productCategory || p.product_category || '',
+    status: p.data?.status || p.status || 'Development',
+    completion_pct: p.completion_pct || 0,
+    total_unit_cost: computeTotalUnitCost(p.data || {}, { getColorCost: getFRColorCost }),
+    currency: p.data?.currency || p.currency || 'USD',
+    updated_at: p.updated_at,
+    created_at: p.created_at,
+    deleted_at: p.deleted_at,
+    cover_image: extractCover(p.images),
+  });
+
+  const orgId = getCurrentOrgIdSync();
+  let cloudRows = null;
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { data, error } = await db
+      .from('tech_packs')
+      .select('id, style_name, product_category, status, completion_pct, updated_at, created_at, deleted_at')
+      .eq('organization_id', orgId)
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false });
+    if (!error && Array.isArray(data)) cloudRows = data.map(r => ({ ...r, cover_image: null }));
+    else if (error) console.error('listDeletedTechPacks:', error);
+  }
+
+  const local = readLocal().filter(p => p?.deleted_at);
+  const seen = new Set();
+  const out = [];
+  (cloudRows || []).forEach(r => {
+    if (!r || !r.id) return;
+    seen.add(r.id);
+    const mirror = local.find(l => l.id === r.id);
+    let row = r;
+    if (mirror) {
+      const localCover = extractCover(mirror.images);
+      if (localCover && !row.cover_image) row = { ...row, cover_image: localCover };
+    }
+    out.push(row);
+  });
+  local.forEach(p => {
+    if (!p || !p.id || seen.has(p.id)) return;
+    out.push(projectLocal(p));
+  });
+  return out.sort((a, b) => (b.deleted_at || '').localeCompare(a.deleted_at || ''));
 }
 
 // Duplicate a tech pack — returns the new row. Storage files are copied to

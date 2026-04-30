@@ -8,7 +8,8 @@ import { Plus, Shirt, Copy, Trash2, GitBranch, Search, LayoutGrid, Columns3 } fr
 import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STATUSES } from './techPackConstants';
 import { CostPill } from './TechPackPrimitives';
 import TechPackBuilder from './TechPackBuilder';
-import { listTechPacks, createTechPack, getTechPack, deleteTechPack, duplicateTechPack, saveTechPack } from '../../utils/techPackStore';
+import { listTechPacks, createTechPack, getTechPack, deleteTechPack, duplicateTechPack, saveTechPack, listDeletedTechPacks, restoreTechPack, purgeTechPack } from '../../utils/techPackStore';
+import PackTrashView from './PackTrashView';
 import { listComponentPacks } from '../../utils/componentPackStore';
 import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
 import { listAllSuppliers } from '../../utils/plmDirectory';
@@ -205,6 +206,7 @@ export default function TechPackList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [existingSuppliers, setExistingSuppliers] = useState([]);
+  const [showTrash, setShowTrash] = useState(false);
   // Default view = grid. Persist the user's choice so the tab remembers it.
   const [view, setView] = useState(() => {
     try { return localStorage.getItem(VIEW_STORAGE_KEY) === 'kanban' ? 'kanban' : 'grid'; }
@@ -394,6 +396,11 @@ export default function TechPackList() {
               <Columns3 size={12} /> Kanban
             </button>
           </div>
+          <button onClick={() => setShowTrash(true)}
+            title="Recently deleted styles"
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', borderRadius: 6, fontSize: 11, background: 'transparent', color: FR.stone, border: `0.5px solid ${FR.sand}`, cursor: 'pointer' }}>
+            <Trash2 size={12} /> Trash
+          </button>
           <button onClick={createNew}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, fontSize: 11, background: FR.slate, color: FR.salt, border: 'none', cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
             <Plus size={14} /> New Tech Pack
@@ -458,6 +465,17 @@ export default function TechPackList() {
               onDrop={onDrop} dragOverStatus={dragOverStatus} setDragOverStatus={setDragOverStatus} />
           ))}
         </div>
+      )}
+      {showTrash && (
+        <PackTrashView
+          title="Trash · Recently deleted styles"
+          emptyHint="No styles in the trash. Anything you delete will land here."
+          list={listDeletedTechPacks}
+          restore={restoreTechPack}
+          purge={purgeTechPack}
+          nameOf={r => r.style_name}
+          onClose={() => { setShowTrash(false); refresh(); }}
+        />
       )}
     </div>
   );
