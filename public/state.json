@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-29T07:38:26.352Z",
+  "lastUpdated": "2026-04-30T10:29:35.182Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,54 +1044,54 @@
   ],
   "changelog": [
     {
-      "sha": "e7b5589",
-      "date": "2026-04-28T14:18:00+00:00",
-      "message": "feat(auth): auth_events audit log + activity page (P4/C5)"
+      "sha": "1d7eed3",
+      "date": "2026-04-30T10:03:12+00:00",
+      "message": "fix(plm-trims): reliable saves, snappy duplication, custom Trim Types"
     },
     {
-      "sha": "52a1ac3",
-      "date": "2026-04-28T14:03:04+00:00",
-      "message": "feat(auth): /account/security + Clerk webhook + users migration (P4/C4)"
+      "sha": "1ab3025",
+      "date": "2026-04-30T10:53:15+03:00",
+      "message": "feat: permanent Saved ✓ indicator in ComponentPackBuilder header"
     },
     {
-      "sha": "302671c",
-      "date": "2026-04-28T13:38:56+00:00",
-      "message": "feat(auth): wire Clerk + replace Supabase Auth (P4/C3)"
+      "sha": "37469f4",
+      "date": "2026-04-29T21:10:32+00:00",
+      "message": "show sync dot at all times, always green unless error"
     },
     {
-      "sha": "be32380",
-      "date": "2026-04-28T13:24:06+00:00",
-      "message": "chore(auth): install @clerk/clerk-react + untrack .env.local (P4/C2)"
+      "sha": "f02d185",
+      "date": "2026-04-29T21:05:35+00:00",
+      "message": "add pulsing sync dot to left of Cash nav button"
     },
     {
-      "sha": "6e9937b",
-      "date": "2026-04-28T15:39:48+03:00",
-      "message": "Create .env.local"
+      "sha": "7cab2d4",
+      "date": "2026-04-29T21:04:10+00:00",
+      "message": "swap TopBar header: ERP title above, org name below"
     },
     {
-      "sha": "26632bf",
-      "date": "2026-04-28T10:30:03+03:00",
-      "message": "feat(legal): add Access Control Policy v1.1 and complete /legal section (#10)"
+      "sha": "12f29ea",
+      "date": "2026-04-29T20:17:30+00:00",
+      "message": "Redesign ERP top nav: 4 hover menus + settings gear"
     },
     {
-      "sha": "8829032",
-      "date": "2026-04-28T10:10:40+03:00",
-      "message": "feat(legal): add Data Retention & Deletion Policy v1.1 (#9)"
+      "sha": "82d75ff",
+      "date": "2026-04-29T19:53:39+00:00",
+      "message": "fix(plaid): decode Clerk JWT directly instead of supabase.auth.getUser"
     },
     {
-      "sha": "3b8c9cd",
-      "date": "2026-04-28T06:56:46+00:00",
-      "message": "13-week (58-wk) cashflow on Dashboard, ported from xlsx"
+      "sha": "ba0c0ff",
+      "date": "2026-04-29T19:30:12+00:00",
+      "message": "fix(plaid): call correct edge function slug (bright-api not plaid-proxy)"
     },
     {
-      "sha": "a867262",
-      "date": "2026-04-28T09:22:13+03:00",
-      "message": "Add files via upload"
+      "sha": "70c35b5",
+      "date": "2026-04-29T19:01:35+00:00",
+      "message": "fix(plaid): switch plaid-proxy and listPlaidItems to org_id scope"
     },
     {
-      "sha": "99d925e",
-      "date": "2026-04-28T09:51:25+03:00",
-      "message": "fix(legal): tighten SiteFooter alignment + visual hierarchy (#8)"
+      "sha": "72ce7f3",
+      "date": "2026-04-29T18:32:45+00:00",
+      "message": "fix: add missing PLM tables migration"
     }
   ]
 }

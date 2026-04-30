@@ -61,6 +61,11 @@ const todayISO = () => {
 
 const emptyMaterial  = () => ({ name: '', composition: '', weightGauge: '', vendor: '', color: '', finish: '' });
 
+// Cap on cost-tier rows. First row is implicitly the MOQ; volume tiers stack
+// below. Capping prevents the preview table from overflowing the cover page.
+export const COST_TIER_CAP = 5;
+const emptyCostTier = () => ({ quantity: '', unitCost: '' });
+
 // Material color options now come from the shared FR brand palette
 // (FR_COLOR_OPTIONS in techPackConstants.js). The old MATERIAL_COLORS list
 // (Natural / White / Navy / ...) was removed as part of the color-system
@@ -82,9 +87,25 @@ export const DEFAULT_COMPONENT_DATA = {
   season: '',
   dateCreated: todayISO(),
   revision: 'V1.0',
-  colorways: '',
-  targetUnitCost: '',
-  moq: '',
+
+  // Colorways — list of FR color names linked to the Colors library. The
+  // legacy free-text `colorways` field is migrated into this list at load
+  // time; entries that don't match an FR color come through as pass-through
+  // tags so nothing is silently dropped.
+  colorwayPicks: [],
+
+  // Tiered pricing — first row is the MOQ tier (smallest qty / highest unit
+  // cost). Additional rows capture volume break points (e.g. 1000, 5000).
+  // The legacy `targetUnitCost` + `moq` pair migrates into costTiers[0].
+  costTiers: [emptyCostTier(), emptyCostTier()],
+  quoteProviderLink: '',
+
+  // Lead times sit with the cost block (not on the vendor) because they vary
+  // by trim type, not by who's making it.
+  leadTimeDays: '',
+  sampleLeadTimeDays: '',
+  sampleCost: '',
+
   status: 'Design',
 
   // Lifecycle log surfaced on the Overview page.

@@ -169,6 +169,32 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
       next = { ...next, revisions: sanitised };
     }
 
+    // Cost-tier migration: lift legacy targetUnitCost + moq into the first
+    // row of costTiers if the new field is empty. Keeps the legacy keys
+    // around so older clients reading the same pack don't see blanks.
+    if (!Array.isArray(next.costTiers) || next.costTiers.length === 0) {
+      const seedQty = next.moq || '';
+      const seedUnit = next.targetUnitCost || next.costPerUnit || '';
+      next = {
+        ...next,
+        costTiers: (seedQty || seedUnit)
+          ? [{ quantity: seedQty, unitCost: seedUnit }, { quantity: '', unitCost: '' }]
+          : [{ quantity: '', unitCost: '' }, { quantity: '', unitCost: '' }],
+      };
+    }
+
+    // Colorways migration: split the legacy comma-separated string into the
+    // new `colorwayPicks` array. Free-text values that don't match an FR
+    // color come through as pass-through tags — handled at render time.
+    if (!Array.isArray(next.colorwayPicks)) {
+      const legacy = typeof next.colorways === 'string' ? next.colorways : '';
+      const picks = legacy
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+      next = { ...next, colorwayPicks: picks };
+    }
+
     return next;
   });
   const [images, setImages] = useState(pack.images || []);
@@ -200,6 +226,13 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     setSaving(true);
     const d = dataRef.current;
     const imgs = imagesRef.current;
+    // Card / pill shows the MOQ-tier unit cost (first row). Falls back to
+    // the legacy targetUnitCost/costPerUnit fields for packs that haven't
+    // been re-opened since the cost-tier migration ran.
+    const moqUnitCost = (Array.isArray(d.costTiers) && d.costTiers[0] && d.costTiers[0].unitCost)
+      || d.targetUnitCost
+      || d.costPerUnit
+      || '';
     try {
       const result = await saveComponentPack(pack.id, {
         data: d, images: imgs,
@@ -207,7 +240,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
         component_category: d.componentCategory || '',
         status: d.status || 'Design',
         supplier: d.supplier || '',
-        cost_per_unit: d.targetUnitCost || d.costPerUnit || '',
+        cost_per_unit: moqUnitCost,
         currency: d.currency || 'USD',
       });
       if (result && result.ok === false) {
@@ -504,7 +537,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
             style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', background: 'rgba(255,255,255,0.1)', color: FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 10, fontWeight: 600, cursor: exporting ? 'wait' : 'pointer' }}>
             <Download size={11} /> {exporting === 'svg' ? 'Exporting…' : 'SVG'}
           </button>
-          <CostPill amount={data.targetUnitCost} currency={data.currency || 'USD'} title="Target unit cost of this trim" style={{ background: FR.salt, color: FR.slate }} />
+          <CostPill amount={(data.costTiers && data.costTiers[0] && data.costTiers[0].unitCost) || data.targetUnitCost} currency={data.currency || 'USD'} title="Unit cost at MOQ" style={{ background: FR.salt, color: FR.slate }} />
           <span style={{ fontSize: 9, color: FR.stone }}>{data.componentCategory || '—'}</span>
           <span style={{ fontSize: 9, color: FR.stone }}>v{(data.revisions || []).length}</span>
         </div>

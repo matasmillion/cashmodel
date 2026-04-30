@@ -60,59 +60,29 @@ function SignatureCard({ x, y, w, h, title, name, date }) {
 
 function PageCover({ d, images }) {
   const cover = (images || []).find(img => img.slot === 'component-cover');
+  const derivedRevision = `V${(d.revisions || []).length + 1}.0`;
 
   // ── Layout budget (PAGE_H = 794, footer at 775) ────────────────────────────
   //   header bar  ..................... 0–70
-  //   title + photo  .................. 90–250
-  //   identity grid  .................. 270–390
-  //   revision history  ............... 410–510
-  //   samples strip  .................. 530–575
-  //   final approval cards  ........... 595–745
+  //   title + 3:2 trim photo  ......... 85–280
+  //   divider rule  ................... 288
+  //   identity grid  .................. 304–404 (3 rows × 30 px gap)
+  //   colorways strip  ................ 420–460
+  //   quote panel  .................... 480–760
   //   footer stripe  .................. 775
 
-  const derivedRevision = `V${(d.revisions || []).length + 1}.0`;
+  // Identity grid — 3 left rows + 3 right rows (no MOQ / target unit cost
+  // here; tiered cost moved into the Quote panel below).
   const leftCol = [
-    { label: 'Trim Type',           value: d.componentType },
-    { label: 'Vendor',              value: d.supplier },
-    { label: 'Season',              value: d.season },
-    { label: 'Date Last Updated',   value: d.dateCreated },
+    { label: 'Trim Type',         value: d.componentType },
+    { label: 'Vendor',            value: d.supplier },
+    { label: 'Season',            value: d.season },
   ];
   const rightCol = [
-    { label: 'Revision',            value: d.revision || derivedRevision },
-    { label: 'Colorways',           value: d.colorways },
-    { label: 'Target Unit Cost ($)', value: d.targetUnitCost },
-    { label: 'MOQ',                 value: d.moq },
+    { label: 'Revision',          value: d.revision || derivedRevision },
+    { label: 'Date Last Updated', value: d.dateCreated },
+    { label: 'Status',            value: d.status },
   ];
-
-  const revCols = [
-    { key: 'rev',         label: 'Rev #',                 w: 60 },
-    { key: 'date',        label: 'Date',                  w: 90 },
-    { key: 'changedBy',   label: 'Changed By',            w: 170 },
-    { key: 'description', label: 'Description of Change', w: 553 },
-    { key: 'approvedBy',  label: 'Approved By',           w: 170 },
-  ];
-  const revRows = (d.revisions || []).filter(r => r.rev || r.date || r.changedBy || r.description || r.approvedBy);
-
-  const fa = d.finalApproval || {};
-  const designer = fa.designer || {};
-  const manager  = fa.manager  || {};
-  const vendor   = fa.vendor   || {};
-
-  // Vertical layout budget (PAGE_H = 794, footer rendered at y=775):
-  //   Children paint on top of PageFrame's footer text in z-order, so the
-  //   final approval cards MUST end before y=770 or they hide the footer.
-  //   70                        header bar
-  //   85–325                    title block + 2:3 trim photo top-right
-  //   288                       divider rule
-  //   304                       "OVERVIEW" subheading
-  //   320–440                   identity grid (4 rows × 30px, two columns)
-  //   452                       Revision History heading
-  //   468–556                   revision grid (header 22 + 3 body rows × 22)
-  //   570                       Samples heading
-  //   584–614                   sample strip pills (30)
-  //   628                       Final Approval heading
-  //   644–766                   three approval cards (122 tall)
-  //   775                       footer
 
   // 3:2 landscape, sized to fill the title zone without crossing the divider
   // rule at y=288. photoY=85, so max height = 288 - 85 - 11 = 192.
@@ -124,10 +94,40 @@ function PageCover({ d, images }) {
   const idY = 320;
   const idRowGap = 30;
 
-  const cardY = 644;
-  const cardH = 122;
-  const cardGap = 14;
-  const cardW = (PAGE_W - 80 - cardGap * 2) / 3;
+  // Colorways — chip strip pulled from the FR Colors library. Falls back to
+  // the legacy comma-separated `colorways` string if the new shape hasn't
+  // been written yet (cloud rows opened on stale clients).
+  const picks = (() => {
+    if (Array.isArray(d.colorwayPicks)) return d.colorwayPicks.filter(Boolean);
+    if (typeof d.colorways === 'string' && d.colorways) {
+      return d.colorways.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    return [];
+  })();
+  const colorwayY = 420;
+
+  // Quote panel — cost tiers on the left, lead times + provider link on
+  // the right. Both bottoms must end before y=770 to clear the footer text.
+  const quoteY = 480;
+  const quoteHeadingY = quoteY;
+  const tierTableX = 40;
+  const tierTableW = 540;
+  const tierCols = [
+    { key: 'tier',     label: 'Tier',          w: 70 },
+    { key: 'quantity', label: 'Quantity',      w: 220 },
+    { key: 'unitCost', label: 'Unit Cost ($)', w: 250 },
+  ];
+  const allTiers = Array.isArray(d.costTiers) && d.costTiers.length
+    ? d.costTiers
+    : [{ quantity: d.moq || '', unitCost: d.targetUnitCost || d.costPerUnit || '' }];
+  const tierRows = allTiers.map((t, i) => ({
+    tier: i === 0 ? 'MOQ' : `T${i + 1}`,
+    quantity: t.quantity || '',
+    unitCost: t.unitCost || '',
+  }));
+
+  const quoteRightX = tierTableX + tierTableW + 24;
+  const quoteRightW = PAGE_W - quoteRightX - 40;
 
   return (
     <g>
@@ -141,7 +141,7 @@ function PageCover({ d, images }) {
         STATUS · {esc((d.status || '—').toUpperCase())}
       </text>
 
-      {/* Trim photo — 2:3 portrait, top-right. */}
+      {/* Trim photo — 3:2 landscape, top-right. */}
       {cover
         ? <image href={cover.data} xlinkHref={cover.data} x={photoX} y={photoY} width={photoW} height={photoH} preserveAspectRatio="xMidYMid slice" />
         : (
@@ -151,7 +151,7 @@ function PageCover({ d, images }) {
           </g>
         )}
 
-      {/* Identity grid — 4 rows × 30 px row gap. */}
+      {/* Identity grid — 3 rows × 30 px row gap, two columns. */}
       <rect x="40" y="288" width={PAGE_W - 80} height="1" fill={FR.sand} />
       <text x={40} y={304} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="2">OVERVIEW</text>
       {leftCol.map((f, i) => {
@@ -173,86 +173,81 @@ function PageCover({ d, images }) {
         );
       })}
 
-      {/* Revision history strip */}
-      <SectionHeading x={40} y={452}>Revision History</SectionHeading>
-      <GridTable x={40} y={468} cols={revCols} rows={revRows} bodyRows={3} rowH={22} headerH={22} />
+      {/* Colorways strip — swatches from the FR Colors library. */}
+      <text x={40} y={colorwayY} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">COLORWAYS</text>
+      {picks.length === 0 ? (
+        <text x={40} y={colorwayY + 22} fontSize="11" fill={FR.stone} fontStyle="italic">No colors picked</text>
+      ) : <ColorwayChips picks={picks} x={40} y={colorwayY + 8} maxW={PAGE_W - 80} />}
 
-      {/* Samples — 3 stages */}
-      <SectionHeading x={40} y={570}>Samples</SectionHeading>
-      <SampleStrip d={d} x={40} y={584} w={PAGE_W - 80} />
+      {/* Quote panel — pricing + lead times + provider link. */}
+      <SectionHeading x={40} y={quoteHeadingY}>Quote</SectionHeading>
+      <GridTable x={tierTableX} y={quoteHeadingY + 16} cols={tierCols}
+        rows={tierRows} bodyRows={Math.max(2, tierRows.length)} rowH={22} headerH={22} />
 
-      {/* Final approval — 3 compact cards. cardY + cardH must stay ≤ 770
-          so PageFrame's y=775 footer text isn't painted over. */}
-      <SectionHeading x={40} y={628}>Final Approval</SectionHeading>
-      <CompactApprovalCard x={40}                         y={cardY} w={cardW} h={cardH} title="Designer" name={designer.name} signature={designer.signature} date={designer.date} />
-      <CompactApprovalCard x={40 + cardW + cardGap}       y={cardY} w={cardW} h={cardH} title="Manager"  name={manager.name}  signature={manager.signature}  date={manager.date} />
-      <CompactApprovalCard x={40 + (cardW + cardGap) * 2} y={cardY} w={cardW} h={cardH} title="Vendor"   name={vendor.name}   signature={vendor.signature}   date={vendor.dateChop}  dateLabel="Date / Chop" />
+      {/* Right column: lead times + sample cost + provider link. */}
+      <QuoteRightCol d={d} x={quoteRightX} y={quoteHeadingY + 16} w={quoteRightW} />
     </g>
   );
 }
 
-// Compact sign-off card used on the Overview preview — 3 stacked label+value
-// rows in 150px. The original ApprovalPreviewCard assumes ~220px of height
-// and overflows when squeezed. This variant hard-codes tight spacing.
-function CompactApprovalCard({ x, y, w, h, title, name, signature, date, dateLabel = 'Date' }) {
-  // 3 rows fit in ~118 px — tighten label/value/underline spacing so the
-  // whole card lives inside the 122 px budget without overflow.
-  return (
-    <g>
-      <rect x={x} y={y} width={w} height={h} fill={FR.white} stroke={FR.sand} />
-      <rect x={x} y={y} width={w} height={20} fill={FR.salt} />
-      <text x={x + 10} y={y + 14} fontSize="8.5" fontWeight="bold" fill={FR.soil} letterSpacing="1.5">{esc(title.toUpperCase())}</text>
-
-      <text x={x + 10} y={y + 34} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">NAME</text>
-      <text x={x + 10} y={y + 46} fontSize="10" fill={FR.slate}>{clampLine(esc(name || '—'), w - 20, 5.8)}</text>
-      <line x1={x + 10} y1={y + 50} x2={x + w - 10} y2={y + 50} stroke={FR.sand} />
-
-      <text x={x + 10} y={y + 64} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">SIGNATURE</text>
-      <text x={x + 10} y={y + 76} fontSize="10" fill={FR.slate}>{clampLine(esc(signature || '—'), w - 20, 5.8)}</text>
-      <line x1={x + 10} y1={y + 80} x2={x + w - 10} y2={y + 80} stroke={FR.sand} />
-
-      <text x={x + 10} y={y + 94} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">{esc(dateLabel.toUpperCase())}</text>
-      <text x={x + 10} y={y + 106} fontSize="10" fill={FR.slate}>{clampLine(esc(date || '—'), w - 20, 5.8)}</text>
-      <line x1={x + 10} y1={y + 110} x2={x + w - 10} y2={y + 110} stroke={FR.sand} />
-    </g>
-  );
+// Inline color chips for the cover preview. Each chip is a rounded pill with
+// the FR color's hex swatch on the left and the name on the right.
+function ColorwayChips({ picks, x, y, maxW }) {
+  const charW = 6.0;
+  const padX = 8;
+  const swatchW = 12;
+  const gap = 6;
+  let cx = x;
+  let cy = y + 12;
+  const rowH = 22;
+  const chips = [];
+  picks.forEach((name, i) => {
+    const meta = (() => { try { return getFRColor(name); } catch { return null; } })();
+    const text = clampLine(name, 180, charW);
+    const chipW = padX * 2 + swatchW + 4 + Math.max(20, text.length * charW);
+    if (cx + chipW > x + maxW) { cx = x; cy += rowH + 4; }
+    chips.push(
+      <g key={`${name}-${i}`} transform={`translate(${cx}, ${cy})`}>
+        <rect x={0} y={-12} width={chipW} height={rowH} rx={11} fill={FR.salt} stroke={FR.sand} />
+        <circle cx={padX + swatchW / 2} cy={-1} r={swatchW / 2} fill={meta?.hex || 'transparent'} stroke="rgba(0,0,0,0.15)" />
+        <text x={padX + swatchW + 4} y={3} fontSize="10" fill={FR.slate}>{text}</text>
+      </g>
+    );
+    cx += chipW + gap;
+  });
+  return <g>{chips}</g>;
 }
 
-// Horizontal strip: one pill per trim sample stage (Design / Sample /
-// Production-Ready). Each pill shows the latest verdict dot + date for
-// that stage so the reader can scan progress at a glance.
-function SampleStrip({ d, x, y, w }) {
-  const STAGES = ['Design', 'Sample', 'Production-Ready'];
-  const samples = d.samples || [];
-  const cellW = (w - 10 * (STAGES.length - 1)) / STAGES.length;
-
-  const latestByType = {};
-  samples.forEach(s => { latestByType[s.type] = s; });
-
-  const verdictColor = (verdict) => {
-    if (verdict === 'Approved') return '#4CAF7D';
-    if (verdict === 'Rejected') return '#C0392B';
-    if (verdict === 'Revise')   return '#D4956A';
-    return FR.stone;
-  };
+// Right column of the Quote panel: provider link at the top, then a 3-up
+// strip of mini stat cells (Lead Time / Sample Lead Time / Sample Cost).
+function QuoteRightCol({ d, x, y, w }) {
+  const link = d.quoteProviderLink || '';
+  const statCellH = 56;
+  const statY = y + 70;
+  const statW = (w - 16) / 3;
+  const stats = [
+    { label: 'Lead Time',        value: d.leadTimeDays ? `${d.leadTimeDays} days` : '' },
+    { label: 'Sample Lead Time', value: d.sampleLeadTimeDays ? `${d.sampleLeadTimeDays} days` : '' },
+    { label: 'Sample Cost',      value: d.sampleCost ? `$${d.sampleCost}` : '' },
+  ];
 
   return (
     <g>
-      {STAGES.map((t, i) => {
-        const cx = x + i * (cellW + 10);
-        const s = latestByType[t];
+      <text x={x} y={y + 12} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">QUOTE PROVIDER</text>
+      <text x={x} y={y + 30} fontSize="11" fill={FR.slate}>
+        {clampLine(esc(link || '—'), w, 6.2)}
+      </text>
+      <line x1={x} y1={y + 36} x2={x + w} y2={y + 36} stroke={FR.sand} />
+
+      {stats.map((s, i) => {
+        const cx = x + i * (statW + 8);
         return (
-          <g key={t}>
-            <rect x={cx} y={y} width={cellW} height={30} fill={FR.white} stroke={FR.sand} rx="3" />
-            <text x={cx + 12} y={y + 12} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.8">{esc(t.toUpperCase())}</text>
-            {s
-              ? (
-                <>
-                  <circle cx={cx + cellW - 16} cy={y + 11} r="4" fill={verdictColor(s.verdict)} />
-                  <text x={cx + 12} y={y + 25} fontSize="9" fill={FR.slate}>{clampLine(esc(`${s.verdict || 'Pending'} · ${s.date || ''}`), cellW - 24, 5.5)}</text>
-                </>
-              )
-              : <text x={cx + 12} y={y + 25} fontSize="9" fill={FR.sand}>No sample logged yet</text>}
+          <g key={s.label}>
+            <rect x={cx} y={statY} width={statW} height={statCellH} fill={FR.salt} stroke={FR.sand} />
+            <text x={cx + 10} y={statY + 18} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">{esc(s.label.toUpperCase())}</text>
+            <text x={cx + 10} y={statY + 42} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="18" fill={FR.slate}>
+              {clampLine(esc(s.value || '—'), statW - 20, 8)}
+            </text>
           </g>
         );
       })}
@@ -845,6 +840,9 @@ function PageQC({ d, images }) {
 // on each role. Designed to print at the end so vendors see the spec
 // first and the sign-off chain second.
 function PageApproval({ d }) {
+  // Cap visible sample rows so the revision-history strip below has room
+  // without colliding with the footer (samples end at 200 + N×28, must
+  // stay above the rev-history block at y=678).
   const samples = (d.samples || []).slice(0, 12);
   const fa = d.finalApproval || {};
 
@@ -852,6 +850,19 @@ function PageApproval({ d }) {
   const leftW = 640;
   const rightX = leftX + leftW + 28;
   const rightW = PAGE_W - rightX - 40;
+
+  // Revision history — moved off the cover page (where vendors don't care
+  // about iteration history) onto this internal-only page next to samples
+  // and approvals.
+  const revCols = [
+    { key: 'rev',         label: 'Rev #',                 w: 70 },
+    { key: 'date',        label: 'Date',                  w: 90 },
+    { key: 'changedBy',   label: 'Changed By',            w: 160 },
+    { key: 'description', label: 'Description of Change', w: 553 },
+    { key: 'approvedBy',  label: 'Approved By',           w: 170 },
+  ];
+  const revRows = (d.revisions || []).filter(r => r.rev || r.date || r.changedBy || r.description || r.approvedBy);
+  const revY = 678;
 
   return (
     <g>
@@ -918,6 +929,10 @@ function PageApproval({ d }) {
           </g>
         );
       })}
+
+      {/* Revision history — bottom strip, full width. */}
+      <text x={leftX} y={revY - 6} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="2">REVISION HISTORY</text>
+      <GridTable x={leftX} y={revY} cols={revCols} rows={revRows} bodyRows={3} rowH={22} headerH={22} />
     </g>
   );
 }

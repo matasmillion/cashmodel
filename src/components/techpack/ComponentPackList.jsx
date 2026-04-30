@@ -59,7 +59,7 @@ function GridCard({ pack, onOpen, onDuplicate, onDelete, duplicating }) {
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
     >
       <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}>
-        <CostPill amount={pack.cost_per_unit} currency={pack.currency || 'USD'} title="Target unit cost of this trim" />
+        <CostPill amount={pack.cost_per_unit} currency={pack.currency || 'USD'} title="Unit cost at MOQ" />
       </div>
       <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer', width: '100%', aspectRatio: '1 / 1', borderBottom: `1px solid ${FR.sand}` }}>
         <Thumb pack={pack} />
@@ -119,7 +119,7 @@ function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onDragStart, onDragEn
             <div style={{ flex: 1, minWidth: 0, fontFamily: "'Cormorant Garamond', serif", fontSize: 13, color: FR.slate, fontWeight: 500, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {pack.component_name || 'Untitled'}
             </div>
-            <CostPill amount={pack.cost_per_unit} currency={pack.currency || 'USD'} title="Target unit cost of this trim" />
+            <CostPill amount={pack.cost_per_unit} currency={pack.currency || 'USD'} title="Unit cost at MOQ" />
           </div>
           <div style={{ fontSize: 9, color: FR.stone, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {pack.supplier ? `🏭 ${pack.supplier}` : '—'} · {formatDate(pack.updated_at)}
@@ -271,7 +271,7 @@ export default function ComponentPackList() {
         component_category: copy.data?.componentCategory || '',
         status: copy.data?.status || 'Design',
         supplier: copy.data?.supplier || '',
-        cost_per_unit: copy.cost_per_unit || copy.data?.targetUnitCost || copy.data?.costPerUnit || '',
+        cost_per_unit: copy.cost_per_unit || copy.data?.costTiers?.[0]?.unitCost || copy.data?.targetUnitCost || copy.data?.costPerUnit || '',
         currency: copy.data?.currency || 'USD',
         cover_image: copy.cover_image,
         updated_at: copy.updated_at,

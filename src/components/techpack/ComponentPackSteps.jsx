@@ -7,11 +7,11 @@
 //   6. Treatment       — 3 finish cards (image + text)
 //   7. Quality Control — 3 QC focus cards (image + text)
 
-import { STATUSES, COMPONENT_TYPES, APPROVAL_STATUSES, SAMPLE_TYPES, SAMPLE_VERDICTS, MATERIAL_FINISHES } from './componentPackConstants';
+import { STATUSES, COMPONENT_TYPES, APPROVAL_STATUSES, SAMPLE_TYPES, SAMPLE_VERDICTS, MATERIAL_FINISHES, COST_TIER_CAP } from './componentPackConstants';
 import { FR, FR_COLOR_OPTIONS } from './techPackConstants';
 import { Input, Select, Row, SectionTitle, AspectPhoto, ASPECTS, EditableSelect, ArrayTable, FRColorCell, labelStyle, inputBase } from './TechPackPrimitives';
 import { addSupplier, addTrimType } from '../../utils/plmDirectory';
-import { getFRColor, updateFRColor } from '../../utils/colorLibrary';
+import { getFRColor, updateFRColor, listFRColors } from '../../utils/colorLibrary';
 import { setPLMHash } from '../../utils/plmRouting';
 import { useState, useRef, useEffect } from 'react';
 import { CheckCircle, XCircle, Clock, Plus, Download, Eye, EyeOff } from 'lucide-react';
@@ -187,6 +187,171 @@ function SampleLog({ samples, onAdd, onUpdate, onRemove }) {
   );
 }
 
+// Multi-select chip picker that draws from the FR Colors library. Each
+// selected color renders as a chip with hex swatch + name; clicking the chip
+// jumps to the Colors tab so designers can edit the source color without
+// leaving the trim pack flow. Free-text legacy entries that don't match an
+// FR color come through as outline-only chips (no swatch), preserving them
+// without making them feel canonical.
+function ColorwayPicker({ value = [], onChange }) {
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState('');
+  const containerRef = useRef(null);
+
+  const all = (() => {
+    try { return listFRColors(); }
+    catch { return []; }
+  })();
+  const byName = new Map(all.map(c => [c.name, c]));
+  const selected = Array.isArray(value) ? value : [];
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [open]);
+
+  const filtered = all.filter(c =>
+    !selected.includes(c.name)
+    && (!filter || c.name.toLowerCase().includes(filter.toLowerCase()))
+  );
+
+  const addPick = (name) => {
+    if (!name || selected.includes(name)) return;
+    onChange([...selected, name]);
+    setFilter('');
+  };
+  const removePick = (name) => onChange(selected.filter(n => n !== name));
+  const openColorsTab = (name) => {
+    setPLMHash({ section: 'colors' });
+    // Light hint for the Colors tab to highlight a specific row when it
+    // grows that capability — harmless if ignored today.
+    try { sessionStorage.setItem('cashmodel_focus_color', name); } catch { /* ignore */ }
+  };
+
+  return (
+    <div style={{ marginBottom: 10 }} ref={containerRef}>
+      <label style={labelStyle}>Colorways</label>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: 6, minHeight: 36, border: `1px solid ${FR.sand}`, borderRadius: 4, background: 'white', alignItems: 'center', position: 'relative' }}>
+        {selected.length === 0 && !open && (
+          <span style={{ fontSize: 11, color: FR.stone, fontStyle: 'italic', padding: '0 4px' }}>
+            No colors picked — click + to add
+          </span>
+        )}
+        {selected.map(name => {
+          const meta = byName.get(name);
+          return (
+            <span key={name}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 4px 3px 6px', background: FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 12, fontSize: 11, color: FR.slate }}>
+              <span
+                onClick={() => openColorsTab(name)}
+                title={meta ? `Open "${name}" in Colors library` : `Legacy entry: "${name}"`}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                <span style={{ width: 12, height: 12, borderRadius: '50%', background: meta?.hex || 'transparent', border: `1px solid ${meta?.hex ? 'rgba(0,0,0,0.15)' : FR.stone}` }} />
+                <span style={{ textDecoration: meta ? 'none' : 'underline dotted' }}>{name}</span>
+              </span>
+              <button type="button" onClick={() => removePick(name)} aria-label={`Remove ${name}`}
+                style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', fontSize: 14, lineHeight: 1 }}>×</button>
+            </span>
+          );
+        })}
+        <button type="button" onClick={() => setOpen(o => !o)} aria-label="Add color"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: open ? FR.slate : 'transparent', color: open ? FR.salt : FR.soil, border: `1px dashed ${open ? FR.slate : FR.sand}`, borderRadius: 12, fontSize: 11, cursor: 'pointer' }}>
+          <Plus size={11} /> {selected.length === 0 ? 'Add color' : 'Add'}
+        </button>
+        {open && (
+          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: 'white', border: `1px solid ${FR.sand}`, borderRadius: 4, boxShadow: '0 6px 20px rgba(0,0,0,0.10)', zIndex: 5, maxHeight: 260, overflowY: 'auto' }}>
+            <input autoFocus value={filter} onChange={e => setFilter(e.target.value)}
+              placeholder="Search FR colors…"
+              style={{ width: '100%', padding: '6px 8px', fontSize: 11, border: 'none', borderBottom: `1px solid ${FR.sand}`, outline: 'none', boxSizing: 'border-box' }} />
+            {filtered.length === 0 && (
+              <div style={{ padding: '8px 10px', fontSize: 11, color: FR.stone, fontStyle: 'italic' }}>
+                {all.length === 0 ? 'No FR colors yet — add some in the Colors tab.' : 'No matches.'}
+              </div>
+            )}
+            {filtered.map(c => (
+              <button key={c.name} type="button" onClick={() => addPick(c.name)}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: '5px 10px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 11, color: FR.slate }}>
+                <span style={{ width: 14, height: 14, borderRadius: '50%', background: c.hex || 'transparent', border: '1px solid rgba(0,0,0,0.15)' }} />
+                <span style={{ flex: 1 }}>{c.name}</span>
+                {c.pantoneTCX && <span style={{ fontSize: 9, color: FR.stone }}>{c.pantoneTCX}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Tiered pricing table on the cover page. Row 0 is the MOQ (smallest qty,
+// highest unit cost); subsequent rows are volume break points. Capped at
+// COST_TIER_CAP rows so the preview block stays inside its layout budget.
+function CostTiersTable({ tiers, onChange }) {
+  const safe = Array.isArray(tiers) && tiers.length ? tiers : [{ quantity: '', unitCost: '' }];
+  const update = (i, key, val) => onChange(safe.map((t, idx) => idx === i ? { ...t, [key]: val } : t));
+  const add = () => { if (safe.length < COST_TIER_CAP) onChange([...safe, { quantity: '', unitCost: '' }]); };
+  const remove = (i) => onChange(safe.filter((_, idx) => idx !== i));
+
+  const cell = { padding: '4px 6px', borderBottom: `1px solid ${FR.sand}`, fontSize: 11 };
+  const headerCell = { ...cell, background: FR.slate, color: FR.salt, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', borderBottom: 'none' };
+
+  return (
+    <div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+        <colgroup>
+          <col style={{ width: 60 }} />
+          <col />
+          <col />
+          <col style={{ width: 30 }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th style={{ ...headerCell, textAlign: 'left' }}>Tier</th>
+            <th style={{ ...headerCell, textAlign: 'left' }}>Quantity</th>
+            <th style={{ ...headerCell, textAlign: 'left' }}>Unit Cost ($)</th>
+            <th style={headerCell} />
+          </tr>
+        </thead>
+        <tbody>
+          {safe.map((t, i) => (
+            <tr key={i} style={{ background: i % 2 === 0 ? FR.salt : FR.white }}>
+              <td style={{ ...cell, color: FR.soil, fontWeight: 600, fontSize: 10 }}>
+                {i === 0 ? 'MOQ' : `T${i + 1}`}
+              </td>
+              <td style={cell}>
+                <input value={t.quantity || ''} onChange={e => update(i, 'quantity', e.target.value)}
+                  placeholder={i === 0 ? '100' : '1000'}
+                  style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '2px 0', color: FR.slate, outline: 'none' }} />
+              </td>
+              <td style={cell}>
+                <input value={t.unitCost || ''} onChange={e => update(i, 'unitCost', e.target.value)}
+                  placeholder={i === 0 ? '0.85' : '0.65'}
+                  style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '2px 0', color: FR.slate, outline: 'none' }} />
+              </td>
+              <td style={{ ...cell, textAlign: 'center' }}>
+                {safe.length > 1 && (
+                  <button onClick={() => remove(i)} aria-label={`Remove tier ${i + 1}`}
+                    style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>×</button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {safe.length < COST_TIER_CAP && (
+        <button type="button" onClick={add}
+          style={{ marginTop: 6, padding: '4px 12px', background: 'none', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 10, color: FR.soil, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <Plus size={11} /> Add tier
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function StepCover({
   data, set, images, onUpload, onRemove,
   existingSuppliers = [], existingTrimTypes = [],
@@ -201,15 +366,6 @@ export function StepCover({
   })();
   const revisionCount = (data.revisions || []).length;
   const derivedRevision = `V${revisionCount + 1}.0`;
-
-  // Revision History — editable table synced with the same array that the
-  // snapshot system appends to. Rows without a rev number come from manual
-  // edits; rows like "V1.0" come from automated snapshots.
-  const seedRow = () => ({ rev: '1.0', date: data.dateCreated || '', changedBy: '', description: 'Initial release', approvedBy: '' });
-  const revRows = data.revisions && data.revisions.length ? data.revisions : [seedRow()];
-  const updateRev = (i, k, v) => set('revisions', revRows.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
-  const addRev = () => set('revisions', [...revRows, { rev: '', date: '', changedBy: '', description: '', approvedBy: '' }]);
-  const removeRev = (i) => set('revisions', revRows.filter((_, idx) => idx !== i));
 
   const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
 
@@ -259,33 +415,58 @@ export function StepCover({
         </div>
       </Row>
 
-      <Row cols="1fr 1fr 1fr">
-        <Input label="Colorways" value={data.colorways} onChange={v => set('colorways', v)} placeholder="e.g. Black, Natural, Slate" />
-        <Input label="Target Unit Cost ($)" value={data.targetUnitCost} onChange={v => set('targetUnitCost', v)} placeholder="0.85" />
-        <Input label="MOQ" value={data.moq} onChange={v => set('moq', v)} placeholder="1000" />
-      </Row>
-
-      <Row>
+      <Row cols="2fr 1fr">
+        <ColorwayPicker
+          value={data.colorwayPicks || []}
+          onChange={picks => set('colorwayPicks', picks)} />
         <Select label="Status" value={data.status} onChange={v => set('status', v)} options={STATUSES} />
-        <div />
       </Row>
 
-      {/* Revision history — iteration log of snapshots + manual entries */}
-      <div style={{ marginTop: 20, marginBottom: 18 }}>
-        <label style={sectionLabel}>Revision History</label>
-        <ArrayTable
-          headers={[
-            { key: 'rev',         label: 'Rev #',                  placeholder: '1.0' },
-            { key: 'date',        label: 'Date',                   placeholder: 'YYYY-MM-DD' },
-            { key: 'changedBy',   label: 'Changed By',             placeholder: 'Name' },
-            { key: 'description', label: 'Description of Change',  placeholder: 'Initial release' },
-            { key: 'approvedBy',  label: 'Approved By',            placeholder: 'Name' },
-          ]}
-          rows={revRows} onUpdate={updateRev} onAdd={addRev} onRemove={removeRev} />
+      {/* Quote panel — single card grouping cost tiers, lead times, and the
+          quote-provider link. Lead times sit with the cost block (not the
+          vendor) because they vary by trim type, not by who's making it. */}
+      <div style={{ marginTop: 18, padding: 16, background: 'white', border: `1px solid ${FR.sand}`, borderRadius: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+          <h4 style={{ margin: 0, fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 18, color: FR.slate }}>Quote</h4>
+          <span style={{ fontSize: 10, color: FR.stone, letterSpacing: 0.5 }}>Pricing &amp; lead times</span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 22 }}>
+          <div>
+            <label style={sectionLabel}>Cost Tiers</label>
+            <CostTiersTable
+              tiers={data.costTiers || []}
+              onChange={tiers => set('costTiers', tiers)} />
+          </div>
+
+          <div>
+            <Row cols="1fr 1fr">
+              <Input label="Lead Time (days)" value={data.leadTimeDays}
+                onChange={v => set('leadTimeDays', v)} placeholder="21" />
+              <Input label="Sample Lead Time (days)" value={data.sampleLeadTimeDays}
+                onChange={v => set('sampleLeadTimeDays', v)} placeholder="10" />
+            </Row>
+            <Row cols="1fr 1fr">
+              <Input label="Sample Cost ($)" value={data.sampleCost}
+                onChange={v => set('sampleCost', v)} placeholder="25" />
+              <div />
+            </Row>
+            <div style={{ marginBottom: 10 }}>
+              <label style={labelStyle}>Quote Provider Link</label>
+              <input value={data.quoteProviderLink || ''}
+                onChange={e => set('quoteProviderLink', e.target.value)}
+                placeholder="https://supplier.example.com/quotes/abc"
+                style={inputBase} />
+              <p style={{ fontSize: 10, color: FR.stone, marginTop: 4 }}>
+                Where this quote came from — often a manufacturer who handles ordering even if we sourced the price ourselves.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <p style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${FR.sand}`, fontSize: 11, color: FR.stone, fontStyle: 'italic' }}>
-        Samples, approvals, and the final download live on the last page (Samples &amp; Approval).
+      <p style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${FR.sand}`, fontSize: 11, color: FR.stone, fontStyle: 'italic' }}>
+        Revision history, samples, approvals, and the final download all live on the last page (Samples &amp; Approval).
       </p>
     </div>
   );
@@ -312,6 +493,16 @@ export function StepApproval({
     createSnapshot(`Revision requested: ${note}`);
   };
 
+  // Revision History — synced with the same array the snapshot system
+  // appends to. Manual rows (no `rev` value) sit alongside auto rows like
+  // "V1.0". Lives on this page (not the cover) because manufacturers don't
+  // care about the iteration log; it's internal trail data.
+  const seedRow = () => ({ rev: '1.0', date: data.dateCreated || '', changedBy: '', description: 'Initial release', approvedBy: '' });
+  const revRows = data.revisions && data.revisions.length ? data.revisions : [seedRow()];
+  const updateRev = (i, k, v) => set('revisions', revRows.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addRev = () => set('revisions', [...revRows, { rev: '', date: '', changedBy: '', description: '', approvedBy: '' }]);
+  const removeRev = (i) => set('revisions', revRows.filter((_, idx) => idx !== i));
+
   return (
     <div>
       <SectionTitle>Samples &amp; Approval</SectionTitle>
@@ -319,6 +510,19 @@ export function StepApproval({
       <p style={{ fontSize: 11, color: FR.stone, marginTop: -10, marginBottom: 18 }}>
         Internal page — asset versioning, sign-off, and the final downloadable trim pack.
       </p>
+
+      <div style={{ marginBottom: 22 }}>
+        <label style={sectionLabel}>Revision History</label>
+        <ArrayTable
+          headers={[
+            { key: 'rev',         label: 'Rev #',                  placeholder: '1.0' },
+            { key: 'date',        label: 'Date',                   placeholder: 'YYYY-MM-DD' },
+            { key: 'changedBy',   label: 'Changed By',             placeholder: 'Name' },
+            { key: 'description', label: 'Description of Change',  placeholder: 'Initial release' },
+            { key: 'approvedBy',  label: 'Approved By',            placeholder: 'Name' },
+          ]}
+          rows={revRows} onUpdate={updateRev} onAdd={addRev} onRemove={removeRev} />
+      </div>
 
       <div style={{ marginBottom: 22 }}>
         <label style={sectionLabel}>Samples</label>

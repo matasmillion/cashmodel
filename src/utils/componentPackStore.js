@@ -62,7 +62,11 @@ export async function listComponentPacks() {
         const mirror = row.cover_image && row.cost_per_unit ? null : local.find(l => l.id === r.id);
         if (!row.cover_image && mirror) row = { ...row, cover_image: extractCover(mirror.images) };
         if (!row.cost_per_unit && mirror) {
-          const cost = mirror.data?.targetUnitCost || mirror.data?.costPerUnit || '';
+          const tier0 = mirror.data?.costTiers?.[0];
+          const cost = (tier0 && tier0.unitCost)
+            || mirror.data?.targetUnitCost
+            || mirror.data?.costPerUnit
+            || '';
           if (cost) row = { ...row, cost_per_unit: cost };
         }
         return row;
@@ -77,7 +81,7 @@ export async function listComponentPacks() {
       component_category: p.data?.componentCategory || '',
       status: p.data?.status || 'Design',
       supplier: p.data?.supplier || '',
-      cost_per_unit: p.data?.targetUnitCost || p.data?.costPerUnit || '',
+      cost_per_unit: (p.data?.costTiers?.[0]?.unitCost) || p.data?.targetUnitCost || p.data?.costPerUnit || '',
       currency: p.data?.currency || 'USD',
       updated_at: p.updated_at,
       created_at: p.created_at,
