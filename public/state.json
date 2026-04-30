@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-30T10:29:35.182Z",
+  "lastUpdated": "2026-04-30T10:55:47.207Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "e0d918f",
+      "date": "2026-04-30T10:30:06+00:00",
+      "message": "feat(plm-trims): cover-page revamp — cost tiers, quote panel, FR color picker"
+    },
+    {
       "sha": "1d7eed3",
       "date": "2026-04-30T10:03:12+00:00",
       "message": "fix(plm-trims): reliable saves, snappy duplication, custom Trim Types"
@@ -1087,11 +1092,6 @@
       "sha": "70c35b5",
       "date": "2026-04-29T19:01:35+00:00",
       "message": "fix(plaid): switch plaid-proxy and listPlaidItems to org_id scope"
-    },
-    {
-      "sha": "72ce7f3",
-      "date": "2026-04-29T18:32:45+00:00",
-      "message": "fix: add missing PLM tables migration"
     }
   ]
 }
