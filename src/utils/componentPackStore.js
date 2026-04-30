@@ -207,12 +207,18 @@ export async function duplicateComponentPack(id) {
   delete copy.organization_id;
 
   const rows = readLocal(); rows.push(copy); writeLocal(rows);
+
+  // Fire-and-forget the cloud insert so the UI can update optimistically
+  // off the local copy. Errors still surface in the console; the local row
+  // is the source of truth until cloud catches up on next list/refresh.
   const orgId = getCurrentOrgIdSync();
   if (IS_SUPABASE_ENABLED && orgId) {
     const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('component_packs').insert({ ...copy, user_id: userId, organization_id: orgId });
-    if (error) console.error('duplicateComponentPack:', error);
+    getAuthedSupabase().then(db => {
+      if (!db) return;
+      db.from('component_packs').insert({ ...copy, user_id: userId, organization_id: orgId })
+        .then(({ error }) => { if (error) console.error('duplicateComponentPack:', error); });
+    });
   }
   return copy;
 }

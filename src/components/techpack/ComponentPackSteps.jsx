@@ -10,7 +10,7 @@
 import { STATUSES, COMPONENT_TYPES, APPROVAL_STATUSES, SAMPLE_TYPES, SAMPLE_VERDICTS, MATERIAL_FINISHES } from './componentPackConstants';
 import { FR, FR_COLOR_OPTIONS } from './techPackConstants';
 import { Input, Select, Row, SectionTitle, AspectPhoto, ASPECTS, EditableSelect, ArrayTable, FRColorCell, labelStyle, inputBase } from './TechPackPrimitives';
-import { addSupplier } from '../../utils/plmDirectory';
+import { addSupplier, addTrimType } from '../../utils/plmDirectory';
 import { getFRColor, updateFRColor } from '../../utils/colorLibrary';
 import { setPLMHash } from '../../utils/plmRouting';
 import { useState, useRef, useEffect } from 'react';
@@ -189,8 +189,16 @@ function SampleLog({ samples, onAdd, onUpdate, onRemove }) {
 
 export function StepCover({
   data, set, images, onUpload, onRemove,
-  existingSuppliers = [],
+  existingSuppliers = [], existingTrimTypes = [],
 }) {
+  // Merge seeded + custom-added types so the dropdown includes both even on
+  // a fresh load before listAllTrimTypes() has resolved.
+  const trimTypeOptions = (() => {
+    const merged = new Set(COMPONENT_TYPES);
+    existingTrimTypes.forEach(t => { if (t) merged.add(t); });
+    if (data.componentType) merged.add(data.componentType);
+    return [...merged].sort((a, b) => a.localeCompare(b));
+  })();
   const revisionCount = (data.revisions || []).length;
   const derivedRevision = `V${revisionCount + 1}.0`;
 
@@ -227,7 +235,8 @@ export function StepCover({
 
       <Row cols="1fr 1fr 1fr">
         <Input label="Trim Name" value={data.componentName} onChange={v => set('componentName', v)} placeholder="e.g. Main Label — Woven" />
-        <Select label="Trim Type" value={data.componentType} onChange={v => set('componentType', v)} options={COMPONENT_TYPES} />
+        <EditableSelect label="Trim Type" value={data.componentType} onChange={v => set('componentType', v)}
+          options={trimTypeOptions} onAddOption={addTrimType} placeholder="Add a new type…" />
         <Input label="Season" value={data.season} onChange={v => set('season', v)} placeholder="SS26 / FW26 / Core" />
       </Row>
 

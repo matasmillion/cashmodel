@@ -12,7 +12,7 @@ import ComponentPackBuilder from './ComponentPackBuilder';
 import { CostPill } from './TechPackPrimitives';
 import { listComponentPacks, createComponentPack, getComponentPack, deleteComponentPack, duplicateComponentPack, saveComponentPack } from '../../utils/componentPackStore';
 import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
-import { listAllSuppliers, listAllPeople } from '../../utils/plmDirectory';
+import { listAllSuppliers, listAllPeople, listAllTrimTypes } from '../../utils/plmDirectory';
 
 const VIEW_STORAGE_KEY = 'cashmodel_trims_view';
 
@@ -44,7 +44,7 @@ function Thumb({ pack }) {
 
 // Grid-view card — a trim shown as a standalone card with thumbnail,
 // name, supplier, status dot, cost pill, and the usual actions.
-function GridCard({ pack, onOpen, onDuplicate, onDelete }) {
+function GridCard({ pack, onOpen, onDuplicate, onDelete, duplicating }) {
   const normalizedStatus = (() => {
     let st = pack.status || 'Design';
     if (LEGACY_STATUS_MIGRATION[st]) st = LEGACY_STATUS_MIGRATION[st];
@@ -77,8 +77,9 @@ function GridCard({ pack, onOpen, onDuplicate, onDelete }) {
           <span style={{ fontSize: 9, color: FR.stone, marginLeft: 'auto' }}>{formatDate(pack.updated_at)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, marginTop: 8, borderTop: `1px solid ${FR.sand}`, paddingTop: 6 }}>
-          <button onClick={e => { e.stopPropagation(); onDuplicate(pack.id); }} title="Duplicate"
-            style={{ padding: 4, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer' }}>
+          <button onClick={e => { e.stopPropagation(); onDuplicate(pack.id); }} disabled={duplicating}
+            title={duplicating ? 'Duplicating…' : 'Duplicate'}
+            style={{ padding: 4, border: 'none', background: 'transparent', color: FR.stone, cursor: duplicating ? 'wait' : 'pointer', opacity: duplicating ? 0.5 : 1 }}>
             <Copy size={11} />
           </button>
           <button onClick={e => { e.stopPropagation(); onDelete(pack.id); }} title="Delete"
@@ -93,7 +94,7 @@ function GridCard({ pack, onOpen, onDuplicate, onDelete }) {
 
 // Compact Kanban card — horizontal layout so a typical desktop column
 // comfortably fits 5+ cards. Same info as the grid card, denser.
-function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onDragStart, onDragEnd }) {
+function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onDragStart, onDragEnd, duplicating }) {
   return (
     <div
       draggable
@@ -124,8 +125,9 @@ function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onDragStart, onDragEn
             {pack.supplier ? `🏭 ${pack.supplier}` : '—'} · {formatDate(pack.updated_at)}
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, marginTop: 4 }}>
-            <button onClick={e => { e.stopPropagation(); onDuplicate(pack.id); }} title="Duplicate"
-              style={{ padding: 2, border: 'none', background: 'transparent', color: FR.stone, cursor: 'pointer', display: 'flex' }}>
+            <button onClick={e => { e.stopPropagation(); onDuplicate(pack.id); }} disabled={duplicating}
+              title={duplicating ? 'Duplicating…' : 'Duplicate'}
+              style={{ padding: 2, border: 'none', background: 'transparent', color: FR.stone, cursor: duplicating ? 'wait' : 'pointer', display: 'flex', opacity: duplicating ? 0.5 : 1 }}>
               <Copy size={10} />
             </button>
             <button onClick={e => { e.stopPropagation(); onDelete(pack.id); }} title="Delete"
@@ -139,7 +141,7 @@ function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onDragStart, onDragEn
   );
 }
 
-function KanbanColumn({ status, packs, onOpen, onDuplicate, onDelete, onDragStart, onDragEnd, onDrop, dragOverStatus, setDragOverStatus }) {
+function KanbanColumn({ status, packs, onOpen, onDuplicate, onDelete, onDragStart, onDragEnd, onDrop, dragOverStatus, setDragOverStatus, duplicatingId }) {
   const colors = STATUS_COLORS[status] || STATUS_COLORS.Design;
   const isOver = dragOverStatus === status;
   return (
@@ -164,7 +166,8 @@ function KanbanColumn({ status, packs, onOpen, onDuplicate, onDelete, onDragStar
         {packs.map(p => (
           <KanbanCard key={p.id} pack={p}
             onOpen={onOpen} onDuplicate={onDuplicate} onDelete={onDelete}
-            onDragStart={onDragStart} onDragEnd={onDragEnd} />
+            onDragStart={onDragStart} onDragEnd={onDragEnd}
+            duplicating={duplicatingId === p.id} />
         ))}
       </div>
     </div>
@@ -178,8 +181,10 @@ export default function ComponentPackList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [existingSuppliers, setExistingSuppliers] = useState([]);
   const [existingPeople, setExistingPeople] = useState([]);
+  const [existingTrimTypes, setExistingTrimTypes] = useState([]);
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverStatus, setDragOverStatus] = useState(null);
+  const [duplicatingId, setDuplicatingId] = useState(null);
 
   // Default view = grid. Persist the user's choice so the tab remembers it.
   const [view, setView] = useState(() => {
@@ -201,6 +206,7 @@ export default function ComponentPackList() {
     setPacks(rows || []);
     setExistingSuppliers(suppliers);
     setExistingPeople(people);
+    setExistingTrimTypes(listAllTrimTypes());
     setLoading(false);
   };
 
@@ -249,7 +255,33 @@ export default function ComponentPackList() {
     setPLMHash({ section: 'components', packId: row.id });
   };
 
-  const onDuplicate = async (id) => { await duplicateComponentPack(id); refresh(); };
+  // Optimistic duplicate: project the freshly written local row into the
+  // visible list immediately. The cloud insert continues in the background;
+  // a subsequent refresh (or next mount) will reconcile with the canonical
+  // Supabase view if anything diverges. Guarded against double-clicks.
+  const onDuplicate = async (id) => {
+    if (duplicatingId) return;
+    setDuplicatingId(id);
+    try {
+      const copy = await duplicateComponentPack(id);
+      if (!copy) { refresh(); return; }
+      const projected = {
+        id: copy.id,
+        component_name: copy.component_name || copy.data?.componentName || '',
+        component_category: copy.data?.componentCategory || '',
+        status: copy.data?.status || 'Design',
+        supplier: copy.data?.supplier || '',
+        cost_per_unit: copy.cost_per_unit || copy.data?.targetUnitCost || copy.data?.costPerUnit || '',
+        currency: copy.data?.currency || 'USD',
+        cover_image: copy.cover_image,
+        updated_at: copy.updated_at,
+        created_at: copy.created_at,
+      };
+      setPacks(prev => [projected, ...prev]);
+    } finally {
+      setDuplicatingId(null);
+    }
+  };
   const onDelete = async (id) => { if (!confirm('Delete this trim?')) return; await deleteComponentPack(id); refresh(); };
   const closeBuilder = async () => {
     setActivePack(null);
@@ -276,7 +308,7 @@ export default function ComponentPackList() {
   };
 
   if (activePack) {
-    return <ComponentPackBuilder pack={activePack} onBack={closeBuilder} existingSuppliers={existingSuppliers} existingPeople={existingPeople} />;
+    return <ComponentPackBuilder pack={activePack} onBack={closeBuilder} existingSuppliers={existingSuppliers} existingPeople={existingPeople} existingTrimTypes={existingTrimTypes} />;
   }
 
   // Filter by search.
@@ -371,7 +403,8 @@ export default function ComponentPackList() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
             {filtered.map(p => (
               <GridCard key={p.id} pack={p}
-                onOpen={openPack} onDuplicate={onDuplicate} onDelete={onDelete} />
+                onOpen={openPack} onDuplicate={onDuplicate} onDelete={onDelete}
+                duplicating={duplicatingId === p.id} />
             ))}
           </div>
         )
@@ -383,7 +416,8 @@ export default function ComponentPackList() {
             <KanbanColumn key={status} status={status} packs={columns[status]}
               onOpen={openPack} onDuplicate={onDuplicate} onDelete={onDelete}
               onDragStart={setDraggingId} onDragEnd={() => setDraggingId(null)}
-              onDrop={onDrop} dragOverStatus={dragOverStatus} setDragOverStatus={setDragOverStatus} />
+              onDrop={onDrop} dragOverStatus={dragOverStatus} setDragOverStatus={setDragOverStatus}
+              duplicatingId={duplicatingId} />
           ))}
         </div>
       )}

@@ -4,7 +4,7 @@
 // landscape page of the component pack.
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowLeft, History, Printer, X, Download } from 'lucide-react';
+import { ArrowLeft, History, Printer, X, Download, Save } from 'lucide-react';
 import { FR, DEFAULT_COMPONENT_DATA, COMPONENT_STEPS, LEGACY_STATUS_MIGRATION, LEGACY_SAMPLE_TYPE_MIGRATION } from './componentPackConstants';
 import { getFRColor } from '../../utils/colorLibrary';
 import { COMPONENT_STEP_FNS } from './ComponentPackSteps';
@@ -115,7 +115,7 @@ function VersionViewer({ revision, onClose }) {
   );
 }
 
-export default function ComponentPackBuilder({ pack, onBack, existingSuppliers = [], existingPeople = [] }) {
+export default function ComponentPackBuilder({ pack, onBack, existingSuppliers = [], existingPeople = [], existingTrimTypes = [] }) {
   const [step, setStep] = useState(() => {
     const { packId, step } = parsePLMHash();
     return packId === pack.id ? Math.min(step, COMPONENT_STEPS.length - 1) : 0;
@@ -173,12 +173,61 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
   });
   const [images, setImages] = useState(pack.images || []);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(true);
+  const [isDirty, setIsDirty] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [viewingVersionIdx, setViewingVersionIdx] = useState(null);
   const [exporting, setExporting] = useState(null);
   const [exportError, setExportError] = useState(null);
   const saveTimerRef = useRef(null);
+  // Refs let flushPendingSave read the freshest data/images without forcing
+  // every save call to be re-bound on each keystroke.
+  const dataRef = useRef(data);
+  const imagesRef = useRef(images);
+  const dirtyRef = useRef(false);
+  const firstRunRef = useRef(true);
+  useEffect(() => { dataRef.current = data; imagesRef.current = images; }, [data, images]);
+
+  // Flushes the debounced save right now. Returns the save result so callers
+  // (manual Save button, Back-to-Trims handler) can react to failures instead
+  // of silently dropping the user's edits.
+  const flushPendingSave = useCallback(async () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    if (!dirtyRef.current) return { ok: true };
+    setSaving(true);
+    const d = dataRef.current;
+    const imgs = imagesRef.current;
+    try {
+      const result = await saveComponentPack(pack.id, {
+        data: d, images: imgs,
+        component_name: d.componentName || '',
+        component_category: d.componentCategory || '',
+        status: d.status || 'Design',
+        supplier: d.supplier || '',
+        cost_per_unit: d.targetUnitCost || d.costPerUnit || '',
+        currency: d.currency || 'USD',
+      });
+      if (result && result.ok === false) {
+        setSaveError(result.error?.message || 'Cloud save failed');
+        setSaving(false);
+        return result;
+      }
+      dirtyRef.current = false;
+      setIsDirty(false);
+      setSaveError(null);
+      setSaved(true);
+      setSaving(false);
+      return { ok: true };
+    } catch (err) {
+      console.error(err);
+      setSaveError(err?.message || String(err));
+      setSaving(false);
+      return { ok: false, error: err };
+    }
+  }, [pack.id]);
 
   const exportFilename = useCallback(() => {
     const stem = sanitizeFilename(data.componentName || 'trimpack');
@@ -231,34 +280,60 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     };
   }, [step, pack.id]);
 
+  // Skip the no-op first run (data/images come straight from props on mount —
+  // saving them back as "edits" is wasteful and would mark a fresh pack
+  // dirty). Every subsequent change schedules a debounced flush.
   useEffect(() => {
+    if (firstRunRef.current) {
+      firstRunRef.current = false;
+      return;
+    }
+    dirtyRef.current = true;
+    setIsDirty(true);
+    setSaved(false);
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(async () => {
-      setSaving(true);
-      try {
-        const result = await saveComponentPack(pack.id, {
-          data, images,
-          component_name: data.componentName || '',
-          component_category: data.componentCategory || '',
-          status: data.status || 'Design',
-          supplier: data.supplier || '',
-          cost_per_unit: data.targetUnitCost || data.costPerUnit || '',
-          currency: data.currency || 'USD',
-        });
-        if (result && result.ok === false) {
-          setSaveError(result.error?.message || 'Cloud save failed');
-        } else {
-          setSaveError(null);
-          setSaved(true);
-        }
-      } catch (err) {
-        console.error(err);
-        setSaveError(err?.message || String(err));
-      }
-      setTimeout(() => setSaving(false), 300);
-    }, 600);
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [data, images, pack.id]);
+    saveTimerRef.current = setTimeout(() => { flushPendingSave(); }, 600);
+  }, [data, images, flushPendingSave]);
+
+  // On unmount with pending edits, fire saveComponentPack synchronously. Its
+  // localStorage write happens before the first await, so even if the user
+  // closes the tab the edits survive — Supabase catches up on next load.
+  useEffect(() => () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    if (dirtyRef.current) {
+      const d = dataRef.current;
+      saveComponentPack(pack.id, {
+        data: d, images: imagesRef.current,
+        component_name: d.componentName || '',
+        component_category: d.componentCategory || '',
+        status: d.status || 'Design',
+        supplier: d.supplier || '',
+        cost_per_unit: d.targetUnitCost || d.costPerUnit || '',
+        currency: d.currency || 'USD',
+      });
+    }
+  }, [pack.id]);
+
+  // Browser-level guard: warn before unload if we still have unsaved edits.
+  useEffect(() => {
+    const handler = (e) => {
+      if (dirtyRef.current) { e.preventDefault(); e.returnValue = ''; }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
+  const handleBack = useCallback(async () => {
+    const result = await flushPendingSave();
+    if (result && result.ok === false) {
+      const proceed = window.confirm('Cloud save failed — your edits are kept locally. Leave anyway?');
+      if (!proceed) return;
+    }
+    onBack();
+  }, [flushPendingSave, onBack]);
 
   const todayStamp = () => new Date().toISOString().slice(0, 10);
   const stampDate = useCallback((p) => ({ ...p, dateCreated: todayStamp() }), []);
@@ -369,7 +444,8 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
   const isCurrentSkipped = skippedSteps.includes(step);
   const stepProps = {
     data, set, images, onUpload: handleImgUpload, onRemove: handleImgRemove,
-    pickFRColor, existingSuppliers, existingPeople, onAddPerson: handleAddPerson,
+    pickFRColor, existingSuppliers, existingPeople, existingTrimTypes,
+    onAddPerson: handleAddPerson,
     createSnapshot, confirmRole, unconfirmRole,
     addSample, updateSample, removeSample,
     onDownloadPDF: handleDownloadPDF, onDownloadSVG: handleDownloadSVG,
@@ -385,7 +461,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     <div style={{ background: FR.salt, fontFamily: "'Helvetica Neue','Inter',sans-serif", borderRadius: 8, overflow: 'hidden', border: `1px solid ${FR.sand}` }}>
       <div style={{ background: FR.slate, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={onBack}
+          <button onClick={handleBack}
             style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: FR.salt, padding: '5px 10px', borderRadius: 3, fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
             <ArrowLeft size={12} /> Back to Trims
           </button>
@@ -399,8 +475,15 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {saving
             ? <span style={{ fontSize: 10, color: FR.sage }}>Saving…</span>
-            : saved && !saveError && <span style={{ fontSize: 10, color: '#4CAF7D' }}>Saved ✓</span>
+            : isDirty
+              ? <span style={{ fontSize: 10, color: '#854F0B' }}>Unsaved changes</span>
+              : saved && !saveError && <span style={{ fontSize: 10, color: '#4CAF7D' }}>Saved ✓</span>
           }
+          <button onClick={() => flushPendingSave()} disabled={saving || (!isDirty && !saveError)}
+            title={isDirty ? 'Save now' : 'No unsaved changes'}
+            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', background: (isDirty || saveError) ? FR.salt : 'rgba(255,255,255,0.1)', color: (isDirty || saveError) ? FR.slate : FR.sand, border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 10, fontWeight: 600, cursor: (saving || (!isDirty && !saveError)) ? 'default' : 'pointer' }}>
+            <Save size={11} /> Save
+          </button>
           {saveError && (
             <span title={saveError} style={{ fontSize: 10, color: '#D4956A', background: 'rgba(212,149,106,0.12)', padding: '2px 8px', borderRadius: 3 }}>
               ⚠︎ Cloud save failed — edits kept locally

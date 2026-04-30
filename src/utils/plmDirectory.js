@@ -21,6 +21,9 @@ const TECHPACKS_KEY = 'cashmodel_techpacks';
 const COMPONENT_PACKS_KEY = 'cashmodel_component_packs';
 const CUSTOM_SUPPLIERS_KEY = 'cashmodel_plm_suppliers';
 const CUSTOM_PEOPLE_KEY = 'cashmodel_plm_people';
+const CUSTOM_TRIM_TYPES_KEY = 'cashmodel_plm_trim_types';
+
+const SEED_TRIM_TYPES = ['Label', 'Zipper', 'Fabric', 'Hardware', 'Packaging'];
 
 function readJSON(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
@@ -161,5 +164,25 @@ export function addPerson(name) {
   if (!current.includes(trimmed)) {
     current.push(trimmed);
     writeJSON(CUSTOM_PEOPLE_KEY, current);
+  }
+}
+
+// ── Trim Types ────────────────────────────────────────────────────────────
+// Categories shown in the Trim Pack overview's "Trim Type" dropdown. The
+// builder originally hard-coded a 5-item list; this helper layers user-added
+// types over those seeds so new categories persist across sessions.
+export function listAllTrimTypes() {
+  const set = new Set(SEED_TRIM_TYPES);
+  readJSON(CUSTOM_TRIM_TYPES_KEY, []).forEach(t => addNormalized(set, t));
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+export function addTrimType(name) {
+  const trimmed = String(name || '').trim();
+  if (!trimmed) return;
+  const current = readJSON(CUSTOM_TRIM_TYPES_KEY, []);
+  if (!current.includes(trimmed)) {
+    current.push(trimmed);
+    writeJSON(CUSTOM_TRIM_TYPES_KEY, current);
   }
 }
