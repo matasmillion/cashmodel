@@ -151,6 +151,13 @@ export function generateCashflow58({
       amexBlue = hist.amexBlue;
       shopifyCapital = hist.shopifyCapital;
       longTermLoan = hist.longTermLoan;
+    } else if (isCurrent) {
+      // Anchor cards on Plaid live balances when present, otherwise project
+      chase5718 = seed.chase5718Balance ?? Math.max(0, (prev?.chase5718 ?? cardOpening.chase5718) - payChase);
+      amexPlum = seed.amexPlumBalance ?? Math.max(0, (prev?.amexPlum ?? cardOpening.amexPlum) - payAmexPlum);
+      amexBlue = seed.amexBlueBalance ?? Math.max(0, (prev?.amexBlue ?? cardOpening.amexBlue) - payAmexBlue);
+      shopifyCapital = (prev?.shopifyCapital ?? cardOpening.shopifyCapital) - payShopifyCapital;
+      longTermLoan = (prev?.longTermLoan ?? cardOpening.longTermLoan) - payLtLoan;
     } else {
       const opening = prev ?? {
         chase5718: cardOpening.chase5718,
@@ -220,6 +227,13 @@ export function generateCashflow58({
       sbSalesTax = hist.sbSalesTax;
       sbCorpTax = hist.sbCorpTax;
       shopifyCapRepayment = hist.shopifyCapRepayment;
+    } else if (isCurrent) {
+      // Current week is anchored on live Plaid balances (Mercury → seed)
+      shopifyPayouts = onlineStore;
+      sbMain = seed.sbMain ?? (prev?.totalCashOnHand ?? 0) + netCashFlow - transferToWC;
+      sbSalesTax = seed.sbSalesTax ?? prev?.sbSalesTax ?? 0;
+      sbCorpTax = seed.sbCorpTax ?? prev?.sbCorpTax ?? 0;
+      shopifyCapRepayment = -payShopifyCapital;
     } else {
       shopifyPayouts = onlineStore; // simplification: payouts = online store inflow
       // SB Main = prev Total Cash + Net Cash Flow - Transfer to WC (Excel R12)

@@ -4,6 +4,7 @@ import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculat
 import { syncShopifyActuals, syncMetaActuals, syncMercuryActuals, syncPlaidActuals, listPlaidItems } from '../utils/liveDataSync';
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { useCurrentUser, useCurrentOrg } from '../lib/auth';
+import { bucketDepositoryAccounts, classifyCreditAccount, cardIdFromMask } from '../utils/bankAccountMap';
 
 const LOCAL_STORAGE_KEY = 'cashmodel_state';
 const INTEGRATIONS_KEY = 'cashmodel_integrations';
@@ -103,32 +104,45 @@ async function runAutoSync(dispatch) {
     );
   }
 
-  // Plaid (Chase / AMEX / any bank or card) — detection is server-side, no
-  // localStorage flag. If there's at least one connected item, sync it.
+  // Plaid (Mercury / Chase / AMEX / any connected institution). All of the
+  // user's bank + card data flows through Plaid now, so this is the source of
+  // truth for the cashflow's "Cash on Hand" and "OPEX CARDS" rows.
   tasks.push((async () => {
     const items = await listPlaidItems().catch(() => []);
     if (!items || items.length === 0) return;
     sources.push('plaid');
     try {
-      const { totals, creditAccounts } = await syncPlaidActuals();
-      // Only overwrite totalCash / sbMain if Mercury didn't already fill it.
-      // Plaid depository totals typically equal Mercury's for the same accounts,
-      // so either source is fine — but if both exist we prefer Mercury
-      // (its API is the source of truth for Mercury balances).
-      if (!creds.mercury?.connected && totals.depository > 0) {
-        dispatch({
-          type: 'UPDATE_SEED',
-          payload: {
-            totalCash: totals.depository,
-            sbMain: totals.depository,
-          },
-        });
-      }
+      const { totals, depositoryAccounts, creditAccounts } = await syncPlaidActuals();
+
+      // Bank accounts → bucketed by name (operating / sales tax / corp tax /
+      // working capital). The cashflow engine reads these to anchor the
+      // current week's balance-sheet rows.
+      const bucketed = bucketDepositoryAccounts(depositoryAccounts);
+      dispatch({
+        type: 'UPDATE_SEED',
+        payload: {
+          totalCash: totals.depository,
+          sbMain: bucketed.operating,
+          sbSalesTax: -Math.abs(bucketed.salesTax),     // shown as negative on the BS
+          sbCorpTax: -Math.abs(bucketed.corporateTax),
+          workingCapital: bucketed.workingCapital,
+          bankAccounts: bucketed.accounts,
+        },
+      });
+
+      // Credit cards & loans → match by mask first (most reliable), then by
+      // name pattern (catches AMEX Plum which Plaid surfaces without a mask).
       for (const a of creditAccounts) {
-        if (!a.mask) continue;
-        const id = guessCardIdFromMask(a.mask);
-        if (id) {
-          dispatch({ type: 'UPDATE_CREDIT_CARD', payload: { id, updates: { balance: a.balance } } });
+        const seedId = cardIdFromMask(a.mask);
+        if (seedId) {
+          dispatch({ type: 'UPDATE_CREDIT_CARD', payload: { id: seedId, updates: { balance: a.balance } } });
+        }
+        const cashflowKey = classifyCreditAccount(a);
+        if (cashflowKey) {
+          dispatch({
+            type: 'UPDATE_SEED',
+            payload: { [cashflowKey + 'Balance']: a.balance },
+          });
         }
       }
     } catch (err) {
@@ -141,18 +155,6 @@ async function runAutoSync(dispatch) {
   await Promise.allSettled(tasks);
   if (changed) saveIntegrations(updated);
   return { sources, errors, syncedAt: now };
-}
-
-// Keep this in sync with the copy in IntegrationsPanel — we match Plaid
-// account mask to the seeded credit cards by last-4 only when we're sure.
-function guessCardIdFromMask(mask) {
-  const knownCards = [
-    { id: 'chase-5718', last4: '5718' },
-    { id: 'amex-blue',  last4: '1005' },
-    { id: 'amex-plum',  last4: null  },
-  ];
-  const match = knownCards.find(c => c.last4 && c.last4 === mask);
-  return match?.id || null;
 }
 
 const AppContext = createContext();

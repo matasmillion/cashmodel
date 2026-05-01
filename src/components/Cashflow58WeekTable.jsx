@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { generateCashflow58 } from '../utils/cashflow58Week';
+import { generateCashflow58, CASHFLOW_DEFAULTS } from '../utils/cashflow58Week';
 import { formatCurrency } from '../utils/calculations';
 
 const FR = {
@@ -8,87 +8,108 @@ const FR = {
   salt: '#F5F0E8',
   sand: '#EBE5D5',
   stone: '#716F70',
-  navy: '#1F3A57',     // header bar (mirrors xlsx)
+  navy: '#1F3A57',
   navyDeep: '#162B43',
   good: '#3B6D11',
   warn: '#854F0B',
   bad: '#A32D2D',
-  highlight: '#FFF4B8', // manual-input cells (xlsx yellow)
-  posSoft: '#E8F0DA',   // weak green for projected positives
-  negSoft: '#F4D8D8',   // weak red for projected negatives
+  blue: '#2563eb',
 };
 
-// Row spec: every row in the table, in the same order as the workbook.
-// `key` is the field on each week object; `kind` controls colouring/formatting.
-//   bold      → bold white-on-navy section header (no values)
-//   driver    → driver row (drivers section)
-//   balance   → asset/liability balance (default formatting)
-//   inflow    → green-tinted positive inflow
-//   outflow   → red-tinted negative outflow (display as negative)
-//   subtotal  → bold subtotal row
-//   pending   → "(pending)" placeholder row
-//   percent   → format as percent
-const SECTIONS = [
-  { header: 'Revenue Run Rate', rows: [
-    { label: 'Shopify Store',  key: 'shopifyRevenue', kind: 'driver', leftLabel: 'H1 Growth' },
-    { label: 'Daily Spend',    key: 'dailyAdSpend',   kind: 'driver' },
-    { label: 'FB Ad Spend',    key: 'fbAdSpend',      kind: 'driver', leftLabel: 'MER' },
-    { label: 'COGS %',         key: 'cogsRate',       kind: 'percent' },
-  ]},
-  { header: 'Balance Sheet', rows: [
-    { label: 'Shopify Payouts',         key: 'shopifyPayouts',     kind: 'balance', leftLabel: 'Weekly Growth' },
-    { label: 'SB - Main (9773)',        key: 'sbMain',             kind: 'balance', leftLabel: 'Profit %' },
-    { label: 'SB - Sales Tax (6735)',   key: 'sbSalesTax',         kind: 'balance' },
-    { label: 'SB - Corporate Tax (6735)', key: 'sbCorpTax',        kind: 'balance' },
-    { label: 'Shopify Capital Repayment', key: 'shopifyCapRepayment', kind: 'balance' },
-    { label: 'PO Milestones',           key: '_poMilestonesPending', kind: 'pending' },
-    { label: 'Total Cash On Hand',      key: 'totalCashOnHand',    kind: 'subtotal' },
-    { label: 'Inventory',               key: 'inventory',          kind: 'balance' },
-    { label: 'Working Capital (2465)',  key: 'workingCapital',     kind: 'balance' },
-    { label: 'Total Assets',            key: 'totalAssets',        kind: 'subtotal' },
-  ]},
-  { header: 'ST Liabilities', rows: [
-    { label: 'Ads Payable (01000)',         key: 'adsPayable',         kind: 'balance' },
-    { label: 'Fullfillment Payable (2907)', key: 'fulfillmentPayable', kind: 'balance' },
-  ]},
-  { header: 'LT Liabilities', rows: [
-    { label: 'CHASE 5718',         key: 'chase5718',     kind: 'balance', leftLabel: 'OPEX CARDS' },
-    { label: 'AMEX PLUM 0000',     key: 'amexPlum',      kind: 'balance' },
-    { label: 'AMEX BLUE 71005',    key: 'amexBlue',      kind: 'balance' },
-    { label: 'Shopify Capital',    key: 'shopifyCapital', kind: 'balance' },
-    { label: 'Long Term Loan',     key: 'longTermLoan',   kind: 'balance' },
-    { label: 'Total Liabilities',  key: 'totalLiabilities', kind: 'subtotal' },
-    { label: 'Total Equity',       key: 'totalEquity',      kind: 'subtotal' },
-    { label: 'Net Cash of ST Liabilities', key: 'netCashOfStLiab', kind: 'subtotal' },
-  ]},
-  { header: 'Projected Statement of Cashflows', rows: [
-    { label: 'Online Store',       key: 'onlineStore',  kind: 'inflow', leftLabel: 'PP %' },
-    { label: 'Transfer to WC (6848)', key: 'transferToWC', kind: 'outflow' },
-    { label: 'Total Inflows',      key: 'totalInflows', kind: 'subtotal' },
-    { label: 'Ads Payable (01000)', key: 'adsPaid',     kind: 'outflow', leftLabel: 'Variable Overhead' },
-    { label: 'Fullfillment Payable (2907)', key: 'fulfillmentPaid', kind: 'outflow' },
-    { label: 'CHASE 5718',         key: 'payChase',         kind: 'outflow', leftLabel: 'Working Capital' },
-    { label: 'AMEX PLUM 0000',     key: 'payAmexPlum',      kind: 'outflow' },
-    { label: 'AMEX BLUE 71005',    key: 'payAmexBlue',      kind: 'outflow' },
-    { label: 'Shopify Capital',    key: 'payShopifyCapital', kind: 'outflow' },
-    { label: 'LT Loan (Nathan)',   key: 'payLtLoan',         kind: 'outflow' },
-    { label: 'Creative Production', key: 'creativeProduction', kind: 'outflow', leftLabel: 'Fixed Overhead' },
-    { label: 'Salary',             key: 'salary',     kind: 'outflow' },
-    { label: 'G&A',                key: 'ga',         kind: 'outflow' },
-    { label: 'R&D',                key: 'rd',         kind: 'outflow' },
-    { label: 'Interest',           key: 'interest',   kind: 'outflow' },
-    { label: 'Fulfillment',        key: 'fulfillmentPaid', kind: 'outflow' },
-    { label: 'Total Outflows',     key: 'totalOutflows',   kind: 'subtotal-out' },
-    { label: 'Net Cash Flow',      key: 'netCashFlow',     kind: 'subtotal' },
-    { label: 'Week #',             key: 'weekIndex',       kind: 'index' },
-  ]},
-  { header: 'Working Capital', rows: [
-    { label: 'Working Capital', key: 'workingCapitalTotal', kind: 'subtotal' },
-    { label: 'Owed',            key: 'workingCapitalOwed',  kind: 'balance' },
-  ]},
-];
+// Find a Plaid-classified bank account (or null) given seed.bankAccounts and a role.
+function pickAccountName(bankAccounts, role, fallback) {
+  if (!bankAccounts || !bankAccounts.length) return fallback;
+  const match = bankAccounts.find(a => a.role === role);
+  if (!match) return fallback;
+  const lastFour = match.mask ? `(${match.mask})` : '';
+  return `${match.name} ${lastFour}`.trim();
+}
 
-function fmtVal(v, kind) {
+// Section spec — the order is the workbook's row order. Each row carries:
+//   key       : field on the week object
+//   label     : column B (row label)
+//   leftLabel : column A — top of a 2-row pair (group label like "H1 Growth")
+//   leftValue : column A — bottom of the same pair (the % value, e.g. "104%")
+//   kind      : balance | inflow | outflow | subtotal | percent | pending | index | driver
+//
+// Section headers are separate row objects with header=true. We render them
+// as a single row spanning across the table with a date appended.
+function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
+  const accs = seed.bankAccounts;
+  const operatingLabel = pickAccountName(accs, 'operating', 'SB - Main (9773)');
+  const salesTaxLabel = pickAccountName(accs, 'salesTax', 'SB - Sales Tax (6735)');
+  const corpTaxLabel = pickAccountName(accs, 'corporateTax', 'SB - Corporate Tax (6735)');
+  const wcLabel = pickAccountName(accs, 'workingCapital', 'Working Capital (2465)');
+  const pct = v => `${Math.round(v * 100)}%`;
+
+  return [
+    { header: true, label: 'Revenue Run Rate As Of', anchorKey: 'date' },
+    { key: 'shopifyRevenue', label: 'Shopify Store',  kind: 'driver',
+      leftLabel: 'H1 Growth', leftValue: pct(C.h1Growth - 1) },
+    { key: 'dailyAdSpend',   label: 'Daily Spend',     kind: 'driver' },
+    { key: 'fbAdSpend',      label: 'FB Ad Spend',     kind: 'driver',
+      leftLabel: 'MER', leftValue: pct(C.mer) },
+    { key: 'cogsRate',       label: 'COGS %',          kind: 'percent' },
+
+    { header: true, label: 'Balance Sheet As Of', anchorKey: 'date' },
+    { key: 'shopifyPayouts',     label: 'Shopify Payouts',     kind: 'balance',
+      leftLabel: 'Weekly Growth', leftValue: pct(C.h2Growth - 1) },
+    { key: 'sbMain',             label: operatingLabel,        kind: 'balance',
+      leftLabel: 'Profit %', leftValue: pct(C.profitPercentForWC) },
+    { key: 'sbSalesTax',         label: salesTaxLabel,         kind: 'balance' },
+    { key: 'sbCorpTax',          label: corpTaxLabel,          kind: 'balance' },
+    { key: 'shopifyCapRepayment',label: 'Shopify Capital Repayment', kind: 'balance' },
+    { key: '_poMilestonesPending', label: 'PO Milestones',     kind: 'pending' },
+    { key: 'totalCashOnHand',    label: 'Total Cash On Hand',  kind: 'subtotal' },
+    { key: 'inventory',          label: 'Inventory',           kind: 'balance' },
+    { key: 'workingCapital',     label: wcLabel,               kind: 'balance' },
+    { key: 'totalAssets',        label: 'Total Assets',        kind: 'subtotal' },
+
+    { header: true, label: 'ST Liabilities' },
+    { key: 'adsPayable',         label: 'Ads Payable (01000)',         kind: 'balance' },
+    { key: 'fulfillmentPayable', label: 'Fullfillment Payable (2907)', kind: 'balance' },
+
+    { header: true, label: 'LT Liabilities' },
+    { key: 'chase5718',     label: 'CHASE 5718',     kind: 'balance', leftLabel: 'OPEX CARDS' },
+    { key: 'amexPlum',      label: 'AMEX PLUM 0000', kind: 'balance' },
+    { key: 'amexBlue',      label: 'AMEX BLUE 71005', kind: 'balance' },
+    { key: 'shopifyCapital',label: 'Shopify Capital', kind: 'balance' },
+    { key: 'longTermLoan',  label: 'Long Term Loan',  kind: 'balance' },
+    { key: 'totalLiabilities',  label: 'Total Liabilities', kind: 'subtotal' },
+    { key: 'totalEquity',       label: 'Total Equity',      kind: 'subtotal' },
+    { key: 'netCashOfStLiab',   label: 'Net Cash of ST Liabilities', kind: 'subtotal' },
+
+    { header: true, label: 'Projected Statement of Cashflows For WK Starting', anchorKey: 'date' },
+    { key: 'onlineStore',     label: 'Online Store', kind: 'inflow',
+      leftLabel: 'PP %', leftValue: pct(C.ppPercent) },
+    { key: 'transferToWC',    label: 'Transfer to WC',           kind: 'outflow' },
+    { key: 'totalInflows',    label: 'Total Inflows',            kind: 'subtotal' },
+    { key: 'adsPaid',         label: 'Ads Payable (01000)',      kind: 'outflow', leftLabel: 'Variable Overhead' },
+    { key: 'fulfillmentPaid', label: 'Fullfillment Payable (2907)', kind: 'outflow' },
+    { key: 'payChase',        label: 'CHASE 5718',     kind: 'outflow', leftLabel: 'Working Capital' },
+    { key: 'payAmexPlum',     label: 'AMEX PLUM 0000', kind: 'outflow' },
+    { key: 'payAmexBlue',     label: 'AMEX BLUE 71005', kind: 'outflow' },
+    { key: 'payShopifyCapital',label: 'Shopify Capital', kind: 'outflow' },
+    { key: 'payLtLoan',       label: 'LT Loan (Nathan)', kind: 'outflow' },
+    { key: 'creativeProduction', label: 'Creative Production', kind: 'outflow',
+      leftLabel: '% of Ad Spend', leftValue: pct(C.creativePercentOfAdSpend) },
+    { key: 'salary',          label: 'Salary',          kind: 'outflow', leftLabel: 'Fixed Overhead' },
+    { key: 'ga',              label: 'G&A',             kind: 'outflow' },
+    { key: 'rd',              label: 'R&D',             kind: 'outflow' },
+    { key: 'interest',        label: 'Interest',        kind: 'outflow' },
+    { key: 'fulfillmentPaid', label: 'Fulfillment',     kind: 'outflow',
+      leftLabel: 'Fulfillment %', leftValue: pct(C.fulfillmentPercent) },
+    { key: 'totalOutflows',   label: 'Total Outflows',  kind: 'subtotal-out' },
+    { key: 'netCashFlow',     label: 'Net Cash Flow',   kind: 'subtotal' },
+    { key: 'weekIndex',       label: 'Week #',          kind: 'index' },
+
+    { header: true, label: 'Working Capital' },
+    { key: 'workingCapitalTotal', label: 'Working Capital', kind: 'subtotal' },
+    { key: 'workingCapitalOwed',  label: 'Owed',            kind: 'balance' },
+  ];
+}
+
+function fmt(v, kind) {
   if (v == null) return '';
   if (kind === 'percent') return `${(v * 100).toFixed(0)}%`;
   if (kind === 'index') return Math.round(v);
@@ -96,19 +117,18 @@ function fmtVal(v, kind) {
   return formatCurrency(v);
 }
 
-function cellColor(v, kind, isHistorical) {
-  if (v == null || kind === 'pending' || kind === 'percent' || kind === 'index') return FR.slate;
+function colorFor(v, kind, isHistorical, isCurrent) {
+  if (v == null || kind === 'pending' || kind === 'index') return FR.slate;
+  if (isCurrent) return FR.blue;
   if (isHistorical) return FR.slate;
-  if (kind === 'subtotal' || kind === 'inflow') {
-    if (v > 0) return FR.good;
-    if (v < 0) return FR.bad;
-  }
-  if (kind === 'outflow' || kind === 'subtotal-out') {
-    if (v > 0) return FR.bad;
-  }
-  if (v < 0) return FR.bad;
-  return FR.slate;
+  if (kind === 'subtotal' || kind === 'inflow') return v > 0 ? FR.good : v < 0 ? FR.bad : FR.slate;
+  if (kind === 'outflow' || kind === 'subtotal-out') return v > 0 ? FR.bad : FR.slate;
+  return v < 0 ? FR.bad : FR.slate;
 }
+
+const COL_W_LEFT = 80;   // column A
+const COL_W_LABEL = 220; // column B
+const COL_W_DATA = 88;
 
 export default function Cashflow58WeekTable() {
   const { state } = useApp();
@@ -128,26 +148,27 @@ export default function Cashflow58WeekTable() {
     [weeks, showHistorical]
   );
 
-  // Build month spans for the top header row (e.g. "MAY" colSpan=4)
+  const sections = useMemo(
+    () => buildSections(state.seed, { ...CASHFLOW_DEFAULTS, ...state.assumptions }),
+    [state.seed, state.assumptions]
+  );
+
+  // Month spans for the top header (e.g. "MAY" colSpan=4)
   const monthSpans = useMemo(() => {
     const spans = [];
-    let cur = '';
-    let span = 0;
+    let cur = '', span = 0;
     visibleWeeks.forEach(w => {
       if (w.monthLabel !== cur) {
         if (cur) spans.push({ month: cur, span });
         cur = w.monthLabel;
         span = 1;
-      } else {
-        span += 1;
-      }
+      } else span += 1;
     });
     if (cur) spans.push({ month: cur, span });
     return spans;
   }, [visibleWeeks]);
 
   const monthlyTotals = useMemo(() => {
-    // Sum revenue per month for the title row above the month bar
     const totals = {};
     visibleWeeks.forEach(w => {
       totals[w.monthLabel] = (totals[w.monthLabel] || 0) + w.shopifyRevenue;
@@ -160,25 +181,30 @@ export default function Cashflow58WeekTable() {
     [visibleWeeks]
   );
 
+  const currentWeekIndex = visibleWeeks.findIndex(w => w.isCurrent);
+  const monthDt = (mLabel) => {
+    const w = visibleWeeks.find(x => x.monthLabel === mLabel);
+    return w?.date ?? '';
+  };
+
   return (
     <div className="rounded-xl overflow-hidden border" style={{ background: 'white', borderColor: FR.sand }}>
       <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: FR.sand }}>
         <div>
           <h3 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 22 }}>
-            13 Week Cashflow — {visibleWeeks.length} weeks
+            13 Week Cashflow
           </h3>
           <p className="text-xs mt-1" style={{ color: FR.stone }}>
-            Live from OPEX, credit cards, loans + Excel-derived formulas. Ports the workbook 1:1.
+            {visibleWeeks.length} weeks · live from Plaid + OPEX · ports the workbook 1:1
           </p>
         </div>
         <button
           onClick={() => setShowHistorical(s => !s)}
-          className="text-xs px-3 py-1.5 rounded-lg border transition-colors"
+          className="text-xs px-3 py-1.5 rounded-lg border"
           style={{
             background: showHistorical ? FR.slate : 'transparent',
             color: showHistorical ? FR.salt : FR.slate,
-            borderColor: FR.sand,
-            fontFamily: "'Inter', sans-serif",
+            borderColor: FR.sand, fontFamily: "'Inter', sans-serif",
           }}
         >
           {showHistorical ? 'Hide historical' : 'Show 12 weeks of historical'}
@@ -187,43 +213,71 @@ export default function Cashflow58WeekTable() {
 
       <div className="overflow-x-auto scrollbar-thin">
         <table className="text-xs" style={{ fontFamily: "'Inter', sans-serif", borderCollapse: 'separate', borderSpacing: 0 }}>
+          <colgroup>
+            <col style={{ width: COL_W_LEFT }} />
+            <col style={{ width: COL_W_LABEL }} />
+            {visibleWeeks.map((_, i) => <col key={i} style={{ width: COL_W_DATA }} />)}
+          </colgroup>
+
           <thead>
-            {/* Row 1: grand total + month titles */}
-            <tr style={{ background: FR.navy, color: FR.salt }}>
-              <th className="sticky left-0 z-20 px-3 py-1.5 text-right font-semibold" style={{ background: FR.navy, color: FR.salt, minWidth: 80 }}></th>
-              <th className="sticky px-3 py-1.5 text-right font-semibold" style={{ background: FR.navy, color: FR.salt, minWidth: 200, position: 'sticky', left: 80, zIndex: 19 }}>
+            {/* Row 1: grand total + monthly subtotals */}
+            <tr style={{ background: FR.navyDeep, color: FR.salt }}>
+              <th colSpan={2} className="sticky left-0 z-20 px-3 py-1.5 text-right font-semibold tabular-nums"
+                  style={{ background: FR.navyDeep, color: FR.salt, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                 ${Math.round(grandTotal).toLocaleString()}
               </th>
               {monthSpans.map((m, i) => (
-                <th key={i} colSpan={m.span} className="px-2 py-1.5 text-center font-semibold border-l" style={{ borderColor: FR.navyDeep, color: FR.salt }}>
-                  {m.month} <span style={{ opacity: 0.7, fontWeight: 400 }}>${Math.round(monthlyTotals[m.month] || 0).toLocaleString()}</span>
+                <th key={i} colSpan={m.span} className="px-2 py-1 text-center border-l text-[10px] font-medium"
+                    style={{ borderColor: FR.navy, color: FR.salt, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                  ${Math.round(monthlyTotals[m.month] || 0).toLocaleString()}
                 </th>
               ))}
             </tr>
-            {/* Row 2: Week numbers */}
-            <tr style={{ background: FR.navyDeep, color: FR.salt }}>
-              <th className="sticky left-0 z-20 px-3 py-1 text-left" style={{ background: FR.navyDeep, color: FR.salt }}>Week</th>
-              <th className="sticky px-3 py-1 text-left" style={{ background: FR.navyDeep, color: FR.salt, position: 'sticky', left: 80, zIndex: 19 }}></th>
+            {/* Row 2: month names */}
+            <tr style={{ background: FR.navy, color: FR.salt }}>
+              <th colSpan={2} className="sticky left-0 z-20 px-3 py-1.5 text-left font-semibold uppercase tracking-[0.06em]"
+                  style={{ background: FR.navy }}></th>
+              {monthSpans.map((m, i) => (
+                <th key={i} colSpan={m.span} className="px-2 py-1.5 text-center border-l font-semibold uppercase tracking-[0.08em]"
+                    style={{ borderColor: FR.navyDeep, color: FR.salt, fontFamily: "'Cormorant Garamond', serif", fontSize: 13 }}>
+                  {m.month}
+                </th>
+              ))}
+            </tr>
+            {/* Row 3: week numbers */}
+            <tr style={{ background: FR.navy, color: FR.salt }}>
+              <th className="sticky left-0 z-20 px-3 py-1 text-left text-[10px] font-medium" style={{ background: FR.navy, color: FR.salt }}>Week</th>
+              <th className="sticky px-3 py-1" style={{ background: FR.navy, position: 'sticky', left: COL_W_LEFT, zIndex: 19 }}></th>
               {visibleWeeks.map((w, i) => (
-                <th key={i} className="px-2 py-1 text-center font-medium border-l" style={{ borderColor: FR.navy, minWidth: 70 }}>
+                <th key={i} className="px-2 py-1 text-center border-l text-[10px]"
+                    style={{ borderColor: FR.navyDeep, color: FR.salt, background: w.isCurrent ? FR.navyDeep : undefined }}>
                   {w.weekIndex + 1}
                 </th>
               ))}
             </tr>
-            {/* Row 3: Date row */}
-            <tr style={{ background: FR.navyDeep, color: FR.salt }}>
-              <th className="sticky left-0 z-20 px-3 py-1 text-left" style={{ background: FR.navyDeep, color: FR.salt }}>Date</th>
-              <th className="sticky px-3 py-1 text-left" style={{ background: FR.navyDeep, color: FR.salt, position: 'sticky', left: 80, zIndex: 19 }}></th>
+            {/* Row 4: dates */}
+            <tr style={{ background: FR.navy, color: FR.salt }}>
+              <th className="sticky left-0 z-20 px-3 py-1 text-left text-[10px] font-medium" style={{ background: FR.navy, color: FR.salt }}>Date</th>
+              <th className="sticky px-3 py-1" style={{ background: FR.navy, position: 'sticky', left: COL_W_LEFT, zIndex: 19 }}></th>
               {visibleWeeks.map((w, i) => (
-                <th key={i} className="px-2 py-1 text-center border-l" style={{ borderColor: FR.navy, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontWeight: w.isCurrent ? 700 : 400 }}>
+                <th key={i} className="px-2 py-1 text-center border-l text-[10px] tabular-nums"
+                    style={{
+                      borderColor: FR.navyDeep, color: FR.salt,
+                      background: w.isCurrent ? FR.navyDeep : undefined,
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontWeight: w.isCurrent ? 700 : 400,
+                    }}>
                   {w.dateLabel}
                 </th>
               ))}
             </tr>
           </thead>
+
           <tbody>
-            {SECTIONS.map((section, si) => (
-              <SectionBlock key={si} section={section} weeks={visibleWeeks} />
+            {sections.map((row, ri) => (
+              row.header
+                ? <SectionHeader key={ri} row={row} weeks={visibleWeeks} />
+                : <DataRow key={ri} row={row} weeks={visibleWeeks} prevRow={sections[ri - 1]} currentWeekIndex={currentWeekIndex} />
             ))}
           </tbody>
         </table>
@@ -232,44 +286,73 @@ export default function Cashflow58WeekTable() {
   );
 }
 
-function SectionBlock({ section, weeks }) {
+function SectionHeader({ row, weeks }) {
+  // First weekly column shows the date if anchorKey is set ('date')
+  const firstDate = row.anchorKey === 'date' && weeks[0] ? weeks[0].dateLabel : '';
   return (
-    <>
-      <tr>
-        <td colSpan={2 + weeks.length} className="px-3 py-1.5 font-semibold uppercase text-[10px] tracking-[0.12em]" style={{ background: FR.sand, color: FR.soil ?? FR.stone }}>
-          {section.header}
-        </td>
-      </tr>
-      {section.rows.map((row, ri) => (
-        <DataRow key={ri} row={row} weeks={weeks} />
+    <tr>
+      <td colSpan={2} className="sticky left-0 z-10 px-3 py-1.5 font-semibold uppercase text-[10px] tracking-[0.12em]"
+          style={{ background: FR.sand, color: FR.slate }}>
+        {row.label}
+      </td>
+      <td className="px-2 py-1.5 text-center text-[10px] tabular-nums border-l"
+          style={{ background: FR.sand, color: FR.stone, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', borderColor: 'rgba(255,255,255,0.5)' }}>
+        {firstDate}
+      </td>
+      {weeks.slice(1).map((_, i) => (
+        <td key={i} className="px-2 py-1.5 border-l" style={{ background: FR.sand, borderColor: 'rgba(255,255,255,0.5)' }} />
       ))}
-    </>
+    </tr>
   );
 }
 
-function DataRow({ row, weeks }) {
+function DataRow({ row, weeks, prevRow, currentWeekIndex }) {
   const isSubtotal = row.kind === 'subtotal' || row.kind === 'subtotal-out';
   const rowBg = isSubtotal ? 'rgba(235,229,213,0.25)' : 'transparent';
+
+  // If the previous row in the same group had the same leftLabel, skip rendering it
+  const showLeftLabel = row.leftLabel && (!prevRow || prevRow.leftLabel !== row.leftLabel);
+  // Always show leftValue when present (it's the row directly under leftLabel)
+  const leftCellTop = row.leftLabel || '';
+  const leftCellBottom = row.leftValue || '';
+
   return (
     <tr style={{ background: rowBg }}>
-      <td className="sticky left-0 z-10 px-3 py-1 text-right text-[10px]" style={{ background: 'white', color: FR.stone, minWidth: 80 }}>
-        {row.leftLabel || ''}
+      <td className="sticky left-0 z-10 px-2 py-0.5 align-top"
+          style={{ background: 'white', minWidth: COL_W_LEFT, borderRight: `1px solid ${FR.sand}` }}>
+        {showLeftLabel && (
+          <div style={{ color: FR.stone, fontSize: 9.5, lineHeight: 1.1, textAlign: 'right', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            {leftCellTop}
+          </div>
+        )}
+        {leftCellBottom && (
+          <div style={{ color: FR.slate, fontSize: 11, textAlign: 'right', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+            {leftCellBottom}
+          </div>
+        )}
       </td>
-      <td className="sticky px-3 py-1" style={{ background: 'white', color: FR.slate, fontWeight: isSubtotal ? 600 : 400, position: 'sticky', left: 80, zIndex: 9, minWidth: 200 }}>
+      <td className="sticky px-3 py-1"
+          style={{
+            background: 'white', color: FR.slate, fontWeight: isSubtotal ? 600 : 400,
+            position: 'sticky', left: COL_W_LEFT, zIndex: 9, minWidth: COL_W_LABEL,
+            borderRight: `1px solid ${FR.sand}`,
+          }}>
         {row.label}
       </td>
       {weeks.map((w, wi) => {
         const v = w[row.key];
-        const display = row.kind === 'pending' ? <span style={{ color: FR.stone, fontStyle: 'italic', fontSize: 10 }}>pending</span> : fmtVal(v, row.kind);
-        const color = cellColor(v, row.kind, w.isHistorical);
+        const isCurrentCol = wi === currentWeekIndex;
+        const display = row.kind === 'pending'
+          ? <span style={{ color: FR.stone, fontStyle: 'italic', fontSize: 10 }}>pending</span>
+          : fmt(v, row.kind);
+        const color = colorFor(v, row.kind, w.isHistorical, isCurrentCol);
         return (
           <td key={wi} className="px-2 py-1 text-right border-l tabular-nums"
               style={{
-                color,
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                color, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                 fontWeight: isSubtotal ? 600 : 400,
                 borderColor: FR.sand,
-                background: w.isCurrent ? 'rgba(31,58,87,0.05)' : 'transparent',
+                background: isCurrentCol ? 'rgba(31,58,87,0.06)' : undefined,
                 fontSize: 11,
               }}>
             {display}

@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-30T11:10:08.546Z",
+  "lastUpdated": "2026-05-01T14:44:36.767Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,54 +1044,54 @@
   ],
   "changelog": [
     {
-      "sha": "654cf85",
-      "date": "2026-04-30T10:57:34+00:00",
-      "message": "chore: regenerate state.json"
+      "sha": "7823f81",
+      "date": "2026-05-01T14:43:23+00:00",
+      "message": "wire Plaid bank accounts + refine 13-week layout to mimic xlsx"
     },
     {
-      "sha": "e1459aa",
-      "date": "2026-04-30T10:57:09+00:00",
-      "message": "fix(plm): cover image lost on cloud-only packs after save"
+      "sha": "f52ab14",
+      "date": "2026-05-01T10:58:49+00:00",
+      "message": "feat(plm): Fort Knox file storage pass — high-res, deferred GC, retries, backfill"
     },
     {
-      "sha": "e0d918f",
-      "date": "2026-04-30T10:30:06+00:00",
-      "message": "feat(plm-trims): cover-page revamp — cost tiers, quote panel, FR color picker"
+      "sha": "1a11736",
+      "date": "2026-05-01T10:33:38+00:00",
+      "message": "fix(plm): schema-resilient cloud saves + visible save errors"
     },
     {
-      "sha": "1d7eed3",
-      "date": "2026-04-30T10:03:12+00:00",
-      "message": "fix(plm-trims): reliable saves, snappy duplication, custom Trim Types"
+      "sha": "126c87b",
+      "date": "2026-05-01T13:21:34+03:00",
+      "message": "Merge pull request #14 from matasmillion/claude/vendor-send-buttons"
     },
     {
-      "sha": "1ab3025",
-      "date": "2026-04-30T10:53:15+03:00",
-      "message": "feat: permanent Saved ✓ indicator in ComponentPackBuilder header"
+      "sha": "d41fa31",
+      "date": "2026-05-01T08:12:05+00:00",
+      "message": "feat(vendor): Send Sample / Send PO buttons on tech packs + trim cards"
     },
     {
-      "sha": "37469f4",
-      "date": "2026-04-29T21:10:32+00:00",
-      "message": "show sync dot at all times, always green unless error"
+      "sha": "09cf227",
+      "date": "2026-05-01T11:06:28+03:00",
+      "message": "Merge pull request #13 from matasmillion/claude/vendor-portal-setup-jqbIB"
     },
     {
-      "sha": "f02d185",
-      "date": "2026-04-29T21:05:35+00:00",
-      "message": "add pulsing sync dot to left of Cash nav button"
+      "sha": "c798e5b",
+      "date": "2026-05-01T05:42:14+00:00",
+      "message": "feat(vendor): notification log panel + Org Settings tab"
     },
     {
-      "sha": "7cab2d4",
-      "date": "2026-04-29T21:04:10+00:00",
-      "message": "swap TopBar header: ERP title above, org name below"
+      "sha": "a10c13a",
+      "date": "2026-05-01T05:34:53+00:00",
+      "message": "feat(vendor): admin invite flow — Portal Access panel + edge function"
     },
     {
-      "sha": "12f29ea",
-      "date": "2026-04-29T20:17:30+00:00",
-      "message": "Redesign ERP top nav: 4 hover menus + settings gear"
+      "sha": "f55a3b7",
+      "date": "2026-05-01T05:22:10+00:00",
+      "message": "feat(vendor): scaffold Vendor Portal with i18n + email notifications"
     },
     {
-      "sha": "82d75ff",
-      "date": "2026-04-29T19:53:39+00:00",
-      "message": "fix(plaid): decode Clerk JWT directly instead of supabase.auth.getUser"
+      "sha": "b5e4319",
+      "date": "2026-04-30T15:34:29+00:00",
+      "message": "feat(plm-assets): Phase 7b — lazy Storage migration for atom libraries"
     }
   ]
 }
