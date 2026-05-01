@@ -24,6 +24,7 @@ import SiteFooter from './components/SiteFooter';
 import LegalRoutes from './components/legal/LegalRoutes';
 import TopBar from './components/TopBar';
 import VendorPortalRoutes from './components/vendor/VendorPortalRoutes';
+import OrgSettings from './components/settings/OrgSettings';
 
 function OrgGate({ children }) {
   const { isLoaded, organization } = useOrganization();
@@ -63,6 +64,7 @@ function Dashboard() {
         {state.activeTab === 'opex' && <OpexManager />}
         {state.activeTab === 'scenarios' && <ScenarioManager />}
         {state.activeTab === 'integrations' && <IntegrationsPanel />}
+        {state.activeTab === 'org-settings' && <OrgSettings />}
       </main>
 
       <SiteFooter />

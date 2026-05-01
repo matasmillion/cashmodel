@@ -11,6 +11,7 @@ import { Plus, X } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { Input, labelStyle } from './TechPackPrimitives';
 import { listVendorUsers, inviteVendorUser, revokeVendorUser } from '../../utils/vendorUserStore';
+import { getOrgSettings } from '../../utils/orgSettingsStore';
 
 const STATUS_COLORS = {
   active:  { fg: '#3B6D11', bg: 'rgba(59,109,17,0.10)' },
@@ -153,6 +154,20 @@ function InviteForm({ vendorName, onCancel, onDone }) {
   const [locale, setLocale] = useState('en');
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState('');
+
+  // Pre-select the org's default locale (set in Org Settings) so the
+  // operator doesn't have to flip the dropdown for every invite.
+  useEffect(() => {
+    let cancelled = false;
+    getOrgSettings()
+      .then(s => {
+        if (cancelled) return;
+        const def = s?.vendor_default_locale;
+        if (def === 'en' || def === 'zh-CN') setLocale(def);
+      })
+      .catch(() => { /* fall through to en default */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const submit = async (e) => {
     e.preventDefault();

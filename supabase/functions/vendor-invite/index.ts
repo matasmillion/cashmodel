@@ -94,10 +94,21 @@ async function handleInvite(claims: JwtClaims, payload: {
   if (vendorErr) return { status: 500, body: { error: vendorErr.message } };
   if (!vendor) return { status: 404, body: { error: `Vendor "${vendorName}" not found in this organization.` } };
 
+  // Resolve the portal origin: prefer the per-org setting from
+  // org_settings (admin can override per environment), fall back to
+  // the function-wide VENDOR_PORTAL_BASE_URL secret.
+  let portalBase = VENDOR_PORTAL_BASE_URL;
+  const { data: settings } = await admin
+    .from('org_settings')
+    .select('vendor_portal_base_url')
+    .eq('org_id', orgId)
+    .maybeSingle();
+  if (settings?.vendor_portal_base_url) portalBase = settings.vendor_portal_base_url;
+
   // Create the Clerk invitation. publicMetadata seeds the JWT claims
   // the vendor will carry once they sign up.
-  const redirectUrl = VENDOR_PORTAL_BASE_URL
-    ? `${VENDOR_PORTAL_BASE_URL.replace(/\/$/, '')}/vendor/sign-up`
+  const redirectUrl = portalBase
+    ? `${portalBase.replace(/\/$/, '')}/vendor/sign-up`
     : undefined;
   const invite = await clerkApi<{ id: string }>('/v1/invitations', {
     method: 'POST',

@@ -1,6 +1,15 @@
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync } from '../lib/auth';
 
+const DEFAULTS = {
+  anthropic_api_key: '',
+  rate_card_instructions: '',
+  vendor_default_locale: 'en',
+  vendor_portal_base_url: '',
+};
+
+const LS_FIELDS = ['anthropic_api_key', 'rate_card_instructions', 'vendor_default_locale', 'vendor_portal_base_url'];
+
 export async function getOrgSettings() {
   const orgId = getCurrentOrgIdSync();
   if (IS_SUPABASE_ENABLED && orgId) {
@@ -10,12 +19,14 @@ export async function getOrgSettings() {
       .select('*')
       .eq('org_id', orgId)
       .maybeSingle();
-    if (data) return data;
+    if (data) return { ...DEFAULTS, ...data };
   }
-  return {
-    anthropic_api_key: localStorage.getItem('anthropic_api_key') || '',
-    rate_card_instructions: localStorage.getItem('rate_card_instructions') || '',
-  };
+  const fromLs = {};
+  for (const k of LS_FIELDS) {
+    const v = localStorage.getItem(k);
+    if (v != null) fromLs[k] = v;
+  }
+  return { ...DEFAULTS, ...fromLs };
 }
 
 export async function saveOrgSettings(patch) {
@@ -28,8 +39,7 @@ export async function saveOrgSettings(patch) {
     );
     if (error) console.error('saveOrgSettings:', error);
   }
-  if (patch.anthropic_api_key !== undefined)
-    localStorage.setItem('anthropic_api_key', patch.anthropic_api_key);
-  if (patch.rate_card_instructions !== undefined)
-    localStorage.setItem('rate_card_instructions', patch.rate_card_instructions);
+  for (const k of LS_FIELDS) {
+    if (patch[k] !== undefined) localStorage.setItem(k, patch[k]);
+  }
 }

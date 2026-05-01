@@ -93,6 +93,29 @@ export async function notifyNewSample({ vendor_id, sample_id, style_id, sample_t
   return row;
 }
 
+// Read-side: list recent dispatches for a single vendor. Admin-only;
+// RLS denies vendor JWTs on this table. Used by VendorNotificationLog
+// inside the vendor editor.
+export async function listVendorNotifications(vendor_name, { limit = 50 } = {}) {
+  if (!vendor_name) return [];
+  const orgId = getCurrentOrgIdSync();
+  if (!IS_SUPABASE_ENABLED || !orgId) return [];
+  const db = await getAuthedSupabase();
+  if (!db) return [];
+  const { data, error } = await db
+    .from('vendor_notifications')
+    .select('id, event_type, subject_id, payload, delivery_status, delivery_error, actor_user_id, created_at, delivered_at')
+    .eq('organization_id', orgId)
+    .eq('vendor_id', vendor_name)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.error('listVendorNotifications:', error);
+    return [];
+  }
+  return data || [];
+}
+
 // vendor_notifications is append-only (see CLAUDE.md).
 export function updateVendorNotification() {
   throw new Error('vendor_notifications is append-only. Inserts only.');

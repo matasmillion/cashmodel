@@ -182,11 +182,23 @@ Deno.serve(async (req) => {
     return new Response('no recipients', { status: 200 });
   }
 
+  // Per-org override of the portal origin, falling back to the
+  // VENDOR_PORTAL_BASE_URL secret. Cheaper to fetch once per dispatch
+  // than per recipient.
+  let portalBase = PORTAL_BASE_URL;
+  const { data: settings } = await admin
+    .from('org_settings')
+    .select('vendor_portal_base_url')
+    .eq('org_id', audit.organization_id)
+    .maybeSingle();
+  if (settings?.vendor_portal_base_url) portalBase = settings.vendor_portal_base_url;
+  const ctaHref = `${portalBase.replace(/\/$/, '')}/vendor`;
+
   const errors: string[] = [];
   for (const r of list) {
     const locale = pickLocale(r.preferred_locale);
     const copy = COPY[locale][body.event_type];
-    const html = renderHtml(locale, copy.subject, copy.body, copy.cta, `${PORTAL_BASE_URL}/vendor`);
+    const html = renderHtml(locale, copy.subject, copy.body, copy.cta, ctaHref);
     const result = await sendOneEmail({ to: r.email, subject: copy.subject, html });
     if (!result.ok) errors.push(`${r.email}: ${result.error}`);
   }
