@@ -58,6 +58,7 @@ const PRIMARY_NAV = [
 
 const SETTINGS_MENU = [
   { kind: 'link', to: '/account/security', label: 'Account' },
+  { kind: 'tab', tabId: 'org-settings', label: 'Org Settings' },
   { kind: 'tab', tabId: 'integrations', label: 'Integrations' },
   { kind: 'tab', tabId: 'scenarios', label: 'Scenarios' },
   { kind: 'signout', label: 'Sign Out' },

@@ -273,6 +273,24 @@ export async function transitionPO(id, newStatus, payload = {}) {
       .eq('organization_id', orgId);
     if (error) console.error('transitionPO:', error);
   }
+
+  // Vendor portal: a PO becoming `placed` is the trigger to email the
+  // vendor. Fire-and-forget — the notify store handles its own audit
+  // row and edge-function dispatch; failures here must never throw.
+  if (newStatus === 'placed' && next.vendor_id) {
+    try {
+      const { notifyNewPO } = await import('./vendorNotificationStore');
+      notifyNewPO({
+        vendor_id: next.vendor_id,
+        po_id: next.id,
+        po_code: next.code,
+        style_id: next.style_id,
+        units: next.units,
+        due_date: next.placed_at,
+      });
+    } catch (err) { console.error('notifyNewPO:', err); }
+  }
+
   return next;
 }
 

@@ -37,6 +37,14 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 input[type="number"] { -moz-appearance: textfield; }
 
+/* Activated by <html class="cjk"> when the i18n provider switches to a
+   Chinese locale. Per CLAUDE.md, CJK copy needs line-height ≥ 1.6 and a
+   font stack that falls back to the system Chinese face. */
+html.cjk {
+  font-family: 'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  line-height: 1.6;
+}
+
 .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
 .scrollbar-thin::-webkit-scrollbar-track { background: var(--fr-sand); }
 .scrollbar-thin::-webkit-scrollbar-thumb { background: var(--fr-stone); border-radius: 3px; }

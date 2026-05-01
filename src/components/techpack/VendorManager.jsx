@@ -19,6 +19,8 @@ import {
 import { fileToDataUrl } from '../../utils/cropImage';
 import { uploadAsset, deleteAsset, isLegacyDataUrl, dataUrlToBlob } from '../../utils/plmAssets';
 import CoverThumb from './CoverThumb';
+import VendorPortalAccessPanel from './VendorPortalAccessPanel';
+import VendorNotificationLog from './VendorNotificationLog';
 
 export default function VendorManager() {
   const [vendors, setVendors] = useState(() => listVendorsLocal());
@@ -372,6 +374,9 @@ function VendorEditor({ name, onClose, onDeleted }) {
               </div>
             </div>
           </div>
+
+          {hasRecord && <VendorPortalAccessPanel vendorName={name} />}
+          {hasRecord && <VendorNotificationLog vendorName={name} />}
 
           <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${FR.sand}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
             <div style={{ fontSize: 10, color: FR.stone, fontStyle: 'italic' }}>

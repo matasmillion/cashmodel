@@ -23,6 +23,8 @@ import UserProfilePage from './components/auth/UserProfilePage';
 import SiteFooter from './components/SiteFooter';
 import LegalRoutes from './components/legal/LegalRoutes';
 import TopBar from './components/TopBar';
+import VendorPortalRoutes from './components/vendor/VendorPortalRoutes';
+import OrgSettings from './components/settings/OrgSettings';
 
 function OrgGate({ children }) {
   const { isLoaded, organization } = useOrganization();
@@ -62,6 +64,7 @@ function Dashboard() {
         {state.activeTab === 'opex' && <OpexManager />}
         {state.activeTab === 'scenarios' && <ScenarioManager />}
         {state.activeTab === 'integrations' && <IntegrationsPanel />}
+        {state.activeTab === 'org-settings' && <OrgSettings />}
       </main>
 
       <SiteFooter />
@@ -101,6 +104,12 @@ function RoutedApp() {
             chrome, with no auth gate — these pages are publicly
             accessible per the rollout spec. */}
         <Route path="/legal/*" element={<LegalRoutes />} />
+        {/* /vendor/* — external surface, separate auth (Clerk
+            sign-in/up scoped to the vendor portal), separate i18n
+            provider, and hard cost/internal-data redaction at the
+            store layer. Mounts entirely outside the internal app
+            shell and the OrgGate. */}
+        <Route path="/vendor/*" element={<VendorPortalRoutes />} />
         {/* Sign-in / sign-up are public; Clerk's Restricted sign-up
             mode enforces the invite gate at /sign-up. */}
         <Route path="/sign-in/*" element={<SignInPage />} />
