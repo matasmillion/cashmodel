@@ -11,7 +11,7 @@ import { useState } from 'react';
 import { X, Send } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { Input } from './TechPackPrimitives';
-import { createPO, transitionPO } from '../../utils/productionStore';
+import { createAndPlacePO } from '../../utils/productionStore';
 
 export default function SendPOModal({ vendorName, styleId, onCancel, onSent }) {
   const [units, setUnits] = useState('');
@@ -28,7 +28,10 @@ export default function SendPOModal({ vendorName, styleId, onCancel, onSent }) {
     setSubmitting(true);
     setErr('');
     try {
-      const po = await createPO({
+      // createAndPlacePO is atomic: if the place step fails it deletes
+      // the draft so we don't leave an orphan PO sitting in the admin
+      // list that nobody asked for.
+      const po = await createAndPlacePO({
         vendor_id: vendorName,
         style_id: styleId,
         units: Number(units),
@@ -36,10 +39,6 @@ export default function SendPOModal({ vendorName, styleId, onCancel, onSent }) {
         lead_days: Number(leadDays) || 0,
         notes,
       });
-      // Transitioning to `placed` is what triggers the vendor email
-      // (notifyNewPO is called from inside transitionPO). It also
-      // freezes the BOM snapshot.
-      await transitionPO(po.id, 'placed');
       onSent({ po_code: po.code });
     } catch (e2) {
       setErr(e2?.message || 'Send failed');

@@ -159,11 +159,23 @@ export function useCurrentOrg() {
  * the active org id off the global Clerk instance. Returns null if no
  * org is active or Clerk hasn't loaded.
  *
+ * Vendor portal users do not hold a Clerk Organization membership —
+ * `clerk.organization` is null for them. The vendor-invite Edge
+ * Function stamps the inviting org's id into publicMetadata so we can
+ * still derive a scope. We fall back to that here; the matching
+ * server-side fallback lives in the SQL helper jwt_org_id().
+ *
  * Use sparingly — prefer useCurrentOrg() in React components.
  * @returns {string | null}
  */
 export function getCurrentOrgIdSync() {
   if (typeof window === 'undefined') return null;
   const clerk = /** @type {any} */ (window).Clerk;
-  return clerk?.organization?.id ?? null;
+  const activeOrgId = clerk?.organization?.id;
+  if (activeOrgId) return activeOrgId;
+  const meta = clerk?.user?.publicMetadata;
+  if (meta && typeof meta.organization_id === 'string' && meta.organization_id) {
+    return meta.organization_id;
+  }
+  return null;
 }

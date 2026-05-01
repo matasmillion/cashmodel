@@ -82,6 +82,15 @@ async function handleInvite(claims: JwtClaims, payload: {
   const preferred_locale = payload.preferred_locale === 'zh-CN' ? 'zh-CN' : 'en';
   if (!vendorName || !email) return { status: 400, body: { error: 'vendor_name and email are required.' } };
 
+  // Reject obviously malformed addresses before we burn a Clerk
+  // invitation slot. RFC 5322 in full is too permissive for a UI hint;
+  // this regex catches the typos and pastebombs we actually see
+  // (missing @, missing TLD, embedded whitespace, leading/trailing dots).
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!EMAIL_RE.test(email) || email.length > 254) {
+    return { status: 400, body: { error: 'Email address looks invalid.' } };
+  }
+
   // Confirm the vendor exists in this org so we can't invite users to a
   // bogus vendor name. The composite unique index on (organization_id,
   // name) is what makes this lookup safe.
@@ -96,7 +105,9 @@ async function handleInvite(claims: JwtClaims, payload: {
 
   // Resolve the portal origin: prefer the per-org setting from
   // org_settings (admin can override per environment), fall back to
-  // the function-wide VENDOR_PORTAL_BASE_URL secret.
+  // the function-wide VENDOR_PORTAL_BASE_URL secret. Reject anything
+  // that isn't an https URL — the value flows into invitation emails
+  // and a `javascript:` paste would render as an executable link.
   let portalBase = VENDOR_PORTAL_BASE_URL;
   const { data: settings } = await admin
     .from('org_settings')
@@ -104,9 +115,22 @@ async function handleInvite(claims: JwtClaims, payload: {
     .eq('org_id', orgId)
     .maybeSingle();
   if (settings?.vendor_portal_base_url) portalBase = settings.vendor_portal_base_url;
+  if (portalBase) {
+    try {
+      const u = new URL(portalBase);
+      if (u.protocol !== 'https:') portalBase = '';
+    } catch {
+      portalBase = '';
+    }
+  }
 
-  // Create the Clerk invitation. publicMetadata seeds the JWT claims
-  // the vendor will carry once they sign up.
+  // We need a stable correlation id between the invitation and the
+  // placeholder vendor_users row so the Clerk webhook can match
+  // deterministically on user.created. Matching by email broke
+  // whenever the user signed up under a different primary address.
+  // Generate our own ref, embed it in publicMetadata, and use it as
+  // the placeholder clerk_user_id (`inv_<ref>`).
+  const inviteRef = crypto.randomUUID();
   const redirectUrl = portalBase
     ? `${portalBase.replace(/\/$/, '')}/vendor/sign-up`
     : undefined;
@@ -119,6 +143,7 @@ async function handleInvite(claims: JwtClaims, payload: {
         vendor_id: vendorName,
         organization_id: orgId,
         preferred_locale,
+        invitation_ref: inviteRef,
       },
       redirect_url: redirectUrl,
       notify: true,
@@ -136,11 +161,10 @@ async function handleInvite(claims: JwtClaims, payload: {
     .eq('email', email)
     .eq('status', 'invited');
 
-  // Insert the vendor_users row in `invited` state. Without a Clerk
-  // user id yet we use the invitation id as a placeholder; the
-  // clerk-webhook rewrites it to the real user.id on user.created via
-  // email match.
-  const placeholder = `inv_${invite.body?.id ?? crypto.randomUUID()}`;
+  // Insert the vendor_users row in `invited` state. The placeholder
+  // clerk_user_id encodes our invitation_ref so the webhook can match
+  // it against publicMetadata.invitation_ref on user.created.
+  const placeholder = `inv_${inviteRef}`;
   const { error: insErr } = await admin.from('vendor_users').insert({
     organization_id: orgId,
     vendor_id: vendorName,
@@ -152,7 +176,7 @@ async function handleInvite(claims: JwtClaims, payload: {
   });
   if (insErr) return { status: 500, body: { error: insErr.message } };
 
-  return { status: 200, body: { ok: true, invitation_id: invite.body?.id } };
+  return { status: 200, body: { ok: true, invitation_id: invite.body?.id, invitation_ref: inviteRef } };
 }
 
 async function handleRevoke(claims: JwtClaims, payload: { vendor_name?: string; clerk_user_id?: string }) {

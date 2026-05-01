@@ -19,30 +19,31 @@ import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync } from '../lib/auth';
 
 // ── Cost / internal-data redaction ─────────────────────────────────────────
+//
+// WHITELIST, not blacklist. Any column not listed here is hidden from
+// the vendor by default — adding a `total_landed_cost` migration
+// tomorrow won't accidentally leak margin. If a new field genuinely
+// needs to be vendor-visible, add it here explicitly.
 
-const REDACTED_PO_FIELDS = new Set([
-  'unit_cost_usd',
-  'total_cost',
-  'total_cost_actual',
-  'cost_per_unit_usd',
-  'margin',
-  'internal_notes',
+const VISIBLE_PO_FIELDS = new Set([
+  'id', 'code', 'organization_id', 'vendor_id', 'style_id',
+  'units', 'status', 'lead_days', 'size_break',
+  'placed_at', 'received_at', 'closed_at', 'cancelled_at',
+  'notes', 'created_at', 'updated_at',
 ]);
 
-const REDACTED_BOM_FIELDS = new Set([
-  'unit_cost_usd',
-  'cost_per_unit_usd',
-  'supplier_cost',
-  'margin',
-  'internal_notes',
+const VISIBLE_SAMPLE_FIELDS = new Set([
+  'id', 'organization_id', 'vendor_id', 'style_id',
+  'sample_type', 'verdict', 'courier', 'tracking_number',
+  'notes', 'requested_at', 'received_at',
+  'created_at', 'updated_at',
 ]);
 
-function redact(row, blocked) {
+function project(row, allowed) {
   if (!row || typeof row !== 'object') return row;
   const out = {};
   for (const k of Object.keys(row)) {
-    if (blocked.has(k)) continue;
-    out[k] = row[k];
+    if (allowed.has(k)) out[k] = row[k];
   }
   return out;
 }
@@ -115,7 +116,7 @@ export async function listVendorPOs() {
   }
   return (data || [])
     .filter(r => STATUSES_VISIBLE_TO_VENDOR.has(r.status))
-    .map(r => redact(r, REDACTED_PO_FIELDS));
+    .map(r => project(r, VISIBLE_PO_FIELDS));
 }
 
 export async function getVendorPO(id) {
@@ -134,7 +135,7 @@ export async function getVendorPO(id) {
   ).maybeSingle();
   if (error || !data) return null;
   if (!STATUSES_VISIBLE_TO_VENDOR.has(data.status)) return null;
-  return redact(data, REDACTED_PO_FIELDS);
+  return project(data, VISIBLE_PO_FIELDS);
 }
 
 // Vendor acknowledges a PO — appends an audit row. We never let the
@@ -160,13 +161,7 @@ export async function acknowledgeVendorPO(po_id) {
   return row;
 }
 
-// ── Sample requests (vendor-facing, redacted) ──────────────────────────────
-
-const REDACTED_SAMPLE_FIELDS = new Set([
-  'cost_per_unit_usd',
-  'internal_notes',
-  'rating',
-]);
+// ── Sample requests (vendor-facing, projected) ─────────────────────────────
 
 export async function listVendorSamples() {
   const orgId = getCurrentOrgIdSync();
@@ -184,7 +179,7 @@ export async function listVendorSamples() {
     console.error('listVendorSamples:', error);
     return [];
   }
-  return (data || []).map(r => redact(r, REDACTED_SAMPLE_FIELDS));
+  return (data || []).map(r => project(r, VISIBLE_SAMPLE_FIELDS));
 }
 
 export async function getVendorSample(id) {
@@ -202,7 +197,7 @@ export async function getVendorSample(id) {
       .eq('organization_id', orgId)
   ).maybeSingle();
   if (error || !data) return null;
-  return redact(data, REDACTED_SAMPLE_FIELDS);
+  return project(data, VISIBLE_SAMPLE_FIELDS);
 }
 
 // ── Vendor preferences (locale, contact email) ─────────────────────────────

@@ -245,25 +245,52 @@ Deno.serve(async (req) => {
       }
 
       // Vendor portal: when an invited user completes sign-up they
-      // arrive carrying publicMetadata.vendor_id (set by the
-      // vendor-invite Edge Function on the original invitation). The
-      // invite row was inserted with a placeholder clerk_user_id of
-      // `inv_<invitation_id>` keyed by email — so on user.created we
-      // match by email + invited status, then rewrite the row with the
-      // real Clerk user id and flip status → active.
+      // arrive carrying publicMetadata.vendor_id and invitation_ref
+      // (both set by the vendor-invite Edge Function on the original
+      // invitation). The placeholder vendor_users row was inserted
+      // with clerk_user_id = 'inv_' + invitation_ref, so we look it up
+      // by that primary-key-friendly path and rewrite to the real
+      // Clerk user id, flipping status → active.
+      //
+      // Fallback to email-based lookup for any rows that pre-date the
+      // invitation_ref change — those won't carry the metadata and
+      // matching by email is the best we can do. Once those clear out,
+      // the email branch can be removed.
       const meta = (u.public_metadata ?? {}) as Record<string, unknown>;
       const vendorId = typeof meta.vendor_id === 'string' ? meta.vendor_id : '';
       const orgIdMeta = typeof meta.organization_id === 'string' ? meta.organization_id : '';
+      const inviteRef = typeof meta.invitation_ref === 'string' ? meta.invitation_ref : '';
       const email = primaryEmail(u);
-      if (vendorId && email) {
-        // Find the invited placeholder row, if any.
-        let lookup = supabase.from('vendor_users')
-          .select('clerk_user_id, organization_id')
-          .eq('email', email)
-          .eq('vendor_id', vendorId)
-          .eq('status', 'invited');
-        if (orgIdMeta) lookup = lookup.eq('organization_id', orgIdMeta);
-        const { data: inviteRows, error: lookupErr } = await lookup.limit(1);
+      if (vendorId) {
+        let inviteRows: Array<{ clerk_user_id: string; organization_id: string }> | null = null;
+        let lookupErr: unknown = null;
+
+        if (inviteRef) {
+          const placeholder = `inv_${inviteRef}`;
+          let q = supabase.from('vendor_users')
+            .select('clerk_user_id, organization_id')
+            .eq('clerk_user_id', placeholder)
+            .eq('vendor_id', vendorId)
+            .eq('status', 'invited');
+          if (orgIdMeta) q = q.eq('organization_id', orgIdMeta);
+          const r = await q.limit(1);
+          inviteRows = r.data;
+          lookupErr = r.error;
+        }
+
+        if (!lookupErr && (!inviteRows || inviteRows.length === 0) && email) {
+          // Legacy fallback: pre-Phase-1 invites land here.
+          let q = supabase.from('vendor_users')
+            .select('clerk_user_id, organization_id')
+            .eq('email', email)
+            .eq('vendor_id', vendorId)
+            .eq('status', 'invited');
+          if (orgIdMeta) q = q.eq('organization_id', orgIdMeta);
+          const r = await q.limit(1);
+          inviteRows = r.data;
+          lookupErr = r.error;
+        }
+
         if (lookupErr) {
           console.warn('clerk-webhook: vendor_users lookup failed', lookupErr);
         } else if (inviteRows && inviteRows[0]) {

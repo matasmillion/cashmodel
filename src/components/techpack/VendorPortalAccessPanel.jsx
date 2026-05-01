@@ -171,12 +171,20 @@ function InviteForm({ vendorName, onCancel, onDone }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!email.trim()) { setErr('Email is required.'); return; }
+    const trimmed = email.trim();
+    if (!trimmed) { setErr('Email is required.'); return; }
+    // Catch the typos that would otherwise burn a Clerk invitation
+    // slot and confuse the operator. Clerk and the edge function both
+    // re-validate; this is purely a UX guard.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed) || trimmed.length > 254) {
+      setErr('That doesn’t look like a valid email address.');
+      return;
+    }
     setSubmitting(true);
     setErr('');
     const res = await inviteVendorUser({
       vendor_name: vendorName,
-      email: email.trim(),
+      email: trimmed,
       preferred_locale: locale,
     });
     setSubmitting(false);

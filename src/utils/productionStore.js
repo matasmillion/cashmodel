@@ -294,6 +294,54 @@ export async function transitionPO(id, newStatus, payload = {}) {
   return next;
 }
 
+// Drop a draft PO entirely. Only callable on drafts — once a PO has
+// been placed, the BOM snapshot freezes and the vendor may have seen
+// the row, so the lifecycle moves through `cancelled` instead. Used by
+// the createAndPlacePO rollback below.
+export async function deleteDraftPO(id) {
+  if (!id) return false;
+  const rows = readLocal(PO_KEY);
+  const idx = rows.findIndex(r => r.id === id);
+  if (idx < 0) return false;
+  if (rows[idx].status !== 'draft') {
+    throw new Error(`Cannot delete PO ${id}: status is ${rows[idx].status}, only drafts can be deleted.`);
+  }
+  rows.splice(idx, 1);
+  writeLocal(PO_KEY, rows);
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { error } = await db
+      .from('purchase_orders')
+      .delete()
+      .eq('id', id)
+      .eq('organization_id', orgId)
+      .eq('status', 'draft');
+    if (error) console.error('deleteDraftPO:', error);
+  }
+  return true;
+}
+
+// Atomic "create + place" for the Send-PO modal. Without this, a
+// successful createPO followed by a failed transitionPO leaves an
+// orphan draft in both localStorage and Supabase that admins have to
+// hunt down and clean up. We own the rollback here so the modal can
+// just call one function.
+export async function createAndPlacePO(input = {}) {
+  const po = await createPO(input);
+  try {
+    const placed = await transitionPO(po.id, 'placed');
+    return placed;
+  } catch (err) {
+    // Best-effort rollback. If the delete itself fails (unlikely —
+    // the row was just inserted), we surface the original placement
+    // error to the caller so they know what actually went wrong.
+    try { await deleteDraftPO(po.id); }
+    catch (delErr) { console.error('createAndPlacePO rollback failed:', delErr); }
+    throw err;
+  }
+}
+
 async function recomputeAtomRollups(actuals) {
   const seen = new Map();
   for (const a of actuals) {

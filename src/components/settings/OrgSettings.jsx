@@ -71,11 +71,28 @@ export default function OrgSettings() {
   const onSave = async (e) => {
     e.preventDefault();
     setError('');
+    // The portal base URL is interpolated into invitation email CTAs
+    // and into the redirect_url on Clerk invitations. Reject anything
+    // that isn't an https URL — `javascript:` or `http:` would render
+    // as live links in vendor inboxes.
+    const trimmedUrl = vendorPortalBaseUrl.trim();
+    if (trimmedUrl) {
+      try {
+        const u = new URL(trimmedUrl);
+        if (u.protocol !== 'https:') {
+          setError('Vendor portal URL must start with https://.');
+          return;
+        }
+      } catch {
+        setError('Vendor portal URL is not a valid URL.');
+        return;
+      }
+    }
     setSaving(true);
     try {
       await saveOrgSettings({
         vendor_default_locale: vendorDefaultLocale,
-        vendor_portal_base_url: vendorPortalBaseUrl.trim(),
+        vendor_portal_base_url: trimmedUrl,
       });
       setSavedAt(new Date());
     } catch (err) {
