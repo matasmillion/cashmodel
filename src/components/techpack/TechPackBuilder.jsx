@@ -255,7 +255,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
         ownerId: pack.id,
         slot,
         blob,
-        skipCompress: true,
+        skipCompress: false, // canonical compression at upload layer (2400 / WebP 0.92)
       });
       setImages(p => p.map(img => {
         if (img && img._tempId === tempId) {
@@ -311,9 +311,12 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     let cancelled = false;
     migratedRef.current = true;
     (async () => {
+      // Capture each legacy entry by object reference; replacement uses
+      // reference equality on the live state so concurrent user edits
+      // can't shift the migration onto the wrong slot.
       const uploads = await Promise.allSettled(legacyEntries.map(async ({ img, i }) => {
         const blob = dataUrlToBlob(img.data);
-        if (!blob) return { i, ref: null };
+        if (!blob) return { entry: img, ref: null };
         const ref = await uploadAsset({
           scope: 'tech-packs',
           ownerId: pack.id,
@@ -321,20 +324,19 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           blob,
           skipCompress: false,
         });
-        return { i, ref };
+        return { entry: img, ref };
       }));
       if (cancelled) return;
-      const replacements = new Map();
+      const replacements = new Map(); // legacy entry object → upload ref
       for (const r of uploads) {
         if (r.status === 'fulfilled' && r.value?.ref) {
-          replacements.set(r.value.i, r.value.ref);
+          replacements.set(r.value.entry, r.value.ref);
         }
       }
       if (replacements.size === 0) return;
-      setImages(prev => prev.map((img, i) => {
-        const ref = replacements.get(i);
-        if (!ref || !img || !isLegacyDataUrl(img.data) || img.path) return img;
-        return { ...ref, name: img.name };
+      setImages(prev => prev.map(img => {
+        const ref = replacements.get(img);
+        return ref ? { ...ref, name: img.name } : img;
       }));
     })();
     return () => { cancelled = true; };

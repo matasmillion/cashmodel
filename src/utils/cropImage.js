@@ -6,7 +6,10 @@
 // pass them straight into ctx.drawImage. The output canvas is sized to the
 // crop (up to maxOut) to avoid bloating localStorage with 4K-scale photos.
 
-export function getCroppedDataUrl(src, pixelCrop, maxOut = 2000) {
+// Crop output is at high quality (0.95) and a generous max dimension
+// (2400px) so detail survives intact for the final compressForUpload
+// pass which is where real compression to WebP @ 0.92 happens.
+export function getCroppedDataUrl(src, pixelCrop, maxOut = 2400) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -32,7 +35,7 @@ export function getCroppedDataUrl(src, pixelCrop, maxOut = 2000) {
         canvas.height = outH;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, x, y, width, height, 0, 0, outW, outH);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
+        resolve(canvas.toDataURL('image/jpeg', 0.95));
       } catch (err) {
         reject(err);
       }

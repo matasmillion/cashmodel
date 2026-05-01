@@ -9,7 +9,7 @@ import { FR, DEFAULT_COMPONENT_DATA, COMPONENT_STEPS, LEGACY_STATUS_MIGRATION, L
 import { getFRColor } from '../../utils/colorLibrary';
 import { COMPONENT_STEP_FNS } from './ComponentPackSteps';
 import ComponentPackPagePreview from './ComponentPackPagePreview';
-import { saveComponentPack } from '../../utils/componentPackStore';
+import { saveComponentPack, getLocalQuotaError } from '../../utils/componentPackStore';
 import { parsePLMHash, replacePLMHash } from '../../utils/plmRouting';
 import { addPerson } from '../../utils/plmDirectory';
 import { generateComponentPackPDF, generateComponentPackSVGAsync, svgToBlob } from '../../utils/componentPackExport';
@@ -206,6 +206,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
   const [saved, setSaved] = useState(true);
   const [isDirty, setIsDirty] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [quotaWarning, setQuotaWarning] = useState(() => !!getLocalQuotaError());
   const [viewingVersionIdx, setViewingVersionIdx] = useState(null);
   const [exporting, setExporting] = useState(null);
   const [exportError, setExportError] = useState(null);
@@ -276,6 +277,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
       setSaveError(null);
       setSaved(true);
       setSaving(false);
+      setQuotaWarning(!!getLocalQuotaError());
       return { ok: true };
     } catch (err) {
       console.error(err);
@@ -401,34 +403,34 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     let cancelled = false;
     migratedRef.current = true;
     (async () => {
+      // Capture each legacy entry by its object reference. After upload,
+      // we replace using reference equality on the live state — surviving
+      // user edits (handleImgRemove preserves references; handleImgUpload
+      // appends new ones) can't accidentally shift the migration onto the
+      // wrong entry the way an index-based replacement could.
       const uploads = await Promise.allSettled(legacyEntries.map(async ({ img, i }) => {
         const blob = dataUrlToBlob(img.data);
-        if (!blob) return { i, ref: null };
+        if (!blob) return { entry: img, ref: null };
         const ref = await uploadAsset({
           scope: 'component-packs',
           ownerId: pack.id,
           slot: img.slot || `legacy-${i}`,
           blob,
-          skipCompress: false, // re-compress legacy uploads while we're at it
+          skipCompress: false, // re-compress legacy uploads through the canonical pipeline
         });
-        return { i, ref };
+        return { entry: img, ref };
       }));
       if (cancelled) return;
-      const replacements = new Map();
+      const replacements = new Map(); // legacy entry object → upload ref
       for (const r of uploads) {
         if (r.status === 'fulfilled' && r.value?.ref) {
-          replacements.set(r.value.i, r.value.ref);
+          replacements.set(r.value.entry, r.value.ref);
         }
       }
       if (replacements.size === 0) return;
-      // Apply against the *current* state (the user may have edited since
-      // the migration started) by matching on the original entry identity.
-      setImages(prev => prev.map((img, i) => {
-        const ref = replacements.get(i);
-        // Only replace if it's still the same legacy entry at that index —
-        // avoids clobbering a user upload that landed at the same index.
-        if (!ref || !img || !isLegacyDataUrl(img.data) || img.path) return img;
-        return { ...ref, name: img.name };
+      setImages(prev => prev.map(img => {
+        const ref = replacements.get(img);
+        return ref ? { ...ref, name: img.name } : img;
       }));
       // Save the migration silently — saveComponentPack will pick up the
       // current state via the next debounce tick (we just dirtied images).
@@ -497,7 +499,8 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
         ownerId: pack.id,
         slot,
         blob,
-        skipCompress: true, // primitives already compressed via resizeImage
+        skipCompress: false, // primitives now hand off high-quality blobs;
+                              // compressForUpload does the canonical 2400px / WebP 0.92 pass
       });
       setImages(p => p.map(img => {
         if (img && img._tempId === tempId) {
@@ -681,6 +684,11 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
           {saveError && (
             <span title={saveError} style={{ fontSize: 10, color: '#D4956A', background: 'rgba(212,149,106,0.12)', padding: '2px 8px', borderRadius: 3, maxWidth: 460, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               ⚠︎ Cloud save failed (kept locally): {saveError}
+            </span>
+          )}
+          {quotaWarning && (
+            <span title="Browser localStorage is full. Edits still save to the cloud, but the local backup mirror is stale until you free space (clear old packs from Trash, sign out + back in, or use a fresh tab)." style={{ fontSize: 10, color: '#A32D2D', background: 'rgba(163,45,45,0.10)', padding: '2px 8px', borderRadius: 3, maxWidth: 460, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              ⚠︎ Local cache full — cloud save still active
             </span>
           )}
           {exportError && (

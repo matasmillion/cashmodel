@@ -25,12 +25,29 @@ import { getCurrentOrgIdSync } from '../lib/auth';
 
 const BUCKET = 'plm-assets';
 
-const DEFAULT_MAX_DIM = 1600;
-const DEFAULT_QUALITY = 0.82;
-const SIGNED_URL_TTL_SECONDS = 60 * 60;
+// Canonical upload pipeline. Every PLM image goes through this exactly
+// once, regardless of how it entered (file picker → resize → crop →
+// upload). 2400px / WebP 0.92 produces ~400-700 KB files that print
+// cleanly at A4 spec sheets and look excellent in the live preview.
+//
+// Don't lower these without checking what they affect — print quality
+// regression on vendor-facing spec sheets is a known way to lose face.
+const DEFAULT_MAX_DIM = 2400;
+const DEFAULT_QUALITY = 0.92;
+// 24h signed-URL TTL lets a tab sit idle through a working day without
+// covers expiring. 5-min refresh buffer means active pages always have
+// a fresh URL well before it actually dies.
+const SIGNED_URL_TTL_SECONDS = 24 * 60 * 60;
 const SIGNED_URL_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
+// 5-second deferred GC window: when a save's orphaned paths are queued
+// for deletion, we wait this long before actually removing them from
+// Storage. Lets concurrent saves / uploads / undo paths re-claim the
+// path without ever leaving a dangling reference to a deleted file.
+const ORPHAN_DEFERRAL_MS = 5_000;
+
 const signedUrlCache = new Map(); // path -> { url, expiresAt }
+const pendingOrphans = new Map(); // path -> { timer, deletedAt }
 
 // ─────────────────────────────────────────────────────────────────────
 // Compression / encoding
@@ -173,13 +190,31 @@ export async function uploadAsset({ scope, ownerId, slot, blob, skipCompress = f
 // URL resolution (signed, cached)
 // ─────────────────────────────────────────────────────────────────────
 
+// Reject any path whose org-id prefix doesn't match the caller's
+// current org. Defends against:
+//   • Cross-org leakage from a stale URL cache after an org switch
+//   • Tampered references (e.g., a JSONB row pointing at another org)
+// When the orgId is null (auth not yet loaded), allow the request — the
+// signing call itself will fail on Storage's RLS if the JWT mismatches.
+function pathBelongsToCurrentOrg(path) {
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) return true;
+  return typeof path === 'string' && path.startsWith(orgId + '/');
+}
+
 /**
  * Resolve a single asset reference (or path) to a signed URL.
- * Returns null if Supabase is unavailable or the path is missing.
+ * Returns null if Supabase is unavailable, the path is missing, or the
+ * path belongs to a different org than the caller's session.
  */
 export async function getAssetUrl(refOrPath) {
   const path = pathOf(refOrPath);
   if (!path) return null;
+
+  if (!pathBelongsToCurrentOrg(path)) {
+    signedUrlCache.delete(path);
+    return null;
+  }
 
   const cached = signedUrlCache.get(path);
   if (cached && cached.expiresAt - SIGNED_URL_REFRESH_BUFFER_MS > Date.now()) {
@@ -210,7 +245,9 @@ export async function getAssetUrl(refOrPath) {
  * Returns Map<path, signedUrl>. Missing/failed paths are absent from the map.
  */
 export async function getAssetUrls(refsOrPaths = []) {
-  const paths = refsOrPaths.map(pathOf).filter(Boolean);
+  const paths = refsOrPaths
+    .map(pathOf)
+    .filter(p => p && pathBelongsToCurrentOrg(p));
   const result = new Map();
   if (!paths.length) return result;
 
@@ -307,6 +344,72 @@ export async function deleteAssets(refsOrPaths = []) {
     return { ok: false, error };
   }
   return { ok: true };
+}
+
+/**
+ * Schedule asset deletion deferred by ORPHAN_DEFERRAL_MS. If the same
+ * path gets re-claimed (via cancelOrphanDeletion) before the timer
+ * fires, the delete is cancelled. This is the safety net for races
+ * between a save that "orphans" a path and a concurrent upload / save
+ * that actually still needs it.
+ *
+ * Use this everywhere instead of the immediate deleteAssets() in
+ * orphan-cleanup paths. Reserve the immediate path for explicit user-
+ * initiated deletes (purge from Trash, vendor logo replace, etc.).
+ */
+export function scheduleOrphanDeletion(refsOrPaths = []) {
+  const paths = refsOrPaths.map(pathOf).filter(Boolean);
+  if (!paths.length) return;
+  const deletedAt = Date.now();
+  for (const path of paths) {
+    // Cancel any prior scheduled deletion for this path — we want the
+    // latest queue entry to win so re-claims always reset the timer.
+    const prior = pendingOrphans.get(path);
+    if (prior) clearTimeout(prior.timer);
+    const timer = setTimeout(() => {
+      pendingOrphans.delete(path);
+      deleteAssets([path]);
+    }, ORPHAN_DEFERRAL_MS);
+    pendingOrphans.set(path, { timer, deletedAt });
+  }
+}
+
+/**
+ * If a path that was scheduled for deferred deletion gets re-claimed
+ * (a concurrent upload completed, an undo restored a slot, lazy
+ * migration re-uploaded under the same path), call this to cancel the
+ * pending delete and keep the file alive.
+ */
+export function cancelOrphanDeletion(refsOrPaths = []) {
+  const paths = refsOrPaths.map(pathOf).filter(Boolean);
+  for (const path of paths) {
+    const entry = pendingOrphans.get(path);
+    if (entry) {
+      clearTimeout(entry.timer);
+      pendingOrphans.delete(path);
+    }
+  }
+}
+
+/**
+ * Clear the in-memory signed URL cache. Called when the org context
+ * changes — without this, URLs signed for org A would be served from
+ * cache when the user has already switched to org B, returning files
+ * from the wrong org (or 403 once Storage's RLS catches up).
+ */
+export function clearAssetUrlCache() {
+  signedUrlCache.clear();
+}
+
+/**
+ * Invalidate a single path's cached signed URL. Used by the onError
+ * handler in image renderers — when an `<img src=signed_url>` errors
+ * out (typically expired or revoked), evict the cached URL so the next
+ * resolve forces a fresh sign.
+ */
+export function invalidateAssetUrl(refOrPath) {
+  const path = pathOf(refOrPath);
+  if (path) signedUrlCache.delete(path);
 }
 
 // ─────────────────────────────────────────────────────────────────────

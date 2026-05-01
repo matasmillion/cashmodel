@@ -3,9 +3,14 @@
 
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
-import { persistableImages, deleteAssets, copyAsset } from './plmAssets';
+import { persistableImages, deleteAssets, copyAsset, scheduleOrphanDeletion, cancelOrphanDeletion } from './plmAssets';
 
 const LOCAL_KEY = 'cashmodel_techpacks';
+
+// localStorage quota state — see componentPackStore for the rationale.
+let lastQuotaError = null;
+export function getTechPackLocalQuotaError() { return lastQuotaError; }
+export function clearTechPackLocalQuotaError() { lastQuotaError = null; }
 
 // Records written before the factory→vendor rename carry the old keys
 // (`factory`, `factoryContact`, `factoryConfirmed`, `finalApproval.factory`).
@@ -41,8 +46,15 @@ function readLocal() {
 function writeLocal(packs) {
   try {
     localStorage.setItem(LOCAL_KEY, JSON.stringify(packs));
+    if (lastQuotaError) lastQuotaError = null;
+    return { ok: true };
   } catch (err) {
     console.error('Failed to save tech packs locally:', err);
+    const isQuota = err && (err.name === 'QuotaExceededError'
+      || err.code === 22
+      || /quota/i.test(err.message || ''));
+    if (isQuota) lastQuotaError = err;
+    return { ok: false, error: err, quota: !!isQuota };
   }
 }
 
@@ -238,6 +250,11 @@ export async function saveTechPack(id, updates) {
   // are valid.
   let patch = { ...corePatch };
   let lastError = null;
+  let networkAttempts = 0;
+  const isTransientNetworkError = (err) => {
+    const msg = String(err?.message || '').toLowerCase();
+    return /networkerror|failed to fetch|timeout|aborted|temporarily|rate limit|503|502|504|connection/i.test(msg);
+  };
   for (let attempt = 0; attempt < 4; attempt++) {
     const { error } = await db
       .from('tech_packs')
@@ -245,7 +262,12 @@ export async function saveTechPack(id, updates) {
       .eq('id', id)
       .eq('organization_id', orgId);
     if (!error) {
-      if (toGc.length) deleteAssets(toGc);
+      if (toGc.length) {
+        const stillReferenced = (cleanedUpdates.images || [])
+          .map(img => img && img.path).filter(Boolean);
+        cancelOrphanDeletion(stillReferenced);
+        scheduleOrphanDeletion(toGc);
+      }
       return { ok: true };
     }
     lastError = error;
@@ -270,6 +292,12 @@ export async function saveTechPack(id, updates) {
       if (patch.updated_at !== undefined) safePatch.updated_at = patch.updated_at;
       if (Object.keys(safePatch).length === Object.keys(patch).length) break;
       patch = safePatch;
+      continue;
+    }
+    if (isTransientNetworkError(error) && networkAttempts < 3) {
+      const delay = [200, 600, 1400][networkAttempts];
+      networkAttempts += 1;
+      await new Promise(r => setTimeout(r, delay));
       continue;
     }
     break;

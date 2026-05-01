@@ -4,7 +4,7 @@ import { FR, FR_COLOR_OPTIONS, resizeImage } from './techPackConstants';
 import { listFRColors } from '../../utils/colorLibrary';
 import { autoCropDataUrl } from '../../utils/autoCrop';
 import { fileToDataUrl } from '../../utils/cropImage';
-import { getAssetUrl } from '../../utils/plmAssets';
+import { getAssetUrl, invalidateAssetUrl } from '../../utils/plmAssets';
 import CropModal from './CropModal';
 
 // AssetImage — render an image entry that may be:
@@ -21,21 +21,59 @@ export function AssetImage({ image, alt, style, onLoad, onError }) {
   // state once it resolves.
   const inlineSrc = image?.data || image?._blobUrl || '';
   const [resolvedPathSrc, setResolvedPathSrc] = useState('');
+  // Bump on retry to force a fresh resolve, and bail out after one
+  // attempt so a permanently-broken path doesn't loop forever.
+  const [retryToken, setRetryToken] = useState(0);
+  const [renderFailed, setRenderFailed] = useState(false);
+  // Reset retry/error state when the input image changes — without this,
+  // an entry that errored out in slot N stays "broken" even after the
+  // user replaces it with a fresh upload, because the component instance
+  // persists across prop changes.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    setRenderFailed(false);
+    setRetryToken(0);
+  }, [image?.data, image?._blobUrl, image?.path]);
   useEffect(() => {
     if (image?.data || image?._blobUrl || !image?.path) return undefined;
     let cancelled = false;
     getAssetUrl(image.path).then(url => { if (!cancelled && url) setResolvedPathSrc(url); });
     return () => { cancelled = true; };
-  }, [image?.data, image?._blobUrl, image?.path]);
+  }, [image?.data, image?._blobUrl, image?.path, retryToken]);
 
   const src = inlineSrc || resolvedPathSrc;
   const isUploading = image?._uploading;
+
+  const handleImgError = (e) => {
+    // First failure: assume the cached URL expired or got revoked. Evict
+    // and force one re-resolve. Second failure: surface a "broken"
+    // indicator so the user can manually retry instead of staring at a
+    // blank slot.
+    if (image?.path && retryToken === 0) {
+      invalidateAssetUrl(image.path);
+      setResolvedPathSrc('');
+      setRetryToken(t => t + 1);
+    } else {
+      setRenderFailed(true);
+    }
+    if (onError) onError(e);
+  };
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      {src ? (
-        <img src={src} alt={alt || ''} style={style} onLoad={onLoad} onError={onError} />
+      {src && !renderFailed ? (
+        <img src={src} alt={alt || ''} style={style} onLoad={onLoad} onError={handleImgError} />
       ) : (
-        <div style={{ width: '100%', height: '100%', background: FR.salt }} />
+        <div style={{ width: '100%', height: '100%', background: FR.salt, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {renderFailed && (
+            <button
+              onClick={() => { setRenderFailed(false); setResolvedPathSrc(''); setRetryToken(t => t + 1); }}
+              title="Image failed to load — click to retry"
+              style={{ background: 'rgba(212,149,106,0.12)', color: '#854F0B', border: `1px solid rgba(212,149,106,0.4)`, borderRadius: 3, padding: '4px 10px', fontSize: 9, letterSpacing: 0.5, cursor: 'pointer', fontWeight: 600 }}>
+              ⟳ Retry image
+            </button>
+          )}
+        </div>
       )}
       {isUploading && (
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(245,240,232,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: FR.soil, letterSpacing: 0.5, fontWeight: 600 }}>

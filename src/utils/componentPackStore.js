@@ -3,9 +3,16 @@
 
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
-import { persistableImages, deleteAssets, copyAsset } from './plmAssets';
+import { persistableImages, deleteAssets, copyAsset, scheduleOrphanDeletion, cancelOrphanDeletion } from './plmAssets';
 
 const LOCAL_KEY = 'cashmodel_component_packs';
+
+// localStorage quota state — surfaced via getLocalQuotaError() so the
+// builder UI can show a real banner when writes start failing instead
+// of silently swallowing every save.
+let lastQuotaError = null;
+export function getLocalQuotaError() { return lastQuotaError; }
+export function clearLocalQuotaError() { lastQuotaError = null; }
 
 // Materials and the final-approval slot used to be keyed `factory`; the rename
 // landed in componentPackConstants but pre-rename rows still hold the old key.
@@ -32,7 +39,23 @@ function readLocal() {
   try { return JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]'); } catch { return []; }
 }
 function writeLocal(rows) {
-  try { localStorage.setItem(LOCAL_KEY, JSON.stringify(rows)); } catch (err) { console.error(err); }
+  try {
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(rows));
+    if (lastQuotaError) lastQuotaError = null;
+    return { ok: true };
+  } catch (err) {
+    // Quota errors are how localStorage tells us "your local backup is
+    // stale and any future cross-session edits will lean entirely on
+    // cloud." Capture the error so the builder UI can surface it
+    // prominently — silent swallowing was the failure mode that
+    // produced months of confusion.
+    console.error('writeLocal:', err);
+    const isQuota = err && (err.name === 'QuotaExceededError'
+      || err.code === 22
+      || /quota/i.test(err.message || ''));
+    if (isQuota) lastQuotaError = err;
+    return { ok: false, error: err, quota: !!isQuota };
+  }
 }
 
 // Cover extraction handles both shapes:
@@ -265,8 +288,17 @@ export async function saveComponentPack(id, updates) {
   // number of times — instead of dropping the whole save and showing the
   // user a "Cloud save failed" pill. Local already wrote successfully, so
   // edits are never lost; this just keeps cloud in sync best-effort.
+  //
+  // Network-resilient save: transient failures (timeout, ECONNRESET, 5xx)
+  // get retried with exponential backoff (200ms / 600ms / 1.4s / 3s) up
+  // to 4 attempts before giving up.
   let patch = { ...corePatch };
   let lastError = null;
+  let networkAttempts = 0;
+  const isTransientNetworkError = (err) => {
+    const msg = String(err?.message || '').toLowerCase();
+    return /networkerror|failed to fetch|timeout|aborted|temporarily|rate limit|503|502|504|connection/i.test(msg);
+  };
   for (let attempt = 0; attempt < 4; attempt++) {
     const { error } = await db
       .from('component_packs')
@@ -274,7 +306,17 @@ export async function saveComponentPack(id, updates) {
       .eq('id', id)
       .eq('organization_id', orgId);
     if (!error) {
-      if (toGc.length) deleteAssets(toGc);
+      if (toGc.length) {
+        // Cancel any pending deferred-deletes for paths in the new
+        // images set (a re-claimed path must never be deleted), then
+        // schedule deletion of orphans with a 5s grace window so a
+        // concurrent in-flight save / upload that re-claims the path
+        // can rescue it.
+        const stillReferenced = (cleanedUpdates.images || [])
+          .map(img => img && img.path).filter(Boolean);
+        cancelOrphanDeletion(stillReferenced);
+        scheduleOrphanDeletion(toGc);
+      }
       return { ok: true };
     }
     lastError = error;
@@ -305,6 +347,12 @@ export async function saveComponentPack(id, updates) {
       if (patch.updated_at !== undefined) safePatch.updated_at = patch.updated_at;
       if (Object.keys(safePatch).length === Object.keys(patch).length) break;
       patch = safePatch;
+      continue;
+    }
+    if (isTransientNetworkError(error) && networkAttempts < 3) {
+      const delay = [200, 600, 1400][networkAttempts];
+      networkAttempts += 1;
+      await new Promise(r => setTimeout(r, delay));
       continue;
     }
     break;

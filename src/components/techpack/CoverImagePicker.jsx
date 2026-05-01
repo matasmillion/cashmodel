@@ -100,7 +100,7 @@ export default function CoverImagePicker({
         ownerId: assetOwnerId,
         slot: assetSlot,
         blob,
-        skipCompress: true, // already resized + cropped client-side
+        skipCompress: false, // canonical compression at upload layer (2400 / WebP 0.92)
       });
       const previousValue = value;
       onChange(ref.path);

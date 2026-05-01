@@ -1,6 +1,8 @@
+import { useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { ClerkProvider, useOrganization, CreateOrganization } from '@clerk/clerk-react';
 import { AppProvider, useApp } from './context/AppContext';
+import { clearAssetUrlCache } from './utils/plmAssets';
 import ErrorBoundary from './components/ErrorBoundary';
 import KPICards from './components/KPICards';
 import CashflowTable from './components/CashflowTable';
@@ -28,6 +30,17 @@ import OrgSettings from './components/settings/OrgSettings';
 
 function OrgGate({ children }) {
   const { isLoaded, organization } = useOrganization();
+  // Watch for org switches and flush every PLM signed-URL cache so a
+  // member of multiple orgs never sees a cached URL signed against the
+  // previous org's bucket prefix.
+  const lastOrgIdRef = useRef(null);
+  useEffect(() => {
+    const id = organization?.id || null;
+    if (lastOrgIdRef.current !== null && lastOrgIdRef.current !== id) {
+      clearAssetUrlCache();
+    }
+    lastOrgIdRef.current = id;
+  }, [organization?.id]);
   if (!isLoaded) return null;
   if (!organization) {
     return (
