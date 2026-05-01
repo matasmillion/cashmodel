@@ -11,6 +11,7 @@ import PackTrashView from './PackTrashView';
 import { FR, DEFAULT_COMPONENT_DATA, STATUSES, LEGACY_STATUS_MIGRATION } from './componentPackConstants';
 import ComponentPackBuilder from './ComponentPackBuilder';
 import { CostPill } from './TechPackPrimitives';
+import SendToVendorButton from './SendToVendorButton';
 import { listComponentPacks, createComponentPack, getComponentPack, deleteComponentPack, duplicateComponentPack, saveComponentPack, listDeletedComponentPacks, restoreComponentPack, purgeComponentPack } from '../../utils/componentPackStore';
 import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
 import { listAllSuppliers, listAllPeople, listAllTrimTypes } from '../../utils/plmDirectory';
@@ -96,6 +97,7 @@ function GridCard({ pack, onOpen, onDuplicate, onDelete, duplicating }) {
           <span style={{ fontSize: 9, color: FR.stone, marginLeft: 'auto' }}>{formatDate(pack.updated_at)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, marginTop: 8, borderTop: `1px solid ${FR.sand}`, paddingTop: 6 }}>
+          <SendToVendorButton vendorName={pack.supplier} styleId={pack.id} variant="card" />
           <button onClick={e => { e.stopPropagation(); onDuplicate(pack.id); }} disabled={duplicating}
             title={duplicating ? 'Duplicating…' : 'Duplicate'}
             style={{ padding: 4, border: 'none', background: 'transparent', color: FR.stone, cursor: duplicating ? 'wait' : 'pointer', opacity: duplicating ? 0.5 : 1 }}>

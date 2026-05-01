@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ArrowLeft, History, Plus, CheckCircle, XCircle, Clock, Camera } from 'lucide-react';
 import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STEPS, IMG_STEPS, computeCompletion, isStepLocked, computeBOMCost, computeColorwayCost, SAMPLE_TYPES, SAMPLE_VERDICTS } from './techPackConstants';
+import SendToVendorButton from './SendToVendorButton';
 import { STEP_FNS } from './TechPackSteps';
 import TechPackPagePreview from './TechPackPagePreview';
 import { saveTechPack } from '../../utils/techPackStore';
@@ -451,6 +452,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <SendToVendorButton vendorName={data.vendor || ''} styleId={pack.id} variant="header" />
           {pendingUploads > 0
             ? <span style={{ fontSize: 10, color: FR.soil }}>Uploading {pendingUploads} image{pendingUploads === 1 ? '' : 's'}…</span>
             : saving
