@@ -244,6 +244,59 @@ Deno.serve(async (req) => {
         return new Response('db write failed', { status: 500 });
       }
 
+      // Vendor portal: when an invited user completes sign-up they
+      // arrive carrying publicMetadata.vendor_id (set by the
+      // vendor-invite Edge Function on the original invitation). The
+      // invite row was inserted with a placeholder clerk_user_id of
+      // `inv_<invitation_id>` keyed by email — so on user.created we
+      // match by email + invited status, then rewrite the row with the
+      // real Clerk user id and flip status → active.
+      const meta = (u.public_metadata ?? {}) as Record<string, unknown>;
+      const vendorId = typeof meta.vendor_id === 'string' ? meta.vendor_id : '';
+      const orgIdMeta = typeof meta.organization_id === 'string' ? meta.organization_id : '';
+      const email = primaryEmail(u);
+      if (vendorId && email) {
+        // Find the invited placeholder row, if any.
+        let lookup = supabase.from('vendor_users')
+          .select('clerk_user_id, organization_id')
+          .eq('email', email)
+          .eq('vendor_id', vendorId)
+          .eq('status', 'invited');
+        if (orgIdMeta) lookup = lookup.eq('organization_id', orgIdMeta);
+        const { data: inviteRows, error: lookupErr } = await lookup.limit(1);
+        if (lookupErr) {
+          console.warn('clerk-webhook: vendor_users lookup failed', lookupErr);
+        } else if (inviteRows && inviteRows[0]) {
+          const inv = inviteRows[0];
+          // Replace the placeholder with the real user id by
+          // delete-then-insert: the primary key is
+          // (organization_id, clerk_user_id) so an UPDATE that changes
+          // the PK isn't supported in one shot.
+          await supabase.from('vendor_users')
+            .delete()
+            .eq('organization_id', inv.organization_id)
+            .eq('clerk_user_id', inv.clerk_user_id);
+          const { error: insErr } = await supabase.from('vendor_users').insert({
+            organization_id: inv.organization_id,
+            vendor_id: vendorId,
+            clerk_user_id: u.id,
+            email,
+            preferred_locale: typeof meta.preferred_locale === 'string' ? meta.preferred_locale : 'en',
+            status: 'active',
+            invited_at: new Date().toISOString(),
+            joined_at: new Date().toISOString(),
+          });
+          if (insErr) console.warn('clerk-webhook: vendor_users activate failed', insErr);
+        } else if (event.type === 'user.updated') {
+          // Subsequent updates (preferred_locale, etc.) — keep the
+          // active row's metadata in sync without touching the PK.
+          const { error: updErr } = await supabase.from('vendor_users')
+            .update({ email })
+            .eq('clerk_user_id', u.id);
+          if (updErr) console.warn('clerk-webhook: vendor_users sync failed', updErr);
+        }
+      }
+
       if (event.type === 'user.updated') {
         const { enrolled, removed } = diffMfaFactors(prevSnapshot, u);
         for (const factorKey of enrolled) {
@@ -257,6 +310,17 @@ Deno.serve(async (req) => {
       }
     } else if (event.type === 'user.deleted') {
       const id = event.data.id;
+      // Mark any vendor_users row for this Clerk user as revoked
+      // before we drop the underlying users row. Keeps the audit
+      // trail intact (we don't hard-delete vendor_users) while
+      // preventing the user from regaining portal access.
+      const { error: vuErr } = await supabase
+        .from('vendor_users')
+        .update({ status: 'revoked' })
+        .eq('clerk_user_id', id);
+      if (vuErr) {
+        console.warn('clerk-webhook: vendor_users revoke on delete failed', vuErr);
+      }
       // FK on auth_events cascades — deleting the user removes their
       // event history. That matches the published Data Retention
       // Policy §4 "User accounts (internal)" row.

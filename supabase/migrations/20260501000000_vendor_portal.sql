@@ -40,9 +40,14 @@ $$ language sql stable;
 -- 2. vendor_users — Clerk user ↔ vendor mapping
 -- ─────────────────────────────────────────────────────────────────────
 
+-- vendor_id stores the vendor's NAME (matching purchase_orders.vendor_id
+-- and treatments.primary_vendor_id throughout the codebase). Vendor
+-- names are unique per (organization_id, name) on public.vendors. We
+-- intentionally don't FK to vendors(id) because the rest of the
+-- codebase doesn't use vendors.id as the join key.
 create table if not exists public.vendor_users (
   organization_id  text not null references public.organizations(id) on delete cascade,
-  vendor_id        text not null references public.vendors(id) on delete cascade,
+  vendor_id        text not null,
   clerk_user_id    text not null,
   email            text not null,
   preferred_locale text not null default 'en',
@@ -60,10 +65,11 @@ create index if not exists vendor_users_vendor_idx
 -- 3. sample_requests — internal-side creates, vendor-side reads
 -- ─────────────────────────────────────────────────────────────────────
 
+-- vendor_id below stores the vendor's name; see vendor_users comment.
 create table if not exists public.sample_requests (
   id                text primary key default gen_random_uuid()::text,
   organization_id   text not null references public.organizations(id) on delete cascade,
-  vendor_id         text not null references public.vendors(id) on delete cascade,
+  vendor_id         text not null,
   style_id          text not null default '',
   sample_type       text not null default 'Proto',
   verdict           text not null default 'Pending'
@@ -90,7 +96,7 @@ create index if not exists sample_requests_vendor_idx
 create table if not exists public.vendor_po_acknowledgements (
   id              text primary key default gen_random_uuid()::text,
   organization_id text not null references public.organizations(id) on delete cascade,
-  vendor_id       text not null references public.vendors(id) on delete cascade,
+  vendor_id       text not null,
   po_id           text not null references public.purchase_orders(id) on delete cascade,
   acknowledged_at timestamptz not null default now()
 );
@@ -105,7 +111,7 @@ create index if not exists vendor_po_ack_po_idx
 create table if not exists public.vendor_notifications (
   id              text primary key default gen_random_uuid()::text,
   organization_id text not null references public.organizations(id) on delete cascade,
-  vendor_id       text not null references public.vendors(id) on delete cascade,
+  vendor_id       text not null,
   event_type      text not null
                   check (event_type in ('po.placed', 'sample.requested')),
   subject_id      text not null,

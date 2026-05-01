@@ -49,9 +49,11 @@ function redact(row, blocked) {
 
 // ── Vendor identity (Clerk user → vendor record) ───────────────────────────
 
-// Synchronous read of the active vendor id. Mirrors getCurrentOrgIdSync
-// in shape — webhook writes `vendor_id` into Clerk publicMetadata when
-// the user is invited under a vendor scope.
+// Synchronous read of the active vendor name. The vendor_id throughout
+// the codebase (purchase_orders.vendor_id, treatments.primary_vendor_id,
+// etc.) stores the vendor's NAME. The webhook writes the same name
+// into Clerk publicMetadata under the key `vendor_id` when the admin
+// invites a vendor user.
 export function getCurrentVendorIdSync() {
   if (typeof window === 'undefined') return null;
   const clerk = /** @type {any} */ (window).Clerk;
@@ -59,20 +61,20 @@ export function getCurrentVendorIdSync() {
   return (meta && typeof meta.vendor_id === 'string' && meta.vendor_id) || null;
 }
 
-// React-friendly resolver. Components should call useCurrentVendorId()
-// from src/components/vendor/useCurrentVendorId.js — this is the
-// store-layer fallback for plain modules.
+// Loads the vendor profile (contact info, country, etc.) for the
+// active vendor user. Looks up by name since that's the join key the
+// rest of the codebase uses.
 export async function resolveCurrentVendor() {
   const orgId = getCurrentOrgIdSync();
-  const vendorId = getCurrentVendorIdSync();
-  if (!IS_SUPABASE_ENABLED || !orgId || !vendorId) return null;
+  const vendorName = getCurrentVendorIdSync();
+  if (!IS_SUPABASE_ENABLED || !orgId || !vendorName) return null;
   const db = await getAuthedSupabase();
   if (!db) return null;
   const { data, error } = await db
     .from('vendors')
     .select('id, name, country, city, primary_contact, email, phone, website')
     .eq('organization_id', orgId)
-    .eq('id', vendorId)
+    .eq('name', vendorName)
     .maybeSingle();
   if (error || !data) return null;
   return data;
