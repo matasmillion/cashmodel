@@ -259,16 +259,58 @@ export async function saveComponentPack(id, updates) {
   if (!IS_SUPABASE_ENABLED || !orgId) return { ok: true };
 
   const db = await getAuthedSupabase();
-  const { error } = await db.from('component_packs').update(corePatch).eq('id', id).eq('organization_id', orgId);
-  if (error) {
-    console.error('saveComponentPack:', error);
-    return { ok: false, error };
+  // Schema-resilient save: if Postgres / PostgREST rejects the patch because
+  // a column is missing (column added recently, schema cache stale, etc.),
+  // we strip the failing column from the patch and retry — up to a small
+  // number of times — instead of dropping the whole save and showing the
+  // user a "Cloud save failed" pill. Local already wrote successfully, so
+  // edits are never lost; this just keeps cloud in sync best-effort.
+  let patch = { ...corePatch };
+  let lastError = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const { error } = await db
+      .from('component_packs')
+      .update(patch)
+      .eq('id', id)
+      .eq('organization_id', orgId);
+    if (!error) {
+      if (toGc.length) deleteAssets(toGc);
+      return { ok: true };
+    }
+    lastError = error;
+    // Match Postgres "column ... does not exist" and PostgREST
+    // "Could not find the 'X' column" / "schema cache" wording. If a
+    // specific column is named, drop just that one. Otherwise drop every
+    // non-essential column (keep data + images so the user's actual edits
+    // still land).
+    const msg = String(error.message || error.details || '');
+    const named = msg.match(/column\s+(?:["']?)([\w.]+)(?:["']?)\s+(?:does not exist|of relation)/i)
+      || msg.match(/Could not find the '([^']+)' column/i)
+      || msg.match(/the '([^']+)' column .* (?:does not exist|schema cache)/i);
+    if (named && named[1]) {
+      const col = named[1].split('.').pop();
+      if (col in patch) {
+        const next = { ...patch };
+        delete next[col];
+        patch = next;
+        continue;
+      }
+    }
+    if (/schema cache|does not exist|could not find.*column/i.test(msg)) {
+      // Generic schema mismatch — strip every projection column, keep only
+      // the JSONB payloads so the save still represents the user's edits.
+      const safePatch = {};
+      if (patch.data !== undefined) safePatch.data = patch.data;
+      if (patch.images !== undefined) safePatch.images = patch.images;
+      if (patch.updated_at !== undefined) safePatch.updated_at = patch.updated_at;
+      if (Object.keys(safePatch).length === Object.keys(patch).length) break;
+      patch = safePatch;
+      continue;
+    }
+    break;
   }
-  // Fire-and-forget orphan cleanup. Failures are logged inside deleteAssets
-  // and don't affect save success — orphans are unreferenced files in a
-  // private bucket; a future scheduled sweep can also catch any missed.
-  if (toGc.length) deleteAssets(toGc);
-  return { ok: true };
+  console.error('saveComponentPack:', lastError);
+  return { ok: false, error: lastError };
 }
 
 // Soft delete — moves a pack to Trash. Storage files are intentionally

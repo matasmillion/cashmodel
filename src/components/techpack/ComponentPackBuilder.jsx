@@ -679,8 +679,8 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
             <Save size={11} /> Save
           </button>
           {saveError && (
-            <span title={saveError} style={{ fontSize: 10, color: '#D4956A', background: 'rgba(212,149,106,0.12)', padding: '2px 8px', borderRadius: 3 }}>
-              ⚠︎ Cloud save failed — edits kept locally
+            <span title={saveError} style={{ fontSize: 10, color: '#D4956A', background: 'rgba(212,149,106,0.12)', padding: '2px 8px', borderRadius: 3, maxWidth: 460, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              ⚠︎ Cloud save failed (kept locally): {saveError}
             </span>
           )}
           {exportError && (

@@ -232,17 +232,50 @@ export async function saveTechPack(id, updates) {
   if (!IS_SUPABASE_ENABLED || !orgId) return { ok: true };
 
   const db = await getAuthedSupabase();
-  const { error } = await db
-    .from('tech_packs')
-    .update(corePatch)
-    .eq('id', id)
-    .eq('organization_id', orgId);
-  if (error) {
-    console.error('saveTechPack:', error);
-    return { ok: false, error };
+  // Schema-resilient save — see saveComponentPack for the rationale. Local
+  // already wrote successfully; this loop keeps cloud in sync best-effort
+  // when the DB or PostgREST schema cache disagrees about which columns
+  // are valid.
+  let patch = { ...corePatch };
+  let lastError = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const { error } = await db
+      .from('tech_packs')
+      .update(patch)
+      .eq('id', id)
+      .eq('organization_id', orgId);
+    if (!error) {
+      if (toGc.length) deleteAssets(toGc);
+      return { ok: true };
+    }
+    lastError = error;
+    const msg = String(error.message || error.details || '');
+    const named = msg.match(/column\s+(?:["']?)([\w.]+)(?:["']?)\s+(?:does not exist|of relation)/i)
+      || msg.match(/Could not find the '([^']+)' column/i)
+      || msg.match(/the '([^']+)' column .* (?:does not exist|schema cache)/i);
+    if (named && named[1]) {
+      const col = named[1].split('.').pop();
+      if (col in patch) {
+        const next = { ...patch };
+        delete next[col];
+        patch = next;
+        continue;
+      }
+    }
+    if (/schema cache|does not exist|could not find.*column/i.test(msg)) {
+      const safePatch = {};
+      if (patch.data !== undefined) safePatch.data = patch.data;
+      if (patch.images !== undefined) safePatch.images = patch.images;
+      if (patch.library !== undefined) safePatch.library = patch.library;
+      if (patch.updated_at !== undefined) safePatch.updated_at = patch.updated_at;
+      if (Object.keys(safePatch).length === Object.keys(patch).length) break;
+      patch = safePatch;
+      continue;
+    }
+    break;
   }
-  if (toGc.length) deleteAssets(toGc);
-  return { ok: true };
+  console.error('saveTechPack:', lastError);
+  return { ok: false, error: lastError };
 }
 
 // Soft delete — moves a tech pack to Trash. Storage files stay so a

@@ -457,7 +457,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
             ? <span style={{ fontSize: 10, color: FR.soil }}>Uploading {pendingUploads} image{pendingUploads === 1 ? '' : 's'}…</span>
             : saving
               ? <span style={{ fontSize: 10, color: FR.sage }}>Saving…</span>
-              : saveError && <span title={saveError} style={{ fontSize: 10, color: '#A32D2D' }}>⚠︎ Save failed — kept locally</span>}
+              : saveError && <span title={saveError} style={{ fontSize: 10, color: '#A32D2D', maxWidth: 460, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>⚠︎ Save failed (kept locally): {saveError}</span>}
           {/* Cost roll-up — BOM + colorway (wash/dye). */}
           <div style={{ textAlign: 'right' }} title={`BOM ${formatCost(bomCost)}  ·  Colorways ${formatCost(colorwayCost)}`}>
             <div style={{ fontSize: 9, color: FR.stone }}>Total Unit Cost</div>
