@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-01T14:44:36.767Z",
+  "lastUpdated": "2026-05-02T12:05:47.810Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,7 +1044,7 @@
   ],
   "changelog": [
     {
-      "sha": "7823f81",
+      "sha": "5da8121",
       "date": "2026-05-01T14:43:23+00:00",
       "message": "wire Plaid bank accounts + refine 13-week layout to mimic xlsx"
     },

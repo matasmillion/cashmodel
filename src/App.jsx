@@ -6,6 +6,7 @@ import { clearAssetUrlCache } from './utils/plmAssets';
 import ErrorBoundary from './components/ErrorBoundary';
 import KPICards from './components/KPICards';
 import CashflowTable from './components/CashflowTable';
+import Cashflow58WeekTable from './components/Cashflow58WeekTable';
 import UnitEconomics from './components/UnitEconomics';
 import POBuilder from './components/POBuilder';
 import POSchedule from './components/POSchedule';
@@ -63,7 +64,7 @@ function Dashboard() {
         {state.activeTab === 'dashboard' && (
           <>
             <KPICards />
-            <CashflowTable />
+            <Cashflow58WeekTable />
           </>
         )}
         {state.activeTab === 'revenue' && <RevenueForecast />}
