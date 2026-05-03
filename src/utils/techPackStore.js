@@ -289,6 +289,13 @@ export async function saveTechPack(id, updates) {
 
   let db = await getAuthedSupabase();
   const userId = getCurrentUserIdSync();
+
+  // Ensure the org row exists before writing. See componentPackStore for
+  // the full rationale. Best-effort — silently skipped if RPC not deployed.
+  try {
+    await db.rpc('ensure_org_exists', { p_org_id: jwtOrgId, p_org_name: '' });
+  } catch (_) { /* best-effort */ }
+
   // Upsert (not update) — see saveComponentPack for the full rationale.
   // Without this, a save against a row that doesn't exist in cloud
   // (most commonly a duplicate whose fire-and-forget INSERT was eaten)

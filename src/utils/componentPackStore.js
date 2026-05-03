@@ -346,6 +346,16 @@ export async function saveComponentPack(id, updates) {
 
   let db = await getAuthedSupabase();
   const userId = getCurrentUserIdSync();
+
+  // Ensure the org row exists in public.organizations before writing any
+  // PLM rows that FK-reference it. The Clerk webhook that auto-creates org
+  // rows may not be configured, so we call ensure_org_exists() as a cheap
+  // SECURITY DEFINER RPC that upserts the org record. This is a no-op if
+  // the row already exists (ON CONFLICT DO NOTHING).
+  try {
+    await db.rpc('ensure_org_exists', { p_org_id: jwtOrgId, p_org_name: '' });
+  } catch (_) { /* best-effort — if the RPC doesn't exist yet, proceed anyway */ }
+
   // Upsert (not update) so a save against a row that doesn't yet exist
   // in cloud — most commonly because a duplicate's fire-and-forget
   // insert was silently eaten — actually creates it. The previous
