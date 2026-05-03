@@ -21,8 +21,17 @@
 --   {
 --     "org_id":    "{{org.id}}",
 --     "vendor_id": "{{user.public_metadata.vendor_id}}",
---     "role":      "{{user.public_metadata.role}}"
+--     "app_role":  "{{user.public_metadata.role}}"
 --   }
+-- ⚠ DO NOT name the app-role claim "role" at the top level — Supabase
+-- PostgREST treats the JWT's top-level `role` claim as the Postgres
+-- role to SET LOCAL ROLE into. A claim like `role: "admin"` will then
+-- error out as `role "admin" does not exist` on every authenticated
+-- request (Storage uploads included). Use `app_role` (or any other
+-- name) and let PostgREST default the Postgres role to "authenticated".
+-- All RLS policies in this codebase read the app role via
+-- `auth.jwt() #>> '{public_metadata,role}'`, which works regardless of
+-- whether `app_role` is also present at the top level.
 -- The clerk-webhook Edge Function stamps publicMetadata.vendor_id when
 -- the admin invites a vendor user; the webhook also upserts a row into
 -- vendor_users for the same purpose, since the JWT alone isn't enough
