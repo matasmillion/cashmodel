@@ -418,6 +418,26 @@ export function AspectPhoto({ slotKey, aspect = ASPECTS.A4_LANDSCAPE, images, on
           <>
             <AssetImage image={current} alt={current.name || slotKey}
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            {current._uploadError && (
+              <div
+                onClick={e => e.stopPropagation()}
+                style={{ position: 'absolute', inset: 0, background: 'rgba(245,240,232,0.92)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 16, gap: 8 }}>
+                <div style={{ fontSize: 11, color: '#A32D2D', fontWeight: 600, letterSpacing: 0.3 }}>⚠ Upload failed</div>
+                <div style={{ fontSize: 10, color: FR.stone, textAlign: 'center', maxWidth: 240, lineHeight: 1.4 }}>{current._uploadError}</div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  <button
+                    onClick={e => { e.stopPropagation(); recropCurrent(); }}
+                    style={{ padding: '4px 10px', borderRadius: 4, background: FR.soil, color: FR.salt, border: 'none', fontSize: 10, cursor: 'pointer', fontWeight: 600, letterSpacing: 0.3 }}>
+                    Retry upload
+                  </button>
+                  <button
+                    onClick={e => { e.stopPropagation(); onRemove(slotKey, 0); }}
+                    style={{ padding: '4px 10px', borderRadius: 4, background: 'transparent', color: FR.stone, border: `1px solid ${FR.sand}`, fontSize: 10, cursor: 'pointer' }}>
+                    Remove
+                  </button>
+                </div>
+              </div>
+            )}
             <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
               <button onClick={e => { e.stopPropagation(); recropCurrent(); }}
                 title="Recrop"

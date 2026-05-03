@@ -12,7 +12,7 @@ import { resizeImage } from './techPackConstants';
 import { parsePLMHash, replacePLMHash } from '../../utils/plmRouting';
 import { getFRColorCost } from '../../utils/colorLibrary';
 import { formatCost } from './TechPackPrimitives';
-import { uploadAsset, dataUrlToBlob, isLegacyDataUrl, useResolvedImageEntries } from '../../utils/plmAssets';
+import { uploadAsset, dataUrlToBlob, isLegacyDataUrl, useResolvedImageEntries, isGhostImage } from '../../utils/plmAssets';
 
 function sanitizeFilename(s) {
   return (s || 'techpack').replace(/[^\w\-]+/g, '_').slice(0, 60);
@@ -298,6 +298,22 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // Runs once per pack mount; user can keep editing while it works in the
   // background. AssetImage renders both shapes so nothing flickers.
   const migratedRef = useRef(false);
+  // One-shot ghost cleanup — see ComponentPackBuilder for the full
+  // rationale. Failed uploads (e.g. the JWT-template misconfiguration)
+  // poisoned existing rows with sourceless { slot, name } entries that
+  // would otherwise lock slots into a blank state forever. Scrubbing on
+  // mount + marking dirty makes the next save remove them from cloud.
+  const ghostCleanedRef = useRef(false);
+  useEffect(() => {
+    if (ghostCleanedRef.current) return;
+    const initial = pack.images || [];
+    const ghostCount = initial.filter(isGhostImage).length;
+    if (ghostCount === 0) { ghostCleanedRef.current = true; return; }
+    ghostCleanedRef.current = true;
+    setImages(prev => (prev || []).filter(img => !isGhostImage(img)));
+    setIsDirty(true);
+    setSaved(false);
+  }, [pack.id, pack.images]);
   useEffect(() => {
     if (migratedRef.current) return;
     const initialImages = pack.images || [];

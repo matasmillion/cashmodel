@@ -10,7 +10,7 @@
 // was.
 
 import { useEffect, useState } from 'react';
-import { Library, Shirt, Package, Scissors, Palette, Layers, Sparkles, Building2, Boxes, PenTool, Download } from 'lucide-react';
+import { Library, Shirt, Package, Scissors, Palette, Layers, Sparkles, Building2, Boxes, PenTool, Download, ShieldCheck } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { exportAllPlmData } from '../../utils/plmBackup';
 import TechPackList from './TechPackList';
@@ -29,6 +29,7 @@ import { seedFabricsIfEmpty } from '../../utils/fabricStore';
 import { seedEmbellishmentsIfEmpty } from '../../utils/embellishmentStore';
 import ProductionList from '../production/ProductionList';
 import ProductionDetail from '../production/ProductionDetail';
+import StorageHealthPanel from './StorageHealthPanel';
 
 const TOP_TABS = [
   { id: 'library', label: 'Library', icon: Library },
@@ -170,6 +171,11 @@ export default function PLMView() {
             style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 11px', borderRadius: 5, fontSize: 11, background: 'transparent', color: FR.stone, border: `0.5px solid ${FR.sand}`, cursor: backingUp ? 'wait' : 'pointer', letterSpacing: 0.3 }}>
             <Download size={12} /> {backingUp ? 'Backing up…' : 'Backup'}
           </button>
+          <button onClick={() => switchLayer('storage-health')}
+            title="Inspect Storage usage, find ghost references and orphan files, repair inconsistencies."
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 11px', borderRadius: 5, fontSize: 11, background: route.layer === 'storage-health' ? FR.slate : 'transparent', color: route.layer === 'storage-health' ? FR.salt : FR.stone, border: `0.5px solid ${route.layer === 'storage-health' ? FR.slate : FR.sand}`, cursor: 'pointer', letterSpacing: 0.3 }}>
+            <ShieldCheck size={12} /> Storage Health
+          </button>
         </div>
       </div>
 
@@ -200,6 +206,8 @@ export default function PLMView() {
       {route.layer === 'production' && (route.packId
         ? <ProductionDetail poId={route.packId} onBack={() => setPLMHash({ layer: 'production' })} />
         : <ProductionList />)}
+
+      {route.layer === 'storage-health' && <StorageHealthPanel />}
     </div>
   );
 }

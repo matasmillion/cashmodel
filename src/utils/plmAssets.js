@@ -584,16 +584,40 @@ export function useResolvedImageEntries(images = []) {
 /**
  * Persistable image entry — drops transient fields (object URLs, upload
  * status flags) so they don't end up in the DB.
+ *
+ * Critical: also drops any entry that ends up with no `path` and no
+ * `data` after stripping. Without this, a failed upload (or a
+ * placeholder that never resolved) gets persisted as `{ slot, name }`
+ * with no source — a ghost entry that locks the slot into a blank
+ * state and can't be recovered without manual deletion. Filtering at
+ * the persist boundary is the single chokepoint that guarantees we
+ * never write a sourceless image into the DB. (See also
+ * isGhostImage / countGhosts for diagnostic + cleanup helpers.)
  */
 export function persistableImage(img) {
-  if (!img) return img;
-  const { _blobUrl, _uploading, _uploadError, ...rest } = img;
+  if (!img) return null;
+  const { _blobUrl, _uploading, _uploadError, _tempId, ...rest } = img;
+  if (!rest.path && !rest.data) return null;
   return rest;
 }
 
-/** Strip transient fields from every entry in an images array. */
+/** Strip transient fields from every entry in an images array AND drop
+ *  ghost entries that lack both a Storage path and an inline data URL. */
 export function persistableImages(images = []) {
   return (images || []).map(persistableImage).filter(Boolean);
+}
+
+/** True when the entry will render as nothing — no Storage path, no
+ *  data URL, no in-flight blob. Used by the builder's auto-repair to
+ *  detect ghost entries already saved into the row's images JSONB. */
+export function isGhostImage(img) {
+  if (!img || typeof img !== 'object') return true;
+  return !img.path && !img.data && !img._blobUrl;
+}
+
+/** Count ghost entries in an images array. */
+export function countGhosts(images = []) {
+  return (images || []).filter(isGhostImage).length;
 }
 
 // ─────────────────────────────────────────────────────────────────────

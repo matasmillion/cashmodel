@@ -15,7 +15,7 @@ import { addPerson } from '../../utils/plmDirectory';
 import { generateComponentPackPDF, generateComponentPackSVGAsync, svgToBlob } from '../../utils/componentPackExport';
 import { downloadBlob } from '../../utils/downloadBlob';
 import { CostPill } from './TechPackPrimitives';
-import { uploadAsset, dataUrlToBlob, isLegacyDataUrl, useResolvedImageEntries, persistableImages } from '../../utils/plmAssets';
+import { uploadAsset, dataUrlToBlob, isLegacyDataUrl, useResolvedImageEntries, persistableImages, isGhostImage } from '../../utils/plmAssets';
 
 function sanitizeFilename(s) {
   return (s || 'trimpack').replace(/[^\w\-]+/g, '_').slice(0, 60);
@@ -390,6 +390,24 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
   // When all uploads finish, we save the migrated images array silently
   // (no dirty flag, no debounce) so subsequent payloads stop being huge.
   const migratedRef = useRef(false);
+  // One-shot ghost cleanup: when the row was saved while uploads were
+  // failing (e.g. the JWT-template misconfiguration), the placeholder
+  // got persisted as { slot, name } with no source — a ghost entry.
+  // On mount we scrub them from local state so they vanish from the UI
+  // immediately, then mark dirty so the next save also strips them
+  // from the cloud row. Ghost cleanup runs even when there are no
+  // legacy base64 entries, so it triggers on its own.
+  const ghostCleanedRef = useRef(false);
+  useEffect(() => {
+    if (ghostCleanedRef.current) return;
+    const initial = pack.images || [];
+    const ghostCount = initial.filter(isGhostImage).length;
+    if (ghostCount === 0) { ghostCleanedRef.current = true; return; }
+    ghostCleanedRef.current = true;
+    setImages(prev => (prev || []).filter(img => !isGhostImage(img)));
+    setIsDirty(true);
+    setSaved(false);
+  }, [pack.id, pack.images]);
   useEffect(() => {
     if (migratedRef.current) return;
     const initialImages = pack.images || [];
