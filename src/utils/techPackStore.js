@@ -1,8 +1,8 @@
 // Tech Pack storage — dual-write to localStorage + Supabase when available
 // Used by the TechPack list and builder views
 
-import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
-import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
+import { IS_SUPABASE_ENABLED, getAuthedSupabase, refreshAuthedSupabase } from '../lib/supabase';
+import { getCurrentUserIdSync, getCurrentOrgIdSync, getJwtOrgId } from '../lib/auth';
 import { persistableImages, deleteAssets, copyAsset, scheduleOrphanDeletion, cancelOrphanDeletion } from './plmAssets';
 
 const LOCAL_KEY = 'cashmodel_techpacks';
@@ -240,19 +240,37 @@ export async function saveTechPack(id, updates) {
   }
   writeLocal(packs);
 
-  const orgId = getCurrentOrgIdSync();
-  if (!IS_SUPABASE_ENABLED || !orgId) return { ok: true };
+  const clientOrgId = getCurrentOrgIdSync();
+  if (!IS_SUPABASE_ENABLED || !clientOrgId) return { ok: true };
 
-  const db = await getAuthedSupabase();
+  // Use the JWT's org_id claim as the authoritative organization_id — mirrors
+  // saveComponentPack. See that function for the full rationale.
+  let jwtOrgId = await getJwtOrgId();
+  if (!jwtOrgId || jwtOrgId !== clientOrgId) {
+    jwtOrgId = await getJwtOrgId({ skipCache: true });
+  }
+  if (!jwtOrgId) {
+    const jwtErr = Object.assign(new Error('JWT is missing the org_id claim — open Storage Health to diagnose'), { code: 'JWT_NO_ORG_ID' });
+    console.error('saveTechPack:', jwtErr);
+    return { ok: false, error: jwtErr };
+  }
+
+  let db = await getAuthedSupabase();
   const userId = getCurrentUserIdSync();
   // Upsert (not update) — see saveComponentPack for the full rationale.
   // Without this, a save against a row that doesn't exist in cloud
   // (most commonly a duplicate whose fire-and-forget INSERT was eaten)
   // matches zero rows and reports success while the user's edits drop
   // into the void. Upsert with onConflict: id makes saves self-healing.
-  let patch = { id, organization_id: orgId, user_id: userId, ...corePatch };
+  let patch = { id, organization_id: jwtOrgId, user_id: userId, ...corePatch };
+  patch.organization_id = jwtOrgId;
   let lastError = null;
   let networkAttempts = 0;
+  const isRlsError = (err) => {
+    const code = String(err?.code || '');
+    const msg = String(err?.message || '').toLowerCase();
+    return code === '42501' || /row-level security|row level security/.test(msg);
+  };
   const isTransientNetworkError = (err) => {
     const msg = String(err?.message || '').toLowerCase();
     return /networkerror|failed to fetch|timeout|aborted|temporarily|rate limit|503|502|504|connection/i.test(msg);
@@ -272,6 +290,16 @@ export async function saveTechPack(id, updates) {
     }
     lastError = error;
     const msg = String(error.message || error.details || '');
+
+    // RLS rejection — force-refresh JWT + client and retry once.
+    if (isRlsError(error) && attempt === 0) {
+      db = await refreshAuthedSupabase();
+      const refreshedOrgId = await getJwtOrgId({ skipCache: true });
+      if (refreshedOrgId) patch = { ...patch, organization_id: refreshedOrgId };
+      continue;
+    }
+    if (isRlsError(error)) break;
+
     const named = msg.match(/column\s+(?:["']?)([\w.]+)(?:["']?)\s+(?:does not exist|of relation)/i)
       || msg.match(/Could not find the '([^']+)' column/i)
       || msg.match(/the '([^']+)' column .* (?:does not exist|schema cache)/i);
