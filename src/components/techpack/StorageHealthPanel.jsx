@@ -70,7 +70,7 @@ function formatBytes(bytes) {
 // Recursively list every file under {orgId}/ in plm-assets. Supabase's
 // list endpoint returns one folder level at a time + max 1000 entries
 // per page, so we DFS the tree and accumulate.
-async function listAllStorageFiles(orgId) {
+async function listAllStorageFiles(orgId, onProgress) {
   const supabase = await getAuthedSupabase();
   if (!supabase) throw new Error('Supabase client not configured');
   const out = [];
@@ -97,6 +97,7 @@ async function listAllStorageFiles(orgId) {
           });
         }
       }
+      if (typeof onProgress === 'function') onProgress(out.length);
       if (data.length < 1000) break;
       offset += 1000;
     }
@@ -108,7 +109,7 @@ async function listAllStorageFiles(orgId) {
 // fail (table doesn't exist, RLS denies, etc.) silently contribute zero
 // — the diagnostic is best-effort and reports what it found, not what
 // it couldn't reach.
-async function loadAllImageRefs(orgId) {
+async function loadAllImageRefs(orgId, onProgress) {
   const supabase = await getAuthedSupabase();
   if (!supabase) throw new Error('Supabase client not configured');
   const refs = [];
@@ -120,6 +121,7 @@ async function loadAllImageRefs(orgId) {
   // not exist" — without the retry, every atom table was invisible to
   // the scan and recovery couldn't see those rows.
   for (const t of SCAN_TABLES) {
+    if (typeof onProgress === 'function') onProgress(t.table);
     let effectiveCoverCol = t.coverCol;
     let attempt = 0;
     while (attempt < 2) {
@@ -521,6 +523,7 @@ const btn = (variant) => ({
 
 export default function StorageHealthPanel() {
   const [scanning, setScanning] = useState(false);
+  const [scanStatus, setScanStatus] = useState('');
   const [report, setReport] = useState(null);
   const [error, setError] = useState(null);
   const [repairing, setRepairing] = useState(false);
@@ -603,15 +606,27 @@ export default function StorageHealthPanel() {
 
   const runScan = async () => {
     setScanning(true);
+    setScanStatus('Listing Storage bucket…');
     setError(null);
     setRepairResult(null);
     try {
       const orgId = getCurrentOrgIdSync();
       if (!orgId) throw new Error('No organization context — sign in first');
+      let storageCount = 0;
+      let scannedTable = '';
+      const onStorageProgress = (n) => {
+        storageCount = n;
+        setScanStatus(`Listing Storage bucket… ${n} file${n === 1 ? '' : 's'} indexed${scannedTable ? ` · cross-referencing ${scannedTable}` : ''}`);
+      };
+      const onTableProgress = (t) => {
+        scannedTable = t;
+        setScanStatus(`Cross-referencing ${t}${storageCount ? ` · ${storageCount} files indexed` : ''}`);
+      };
       const [files, refs] = await Promise.all([
-        listAllStorageFiles(orgId),
-        loadAllImageRefs(orgId),
+        listAllStorageFiles(orgId, onStorageProgress),
+        loadAllImageRefs(orgId, onTableProgress),
       ]);
+      setScanStatus('Computing report…');
       const { referencedPaths, ghosts, legacyDataCount } = summarizeRefs(refs);
       const fileSet = new Set(files.map(f => f.path));
       const orphans = files.filter(f => !referencedPaths.has(f.path));
@@ -635,6 +650,7 @@ export default function StorageHealthPanel() {
       setError(err?.message || String(err));
     } finally {
       setScanning(false);
+      setScanStatus('');
     }
   };
 
@@ -737,12 +753,40 @@ export default function StorageHealthPanel() {
         <span style={{ fontSize: 11, color: FR.stone, letterSpacing: 0.3 }}>
           Files · references · orphans · ghosts · broken paths
         </span>
-        <div style={{ marginLeft: 'auto' }}>
-          <button onClick={runScan} disabled={scanning} style={btn('primary')}>
-            <RefreshCw size={12} /> {scanning ? 'Scanning…' : (report ? 'Rescan' : 'Run scan')}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          {scanning && scanStatus && (
+            <span style={{ fontSize: 11, color: FR.stone, letterSpacing: 0.2, fontStyle: 'italic' }}>
+              {scanStatus}
+            </span>
+          )}
+          <button onClick={runScan} disabled={scanning}
+            style={{
+              ...btn('primary'),
+              ...(scanning ? { opacity: 0.85, cursor: 'wait' } : {}),
+            }}>
+            <RefreshCw size={12}
+              style={scanning ? { animation: 'plm-spin 0.9s linear infinite' } : undefined} />
+            {scanning ? 'Scanning…' : (report ? 'Rescan' : 'Run scan')}
           </button>
         </div>
       </div>
+      <style>{`@keyframes plm-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+
+      {scanning && (
+        <div style={{
+          ...card,
+          padding: 14,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          background: 'linear-gradient(90deg, rgba(245,240,232,0.6), rgba(255,255,255,0.6))',
+        }}>
+          <RefreshCw size={14} style={{ color: FR.soil, animation: 'plm-spin 0.9s linear infinite' }} />
+          <div style={{ fontSize: 12, color: FR.stone }}>
+            {scanStatus || 'Scanning…'}
+          </div>
+        </div>
+      )}
 
       {/* JWT diagnostics — surfaces the most common cause of every
           mysterious "Cloud save failed" / "RLS policy violation" error. */}
@@ -848,7 +892,7 @@ export default function StorageHealthPanel() {
       )}
 
       {report && (
-        <>
+        <div style={scanning ? { opacity: 0.55, pointerEvents: 'none', transition: 'opacity 0.2s' } : { transition: 'opacity 0.2s' }}>
           <div style={card}>
             <h3 style={sectionTitle}><HardDrive size={14} /> Storage usage</h3>
             <div style={statRow}>
@@ -1015,7 +1059,7 @@ export default function StorageHealthPanel() {
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );
