@@ -244,11 +244,13 @@ export async function saveTechPack(id, updates) {
   if (!IS_SUPABASE_ENABLED || !orgId) return { ok: true };
 
   const db = await getAuthedSupabase();
-  // Schema-resilient save — see saveComponentPack for the rationale. Local
-  // already wrote successfully; this loop keeps cloud in sync best-effort
-  // when the DB or PostgREST schema cache disagrees about which columns
-  // are valid.
-  let patch = { ...corePatch };
+  const userId = getCurrentUserIdSync();
+  // Upsert (not update) — see saveComponentPack for the full rationale.
+  // Without this, a save against a row that doesn't exist in cloud
+  // (most commonly a duplicate whose fire-and-forget INSERT was eaten)
+  // matches zero rows and reports success while the user's edits drop
+  // into the void. Upsert with onConflict: id makes saves self-healing.
+  let patch = { id, organization_id: orgId, user_id: userId, ...corePatch };
   let lastError = null;
   let networkAttempts = 0;
   const isTransientNetworkError = (err) => {
@@ -258,9 +260,7 @@ export async function saveTechPack(id, updates) {
   for (let attempt = 0; attempt < 4; attempt++) {
     const { error } = await db
       .from('tech_packs')
-      .update(patch)
-      .eq('id', id)
-      .eq('organization_id', orgId);
+      .upsert(patch, { onConflict: 'id' });
     if (!error) {
       if (toGc.length) {
         const stillReferenced = (cleanedUpdates.images || [])
@@ -277,7 +277,8 @@ export async function saveTechPack(id, updates) {
       || msg.match(/the '([^']+)' column .* (?:does not exist|schema cache)/i);
     if (named && named[1]) {
       const col = named[1].split('.').pop();
-      if (col in patch) {
+      // Never drop the upsert keys.
+      if (col in patch && !['id', 'organization_id', 'user_id'].includes(col)) {
         const next = { ...patch };
         delete next[col];
         patch = next;
@@ -285,7 +286,10 @@ export async function saveTechPack(id, updates) {
       }
     }
     if (/schema cache|does not exist|could not find.*column/i.test(msg)) {
-      const safePatch = {};
+      // id / organization_id / user_id are required for upsert INSERT.
+      const safePatch = { id: patch.id };
+      if (patch.organization_id !== undefined) safePatch.organization_id = patch.organization_id;
+      if (patch.user_id !== undefined) safePatch.user_id = patch.user_id;
       if (patch.data !== undefined) safePatch.data = patch.data;
       if (patch.images !== undefined) safePatch.images = patch.images;
       if (patch.library !== undefined) safePatch.library = patch.library;
