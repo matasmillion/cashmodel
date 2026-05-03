@@ -112,20 +112,39 @@ async function loadAllImageRefs(orgId) {
   const supabase = await getAuthedSupabase();
   if (!supabase) throw new Error('Supabase client not configured');
   const refs = [];
+  // For each table, try the full projection first. If the cover column
+  // doesn't exist (some atom tables predate the cover_image column),
+  // retry without it so the row still contributes its imagesCol or at
+  // least confirms the row exists. This is what was producing
+  // "[StorageHealth] skipped fabrics: column fabrics.cover_image does
+  // not exist" — without the retry, every atom table was invisible to
+  // the scan and recovery couldn't see those rows.
   for (const t of SCAN_TABLES) {
-    const cols = ['id'];
-    if (t.imagesCol) cols.push(t.imagesCol);
-    if (t.coverCol) cols.push(t.coverCol);
-    const { data, error } = await supabase
-      .from(t.table)
-      .select(cols.join(','))
-      .eq('organization_id', orgId);
-    if (error) {
-      console.warn(`[StorageHealth] skipped ${t.table}:`, error.message);
-      continue;
-    }
-    for (const row of data || []) {
-      refs.push({ table: t.table, row, imagesCol: t.imagesCol, coverCol: t.coverCol });
+    let effectiveCoverCol = t.coverCol;
+    let attempt = 0;
+    while (attempt < 2) {
+      const cols = ['id'];
+      if (t.imagesCol) cols.push(t.imagesCol);
+      if (effectiveCoverCol) cols.push(effectiveCoverCol);
+      const { data, error } = await supabase
+        .from(t.table)
+        .select(cols.join(','))
+        .eq('organization_id', orgId);
+      if (error) {
+        const msg = String(error.message || '');
+        if (effectiveCoverCol && /column.*does not exist/i.test(msg)) {
+          // Drop the cover column and retry once.
+          effectiveCoverCol = null;
+          attempt += 1;
+          continue;
+        }
+        console.warn(`[StorageHealth] skipped ${t.table}:`, msg);
+        break;
+      }
+      for (const row of data || []) {
+        refs.push({ table: t.table, row, imagesCol: t.imagesCol, coverCol: effectiveCoverCol });
+      }
+      break;
     }
   }
   return refs;
@@ -318,14 +337,26 @@ async function planOrphanRecovery(orphans) {
   let unmatched = 0;
   let restoredFromLocal = 0;
   for (const g of groups.values()) {
-    const cols = ['id'];
-    if (g.config.imagesCol) cols.push(g.config.imagesCol);
-    if (g.config.coverCol) cols.push(g.config.coverCol);
-    const { data: row, error } = await supabase
-      .from(g.config.table)
-      .select(cols.join(','))
-      .eq('id', g.ownerId)
-      .maybeSingle();
+    let effectiveCoverCol = g.config.coverCol;
+    let row = null;
+    let error = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const cols = ['id'];
+      if (g.config.imagesCol) cols.push(g.config.imagesCol);
+      if (effectiveCoverCol) cols.push(effectiveCoverCol);
+      const r = await supabase
+        .from(g.config.table)
+        .select(cols.join(','))
+        .eq('id', g.ownerId)
+        .maybeSingle();
+      if (r.error && effectiveCoverCol && /column.*does not exist/i.test(r.error.message || '')) {
+        effectiveCoverCol = null;
+        continue;
+      }
+      row = r.data;
+      error = r.error;
+      break;
+    }
     let restoreFromLocal = false;
     let workingRow = row;
     if (error || !row) {
@@ -374,21 +405,18 @@ async function planOrphanRecovery(orphans) {
         : g.scope === 'component-packs' ? 'component-cover'
         : null;
       let coverPatch = null;
-      if (g.config.coverCol && !workingRow[g.config.coverCol] && coverSlot) {
+      if (effectiveCoverCol && !workingRow[effectiveCoverCol] && coverSlot) {
         const coverEntry = newImages.find(i => i?.slot === coverSlot && i?.path);
         if (coverEntry) coverPatch = coverEntry.path;
       }
-      // restoreFromLocal builds a full upsert payload from the local
-      // row. update-only is enough for cloud-existing rows because
-      // every other column is already correct there.
       const patch = restoreFromLocal
         ? {
             ...sanitizeForUpsert(workingRow, orgId, userId),
             [g.config.imagesCol]: newImages,
-            ...(coverPatch ? { [g.config.coverCol]: coverPatch } : {}),
+            ...(coverPatch ? { [effectiveCoverCol]: coverPatch } : {}),
           }
         : (coverPatch
-            ? { [g.config.imagesCol]: newImages, [g.config.coverCol]: coverPatch }
+            ? { [g.config.imagesCol]: newImages, [effectiveCoverCol]: coverPatch }
             : { [g.config.imagesCol]: newImages });
       plans.push({
         table: g.config.table,
@@ -397,16 +425,17 @@ async function planOrphanRecovery(orphans) {
         addedCount: toAdd.length,
         restoreFromLocal,
       });
-    } else if (g.config.coverCol) {
-      if (workingRow[g.config.coverCol] && !restoreFromLocal) continue;
+    } else if (effectiveCoverCol) {
+      // Single-cover atom WITH a working cover column.
+      if (workingRow[effectiveCoverCol] && !restoreFromLocal) continue;
       const latest = [...bySlot.values()].sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))[0];
       if (!latest) continue;
       const patch = restoreFromLocal
         ? {
             ...sanitizeForUpsert(workingRow, orgId, userId),
-            [g.config.coverCol]: workingRow[g.config.coverCol] || latest.path,
+            [effectiveCoverCol]: workingRow[effectiveCoverCol] || latest.path,
           }
-        : { [g.config.coverCol]: latest.path };
+        : { [effectiveCoverCol]: latest.path };
       plans.push({
         table: g.config.table,
         id: g.ownerId,
@@ -415,6 +444,10 @@ async function planOrphanRecovery(orphans) {
         restoreFromLocal,
       });
     }
+    // If neither imagesCol nor a working coverCol exists for this scope
+    // (atom table where the cover_image migration never ran), there's
+    // no place to link the file in the DB. Skip — the file stays an
+    // orphan until the schema catches up.
   }
   return { plans, unmatched, restoredFromLocal };
 }
@@ -520,11 +553,46 @@ export default function StorageHealthPanel() {
       if (payload && typeof payload.exp === 'number' && payload.exp * 1000 < Date.now()) {
         issues.push('Token is expired. Refresh the page or sign out + back in.');
       }
+
+      // Server-side probe: ask Postgres what jwt_org_id() returns when
+      // it parses the JWT we just sent. Critical because the client-
+      // side decode above only proves the token *contains* org_id —
+      // it can't tell us whether Postgres can read it. If the JWT
+      // signing key isn't configured between Clerk and Supabase, the
+      // server treats the token as anonymous and auth.jwt() returns
+      // NULL even though the bytes are perfectly valid client-side.
+      // That's exactly the failure mode that produces "RLS policy
+      // violation" errors despite a green client-side check.
+      let serverOrgId = null;
+      let serverProbeError = null;
+      try {
+        const supabase = await getAuthedSupabase();
+        if (supabase) {
+          const { data, error } = await supabase.rpc('jwt_org_id');
+          if (error) serverProbeError = error.message;
+          else serverOrgId = data ?? null;
+        }
+      } catch (err) {
+        serverProbeError = err?.message || String(err);
+      }
+      if (payload?.org_id && !serverOrgId) {
+        issues.push(
+          'Server-side jwt_org_id() returns NULL — Postgres cannot read the JWT. ' +
+          'The Clerk JWT template is not signed with your Supabase JWT secret. ' +
+          'In the Clerk Dashboard → JWT Templates → "supabase", set the Signing key to your Supabase project\'s JWT secret ' +
+          '(Supabase → Project Settings → API → JWT Settings → JWT Secret), then sign out + back in.'
+        );
+      } else if (payload?.org_id && serverOrgId && serverOrgId !== payload.org_id) {
+        issues.push(`Server sees org_id "${serverOrgId}" but JWT bytes carry "${payload.org_id}". Sign out + back in.`);
+      }
+
       setJwtInfo({
         loading: false,
         present: !!token,
         payload,
         clientOrgId,
+        serverOrgId,
+        serverProbeError,
         issues,
       });
     } catch (err) {
@@ -701,9 +769,15 @@ export default function StorageHealthPanel() {
           {!jwtInfo.loading && jwtInfo.present && jwtInfo.payload && (
             <>
               <div style={statRow}>
-                <span style={statLabel}>JWT org_id</span>
+                <span style={statLabel}>JWT org_id (token bytes)</span>
                 <span style={{ ...statValue, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13 }}>
                   {jwtInfo.payload.org_id || <span style={{ color: '#A32D2D' }}>—</span>}
+                </span>
+              </div>
+              <div style={statRow}>
+                <span style={statLabel}>Server jwt_org_id()</span>
+                <span style={{ ...statValue, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13, color: jwtInfo.serverOrgId === jwtInfo.payload.org_id ? FR.slate : '#A32D2D' }}>
+                  {jwtInfo.serverOrgId || <span style={{ color: '#A32D2D' }}>NULL · Postgres can&apos;t read JWT</span>}
                 </span>
               </div>
               <div style={statRow}>
