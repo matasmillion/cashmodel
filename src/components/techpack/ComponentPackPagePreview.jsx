@@ -10,6 +10,23 @@ const PAGE_H = 794;
 const TOTAL_PAGES = 8;
 
 function esc(s) { return String(s ?? ''); }
+
+// Pick black or white text for a given background hex using the WCAG
+// relative-luminance formula. Used by the colorway swatch chip so light
+// FR colors (Salt, Bone, etc.) don't render the colorway name in white-
+// on-white. Returns FR.slate for light backgrounds, FR.salt for dark.
+function textOn(bgHex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(bgHex || '').trim());
+  if (!m) return FR.salt;
+  const n = parseInt(m[1], 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const lin = (c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return L > 0.55 ? FR.slate : FR.salt;
+}
+
 function clampLine(s, maxW, charW = 6.5) {
   const max = Math.floor(maxW / charW);
   if (s.length <= max) return s;
@@ -555,6 +572,10 @@ function PageEmbellishments({ d, images }) {
         const pantoneTPG = entry?.pantoneTPG || cw.pantoneTPG || '';
         const hex        = entry?.hex        || cw.hex        || '';
         const rgb        = entry?.rgb        || cw.rgb        || '';
+        // Pick a swatch-text color that contrasts with the swatch fill.
+        // Without this, a Salt-colored swatch (#F5F0E8) renders the
+        // name + usage text in FR.salt and they vanish into the chip.
+        const swatchTextColor = textOn(hex || FR.salt);
         // Layout inside the card
         const swatchH = 38;
         const cardThumbW = 50;
@@ -565,10 +586,10 @@ function PageEmbellishments({ d, images }) {
             <rect x={cx} y={cwRowY} width={cwW} height={cwRowH} fill={FR.white} stroke={FR.sand} rx="3" />
             {/* Swatch chip */}
             <rect x={cx} y={cwRowY} width={cwW} height={swatchH} fill={hex || FR.salt} />
-            <text x={cx + 10} y={cwRowY + 14} fontSize="8" fontWeight="bold" fill={FR.salt} letterSpacing="1">
+            <text x={cx + 10} y={cwRowY + 14} fontSize="8" fontWeight="bold" fill={swatchTextColor} letterSpacing="1">
               {esc((cw.name || `COLORWAY ${i + 1}`).toUpperCase())}
             </text>
-            <text x={cx + 10} y={cwRowY + 30} fontSize="9" fill={FR.salt}>
+            <text x={cx + 10} y={cwRowY + 30} fontSize="9" fill={swatchTextColor}>
               {clampLine(esc(cw.usage || 'Usage —'), cwW - 20, 5.8)}
             </text>
 
