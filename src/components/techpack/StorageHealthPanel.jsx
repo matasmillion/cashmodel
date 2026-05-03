@@ -618,11 +618,34 @@ export default function StorageHealthPanel() {
       const orgId = getCurrentOrgIdSync();
       const userId = getCurrentUserIdSync();
       if (!orgId) throw new Error('No active org');
-      // Use a valid UUID — the live component_packs.id column is uuid in
-      // production (the migration declares text but a separate ALTER must
-      // have re-typed it). A non-uuid test id fails Postgres input
-      // validation before RLS is even evaluated, masking what we're
-      // actually trying to test.
+
+      // Step 0: verify the org exists in public.organizations. If it doesn't,
+      // the FK constraint on component_packs.organization_id will reject the
+      // INSERT (and Postgres sometimes surfaces that as an RLS-like error
+      // rather than a FK error, depending on the policy evaluation order).
+      const { data: orgRow, error: orgErr } = await supabase
+        .from('organizations')
+        .select('id')
+        .eq('id', orgId)
+        .maybeSingle();
+      if (orgErr || !orgRow) {
+        setWriteTest({
+          loading: false,
+          ok: false,
+          phase: 'org-check',
+          message: orgErr
+            ? `Cannot read public.organizations: ${orgErr.message} (code: ${orgErr.code})`
+            : `Org "${orgId}" is not present in public.organizations. The Clerk webhook that creates org rows (organization.created event) may not be configured or has not fired. Insert it manually in the Supabase SQL editor: INSERT INTO public.organizations (id, name) VALUES ('${orgId}', 'My Org');`,
+          payload: { checked_org_id: orgId },
+        });
+        return;
+      }
+
+      // Step 1: plain INSERT (not upsert). Upsert uses ON CONFLICT DO UPDATE
+      // which evaluates BOTH insert and update RLS policies simultaneously —
+      // a stale conflict row owned by another org would cause the update USING
+      // check to fail even when the insert check would pass. A plain insert
+      // only triggers the org_insert WITH CHECK, isolating the diagnosis.
       const testId = (crypto.randomUUID && crypto.randomUUID())
         || `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0')}`;
       const payload = {
@@ -636,13 +659,13 @@ export default function StorageHealthPanel() {
       };
       const { error: insertErr } = await supabase
         .from('component_packs')
-        .upsert(payload, { onConflict: 'id' });
+        .insert(payload);
       if (insertErr) {
         setWriteTest({
           loading: false,
           ok: false,
           phase: 'insert',
-          message: insertErr.message,
+          message: `${insertErr.message}${insertErr.code ? ` (code: ${insertErr.code})` : ''}${insertErr.hint ? ` — hint: ${insertErr.hint}` : ''}${insertErr.details ? ` — details: ${insertErr.details}` : ''}`,
           payload,
         });
         return;
