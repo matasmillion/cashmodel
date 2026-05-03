@@ -546,6 +546,15 @@ function PageEmbellishments({ d, images }) {
         const cx = 40 + i * (cwW + cwGap);
         const entry = cw.frColor ? libraryByColor[cw.frColor] : null;
         const cardImage = entry?.cardImage;
+        // Pantone codes / HEX / RGB live in the shared color library —
+        // the colorway only stores { name, usage, frColor, hidden } after
+        // the palette-manager unification. Read library values first,
+        // fall back to any inline pack values so legacy packs that
+        // never re-saved still render their old codes.
+        const pantoneTCX = entry?.pantoneTCX || cw.pantoneTCX || '';
+        const pantoneTPG = entry?.pantoneTPG || cw.pantoneTPG || '';
+        const hex        = entry?.hex        || cw.hex        || '';
+        const rgb        = entry?.rgb        || cw.rgb        || '';
         // Layout inside the card
         const swatchH = 38;
         const cardThumbW = 50;
@@ -555,7 +564,7 @@ function PageEmbellishments({ d, images }) {
           <g key={i}>
             <rect x={cx} y={cwRowY} width={cwW} height={cwRowH} fill={FR.white} stroke={FR.sand} rx="3" />
             {/* Swatch chip */}
-            <rect x={cx} y={cwRowY} width={cwW} height={swatchH} fill={cw.hex || FR.salt} />
+            <rect x={cx} y={cwRowY} width={cwW} height={swatchH} fill={hex || FR.salt} />
             <text x={cx + 10} y={cwRowY + 14} fontSize="8" fontWeight="bold" fill={FR.salt} letterSpacing="1">
               {esc((cw.name || `COLORWAY ${i + 1}`).toUpperCase())}
             </text>
@@ -568,13 +577,13 @@ function PageEmbellishments({ d, images }) {
             <text x={cx + 10} y={cwRowY + swatchH + 32} fontSize="10" fill={FR.slate}>{clampLine(esc(cw.frColor || '—'), cwW - 20, 5.8)}</text>
 
             <text x={cx + 10} y={cwRowY + swatchH + 52} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">PANTONE TCX</text>
-            <text x={cx + 10} y={cwRowY + swatchH + 66} fontSize="10" fill={FR.slate}>{clampLine(esc(cw.pantoneTCX || '—'), cwW - 20, 5.8)}</text>
+            <text x={cx + 10} y={cwRowY + swatchH + 66} fontSize="10" fill={FR.slate}>{clampLine(esc(pantoneTCX || '—'), cwW - 20, 5.8)}</text>
 
             <text x={cx + 10} y={cwRowY + swatchH + 86} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">PANTONE TPG</text>
-            <text x={cx + 10} y={cwRowY + swatchH + 100} fontSize="10" fill={FR.slate}>{clampLine(esc(cw.pantoneTPG || '—'), cwW - 20, 5.8)}</text>
+            <text x={cx + 10} y={cwRowY + swatchH + 100} fontSize="10" fill={FR.slate}>{clampLine(esc(pantoneTPG || '—'), cwW - 20, 5.8)}</text>
 
             <text x={cx + 10} y={cwRowY + swatchH + 120} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">HEX · RGB</text>
-            <text x={cx + 10} y={cwRowY + swatchH + 134} fontSize="10" fill={FR.slate}>{clampLine(esc(`${cw.hex || '—'} · ${cw.rgb || '—'}`), cwW - 20, 5.8)}</text>
+            <text x={cx + 10} y={cwRowY + swatchH + 134} fontSize="10" fill={FR.slate}>{clampLine(esc(`${hex || '—'} · ${rgb || '—'}`), cwW - 20, 5.8)}</text>
 
             {/* Pantone TCX card thumbnail (if library has one for the FR color). */}
             {cardImage && (
