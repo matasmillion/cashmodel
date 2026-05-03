@@ -19,14 +19,30 @@
 // default — link from PLMView's footer or call directly). Org-scoped
 // via getCurrentOrgIdSync; cannot leak into another org.
 
-import { useState } from 'react';
-import { AlertTriangle, CheckCircle, Database, HardDrive, RefreshCw, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AlertTriangle, CheckCircle, Database, HardDrive, RefreshCw, Trash2, Key } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { getAuthedSupabase } from '../../lib/supabase';
-import { getCurrentOrgIdSync } from '../../lib/auth';
+import { getCurrentOrgIdSync, getClerkToken } from '../../lib/auth';
 import { isGhostImage, persistableImages, deleteAssets } from '../../utils/plmAssets';
 
 const BUCKET = 'plm-assets';
+
+// Decode a JWT payload without verifying. We only ever use this to
+// surface what claims the client is actually sending — never to
+// authorize anything. The middle segment is base64url-encoded JSON.
+function decodeJwtPayload(token) {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '==='.slice((b64.length + 3) % 4);
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+}
 
 // Tables that hold image refs we want to scan. Each entry maps the
 // table name to the columns it uses for image refs.
@@ -229,6 +245,46 @@ export default function StorageHealthPanel() {
   const [repairing, setRepairing] = useState(false);
   const [repairResult, setRepairResult] = useState(null);
 
+  // JWT diagnostics — reads the actual Clerk-issued token the Supabase
+  // client will send and surfaces every claim that affects RLS. The
+  // overwhelming majority of "Cloud save failed" / "RLS policy violation"
+  // errors trace back to a JWT problem (stale session after template
+  // change, missing org_id when no org is active, role claim that's
+  // not authenticated/anon/service_role). Showing the actual claims
+  // makes those problems visible instead of having to guess.
+  const [jwtInfo, setJwtInfo] = useState(null);
+  const refreshJwt = async () => {
+    setJwtInfo({ loading: true });
+    try {
+      const token = await getClerkToken('supabase');
+      const payload = decodeJwtPayload(token);
+      const clientOrgId = getCurrentOrgIdSync();
+      const issues = [];
+      if (!token) issues.push('No JWT issued — Clerk session may be missing the "supabase" template.');
+      if (token && !payload) issues.push('JWT structure is unparseable.');
+      if (payload && !payload.org_id) issues.push('Token has no org_id claim — add `"org_id": "{{org.id}}"` to the Clerk template.');
+      if (payload && payload.org_id && clientOrgId && payload.org_id !== clientOrgId) {
+        issues.push(`org_id mismatch: JWT carries "${payload.org_id}" but the active org is "${clientOrgId}". Sign out and back in to refresh the JWT.`);
+      }
+      if (payload && payload.role && !['authenticated', 'anon', 'service_role'].includes(payload.role)) {
+        issues.push(`Top-level role claim is "${payload.role}" — Supabase requires authenticated/anon/service_role. Rename to app_role in the Clerk template, then sign out + back in.`);
+      }
+      if (payload && typeof payload.exp === 'number' && payload.exp * 1000 < Date.now()) {
+        issues.push('Token is expired. Refresh the page or sign out + back in.');
+      }
+      setJwtInfo({
+        loading: false,
+        present: !!token,
+        payload,
+        clientOrgId,
+        issues,
+      });
+    } catch (err) {
+      setJwtInfo({ loading: false, present: false, error: err?.message || String(err), issues: [`Could not fetch JWT: ${err?.message}`] });
+    }
+  };
+  useEffect(() => { refreshJwt(); }, []);
+
   const runScan = async () => {
     setScanning(true);
     setError(null);
@@ -322,6 +378,83 @@ export default function StorageHealthPanel() {
           </button>
         </div>
       </div>
+
+      {/* JWT diagnostics — surfaces the most common cause of every
+          mysterious "Cloud save failed" / "RLS policy violation" error. */}
+      {jwtInfo && (
+        <div style={{
+          ...card,
+          ...((jwtInfo.issues && jwtInfo.issues.length)
+            ? { borderColor: 'rgba(163,45,45,0.4)', background: 'rgba(163,45,45,0.05)' }
+            : {}),
+        }}>
+          <h3 style={sectionTitle}>
+            {jwtInfo.loading
+              ? <RefreshCw size={14} />
+              : (jwtInfo.issues && jwtInfo.issues.length
+                  ? <AlertTriangle size={14} color="#A32D2D" />
+                  : <CheckCircle size={14} color="#3B6D11" />)}
+            Auth & JWT diagnostics
+            <button onClick={refreshJwt} disabled={jwtInfo.loading}
+              style={{ ...btn('ghost'), marginLeft: 'auto', fontSize: 10 }}>
+              <Key size={11} /> Re-check
+            </button>
+          </h3>
+          {jwtInfo.loading && <div style={{ fontSize: 12, color: FR.stone }}>Reading current session token…</div>}
+          {!jwtInfo.loading && jwtInfo.present && jwtInfo.payload && (
+            <>
+              <div style={statRow}>
+                <span style={statLabel}>JWT org_id</span>
+                <span style={{ ...statValue, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13 }}>
+                  {jwtInfo.payload.org_id || <span style={{ color: '#A32D2D' }}>—</span>}
+                </span>
+              </div>
+              <div style={statRow}>
+                <span style={statLabel}>Active org (client)</span>
+                <span style={{ ...statValue, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13 }}>
+                  {jwtInfo.clientOrgId || <span style={{ color: '#A32D2D' }}>—</span>}
+                </span>
+              </div>
+              <div style={statRow}>
+                <span style={statLabel}>JWT role</span>
+                <span style={{ ...statValue, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13, color: (!jwtInfo.payload.role || ['authenticated','anon','service_role'].includes(jwtInfo.payload.role)) ? FR.slate : '#A32D2D' }}>
+                  {jwtInfo.payload.role || '(none — defaults to authenticated)'}
+                </span>
+              </div>
+              <div style={statRow}>
+                <span style={statLabel}>Subject (sub)</span>
+                <span style={{ ...statValue, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, color: FR.stone }}>
+                  {jwtInfo.payload.sub || '—'}
+                </span>
+              </div>
+              <div style={statRow}>
+                <span style={statLabel}>Expires</span>
+                <span style={{ ...statValue, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, color: FR.stone }}>
+                  {jwtInfo.payload.exp ? new Date(jwtInfo.payload.exp * 1000).toLocaleString() : '—'}
+                </span>
+              </div>
+            </>
+          )}
+          {!jwtInfo.loading && !jwtInfo.present && (
+            <div style={{ fontSize: 12, color: '#A32D2D', marginTop: 8 }}>
+              No JWT — Clerk session is missing the &quot;supabase&quot; template, or you are not signed in.
+            </div>
+          )}
+          {jwtInfo.issues && jwtInfo.issues.length > 0 && (
+            <div style={{ marginTop: 12, padding: 10, background: 'rgba(163,45,45,0.06)', borderLeft: '3px solid #A32D2D', borderRadius: 3, fontSize: 12, color: '#A32D2D', lineHeight: 1.6 }}>
+              <strong style={{ letterSpacing: 0.3 }}>{jwtInfo.issues.length === 1 ? 'Issue' : 'Issues'}:</strong>
+              <ul style={{ margin: '6px 0 0 0', paddingLeft: 18 }}>
+                {jwtInfo.issues.map((i, idx) => <li key={idx} style={{ marginBottom: 4 }}>{i}</li>)}
+              </ul>
+            </div>
+          )}
+          {jwtInfo.payload && jwtInfo.issues && jwtInfo.issues.length === 0 && (
+            <div style={{ marginTop: 12, padding: 10, background: 'rgba(59,109,17,0.06)', borderLeft: '3px solid #3B6D11', borderRadius: 3, fontSize: 12, color: '#3B6D11' }}>
+              JWT looks correct — RLS policies should pass for this org.
+            </div>
+          )}
+        </div>
+      )}
 
       {error && (
         <div style={{ ...card, borderColor: 'rgba(163,45,45,0.4)', background: 'rgba(163,45,45,0.05)' }}>
