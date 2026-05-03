@@ -20,7 +20,7 @@
 // via getCurrentOrgIdSync; cannot leak into another org.
 
 import { useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle, Database, HardDrive, RefreshCw, Trash2, Key } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Database, HardDrive, RefreshCw, Trash2, Key, Zap } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { getAuthedSupabase } from '../../lib/supabase';
 import { getCurrentOrgIdSync, getCurrentUserIdSync, getClerkToken } from '../../lib/auth';
@@ -604,6 +604,67 @@ export default function StorageHealthPanel() {
   };
   useEffect(() => { refreshJwt(); }, []);
 
+  // Live cloud-write test. Runs a real INSERT (then DELETE) against
+  // component_packs using the exact same payload shape as a normal
+  // save. This is the diagnostic that resolves the "JWT looks fine
+  // but saves keep failing with RLS" mystery for sure — it returns
+  // the actual Postgres error verbatim instead of guessing.
+  const [writeTest, setWriteTest] = useState(null);
+  const runWriteTest = async () => {
+    setWriteTest({ loading: true });
+    try {
+      const supabase = await getAuthedSupabase();
+      if (!supabase) throw new Error('Supabase client not configured');
+      const orgId = getCurrentOrgIdSync();
+      const userId = getCurrentUserIdSync();
+      if (!orgId) throw new Error('No active org');
+      const testId = `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const payload = {
+        id: testId,
+        organization_id: orgId,
+        user_id: userId,
+        component_name: '__storage_health_write_test',
+        data: { _test: true },
+        images: [],
+        updated_at: new Date().toISOString(),
+      };
+      const { error: insertErr } = await supabase
+        .from('component_packs')
+        .upsert(payload, { onConflict: 'id' });
+      if (insertErr) {
+        setWriteTest({
+          loading: false,
+          ok: false,
+          phase: 'insert',
+          message: insertErr.message,
+          payload,
+        });
+        return;
+      }
+      // Cleanup — the test row served its purpose. Don't leave clutter.
+      const { error: delErr } = await supabase
+        .from('component_packs')
+        .delete()
+        .eq('id', testId)
+        .eq('organization_id', orgId);
+      setWriteTest({
+        loading: false,
+        ok: true,
+        phase: 'cleanup',
+        message: delErr
+          ? `Insert succeeded but cleanup delete returned: ${delErr.message} (test row left behind, run scan to surface it)`
+          : 'Cloud write path is fully operational. Saves should not fail with RLS errors against this org going forward.',
+      });
+    } catch (err) {
+      setWriteTest({
+        loading: false,
+        ok: false,
+        phase: 'unexpected',
+        message: err?.message || String(err),
+      });
+    }
+  };
+
   const runScan = async () => {
     setScanning(true);
     setScanStatus('Listing Storage bucket…');
@@ -868,6 +929,44 @@ export default function StorageHealthPanel() {
               JWT looks correct — RLS policies should pass for this org.
             </div>
           )}
+
+          {/* Live write-path test — proves whether saves actually work
+              against this org's component_packs table by performing a
+              real INSERT + cleanup DELETE. Runs in under a second. */}
+          <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${FR.sand}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <button onClick={runWriteTest} disabled={writeTest?.loading}
+                style={btn('ghost')}>
+                <Zap size={11} /> {writeTest?.loading ? 'Testing…' : 'Test cloud write'}
+              </button>
+              <span style={{ fontSize: 11, color: FR.stone, lineHeight: 1.5, flex: 1, minWidth: 280 }}>
+                Performs a real INSERT against <code style={{ background: FR.salt, padding: '1px 5px', borderRadius: 3 }}>component_packs</code> with
+                the same payload shape your saves use, then deletes it. The most direct proof that RLS will accept your writes.
+              </span>
+            </div>
+            {writeTest && !writeTest.loading && (
+              <div style={{
+                marginTop: 10,
+                padding: 10,
+                background: writeTest.ok ? 'rgba(59,109,17,0.06)' : 'rgba(163,45,45,0.06)',
+                borderLeft: `3px solid ${writeTest.ok ? '#3B6D11' : '#A32D2D'}`,
+                borderRadius: 3,
+                fontSize: 12,
+                color: writeTest.ok ? '#3B6D11' : '#A32D2D',
+                lineHeight: 1.6,
+              }}>
+                {writeTest.ok ? '✓ ' : '⚠ '}{writeTest.message}
+                {!writeTest.ok && writeTest.payload && (
+                  <details style={{ marginTop: 6 }}>
+                    <summary style={{ cursor: 'pointer', fontSize: 11, color: FR.stone }}>Show payload sent</summary>
+                    <pre style={{ fontSize: 11, color: FR.stone, marginTop: 6, overflow: 'auto', maxWidth: 760 }}>
+{JSON.stringify(writeTest.payload, null, 2)}
+                    </pre>
+                  </details>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
