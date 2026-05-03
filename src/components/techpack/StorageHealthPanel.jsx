@@ -23,7 +23,7 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle, Database, HardDrive, RefreshCw, Trash2, Key } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { getAuthedSupabase } from '../../lib/supabase';
-import { getCurrentOrgIdSync, getClerkToken } from '../../lib/auth';
+import { getCurrentOrgIdSync, getCurrentUserIdSync, getClerkToken } from '../../lib/auth';
 import { isGhostImage, persistableImages, deleteAssets } from '../../utils/plmAssets';
 
 const BUCKET = 'plm-assets';
@@ -209,15 +209,52 @@ async function repairGhosts(refs) {
 // JSONB. `coverCol` rows store a single text path (the FR atom tables
 // — fabrics, patterns, treatments, embellishments, colors, vendors).
 const SCOPE_MAP = {
-  'tech-packs':       { table: 'tech_packs',      imagesCol: 'images', coverCol: 'cover_image' },
-  'component-packs':  { table: 'component_packs', imagesCol: 'images', coverCol: 'cover_image' },
-  'fabrics':          { table: 'fabrics',         imagesCol: null,     coverCol: 'cover_image' },
-  'patterns':         { table: 'patterns',        imagesCol: null,     coverCol: 'cover_image' },
-  'treatments':       { table: 'treatments',      imagesCol: null,     coverCol: 'cover_image' },
-  'embellishments':   { table: 'embellishments',  imagesCol: null,     coverCol: 'cover_image' },
-  'colors':           { table: 'colors',          imagesCol: null,     coverCol: 'card_image' },
-  'vendors':          { table: 'vendors',         imagesCol: null,     coverCol: 'logo_image' },
+  'tech-packs':       { table: 'tech_packs',      imagesCol: 'images', coverCol: 'cover_image', lsKey: 'cashmodel_techpacks' },
+  'component-packs':  { table: 'component_packs', imagesCol: 'images', coverCol: 'cover_image', lsKey: 'cashmodel_component_packs' },
+  'fabrics':          { table: 'fabrics',         imagesCol: null,     coverCol: 'cover_image', lsKey: 'cashmodel_fabrics' },
+  'patterns':         { table: 'patterns',        imagesCol: null,     coverCol: 'cover_image', lsKey: 'cashmodel_patterns' },
+  'treatments':       { table: 'treatments',      imagesCol: null,     coverCol: 'cover_image', lsKey: 'cashmodel_treatments' },
+  'embellishments':   { table: 'embellishments',  imagesCol: null,     coverCol: 'cover_image', lsKey: 'cashmodel_embellishments' },
+  'colors':           { table: 'colors',          imagesCol: null,     coverCol: 'card_image',  lsKey: 'cashmodel_fr_colors' },
+  'vendors':          { table: 'vendors',         imagesCol: null,     coverCol: 'logo_image',  lsKey: 'cashmodel_vendors' },
 };
+
+// Build a localStorage index by row id for the given scope. Used as
+// the fallback when a cloud row lookup misses — the most common reason
+// a recovery candidate isn't in cloud is that the original CREATE
+// INSERT got rejected by RLS during the JWT-broken window, so the row
+// only ever existed locally.
+function readLocalIndex(lsKey) {
+  if (!lsKey) return new Map();
+  try {
+    const raw = localStorage.getItem(lsKey);
+    if (!raw) return new Map();
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return new Map();
+    const out = new Map();
+    for (const row of arr) {
+      if (row && row.id) out.set(row.id, row);
+    }
+    return out;
+  } catch {
+    return new Map();
+  }
+}
+
+// Strip transient / unsafe fields from a local row before upserting it
+// to cloud. Local rows can carry stale auth context, deleted_at flags,
+// computed projections, etc. — the upsert needs a clean payload that
+// matches the cloud schema's expected columns.
+function sanitizeForUpsert(localRow, orgId, userId) {
+  if (!localRow || typeof localRow !== 'object') return null;
+  // eslint-disable-next-line no-unused-vars
+  const { user_id, organization_id, deleted_at, ...rest } = localRow;
+  return {
+    ...rest,
+    organization_id: orgId,
+    user_id: userId,
+  };
+}
 
 // Parse a Storage path like
 //   "{orgId}/{scope}/{ownerId}/{slot}-{uuid}.{ext}"
@@ -249,6 +286,9 @@ function parseAssetPath(path) {
 async function planOrphanRecovery(orphans) {
   const supabase = await getAuthedSupabase();
   if (!supabase) throw new Error('Supabase not configured');
+  const orgId = getCurrentOrgIdSync();
+  const userId = getCurrentUserIdSync();
+  if (!orgId) throw new Error('No organization context');
 
   // Group orphans by scope + ownerId
   const groups = new Map();
@@ -262,9 +302,21 @@ async function planOrphanRecovery(orphans) {
     groups.get(key).files.push({ ...o, ...parsed });
   }
 
-  // For each group, fetch the row and build a recovery plan.
+  // Cache localStorage indexes so we read each LS_KEY at most once even
+  // when many groups share the same scope.
+  const localIndexes = new Map();
+  const indexFor = (lsKey) => {
+    if (!localIndexes.has(lsKey)) localIndexes.set(lsKey, readLocalIndex(lsKey));
+    return localIndexes.get(lsKey);
+  };
+
+  // For each group, fetch the row and build a recovery plan. Rows that
+  // are missing from cloud but present in local get upgraded to a
+  // restoreFromLocal plan: upsert the local row + link the orphans in
+  // a single write.
   const plans = [];
   let unmatched = 0;
+  let restoredFromLocal = 0;
   for (const g of groups.values()) {
     const cols = ['id'];
     if (g.config.imagesCol) cols.push(g.config.imagesCol);
@@ -274,9 +326,21 @@ async function planOrphanRecovery(orphans) {
       .select(cols.join(','))
       .eq('id', g.ownerId)
       .maybeSingle();
+    let restoreFromLocal = false;
+    let workingRow = row;
     if (error || !row) {
-      unmatched += g.files.length;
-      continue;
+      // Cloud miss. Look in localStorage — the row likely exists there
+      // because its CREATE INSERT was rejected by RLS during the
+      // JWT-broken window. We'll upsert it back to cloud as part of
+      // the recovery patch.
+      const localRow = indexFor(g.config.lsKey).get(g.ownerId);
+      if (!localRow) {
+        unmatched += g.files.length;
+        continue;
+      }
+      restoreFromLocal = true;
+      workingRow = localRow;
+      restoredFromLocal += 1;
     }
 
     // Pick the freshest file per slot — handles cases where a slot
@@ -291,7 +355,7 @@ async function planOrphanRecovery(orphans) {
     }
 
     if (g.config.imagesCol) {
-      const existing = Array.isArray(row[g.config.imagesCol]) ? row[g.config.imagesCol] : [];
+      const existing = Array.isArray(workingRow[g.config.imagesCol]) ? workingRow[g.config.imagesCol] : [];
       const existingPaths = new Set(existing.map(i => i?.path).filter(Boolean));
       const toAdd = [];
       for (const f of bySlot.values()) {
@@ -304,63 +368,87 @@ async function planOrphanRecovery(orphans) {
           uploaded_at: f.updatedAt || new Date().toISOString(),
         });
       }
-      if (toAdd.length === 0) continue;
+      if (toAdd.length === 0 && !restoreFromLocal) continue;
       const newImages = [...existing, ...toAdd];
-      // Refresh cover_image from a likely cover slot if the row has
-      // a coverCol and it's currently null.
       const coverSlot = g.scope === 'tech-packs' ? 'cover'
         : g.scope === 'component-packs' ? 'component-cover'
         : null;
       let coverPatch = null;
-      if (g.config.coverCol && !row[g.config.coverCol] && coverSlot) {
+      if (g.config.coverCol && !workingRow[g.config.coverCol] && coverSlot) {
         const coverEntry = newImages.find(i => i?.slot === coverSlot && i?.path);
         if (coverEntry) coverPatch = coverEntry.path;
       }
+      // restoreFromLocal builds a full upsert payload from the local
+      // row. update-only is enough for cloud-existing rows because
+      // every other column is already correct there.
+      const patch = restoreFromLocal
+        ? {
+            ...sanitizeForUpsert(workingRow, orgId, userId),
+            [g.config.imagesCol]: newImages,
+            ...(coverPatch ? { [g.config.coverCol]: coverPatch } : {}),
+          }
+        : (coverPatch
+            ? { [g.config.imagesCol]: newImages, [g.config.coverCol]: coverPatch }
+            : { [g.config.imagesCol]: newImages });
       plans.push({
         table: g.config.table,
         id: g.ownerId,
-        patch: coverPatch
-          ? { [g.config.imagesCol]: newImages, [g.config.coverCol]: coverPatch }
-          : { [g.config.imagesCol]: newImages },
+        patch,
         addedCount: toAdd.length,
+        restoreFromLocal,
       });
     } else if (g.config.coverCol) {
-      // Single-cover atoms — pick the freshest file overall and set it
-      // as cover_image, only if there isn't one already.
-      if (row[g.config.coverCol]) continue;
+      if (workingRow[g.config.coverCol] && !restoreFromLocal) continue;
       const latest = [...bySlot.values()].sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))[0];
       if (!latest) continue;
+      const patch = restoreFromLocal
+        ? {
+            ...sanitizeForUpsert(workingRow, orgId, userId),
+            [g.config.coverCol]: workingRow[g.config.coverCol] || latest.path,
+          }
+        : { [g.config.coverCol]: latest.path };
       plans.push({
         table: g.config.table,
         id: g.ownerId,
-        patch: { [g.config.coverCol]: latest.path },
+        patch,
         addedCount: 1,
+        restoreFromLocal,
       });
     }
   }
-  return { plans, unmatched };
+  return { plans, unmatched, restoredFromLocal };
 }
 
-// Execute the recovery plan — one UPDATE per affected row.
+// Execute the recovery plan. Plans flagged restoreFromLocal use upsert
+// (insert-or-update on id) so missing-from-cloud rows are reconstructed
+// from their local payload in the same write that links the orphan
+// files. Cloud-existing rows use update.
 async function executeOrphanRecovery(plans) {
   const supabase = await getAuthedSupabase();
   if (!supabase) throw new Error('Supabase not configured');
   let rowsUpdated = 0;
+  let rowsRestored = 0;
   let filesLinked = 0;
   const failures = [];
   for (const p of plans) {
-    const { error } = await supabase
-      .from(p.table)
-      .update({ ...p.patch, updated_at: new Date().toISOString() })
-      .eq('id', p.id);
+    const payload = { ...p.patch, id: p.id, updated_at: new Date().toISOString() };
+    let error;
+    if (p.restoreFromLocal) {
+      const res = await supabase.from(p.table).upsert(payload, { onConflict: 'id' });
+      error = res.error;
+    } else {
+      const res = await supabase.from(p.table).update(payload).eq('id', p.id);
+      error = res.error;
+    }
     if (error) {
-      failures.push({ table: p.table, id: p.id, error: error.message });
+      failures.push({ table: p.table, id: p.id, error: error.message, restoreFromLocal: p.restoreFromLocal });
       continue;
     }
+    if (p.restoreFromLocal) rowsRestored += 1;
     rowsUpdated += 1;
     filesLinked += p.addedCount;
   }
-  return { rowsUpdated, filesLinked, failures };
+  return { rowsUpdated, rowsRestored, filesLinked, failures };
 }
 
 const card = {
@@ -529,34 +617,41 @@ export default function StorageHealthPanel() {
     if (!report) return;
     setRepairing(true);
     try {
-      const { plans, unmatched } = await planOrphanRecovery(report.orphans);
+      const { plans, unmatched, restoredFromLocal } = await planOrphanRecovery(report.orphans);
       if (plans.length === 0) {
         setRepairResult({
           kind: 'recover',
           ok: false,
           message: unmatched > 0
-            ? `Couldn't match any of the ${report.orphans.length} orphan files to existing rows. The packs/atoms they belonged to may have been deleted.`
+            ? `Couldn't match any of the ${report.orphans.length} orphan files to existing rows in cloud or localStorage. The packs/atoms they belonged to were likely deleted before the JWT fix landed — the file bytes are intact in Storage but there's no row to link them to.`
             : 'Nothing to recover — every orphan is already linked or its row is missing.',
         });
         return;
       }
       const filesPlanned = plans.reduce((a, p) => a + p.addedCount, 0);
+      const restoringLocalRows = plans.filter(p => p.restoreFromLocal).length;
+      const detail = restoringLocalRows > 0
+        ? `\n\n${restoringLocalRows} of those rows currently exist only in your browser's localStorage — they were created during the JWT-broken window so their cloud INSERT was rejected. Recovery will restore them to cloud as part of the same write.`
+        : '';
       const ok = window.confirm(
-        `Recover ${filesPlanned} orphan files into ${plans.length} rows?\n\n` +
-        `Each file will be linked back to the pack or atom whose ID is in its Storage path. ` +
-        `Cover slots will populate cover_image when one isn't already set. ` +
-        `${unmatched > 0 ? `\n\n${unmatched} files belong to deleted rows and will stay as orphans.` : ''}`
+        `Recover ${filesPlanned} orphan files into ${plans.length} rows?${detail}\n\n` +
+        `Existing entries are kept first in the array, so nothing already visible gets replaced. ` +
+        `Cover slots populate cover_image only when one isn't already set.` +
+        `${unmatched > 0 ? `\n\n${unmatched} files belong to rows that no longer exist anywhere and will stay as orphans.` : ''}`
       );
       if (!ok) return;
       const result = await executeOrphanRecovery(plans);
+      const restoredMsg = result.rowsRestored > 0 ? ` (${result.rowsRestored} restored from local to cloud)` : '';
       setRepairResult({
         kind: 'recover',
         ok: result.failures.length === 0,
         message: result.failures.length === 0
-          ? `Recovered ${result.filesLinked} files across ${result.rowsUpdated} rows. Reload your packs to see them.`
-          : `Recovered ${result.filesLinked} files across ${result.rowsUpdated} rows; ${result.failures.length} updates failed (see console).`,
+          ? `Recovered ${result.filesLinked} files across ${result.rowsUpdated} rows${restoredMsg}. Reload your library to see them.`
+          : `Recovered ${result.filesLinked} files across ${result.rowsUpdated} rows${restoredMsg}; ${result.failures.length} writes failed (see console).`,
       });
       if (result.failures.length) console.error('Orphan recovery failures:', result.failures);
+      // restoredFromLocal is reported only for telemetry symmetry
+      if (restoredFromLocal !== undefined) console.info('[StorageHealth] groups restored from local:', restoredFromLocal);
       await runScan();
     } catch (err) {
       setRepairResult({ kind: 'recover', ok: false, message: err?.message || String(err) });
