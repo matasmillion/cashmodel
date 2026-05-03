@@ -146,6 +146,11 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState(null);
   const saveTimerRef = useRef(null);
+  // Pack id can rotate when an upsert hits an unrecoverable RLS conflict
+  // (existing cloud row owned by another org / NULL org). saveTechPack
+  // returns { idChanged } and we move the live id here so subsequent
+  // saves target the new row.
+  const packIdRef = useRef(pack.id);
 
   // Mirror the ComponentPackBuilder pattern: track in-flight uploads so the
   // debounced save waits for them, instead of persisting placeholder rows
@@ -169,14 +174,14 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // Push step into URL on every change (replaceState — flicking through
   // 14 steps shouldn't pollute the back stack).
   useEffect(() => {
-    replacePLMHash({ section: 'styles', packId: pack.id, step });
+    replacePLMHash({ section: 'styles', packId: packIdRef.current, step });
   }, [step, pack.id]);
 
   // Browser back/forward → keep wizard step in sync with the URL
   useEffect(() => {
     const sync = () => {
       const { packId, step: urlStep } = parsePLMHash();
-      if (packId === pack.id && urlStep !== step) {
+      if (packId === packIdRef.current && urlStep !== step) {
         setStep(Math.min(urlStep, STEPS.length - 1));
       }
     };
@@ -210,7 +215,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
         return;
       }
       try {
-        const result = await saveTechPack(pack.id, {
+        const result = await saveTechPack(packIdRef.current, {
           data, images, library,
           style_name: data.styleName || '',
           product_category: data.productCategory || '',
@@ -220,6 +225,10 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
         if (result && result.ok === false) {
           setSaveError(result.error?.message || 'Cloud save failed');
         } else {
+          if (result && result.idChanged) {
+            packIdRef.current = result.idChanged.to;
+            replacePLMHash({ section: 'styles', packId: packIdRef.current, step });
+          }
           setSaveError(null);
         }
       } catch (err) {
@@ -419,13 +428,17 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       downloadBlob(pdfBlob, `${filename}_v${(data.revisions || []).length || 1}.pdf`);
       const svgString = await generateTechPackSVGAsync(fullPack);
       downloadBlob(svgToBlob(svgString), `${filename}_v${(data.revisions || []).length || 1}.svg`);
-      await saveTechPack(pack.id, {
+      const finalSave = await saveTechPack(packIdRef.current, {
         data, images, library,
         style_name: data.styleName || '',
         product_category: data.productCategory || '',
         status: data.status || 'Design',
         completion_pct: computeCompletion(data),
       });
+      if (finalSave && finalSave.idChanged) {
+        packIdRef.current = finalSave.idChanged.to;
+        replacePLMHash({ section: 'styles', packId: packIdRef.current, step });
+      }
       setSubmitResult({ filename });
     } catch (err) {
       console.error('Generate failed:', err);

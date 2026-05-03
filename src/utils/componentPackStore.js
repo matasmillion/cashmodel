@@ -83,6 +83,50 @@ function orphanedPaths(prev, next) {
   return dropped;
 }
 
+// Adopt-and-rotate: when an upsert keeps failing with RLS, the cloud row
+// for this id is owned by a different organization_id (or NULL — common
+// for rows that pre-date the org-cloud migration). Postgres won't ever
+// let this user UPDATE it. The recovery is to INSERT a fresh row under a
+// new uuid that the current org owns, then rewrite the local mirror so
+// subsequent saves target the new id. Caller updates the URL hash via the
+// `idChanged` field on the save result.
+async function adoptAndRotate({ db, oldId, jwtOrgId, userId, corePatch, cleanedUpdates }) {
+  const newId = (crypto.randomUUID && crypto.randomUUID())
+    || `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0')}`;
+  const freshRow = {
+    id: newId,
+    organization_id: jwtOrgId,
+    user_id: userId,
+    ...corePatch,
+  };
+  // INSERT (not upsert) — we just minted a fresh uuid, conflict is
+  // impossible. If somehow it does conflict, surface that as an error
+  // rather than retry-storming.
+  const { error } = await db.from('component_packs').insert(freshRow);
+  if (error) return { ok: false, error };
+  // Rewrite the local mirror so the next save targets the rotated id.
+  // Carry over any fields the local row had that the freshRow doesn't
+  // (e.g. created_at) so the local list view still renders correctly.
+  try {
+    const rows = readLocal();
+    const idx = rows.findIndex(p => p.id === oldId);
+    if (idx >= 0) {
+      rows[idx] = {
+        ...rows[idx],
+        ...freshRow,
+        id: newId,
+        images: cleanedUpdates.images !== undefined ? cleanedUpdates.images : rows[idx].images,
+      };
+    } else {
+      rows.push({ ...freshRow, images: cleanedUpdates.images || [] });
+    }
+    writeLocal(rows);
+  } catch (err) {
+    console.error('adoptAndRotate local mirror update:', err);
+  }
+  return { ok: true, newId };
+}
+
 // Project a localStorage row into the same projected shape that the cloud
 // listing returns (id + scalar columns + cover_image, no images JSONB).
 function projectLocalRow(p) {
@@ -354,10 +398,32 @@ export async function saveComponentPack(id, updates) {
       if (refreshedOrgId) patch = { ...patch, organization_id: refreshedOrgId };
       continue;
     }
-    // Second RLS failure after a fresh token — the JWT template itself is
-    // misconfigured (missing org_id, wrong signing key, wrong role claim).
-    // Stop retrying; the caller surfaces a "diagnose" link to Storage Health.
-    if (isRlsError(error)) break;
+    // Second RLS failure after a fresh token. JWT chain checks out (verified
+    // earlier in this function), so the existing cloud row is owned by a
+    // different organization_id (or NULL — common for rows created before
+    // the org-cloud migration ran). Postgres can never let us update it.
+    // Adopt-and-rotate: keep the user's data, give it a fresh id, and
+    // INSERT it as a new row owned by the current org. Old cloud row is
+    // orphaned (it's already invisible to this org via RLS, so there's
+    // nothing to clean up from the client).
+    if (isRlsError(error)) {
+      const rotated = await adoptAndRotate({
+        db, oldId: id, jwtOrgId, userId, corePatch, cleanedUpdates,
+      });
+      if (rotated.ok) {
+        if (toGc.length) {
+          const stillReferenced = (cleanedUpdates.images || [])
+            .map(img => img && img.path).filter(Boolean);
+          cancelOrphanDeletion(stillReferenced);
+          scheduleOrphanDeletion(toGc);
+        }
+        return { ok: true, idChanged: { from: id, to: rotated.newId } };
+      }
+      // Rotation failed — surface the original RLS error so the caller
+      // can deep-link to the diagnostic.
+      lastError = rotated.error || error;
+      break;
+    }
 
     // Match Postgres "column ... does not exist" and PostgREST
     // "Could not find the 'X' column" / "schema cache" wording. If a

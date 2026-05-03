@@ -67,6 +67,38 @@ function extractCover(images) {
   return cover.path || cover.data || null;
 }
 
+// Adopt-and-rotate — see saveComponentPack for the full rationale.
+async function adoptAndRotate({ db, oldId, jwtOrgId, userId, corePatch, cleanedUpdates }) {
+  const newId = (crypto.randomUUID && crypto.randomUUID())
+    || `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0')}`;
+  const freshRow = {
+    id: newId,
+    organization_id: jwtOrgId,
+    user_id: userId,
+    ...corePatch,
+  };
+  const { error } = await db.from('tech_packs').insert(freshRow);
+  if (error) return { ok: false, error };
+  try {
+    const packs = readLocal();
+    const idx = packs.findIndex(p => p.id === oldId);
+    if (idx >= 0) {
+      packs[idx] = {
+        ...packs[idx],
+        ...freshRow,
+        id: newId,
+        images: cleanedUpdates.images !== undefined ? cleanedUpdates.images : packs[idx].images,
+      };
+    } else {
+      packs.push({ ...freshRow, images: cleanedUpdates.images || [] });
+    }
+    writeLocal(packs);
+  } catch (err) {
+    console.error('adoptAndRotate local mirror update:', err);
+  }
+  return { ok: true, newId };
+}
+
 // Storage paths that disappeared between two image arrays — used to GC
 // orphaned files from the bucket on save.
 function orphanedPaths(prev, next) {
@@ -298,7 +330,25 @@ export async function saveTechPack(id, updates) {
       if (refreshedOrgId) patch = { ...patch, organization_id: refreshedOrgId };
       continue;
     }
-    if (isRlsError(error)) break;
+    // Second RLS failure — see saveComponentPack for the full rationale.
+    // The cloud row is owned by another org (or NULL); rotate the id and
+    // INSERT as a fresh row owned by the current org.
+    if (isRlsError(error)) {
+      const rotated = await adoptAndRotate({
+        db, oldId: id, jwtOrgId, userId, corePatch, cleanedUpdates,
+      });
+      if (rotated.ok) {
+        if (toGc.length) {
+          const stillReferenced = (cleanedUpdates.images || [])
+            .map(img => img && img.path).filter(Boolean);
+          cancelOrphanDeletion(stillReferenced);
+          scheduleOrphanDeletion(toGc);
+        }
+        return { ok: true, idChanged: { from: id, to: rotated.newId } };
+      }
+      lastError = rotated.error || error;
+      break;
+    }
 
     const named = msg.match(/column\s+(?:["']?)([\w.]+)(?:["']?)\s+(?:does not exist|of relation)/i)
       || msg.match(/Could not find the '([^']+)' column/i)
