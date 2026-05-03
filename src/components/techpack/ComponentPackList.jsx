@@ -264,7 +264,16 @@ export default function ComponentPackList() {
   }, [activePack?.id]);
 
   const openPack = async (id) => {
-    const full = await getComponentPack(id);
+    // Try cloud → local → projected list (in that order). The projected
+    // fallback rescues rows whose cloud insert was eaten (JWT / RLS /
+    // network) and whose local writeLocal also failed (quota) — a hand
+    // we'd otherwise lose silently because getComponentPack returns
+    // null in that scenario and the user thinks the card is dead.
+    let full = await getComponentPack(id);
+    if (!full) {
+      const projected = packs.find(p => p.id === id);
+      if (projected) full = projected;
+    }
     if (full) {
       setActivePack(full);
       setPLMHash({ section: 'components', packId: id });
@@ -277,10 +286,12 @@ export default function ComponentPackList() {
     setPLMHash({ section: 'components', packId: row.id });
   };
 
-  // Optimistic duplicate: project the freshly written local row into the
-  // visible list immediately. The cloud insert continues in the background;
-  // a subsequent refresh (or next mount) will reconcile with the canonical
-  // Supabase view if anything diverges. Guarded against double-clicks.
+  // Duplicate flow: write a fresh local row, project it into the visible
+  // list immediately, then open the new builder using the in-memory copy
+  // we already hold. Skipping the click → getComponentPack round-trip
+  // dodges the race where the fire-and-forget cloud insert hasn't
+  // landed by the time the user clicks the new card (or got eaten by
+  // the JWT-template misconfiguration / RLS / localStorage quota).
   const onDuplicate = async (id) => {
     if (duplicatingId) return;
     setDuplicatingId(id);
@@ -300,6 +311,11 @@ export default function ComponentPackList() {
         created_at: copy.created_at,
       };
       setPacks(prev => [projected, ...prev]);
+      // Auto-open the freshly created duplicate. The full row is in
+      // hand (`copy`) so we can skip getComponentPack entirely — saves
+      // a round-trip and avoids every race the read path can hit.
+      setActivePack(copy);
+      setPLMHash({ section: 'components', packId: copy.id });
     } finally {
       setDuplicatingId(null);
     }

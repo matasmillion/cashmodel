@@ -268,7 +268,15 @@ export default function TechPackList() {
   }, [activePack?.id]);
 
   const openPack = async (id) => {
-    const full = await getTechPack(id);
+    // Try cloud → local → projected list. The projected fallback rescues
+    // freshly duplicated rows whose cloud insert was eaten or whose local
+    // writeLocal failed (quota) — without it, getTechPack returns null
+    // and the user thinks the card is dead.
+    let full = await getTechPack(id);
+    if (!full) {
+      const projected = packs.find(p => p.id === id);
+      if (projected) full = projected;
+    }
     if (full) {
       setActivePack(full);
       setPLMHash({ section: 'styles', packId: id });
@@ -282,7 +290,14 @@ export default function TechPackList() {
   };
 
   const onDuplicate = async (id) => {
-    await duplicateTechPack(id);
+    // Auto-open the duplicate using the in-memory copy so we skip the
+    // click → getTechPack round-trip and dodge every read-path race
+    // (cloud insert pending, RLS denial, localStorage quota).
+    const copy = await duplicateTechPack(id);
+    if (copy) {
+      setActivePack(copy);
+      setPLMHash({ section: 'styles', packId: copy.id });
+    }
     refresh();
   };
 
