@@ -203,6 +203,166 @@ async function repairGhosts(refs) {
   return { cleanedRows, droppedEntries };
 }
 
+// Maps a Storage scope folder (the second path segment under the org
+// prefix) to the table that owns that scope and how it stores image
+// references. `imagesCol` rows store an array of { slot, path, … } in
+// JSONB. `coverCol` rows store a single text path (the FR atom tables
+// — fabrics, patterns, treatments, embellishments, colors, vendors).
+const SCOPE_MAP = {
+  'tech-packs':       { table: 'tech_packs',      imagesCol: 'images', coverCol: 'cover_image' },
+  'component-packs':  { table: 'component_packs', imagesCol: 'images', coverCol: 'cover_image' },
+  'fabrics':          { table: 'fabrics',         imagesCol: null,     coverCol: 'cover_image' },
+  'patterns':         { table: 'patterns',        imagesCol: null,     coverCol: 'cover_image' },
+  'treatments':       { table: 'treatments',      imagesCol: null,     coverCol: 'cover_image' },
+  'embellishments':   { table: 'embellishments',  imagesCol: null,     coverCol: 'cover_image' },
+  'colors':           { table: 'colors',          imagesCol: null,     coverCol: 'card_image' },
+  'vendors':          { table: 'vendors',         imagesCol: null,     coverCol: 'logo_image' },
+};
+
+// Parse a Storage path like
+//   "{orgId}/{scope}/{ownerId}/{slot}-{uuid}.{ext}"
+// back into its semantic parts so we can stitch an orphan file back
+// into the row that originally owned it.
+function parseAssetPath(path) {
+  if (typeof path !== 'string') return null;
+  const parts = path.split('/');
+  if (parts.length < 4) return null;
+  const [orgId, scope, ownerId, ...rest] = parts;
+  const filename = rest.join('/');
+  const m = /^(.+?)-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9]{8,})\.([a-z0-9]+)$/i.exec(filename);
+  const slot = m ? m[1] : 'recovered';
+  const ext = m ? m[3] : (filename.split('.').pop() || 'bin');
+  const contentType = ext === 'webp' ? 'image/webp'
+    : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
+    : ext === 'png' ? 'image/png'
+    : ext === 'gif' ? 'image/gif'
+    : ext === 'svg' ? 'image/svg+xml'
+    : 'application/octet-stream';
+  return { orgId, scope, ownerId, slot, filename, ext, contentType };
+}
+
+// Plan a recovery: group orphan files by (scope, ownerId), pick the
+// latest file per slot to avoid stacking duplicates if a slot was
+// re-uploaded multiple times before saves were working, then build a
+// per-table patch list. Read-only — returns the plan; caller decides
+// whether to commit it.
+async function planOrphanRecovery(orphans) {
+  const supabase = await getAuthedSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+
+  // Group orphans by scope + ownerId
+  const groups = new Map();
+  for (const o of orphans) {
+    const parsed = parseAssetPath(o.path);
+    if (!parsed) continue;
+    const config = SCOPE_MAP[parsed.scope];
+    if (!config) continue;
+    const key = `${parsed.scope}/${parsed.ownerId}`;
+    if (!groups.has(key)) groups.set(key, { scope: parsed.scope, ownerId: parsed.ownerId, config, files: [] });
+    groups.get(key).files.push({ ...o, ...parsed });
+  }
+
+  // For each group, fetch the row and build a recovery plan.
+  const plans = [];
+  let unmatched = 0;
+  for (const g of groups.values()) {
+    const cols = ['id'];
+    if (g.config.imagesCol) cols.push(g.config.imagesCol);
+    if (g.config.coverCol) cols.push(g.config.coverCol);
+    const { data: row, error } = await supabase
+      .from(g.config.table)
+      .select(cols.join(','))
+      .eq('id', g.ownerId)
+      .maybeSingle();
+    if (error || !row) {
+      unmatched += g.files.length;
+      continue;
+    }
+
+    // Pick the freshest file per slot — handles cases where a slot
+    // was uploaded multiple times before saves were working. Most
+    // recent wins so the row reflects the user's latest intent.
+    const bySlot = new Map();
+    for (const f of g.files) {
+      const prev = bySlot.get(f.slot);
+      if (!prev || (f.updatedAt || '') > (prev.updatedAt || '')) {
+        bySlot.set(f.slot, f);
+      }
+    }
+
+    if (g.config.imagesCol) {
+      const existing = Array.isArray(row[g.config.imagesCol]) ? row[g.config.imagesCol] : [];
+      const existingPaths = new Set(existing.map(i => i?.path).filter(Boolean));
+      const toAdd = [];
+      for (const f of bySlot.values()) {
+        if (existingPaths.has(f.path)) continue;
+        toAdd.push({
+          slot: f.slot,
+          path: f.path,
+          size: f.size,
+          content_type: f.contentType,
+          uploaded_at: f.updatedAt || new Date().toISOString(),
+        });
+      }
+      if (toAdd.length === 0) continue;
+      const newImages = [...existing, ...toAdd];
+      // Refresh cover_image from a likely cover slot if the row has
+      // a coverCol and it's currently null.
+      const coverSlot = g.scope === 'tech-packs' ? 'cover'
+        : g.scope === 'component-packs' ? 'component-cover'
+        : null;
+      let coverPatch = null;
+      if (g.config.coverCol && !row[g.config.coverCol] && coverSlot) {
+        const coverEntry = newImages.find(i => i?.slot === coverSlot && i?.path);
+        if (coverEntry) coverPatch = coverEntry.path;
+      }
+      plans.push({
+        table: g.config.table,
+        id: g.ownerId,
+        patch: coverPatch
+          ? { [g.config.imagesCol]: newImages, [g.config.coverCol]: coverPatch }
+          : { [g.config.imagesCol]: newImages },
+        addedCount: toAdd.length,
+      });
+    } else if (g.config.coverCol) {
+      // Single-cover atoms — pick the freshest file overall and set it
+      // as cover_image, only if there isn't one already.
+      if (row[g.config.coverCol]) continue;
+      const latest = [...bySlot.values()].sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))[0];
+      if (!latest) continue;
+      plans.push({
+        table: g.config.table,
+        id: g.ownerId,
+        patch: { [g.config.coverCol]: latest.path },
+        addedCount: 1,
+      });
+    }
+  }
+  return { plans, unmatched };
+}
+
+// Execute the recovery plan — one UPDATE per affected row.
+async function executeOrphanRecovery(plans) {
+  const supabase = await getAuthedSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  let rowsUpdated = 0;
+  let filesLinked = 0;
+  const failures = [];
+  for (const p of plans) {
+    const { error } = await supabase
+      .from(p.table)
+      .update({ ...p.patch, updated_at: new Date().toISOString() })
+      .eq('id', p.id);
+    if (error) {
+      failures.push({ table: p.table, id: p.id, error: error.message });
+      continue;
+    }
+    rowsUpdated += 1;
+    filesLinked += p.addedCount;
+  }
+  return { rowsUpdated, filesLinked, failures };
+}
+
 const card = {
   background: '#fff',
   border: '0.5px solid rgba(58,58,58,0.15)',
@@ -358,6 +518,48 @@ export default function StorageHealthPanel() {
       await runScan();
     } catch (err) {
       setRepairResult({ kind: 'orphan', ok: false, message: err?.message || String(err) });
+    } finally {
+      setRepairing(false);
+    }
+  };
+
+  // Recover orphan uploads → original packs/atoms. The plan is shown
+  // first (read-only); the user explicitly confirms the apply step.
+  const runOrphanRecovery = async () => {
+    if (!report) return;
+    setRepairing(true);
+    try {
+      const { plans, unmatched } = await planOrphanRecovery(report.orphans);
+      if (plans.length === 0) {
+        setRepairResult({
+          kind: 'recover',
+          ok: false,
+          message: unmatched > 0
+            ? `Couldn't match any of the ${report.orphans.length} orphan files to existing rows. The packs/atoms they belonged to may have been deleted.`
+            : 'Nothing to recover — every orphan is already linked or its row is missing.',
+        });
+        return;
+      }
+      const filesPlanned = plans.reduce((a, p) => a + p.addedCount, 0);
+      const ok = window.confirm(
+        `Recover ${filesPlanned} orphan files into ${plans.length} rows?\n\n` +
+        `Each file will be linked back to the pack or atom whose ID is in its Storage path. ` +
+        `Cover slots will populate cover_image when one isn't already set. ` +
+        `${unmatched > 0 ? `\n\n${unmatched} files belong to deleted rows and will stay as orphans.` : ''}`
+      );
+      if (!ok) return;
+      const result = await executeOrphanRecovery(plans);
+      setRepairResult({
+        kind: 'recover',
+        ok: result.failures.length === 0,
+        message: result.failures.length === 0
+          ? `Recovered ${result.filesLinked} files across ${result.rowsUpdated} rows. Reload your packs to see them.`
+          : `Recovered ${result.filesLinked} files across ${result.rowsUpdated} rows; ${result.failures.length} updates failed (see console).`,
+      });
+      if (result.failures.length) console.error('Orphan recovery failures:', result.failures);
+      await runScan();
+    } catch (err) {
+      setRepairResult({ kind: 'recover', ok: false, message: err?.message || String(err) });
     } finally {
       setRepairing(false);
     }
@@ -578,14 +780,21 @@ export default function StorageHealthPanel() {
               </span>
             </div>
             <div style={{ fontSize: 11, color: FR.stone, lineHeight: 1.5, marginTop: 8 }}>
-              Orphans are files in Storage that no DB row points at. Common when an upload succeeds but the
-              following save fails, or when a slot is replaced before the deferred-orphan-GC sweep runs.
-              Reclaiming them is permanent but safe — nothing references them.
+              Orphans are files in Storage that no DB row currently points at. They are most often the result
+              of uploads that landed successfully but whose follow-up save failed (a JWT misconfiguration,
+              transient RLS rejection, etc.). Use <strong>Recover</strong> first — it reads each orphan&apos;s
+              Storage path, finds the pack or atom whose id is encoded in the path, and stitches the
+              reference back into that row. Anything that can&apos;t be matched to a still-existing row is a
+              true orphan and only then is <strong>Reclaim</strong> safe.
             </div>
             {report.orphans.length > 0 && (
-              <div style={{ marginTop: 12 }}>
-                <button onClick={runOrphanCleanup} disabled={repairing} style={btn('primary')}>
-                  <Trash2 size={12} /> {repairing && repairResult?.kind !== 'ghost' ? 'Cleaning…' : `Reclaim ${formatBytes(report.orphanBytes)}`}
+              <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button onClick={runOrphanRecovery} disabled={repairing} style={btn('primary')}>
+                  <RefreshCw size={12} /> {repairing && repairResult?.kind !== 'ghost' && repairResult?.kind !== 'orphan' ? 'Recovering…' : `Recover ${report.orphans.length} files`}
+                </button>
+                <button onClick={runOrphanCleanup} disabled={repairing}
+                  style={{ ...btn('ghost'), color: '#A32D2D', borderColor: 'rgba(163,45,45,0.4)' }}>
+                  <Trash2 size={12} /> {repairing && repairResult?.kind !== 'ghost' && repairResult?.kind !== 'recover' ? 'Reclaiming…' : `Permanently delete ${formatBytes(report.orphanBytes)}`}
                 </button>
               </div>
             )}
