@@ -1,8 +1,8 @@
 // Component Pack storage — dual-write to localStorage + Supabase
 // Mirrors techPackStore.js but for the `component_packs` table
 
-import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
-import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
+import { IS_SUPABASE_ENABLED, getAuthedSupabase, refreshAuthedSupabase } from '../lib/supabase';
+import { getCurrentUserIdSync, getCurrentOrgIdSync, getJwtOrgId } from '../lib/auth';
 import { persistableImages, deleteAssets, copyAsset, scheduleOrphanDeletion, cancelOrphanDeletion } from './plmAssets';
 
 const LOCAL_KEY = 'cashmodel_component_packs';
@@ -278,23 +278,48 @@ export async function saveComponentPack(id, updates) {
   }
   writeLocal(rows);
 
-  const orgId = getCurrentOrgIdSync();
-  if (!IS_SUPABASE_ENABLED || !orgId) return { ok: true };
+  const clientOrgId = getCurrentOrgIdSync();
+  if (!IS_SUPABASE_ENABLED || !clientOrgId) return { ok: true };
 
-  const db = await getAuthedSupabase();
-  // Schema-resilient save: if Postgres / PostgREST rejects the patch because
-  // a column is missing (column added recently, schema cache stale, etc.),
-  // we strip the failing column from the patch and retry — up to a small
-  // number of times — instead of dropping the whole save and showing the
-  // user a "Cloud save failed" pill. Local already wrote successfully, so
-  // edits are never lost; this just keeps cloud in sync best-effort.
-  //
-  // Network-resilient save: transient failures (timeout, ECONNRESET, 5xx)
-  // get retried with exponential backoff (200ms / 600ms / 1.4s / 3s) up
-  // to 4 attempts before giving up.
-  let patch = { ...corePatch };
+  // Use the JWT's org_id claim as the authoritative organization_id for the
+  // upsert body rather than clientOrgId. The two can drift when Clerk's
+  // token cache still holds a token minted before the active org was set
+  // (e.g. immediately after sign-in or an org switch). When they differ
+  // we force-refresh the token first so the body and the JWT go in together.
+  let jwtOrgId = await getJwtOrgId();
+  if (!jwtOrgId || jwtOrgId !== clientOrgId) {
+    jwtOrgId = await getJwtOrgId({ skipCache: true });
+  }
+  // If the JWT has no org_id even after a fresh fetch, Postgres will see
+  // jwt_org_id()=NULL and the WITH CHECK will always fail. Return a
+  // structured error so the UI can surface a "diagnose" link instead of
+  // spamming retries.
+  if (!jwtOrgId) {
+    const jwtErr = Object.assign(new Error('JWT is missing the org_id claim — open Storage Health to diagnose'), { code: 'JWT_NO_ORG_ID' });
+    console.error('saveComponentPack:', jwtErr);
+    return { ok: false, error: jwtErr };
+  }
+
+  let db = await getAuthedSupabase();
+  const userId = getCurrentUserIdSync();
+  // Upsert (not update) so a save against a row that doesn't yet exist
+  // in cloud — most commonly because a duplicate's fire-and-forget
+  // insert was silently eaten — actually creates it. The previous
+  // pure-update path matched zero rows and returned no error, so the
+  // UI cheerfully showed Saved ✓ while the duplicate's edits dropped
+  // straight into the void. Upsert with onConflict: id makes saves
+  // self-healing.
+  let patch = { id, organization_id: jwtOrgId, user_id: userId, ...corePatch };
+  // Ensure corePatch can never override the JWT-derived org — it comes from
+  // the form, which doesn't carry organization_id, but belt-and-suspenders.
+  patch.organization_id = jwtOrgId;
   let lastError = null;
   let networkAttempts = 0;
+  const isRlsError = (err) => {
+    const code = String(err?.code || '');
+    const msg = String(err?.message || '').toLowerCase();
+    return code === '42501' || /row-level security|row level security/.test(msg);
+  };
   const isTransientNetworkError = (err) => {
     const msg = String(err?.message || '').toLowerCase();
     return /networkerror|failed to fetch|timeout|aborted|temporarily|rate limit|503|502|504|connection/i.test(msg);
@@ -302,9 +327,7 @@ export async function saveComponentPack(id, updates) {
   for (let attempt = 0; attempt < 4; attempt++) {
     const { error } = await db
       .from('component_packs')
-      .update(patch)
-      .eq('id', id)
-      .eq('organization_id', orgId);
+      .upsert(patch, { onConflict: 'id' });
     if (!error) {
       if (toGc.length) {
         // Cancel any pending deferred-deletes for paths in the new
@@ -320,18 +343,36 @@ export async function saveComponentPack(id, updates) {
       return { ok: true };
     }
     lastError = error;
+    const msg = String(error.message || error.details || '');
+
+    // RLS rejection — force-refresh the JWT and the client, then re-derive
+    // org_id from the fresh token and retry once. This heals the case where
+    // the cached token was minted before the active org was established.
+    if (isRlsError(error) && attempt === 0) {
+      db = await refreshAuthedSupabase();
+      const refreshedOrgId = await getJwtOrgId({ skipCache: true });
+      if (refreshedOrgId) patch = { ...patch, organization_id: refreshedOrgId };
+      continue;
+    }
+    // Second RLS failure after a fresh token — the JWT template itself is
+    // misconfigured (missing org_id, wrong signing key, wrong role claim).
+    // Stop retrying; the caller surfaces a "diagnose" link to Storage Health.
+    if (isRlsError(error)) break;
+
     // Match Postgres "column ... does not exist" and PostgREST
     // "Could not find the 'X' column" / "schema cache" wording. If a
     // specific column is named, drop just that one. Otherwise drop every
     // non-essential column (keep data + images so the user's actual edits
     // still land).
-    const msg = String(error.message || error.details || '');
     const named = msg.match(/column\s+(?:["']?)([\w.]+)(?:["']?)\s+(?:does not exist|of relation)/i)
       || msg.match(/Could not find the '([^']+)' column/i)
       || msg.match(/the '([^']+)' column .* (?:does not exist|schema cache)/i);
     if (named && named[1]) {
       const col = named[1].split('.').pop();
-      if (col in patch) {
+      // Never drop the upsert keys — without id / organization_id /
+      // user_id the upsert can't INSERT a missing row and the save
+      // silently no-ops.
+      if (col in patch && !['id', 'organization_id', 'user_id'].includes(col)) {
         const next = { ...patch };
         delete next[col];
         patch = next;
@@ -341,7 +382,11 @@ export async function saveComponentPack(id, updates) {
     if (/schema cache|does not exist|could not find.*column/i.test(msg)) {
       // Generic schema mismatch — strip every projection column, keep only
       // the JSONB payloads so the save still represents the user's edits.
-      const safePatch = {};
+      // id / organization_id / user_id are required for the upsert to be
+      // able to INSERT a missing row, so they're preserved unconditionally.
+      const safePatch = { id: patch.id };
+      if (patch.organization_id !== undefined) safePatch.organization_id = patch.organization_id;
+      if (patch.user_id !== undefined) safePatch.user_id = patch.user_id;
       if (patch.data !== undefined) safePatch.data = patch.data;
       if (patch.images !== undefined) safePatch.images = patch.images;
       if (patch.updated_at !== undefined) safePatch.updated_at = patch.updated_at;
@@ -506,17 +551,29 @@ export async function duplicateComponentPack(id) {
 
   const rows = readLocal(); rows.push(copy); writeLocal(rows);
 
-  // Fire-and-forget the cloud insert so the UI can update optimistically
-  // off the local copy. Errors still surface in the console; the local row
-  // is the source of truth until cloud catches up on next list/refresh.
+  // Await the cloud insert (was fire-and-forget) so failures surface
+  // before the user enters the builder thinking the duplicate is safe.
+  // Without this, a JWT / RLS / schema error silently lost the row,
+  // every subsequent edit ran .update().eq('id', ...) against nothing
+  // (zero rows affected, no error returned), the UI cheerfully showed
+  // Saved ✓, and on close+refresh the duplicate was just gone. Now
+  // saveComponentPack is also upsert so even if this insert fails,
+  // the first edit in the builder creates the row — but we still want
+  // to know about insert failures up front.
   const orgId = getCurrentOrgIdSync();
   if (IS_SUPABASE_ENABLED && orgId) {
     const userId = getCurrentUserIdSync();
-    getAuthedSupabase().then(db => {
-      if (!db) return;
-      db.from('component_packs').insert({ ...copy, user_id: userId, organization_id: orgId })
-        .then(({ error }) => { if (error) console.error('duplicateComponentPack:', error); });
-    });
+    const db = await getAuthedSupabase();
+    if (db) {
+      const { error } = await db
+        .from('component_packs')
+        .insert({ ...copy, user_id: userId, organization_id: orgId });
+      if (error) {
+        console.error('duplicateComponentPack cloud insert:', error);
+        // Don't fail the whole duplicate — the local row is written and
+        // saveComponentPack's upsert will heal cloud on the next edit.
+      }
+    }
   }
   return copy;
 }

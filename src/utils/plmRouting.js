@@ -49,7 +49,7 @@ export const LIBRARY_SECTIONS = [
 ];
 const LIBRARY_SET = new Set(LIBRARY_SECTIONS);
 
-const TOP_LAYERS = new Set(['library', 'styles', 'production']);
+const TOP_LAYERS = new Set(['library', 'styles', 'production', 'storage-health']);
 
 // Default landing atom when the URL is bare (`#product` or `#product/library`).
 // Patterns is first in the library tab order, so a fresh user lands at the
@@ -140,6 +140,9 @@ function parseInner(parts) {
       const packId = parts[2] || null;
       return buildResult({ layer: 'production', atom: null, packId, step: 0 });
     }
+    if (second === 'storage-health') {
+      return buildResult({ layer: 'storage-health', atom: null, packId: null, step: 0 });
+    }
   }
 
   // Legacy grammar: <tab>/<single-word-section>
@@ -201,6 +204,9 @@ export function buildPLMHash(args = {}) {
       if (step > 0) h += `/${step + 1}`;
     }
     return h;
+  }
+  if (layer === 'storage-health') {
+    return `#${PLM_TAB}/storage-health`;
   }
   // production
   let h = `#${PLM_TAB}/production`;

@@ -700,8 +700,16 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
             <Save size={11} /> Save
           </button>
           {saveError && (
-            <span title={saveError} style={{ fontSize: 10, color: '#D4956A', background: 'rgba(212,149,106,0.12)', padding: '2px 8px', borderRadius: 3, maxWidth: 460, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              ⚠︎ Cloud save failed (kept locally): {saveError}
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: '#D4956A', background: 'rgba(212,149,106,0.12)', padding: '2px 8px', borderRadius: 3, maxWidth: 520 }}>
+              <span title={saveError} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                ⚠︎ Cloud save failed (kept locally): {saveError}
+              </span>
+              <button
+                onClick={() => { window.location.hash = 'plm/storage-health'; }}
+                style={{ flexShrink: 0, background: 'none', border: 'none', padding: 0, color: '#D4956A', textDecoration: 'underline', cursor: 'pointer', fontSize: 10, fontWeight: 600 }}
+              >
+                Diagnose →
+              </button>
             </span>
           )}
           {quotaWarning && (

@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-02T12:05:47.810Z",
+  "lastUpdated": "2026-05-03T09:47:40.682Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,54 +1044,54 @@
   ],
   "changelog": [
     {
-      "sha": "5da8121",
-      "date": "2026-05-01T14:43:23+00:00",
-      "message": "wire Plaid bank accounts + refine 13-week layout to mimic xlsx"
+      "sha": "503e19b",
+      "date": "2026-05-03T09:38:59+00:00",
+      "message": "docs(plm): fix plan for cloud-save RLS error on component_packs"
     },
     {
-      "sha": "f52ab14",
-      "date": "2026-05-01T10:58:49+00:00",
-      "message": "feat(plm): Fort Knox file storage pass — high-res, deferred GC, retries, backfill"
+      "sha": "095302d",
+      "date": "2026-05-03T09:25:10+00:00",
+      "message": "feat(plm): live cloud-write test in Storage Health diagnostics"
     },
     {
-      "sha": "1a11736",
-      "date": "2026-05-01T10:33:38+00:00",
-      "message": "fix(plm): schema-resilient cloud saves + visible save errors"
+      "sha": "18c6068",
+      "date": "2026-05-03T09:20:55+00:00",
+      "message": "feat(plm): live scan progress on Storage Health (spinner + per-phase status)"
     },
     {
-      "sha": "126c87b",
-      "date": "2026-05-01T13:21:34+03:00",
-      "message": "Merge pull request #14 from matasmillion/claude/vendor-send-buttons"
+      "sha": "ea5d0e4",
+      "date": "2026-05-03T09:14:22+00:00",
+      "message": "fix(plm): server-side JWT probe + storage-health route + scan resilience"
     },
     {
-      "sha": "d41fa31",
-      "date": "2026-05-01T08:12:05+00:00",
-      "message": "feat(vendor): Send Sample / Send PO buttons on tech packs + trim cards"
+      "sha": "9138850",
+      "date": "2026-05-03T09:04:07+00:00",
+      "message": "fix(plm): orphan recovery now also restores rows that exist only in localStorage"
     },
     {
-      "sha": "09cf227",
-      "date": "2026-05-01T11:06:28+03:00",
-      "message": "Merge pull request #13 from matasmillion/claude/vendor-portal-setup-jqbIB"
+      "sha": "360a53b",
+      "date": "2026-05-03T08:56:09+00:00",
+      "message": "feat(plm): Storage Health → Recover orphan uploads back to their original packs"
     },
     {
-      "sha": "c798e5b",
-      "date": "2026-05-01T05:42:14+00:00",
-      "message": "feat(vendor): notification log panel + Org Settings tab"
+      "sha": "81f81bf",
+      "date": "2026-05-03T08:50:26+00:00",
+      "message": "feat(plm): JWT diagnostics on Storage Health surface RLS / org_id mismatches"
     },
     {
-      "sha": "a10c13a",
-      "date": "2026-05-01T05:34:53+00:00",
-      "message": "feat(vendor): admin invite flow — Portal Access panel + edge function"
+      "sha": "dbb351d",
+      "date": "2026-05-03T08:35:18+00:00",
+      "message": "fix(plm): saves are now upsert — duplicates that don't reach cloud heal on first edit"
     },
     {
-      "sha": "f55a3b7",
-      "date": "2026-05-01T05:22:10+00:00",
-      "message": "feat(vendor): scaffold Vendor Portal with i18n + email notifications"
+      "sha": "946f211",
+      "date": "2026-05-03T08:24:58+00:00",
+      "message": "fix(plm): duplicate now auto-opens the new pack instead of relying on a click"
     },
     {
-      "sha": "b5e4319",
-      "date": "2026-04-30T15:34:29+00:00",
-      "message": "feat(plm-assets): Phase 7b — lazy Storage migration for atom libraries"
+      "sha": "51955e5",
+      "date": "2026-05-03T08:13:30+00:00",
+      "message": "feat(plm): trim pack attachments accept raster + font files (PNG, JPG, OTF, TTF…)"
     }
   ]
 }

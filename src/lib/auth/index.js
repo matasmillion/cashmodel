@@ -119,12 +119,36 @@ export function getCurrentUserIdSync() {
  * @param {string} [template]
  * @returns {Promise<string | null>}
  */
-export async function getClerkToken(template = 'supabase') {
+export async function getClerkToken(template = 'supabase', { skipCache = false } = {}) {
   if (typeof window === 'undefined') return null;
   const clerk = /** @type {any} */ (window).Clerk;
   if (!clerk?.session) return null;
   try {
-    return await clerk.session.getToken({ template });
+    return await clerk.session.getToken({ template, skipCache });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Decode the Clerk "supabase" JWT and return its org_id claim — the value
+ * Postgres will see via auth.jwt() ->> 'org_id'. Using this claim (rather
+ * than getCurrentOrgIdSync) as the body's organization_id keeps the request
+ * body and the JWT in lock-step by construction.
+ *
+ * @param {{ skipCache?: boolean }} [opts]
+ * @returns {Promise<string | null>}
+ */
+export async function getJwtOrgId({ skipCache = false } = {}) {
+  const token = await getClerkToken('supabase', { skipCache });
+  if (!token) return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '==='.slice((b64.length + 3) % 4);
+    const payload = JSON.parse(atob(padded));
+    return payload.org_id || null;
   } catch {
     return null;
   }
