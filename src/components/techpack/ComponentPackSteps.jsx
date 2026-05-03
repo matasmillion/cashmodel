@@ -948,7 +948,7 @@ export function StepEmbellishments({ data, set, images, onUpload, onRemove }) {
       </div>
 
       <div>
-        <label style={sectionLabel}>Attachments — SVG / AI / PDF source files</label>
+        <label style={sectionLabel}>Attachments — source files (SVG · AI · PDF · PNG · JPG · fonts)</label>
         <AttachmentZone attachments={data.attachments || []} onChange={v => set('attachments', v)} />
         <p style={{ fontSize: 10, color: FR.stone, marginTop: 6 }}>
           Files persist with the pack. They'll live-link on the exported PDF and attach to the vendor email / portal once those phases ship.
@@ -959,9 +959,19 @@ export function StepEmbellishments({ data, set, images, onUpload, onRemove }) {
 }
 
 // Inline base64 file uploader. Matches the image upload pattern but doesn't
-// resize or re-encode — SVG / AI / PDF blobs are stored as-is. Individual
-// files are capped at 10 MB to keep the pack row size manageable.
+// resize or re-encode — source-file blobs are stored as-is. Accepts the full
+// vector + raster + font set vendors typically need: SVG, AI, EPS, PDF, PNG,
+// JPG, GIF, WebP, plus OTF / TTF / WOFF / WOFF2 font files. Individual files
+// are capped at 10 MB to keep the pack row size manageable.
 const ATTACHMENT_SIZE_LIMIT = 10 * 1024 * 1024;
+const ATTACHMENT_ACCEPT = [
+  '.svg', '.ai', '.eps', '.pdf',
+  '.png', '.jpg', '.jpeg', '.gif', '.webp',
+  '.otf', '.ttf', '.woff', '.woff2',
+  'image/svg+xml', 'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+  'application/pdf', 'application/illustrator', 'application/postscript',
+  'font/otf', 'font/ttf', 'font/woff', 'font/woff2',
+].join(',');
 
 function AttachmentZone({ attachments, onChange }) {
   const fileRef = useRef(null);
@@ -1016,7 +1026,7 @@ function AttachmentZone({ attachments, onChange }) {
         onDragLeave={() => setDragging(false)}
         style={{ border: `2px dashed ${dragging ? FR.soil : FR.sand}`, borderRadius: 6, padding: attachments.length ? 14 : 28, textAlign: 'center', cursor: 'pointer', background: dragging ? FR.sand : FR.salt, transition: 'all 0.2s' }}>
         <input ref={fileRef} type="file" multiple
-          accept=".svg,.ai,.pdf,image/svg+xml,application/pdf,application/illustrator,application/postscript"
+          accept={ATTACHMENT_ACCEPT}
           onChange={e => { if (e.target.files.length) handleFiles(Array.from(e.target.files)); e.target.value = ''; }}
           style={{ display: 'none' }} />
         {attachments.length === 0
@@ -1024,7 +1034,7 @@ function AttachmentZone({ attachments, onChange }) {
             <>
               <div style={{ fontSize: 22, color: FR.sand, lineHeight: 1 }}>＋</div>
               <div style={{ fontSize: 12, color: FR.stone, marginTop: 6 }}>Drop files here or click to upload</div>
-              <div style={{ fontSize: 10, color: FR.sand, marginTop: 3 }}>SVG · AI · PDF · up to 10 MB each</div>
+              <div style={{ fontSize: 10, color: FR.sand, marginTop: 3 }}>SVG · AI · EPS · PDF · PNG · JPG · GIF · WebP · OTF · TTF · WOFF · up to 10 MB each</div>
             </>
           )
           : (
