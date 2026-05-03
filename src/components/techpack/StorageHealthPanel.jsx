@@ -619,26 +619,21 @@ export default function StorageHealthPanel() {
       const userId = getCurrentUserIdSync();
       if (!orgId) throw new Error('No active org');
 
-      // Step 0: verify the org exists in public.organizations. If it doesn't,
-      // the FK constraint on component_packs.organization_id will reject the
-      // INSERT (and Postgres sometimes surfaces that as an RLS-like error
-      // rather than a FK error, depending on the policy evaluation order).
+      // Step 0: verify the org is visible via the authenticated client.
+      // The organizations SELECT policy requires a user_org_memberships row,
+      // so this check may return nothing even if the org row exists (RLS hides
+      // it). We record the result as a warning but do NOT abort — we still
+      // attempt the INSERT so Postgres can give us the real error code.
       const { data: orgRow, error: orgErr } = await supabase
         .from('organizations')
         .select('id')
         .eq('id', orgId)
         .maybeSingle();
-      if (orgErr || !orgRow) {
-        setWriteTest({
-          loading: false,
-          ok: false,
-          phase: 'org-check',
-          message: orgErr
-            ? `Cannot read public.organizations: ${orgErr.message} (code: ${orgErr.code})`
-            : `Org "${orgId}" is not present in public.organizations. The Clerk webhook that creates org rows (organization.created event) may not be configured or has not fired. Insert it manually in the Supabase SQL editor: INSERT INTO public.organizations (id, name) VALUES ('${orgId}', 'My Org');`,
-          payload: { checked_org_id: orgId },
-        });
-        return;
+      let orgWarning = null;
+      if (orgErr) {
+        orgWarning = `organizations SELECT error: ${orgErr.message} (code: ${orgErr.code})`;
+      } else if (!orgRow) {
+        orgWarning = `Org "${orgId}" is not visible via RLS. The row may exist but your user has no entry in user_org_memberships. Run this SQL in the Supabase editor:\n\nINSERT INTO public.users (clerk_user_id, email, name, role) VALUES ('${getCurrentUserIdSync()}', '', '', 'admin') ON CONFLICT (clerk_user_id) DO NOTHING;\nINSERT INTO public.organizations (id, name) VALUES ('${orgId}', 'My Org') ON CONFLICT (id) DO NOTHING;\nINSERT INTO public.user_org_memberships (user_id, org_id, role) VALUES ('${getCurrentUserIdSync()}', '${orgId}', 'admin') ON CONFLICT (user_id, org_id) DO NOTHING;`;
       }
 
       // Step 1: plain INSERT (not upsert). Upsert uses ON CONFLICT DO UPDATE
@@ -665,7 +660,7 @@ export default function StorageHealthPanel() {
           loading: false,
           ok: false,
           phase: 'insert',
-          message: `${insertErr.message}${insertErr.code ? ` (code: ${insertErr.code})` : ''}${insertErr.hint ? ` — hint: ${insertErr.hint}` : ''}${insertErr.details ? ` — details: ${insertErr.details}` : ''}`,
+          message: `${insertErr.message}${insertErr.code ? ` (code: ${insertErr.code})` : ''}${insertErr.hint ? ` — hint: ${insertErr.hint}` : ''}${insertErr.details ? ` — details: ${insertErr.details}` : ''}${orgWarning ? `\n\nOrg visibility warning: ${orgWarning}` : ''}`,
           payload,
         });
         return;
@@ -678,11 +673,13 @@ export default function StorageHealthPanel() {
         .eq('organization_id', orgId);
       setWriteTest({
         loading: false,
-        ok: true,
+        ok: !orgWarning,
         phase: 'cleanup',
         message: delErr
           ? `Insert succeeded but cleanup delete returned: ${delErr.message} (test row left behind, run scan to surface it)`
-          : 'Cloud write path is fully operational. Saves should not fail with RLS errors against this org going forward.',
+          : orgWarning
+            ? `INSERT passed RLS. However, org visibility warning: ${orgWarning}`
+            : 'Cloud write path is fully operational. Saves should not fail with RLS errors against this org going forward.',
       });
     } catch (err) {
       setWriteTest({
