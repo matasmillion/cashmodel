@@ -217,6 +217,11 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
   const imagesRef = useRef(images);
   const dirtyRef = useRef(false);
   const firstRunRef = useRef(true);
+  // Pack id can rotate mid-session when an upsert hits an unrecoverable RLS
+  // conflict (existing cloud row owned by another org / NULL org). The store
+  // returns { idChanged: { from, to } } and we move the live id here so every
+  // subsequent save targets the new row.
+  const packIdRef = useRef(pack.id);
   useEffect(() => { dataRef.current = data; imagesRef.current = images; }, [data, images]);
 
   // Wait for all in-flight Storage uploads to settle (success or failure) so
@@ -258,7 +263,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
       || d.costPerUnit
       || '';
     try {
-      const result = await saveComponentPack(pack.id, {
+      const result = await saveComponentPack(packIdRef.current, {
         data: d, images: imgs,
         component_name: d.componentName || '',
         component_category: d.componentCategory || '',
@@ -271,6 +276,12 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
         setSaveError(result.error?.message || 'Cloud save failed');
         setSaving(false);
         return result;
+      }
+      // Save adopted the pack under a new id (RLS-locked old row left
+      // orphaned in cloud). Point future saves + the URL at the new id.
+      if (result && result.idChanged) {
+        packIdRef.current = result.idChanged.to;
+        replacePLMHash({ section: 'components', packId: packIdRef.current, step });
       }
       dirtyRef.current = false;
       setIsDirty(false);
@@ -320,13 +331,13 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
   }, [data, images, exportFilename]);
 
   useEffect(() => {
-    replacePLMHash({ section: 'components', packId: pack.id, step });
+    replacePLMHash({ section: 'components', packId: packIdRef.current, step });
   }, [step, pack.id]);
 
   useEffect(() => {
     const sync = () => {
       const { packId, step: urlStep } = parsePLMHash();
-      if (packId === pack.id && urlStep !== step) {
+      if (packId === packIdRef.current && urlStep !== step) {
         setStep(Math.min(urlStep, COMPONENT_STEPS.length - 1));
       }
     };
@@ -363,7 +374,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     }
     if (dirtyRef.current) {
       const d = dataRef.current;
-      saveComponentPack(pack.id, {
+      saveComponentPack(packIdRef.current, {
         data: d, images: imagesRef.current,
         component_name: d.componentName || '',
         component_category: d.componentCategory || '',

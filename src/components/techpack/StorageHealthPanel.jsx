@@ -618,7 +618,13 @@ export default function StorageHealthPanel() {
       const orgId = getCurrentOrgIdSync();
       const userId = getCurrentUserIdSync();
       if (!orgId) throw new Error('No active org');
-      const testId = `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      // Use a valid UUID — the live component_packs.id column is uuid in
+      // production (the migration declares text but a separate ALTER must
+      // have re-typed it). A non-uuid test id fails Postgres input
+      // validation before RLS is even evaluated, masking what we're
+      // actually trying to test.
+      const testId = (crypto.randomUUID && crypto.randomUUID())
+        || `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0')}`;
       const payload = {
         id: testId,
         organization_id: orgId,
