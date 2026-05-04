@@ -252,3 +252,88 @@ export function deleteVendor(name) {
   deleteVendorFromCloud(name);
   return { ok: true };
 }
+
+// Rename a vendor and cascade the change through every PLM
+// localStorage row that references the old name. Vendor names are
+// used as the cross-row foreign key (no UUIDs), so renaming is a
+// real surgery: re-key the vendor entry, rename in cloud, and walk
+// every dependent pack/atom in localStorage to update its
+// vendor-pointing fields.
+//
+// Cloud-side cascade is best-effort:
+//   • The vendor row itself is UPDATEd to the new name.
+//   • Pack / atom rows in cloud still carry the old name in their
+//     JSONB or projection columns; they'll heal on the next save
+//     of each of those rows. We don't run mass cross-table UPDATEs
+//     because they're hard to make atomic and a partial failure
+//     would be worse than a slow heal.
+//
+// Returns { ok: true, renamed, localRefsUpdated } on success or
+// { ok: false, reason } if the new name is empty / already taken.
+export function renameVendor(oldName, newName) {
+  const oldClean = String(oldName || '').trim();
+  const newClean = String(newName || '').trim();
+  if (!oldClean || !newClean) return { ok: false, reason: 'Both names required.' };
+  if (oldClean === newClean) return { ok: true, renamed: false, localRefsUpdated: 0 };
+  const store = readStore();
+  if (!store[oldClean]) return { ok: false, reason: 'Original vendor not found.' };
+  if (store[newClean]) return { ok: false, reason: 'A vendor with that name already exists.' };
+
+  // 1. Re-key the vendor entry in the local store.
+  const entry = { ...store[oldClean], name: newClean };
+  const next = { ...store, [newClean]: entry };
+  delete next[oldClean];
+  writeStore(next);
+
+  // 2. Cascade local references. Each PLM store keeps its own
+  // localStorage key; we walk known vendor-pointing fields on each
+  // and rewrite. Unknown fields are left alone — better to miss a
+  // reference than to corrupt unrelated data.
+  let localRefsUpdated = 0;
+  const VENDOR_REF_KEYS = ['cashmodel_techpacks', 'cashmodel_component_packs', 'cashmodel_treatments', 'cashmodel_embellishments', 'cashmodel_fabrics', 'cashmodel_patterns', 'cashmodel_purchase_orders', 'cashmodel_production'];
+  for (const lsKey of VENDOR_REF_KEYS) {
+    let raw;
+    try { raw = localStorage.getItem(lsKey); } catch { continue; }
+    if (!raw) continue;
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch { continue; }
+    if (!Array.isArray(parsed)) continue;
+    let dirty = false;
+    for (const row of parsed) {
+      if (!row || typeof row !== 'object') continue;
+      // Top-level keys we know hold a vendor name.
+      for (const k of ['supplier', 'vendor', 'vendor_id', 'vendorId', 'primary_vendor_id', 'primaryVendorId', 'vendorName']) {
+        if (row[k] === oldClean) { row[k] = newClean; dirty = true; localRefsUpdated++; }
+      }
+      // Same keys nested under data (most PLM rows put domain fields
+      // into the JSONB data column rather than projection columns).
+      const d = row.data;
+      if (d && typeof d === 'object') {
+        for (const k of ['supplier', 'vendor', 'vendor_id', 'vendorId', 'primary_vendor_id', 'primaryVendorId', 'vendorName']) {
+          if (d[k] === oldClean) { d[k] = newClean; dirty = true; localRefsUpdated++; }
+        }
+      }
+    }
+    if (dirty) {
+      try { localStorage.setItem(lsKey, JSON.stringify(parsed)); }
+      catch (err) { console.error('renameVendor cascade write:', err); }
+    }
+  }
+
+  // 3. Cloud-side: update the vendor row's name. Cross-table refs
+  // heal on next save of each affected row; not worth the partial-
+  // failure risk of a mass cascade here.
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    getAuthedSupabase().then(db => {
+      if (!db) return;
+      db.from('vendors')
+        .update({ name: newClean })
+        .eq('organization_id', orgId)
+        .eq('name', oldClean)
+        .then(({ error }) => { if (error) console.error('renameVendor cloud:', error); });
+    });
+  }
+
+  return { ok: true, renamed: true, localRefsUpdated };
+}

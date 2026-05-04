@@ -14,7 +14,7 @@ import { Input, labelStyle } from './TechPackPrimitives';
 import {
   listVendorsLocal, listVendors,
   getVendor, updateVendor, clearVendorField,
-  addVendor, deleteVendor,
+  addVendor, deleteVendor, renameVendor,
 } from '../../utils/vendorLibrary';
 import { fileToDataUrl } from '../../utils/cropImage';
 import { uploadAsset, deleteAsset, isLegacyDataUrl, dataUrlToBlob } from '../../utils/plmAssets';
@@ -92,7 +92,9 @@ export default function VendorManager() {
       {adding && <AddVendorForm onCancel={() => setAdding(false)} onSubmit={handleAdd} />}
       {activeName && (
         <VendorEditor
+          key={activeName}
           name={activeName}
+          onRenamed={(newName) => setActiveName(newName)}
           onClose={() => handleClose()}
           onDeleted={() => handleClose()} />
       )}
@@ -219,7 +221,7 @@ function AddVendorForm({ onCancel, onSubmit }) {
   );
 }
 
-function VendorEditor({ name, onClose, onDeleted }) {
+function VendorEditor({ name, onClose, onDeleted, onRenamed }) {
   const [entry, setEntry] = useState(() => getVendor(name) || { name });
   const fileRef = useRef(null);
   const hasRecord = !!entry._hasRecord;
@@ -323,12 +325,56 @@ function VendorEditor({ name, onClose, onDeleted }) {
       <div onClick={e => e.stopPropagation()}
         style={{ background: FR.white, borderRadius: 10, width: '100%', maxWidth: 760, maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
         <div style={{ background: FR.slate, padding: '18px 22px', color: FR.salt, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ fontSize: 9, letterSpacing: 3, fontWeight: 600, opacity: 0.8 }}>VENDOR</div>
-            <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 26, lineHeight: 1, marginTop: 4 }}>{name}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 9, letterSpacing: 3, fontWeight: 600, opacity: 0.8 }}>VENDOR · CLICK TO RENAME</div>
+            <input
+              type="text"
+              defaultValue={name}
+              onBlur={(e) => {
+                const next = e.target.value.trim();
+                if (!next || next === name) { e.target.value = name; return; }
+                const result = renameVendor(name, next);
+                if (!result.ok) {
+                  alert(result.reason || 'Could not rename vendor.');
+                  e.target.value = name;
+                  return;
+                }
+                if (onRenamed) onRenamed(next);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+                if (e.key === 'Escape') { e.target.value = name; e.target.blur(); }
+              }}
+              style={{
+                width: '100%',
+                marginTop: 4,
+                padding: '2px 6px',
+                marginLeft: -6,
+                fontFamily: "'Cormorant Garamond', Georgia, serif",
+                fontSize: 26,
+                lineHeight: 1.1,
+                color: FR.salt,
+                background: 'transparent',
+                border: '1px solid transparent',
+                borderRadius: 3,
+                outline: 'none',
+                transition: 'border-color 0.15s, background 0.15s',
+              }}
+              onFocus={e => {
+                e.target.style.borderColor = 'rgba(255,255,255,0.35)';
+                e.target.style.background = 'rgba(255,255,255,0.06)';
+                e.target.select();
+              }}
+              onMouseLeave={e => {
+                if (document.activeElement !== e.target) {
+                  e.target.style.borderColor = 'transparent';
+                  e.target.style.background = 'transparent';
+                }
+              }}
+            />
           </div>
           <button onClick={onClose} aria-label="Close"
-            style={{ padding: 6, background: 'rgba(255,255,255,0.12)', color: FR.salt, border: 'none', borderRadius: 3, cursor: 'pointer' }}>
+            style={{ padding: 6, background: 'rgba(255,255,255,0.12)', color: FR.salt, border: 'none', borderRadius: 3, cursor: 'pointer', marginLeft: 12 }}>
             <X size={14} />
           </button>
         </div>
