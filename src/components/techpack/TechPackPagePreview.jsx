@@ -32,7 +32,7 @@ function PageFrame({ title, pageNum, styleInfo, children }) {
   );
 }
 
-// ─── Page 1 — Cover & Identity ──────────────────────────────────────────────
+// ─── Page 1 — Style Overview ──────────────────────────────────────────────
 function MetaRow({ x, y, label, value, w = 400 }) {
   return (
     <g>
@@ -46,65 +46,101 @@ function MetaRow({ x, y, label, value, w = 400 }) {
 function PageCover({ d, images }) {
   const cover = (images || []).find(img => img.slot === 'cover');
   const colorways = (d.colorways || []).filter(c => c && c.name).map(c => c.name).join(', ') || '—';
-  const sig = (s) => s && s.name ? `${s.name}${s.date ? ` · ${s.date}` : ''}` : '—';
+  const sizeRange = Array.isArray(d.sizeRange) ? d.sizeRange.join(' / ') : (d.sizeRange || '—');
+  const assumptions = d.assumptions || {};
+  const productPercent = parseFloat(assumptions.productPercent ?? 0.27);
+  const seaFreightSpot = parseFloat(assumptions.seaFreightSpot ?? 4);
+  const targetRetailNum = parseFloat(d.targetRetail) || 0;
+  const maxFOB = targetRetailNum > 0 ? (targetRetailNum * productPercent - seaFreightSpot).toFixed(2) : '—';
+
+  // Cover image: 2:3 portrait, right column
+  const imgW = 280;
+  const imgH = imgW * 3 / 2; // 420
+  const imgX = PAGE_W - imgW - 40;
+  const imgY = 85;
+  const leftW = imgX - 60; // width of left content column
+
+  // Quote tier stat strip dimensions
+  const tierStripY = 640;
+  const tierStripH = 36;
 
   return (
     <g>
-      {/* Tech Pack wordmark + style name */}
-      <text x={40} y={120} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="46" fill={FR.slate}>Tech Pack</text>
-      <rect x={40} y={132} width="100" height="2" fill={FR.soil} />
-      <text x={40} y={168} fontSize="16" fill={FR.stone}>
-        {clampLine(d.styleName || 'Untitled Style', 700, 9)}
-      </text>
-      <text x={40} y={192} fontSize="11" fill={FR.soil}>
-        {esc(d.styleNumber || 'STYLE-000')}
-      </text>
-
-      {/* Product render on the right */}
+      {/* Large 2:3 cover image — right column */}
       {cover
-        ? <image href={cover.data} x={PAGE_W - 360 - 40} y={100} width="360" height="240" preserveAspectRatio="xMidYMid meet" />
+        ? <image href={cover.data} x={imgX} y={imgY} width={imgW} height={imgH} preserveAspectRatio="xMidYMid meet" />
         : (
           <g>
-            <rect x={PAGE_W - 360 - 40} y={100} width="360" height="240" fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" />
-            <text x={PAGE_W - 180 - 40} y={225} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">Product render goes here</text>
+            <rect x={imgX} y={imgY} width={imgW} height={imgH} fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" />
+            <text x={imgX + imgW / 2} y={imgY + imgH / 2} textAnchor="middle" fontSize="10" fill={FR.stone} fontStyle="italic">Product render goes here</text>
           </g>
         )}
 
-      {/* Section divider */}
-      <rect x="40" y="360" width={PAGE_W - 80} height="1" fill={FR.sand} />
-      <text x={40} y={380} fontSize="10" fontWeight="bold" fill={FR.soil} letterSpacing="2">STYLE SUMMARY</text>
+      {/* Tech Pack wordmark — left column */}
+      <text x={40} y={120} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="44" fill={FR.slate}>Tech Pack</text>
+      <rect x={40} y={132} width="100" height="2" fill={FR.soil} />
+      <text x={40} y={160} fontSize="15" fill={FR.stone}>
+        {clampLine(d.styleNumber || d.styleName || 'Untitled Style', 600, 8.5)}
+      </text>
 
-      {/* Two-column metadata */}
+      {/* Section divider */}
+      <rect x="40" y="188" width={leftW} height="1" fill={FR.sand} />
+      <text x={40} y={206} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="2">STYLE SUMMARY</text>
+
+      {/* Two-column metadata — left of the image */}
       {(() => {
-        const leftX = 40;
-        const rightX = PAGE_W / 2 + 20;
-        const colW = PAGE_W / 2 - 60;
-        const startY = 410;
-        const gap = 50;
+        const lx = 40;
+        const rx = 40 + leftW / 2 + 10;
+        const cw = leftW / 2 - 10;
+        const startY = 228;
+        const gap = 44;
         const left = [
-          { label: 'Style #',        value: d.styleNumber },
-          { label: 'SKU Prefix',     value: d.skuPrefix },
-          { label: 'Product Tier',   value: d.productTier },
-          { label: 'Season',         value: d.season },
-          { label: 'Date Created',   value: d.dateCreated },
-          { label: 'Revision',       value: d.revision },
-          { label: 'Designed By',    value: sig(d.designedBy) },
+          { label: 'Style #',      value: d.styleNumber },
+          { label: 'Collection',   value: d.collection },
+          { label: 'Product Type', value: d.productType },
+          { label: 'Season',       value: d.season },
+          { label: 'Version',      value: d.revision },
         ];
         const right = [
           { label: 'Vendor',            value: d.vendor },
           { label: 'Colorways',         value: colorways },
-          { label: 'Size Range',        value: d.sizeRange },
+          { label: 'Size Range',        value: sizeRange },
           { label: 'Target Retail ($)', value: d.targetRetail },
-          { label: 'Target FOB ($)',    value: d.targetFOB },
+          { label: 'Maximum FOB ($)',   value: maxFOB },
           { label: 'Status',            value: d.status },
-          { label: 'Approved By',       value: sig(d.approvedBy) },
         ];
         return (
           <>
-            {left.map((f, i)  => <MetaRow key={`L${i}`} x={leftX}  y={startY + i * gap} label={f.label} value={f.value} w={colW} />)}
-            {right.map((f, i) => <MetaRow key={`R${i}`} x={rightX} y={startY + i * gap} label={f.label} value={f.value} w={colW} />)}
-            <MetaRow x={rightX} y={startY + 7 * gap} label="Vendor Confirmed" value={sig(d.vendorConfirmed)} w={colW} />
+            {left.map((f, i)  => <MetaRow key={`L${i}`} x={lx} y={startY + i * gap} label={f.label} value={f.value} w={cw} />)}
+            {right.map((f, i) => <MetaRow key={`R${i}`} x={rx} y={startY + i * gap} label={f.label} value={f.value} w={cw} />)}
           </>
+        );
+      })()}
+
+      {/* Quote stat strip */}
+      {(() => {
+        const tiers = d.costTiers || [];
+        const moq = tiers[0];
+        const statCells = [
+          { label: 'MOQ',              value: moq ? `${moq.quantity || '—'} units` : '—' },
+          { label: 'MOQ Unit Cost',    value: moq && moq.unitCost ? `$${moq.unitCost}` : '—' },
+          { label: 'Lead Time',        value: d.leadTimeDays ? `${d.leadTimeDays} days` : '—' },
+          { label: 'Sample Lead',      value: d.sampleLeadTimeDays ? `${d.sampleLeadTimeDays} days` : '—' },
+          { label: 'Sample Cost',      value: d.sampleCost ? `$${d.sampleCost}` : '—' },
+        ];
+        const cw = leftW / statCells.length;
+        return (
+          <g>
+            <rect x={40} y={tierStripY - 16} width={leftW} height={1} fill={FR.sand} />
+            <text x={40} y={tierStripY - 4} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="2">QUOTE</text>
+            <rect x={40} y={tierStripY + 4} width={leftW} height={tierStripH} fill={FR.salt} stroke={FR.sand} />
+            {statCells.map((c, i) => (
+              <g key={i}>
+                <text x={40 + i * cw + 8} y={tierStripY + 4 + 14} fontSize="7" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">{esc(c.label.toUpperCase())}</text>
+                <text x={40 + i * cw + 8} y={tierStripY + 4 + 28} fontSize="10" fill={FR.slate}>{esc(c.value)}</text>
+              </g>
+            ))}
+          </g>
         );
       })()}
     </g>
@@ -125,12 +161,12 @@ function InfoStrip({ d }) {
   const y = 90;
   const h = 44;
   const cells = [
-    { label: 'Style #',     value: d.styleNumber },
-    { label: 'Style Name',  value: d.styleName },
+    { label: 'Style #',     value: d.styleNumber || d.styleName },
+    { label: 'Collection',  value: d.collection },
     { label: 'Season',      value: d.season },
-    { label: 'Date',        value: d.dateCreated },
+    { label: 'Version',     value: d.revision },
     { label: 'Colorway',    value: ((d.colorways || []).find(c => c && c.name) || {}).name || '—' },
-    { label: 'Size Range',  value: d.sizeRange },
+    { label: 'Size Range',  value: Array.isArray(d.sizeRange) ? d.sizeRange.join(' / ') : d.sizeRange },
   ];
   const cellW = (PAGE_W - 80) / cells.length;
   return (
@@ -925,7 +961,7 @@ function ComingSoon({ pageNum, title }) {
 }
 
 const PAGE_FNS = [
-  { title: 'Cover & Identity',             body: ({ d, images }) => <PageCover d={d} images={images} /> },
+  { title: 'Style Overview',                body: ({ d, images }) => <PageCover d={d} images={images} /> },
   { title: 'Design Overview',              body: ({ d, images }) => <PageDesignOverview d={d} images={images} /> },
   { title: 'Technical Flat Lay Diagrams',  body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
   { title: 'Bill of Materials',            body: ({ d }) => <PageBOM d={d} /> },

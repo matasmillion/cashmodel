@@ -4,14 +4,69 @@
 // Page 1 (Cover & Identity) is fully built. All other pages are placeholders
 // that will be replaced in subsequent prompts.
 
-import { useEffect, useState } from 'react';
-import { FR, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, isStepLocked } from './techPackConstants';
+import { useEffect, useState, useMemo } from 'react';
+import { FR, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, isStepLocked, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
 import { listFRColors } from '../../utils/colorLibrary';
 import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, EditableSelect, FRColorCell } from './TechPackPrimitives';
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
 import { addSupplier } from '../../utils/plmDirectory';
 import { getFRColor } from '../../utils/colorLibrary';
 import { listTreatments } from '../../utils/treatmentStore';
+import { useApp } from '../../context/AppContext';
+
+const COST_TIER_CAP = 5;
+const SIZE_OPTIONS = ['S', 'M', 'L', 'XL', 'NS', 'W30', 'W32', 'W34', 'W36'];
+
+function CostTiersTable({ tiers, onChange }) {
+  const safe = Array.isArray(tiers) && tiers.length ? tiers : [{ quantity: '', unitCost: '' }];
+  const update = (i, key, val) => onChange(safe.map((t, idx) => idx === i ? { ...t, [key]: val } : t));
+  const add = () => { if (safe.length < COST_TIER_CAP) onChange([...safe, { quantity: '', unitCost: '' }]); };
+  const remove = (i) => onChange(safe.filter((_, idx) => idx !== i));
+  const cell = { padding: '4px 6px', borderBottom: `1px solid ${FR.sand}`, fontSize: 11 };
+  const headerCell = { ...cell, background: FR.slate, color: FR.salt, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', borderBottom: 'none' };
+  return (
+    <div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+        <colgroup><col style={{ width: 60 }} /><col /><col /><col style={{ width: 30 }} /></colgroup>
+        <thead>
+          <tr>
+            <th style={{ ...headerCell, textAlign: 'left' }}>Tier</th>
+            <th style={{ ...headerCell, textAlign: 'left' }}>Quantity</th>
+            <th style={{ ...headerCell, textAlign: 'left' }}>Unit Cost ($)</th>
+            <th style={headerCell} />
+          </tr>
+        </thead>
+        <tbody>
+          {safe.map((t, i) => (
+            <tr key={i} style={{ background: i % 2 === 0 ? FR.salt : FR.white }}>
+              <td style={{ ...cell, color: FR.soil, fontWeight: 600, fontSize: 10 }}>{i === 0 ? 'MOQ' : `T${i + 1}`}</td>
+              <td style={cell}><input value={t.quantity || ''} onChange={e => update(i, 'quantity', e.target.value)} placeholder={i === 0 ? '100' : '1000'} style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '2px 0', color: FR.slate, outline: 'none' }} /></td>
+              <td style={cell}><input value={t.unitCost || ''} onChange={e => update(i, 'unitCost', e.target.value)} placeholder={i === 0 ? '28.00' : '24.00'} style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '2px 0', color: FR.slate, outline: 'none' }} /></td>
+              <td style={{ ...cell, textAlign: 'center' }}>
+                {safe.length > 1 && <button onClick={() => remove(i)} style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>×</button>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {safe.length < COST_TIER_CAP && (
+        <button type="button" onClick={add} style={{ marginTop: 6, padding: '4px 12px', background: 'none', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 10, color: FR.soil, cursor: 'pointer' }}>
+          + Add tier
+        </button>
+      )}
+    </div>
+  );
+}
+
+function computeFulfillmentCost(weightKg, rateCard) {
+  if (!weightKg || !rateCard) return null;
+  const weightLbs = parseFloat(weightKg) * 2.20462;
+  if (!weightLbs || isNaN(weightLbs)) return null;
+  const tier = (rateCard.weightTiers || []).find(t => weightLbs >= t.minLbs && weightLbs < t.maxLbs)
+    || (rateCard.weightTiers || []).slice(-1)[0];
+  if (!tier) return null;
+  return (rateCard.pickPack || 0) + (tier.rate || 0) + (rateCard.packagingMaterials || 0);
+}
 
 function LockedBanner({ status }) {
   return (
@@ -51,85 +106,246 @@ function SignatureBlock({ label, value, onNameChange, onDateChange }) {
 }
 
 export function StepCover({ data, set, images, onUpload, onRemove, existingSuppliers = [] }) {
-  const colorways = data.colorways && data.colorways.length ? data.colorways : [{ name: '', frColor: '', pantone: '', hex: '' }];
-  const updateCWName = (i, v) => set('colorways', colorways.map((r, idx) => idx === i ? { ...r, name: v } : r));
-  const addCW = () => set('colorways', [...colorways, { name: '', frColor: '', pantone: '', hex: '' }]);
-  const removeCW = (i) => set('colorways', colorways.filter((_, idx) => idx !== i));
+  const { state } = useApp();
+  const rateCard = state.rateCard;
 
-  const setSig = (key, field, val) => set(key, { ...(data[key] || { name: '', date: '' }), [field]: val });
+  // Library colors for colorway chip picker
+  const [libraryColors, setLibraryColors] = useState([]);
+  useEffect(() => { listFRColors().then(setLibraryColors); }, []);
+
+  // Colorways — array of { name, frColor, hex }
+  const selectedColorways = Array.isArray(data.colorways) ? data.colorways : [];
+  const toggleColorway = (color) => {
+    const idx = selectedColorways.findIndex(c => c.frColor === color.name);
+    if (idx >= 0) {
+      set('colorways', selectedColorways.filter((_, i) => i !== idx));
+    } else {
+      set('colorways', [...selectedColorways, { name: color.name, frColor: color.name, hex: color.hex || '', pantone: '', approvalStatus: 'Pending' }]);
+    }
+  };
+
+  // Size range — array of size strings
+  const selectedSizes = Array.isArray(data.sizeRange) ? data.sizeRange
+    : (data.sizeRange ? String(data.sizeRange).split(/[/,\s]+/).map(s => s.trim()).filter(Boolean) : []);
+  const toggleSize = (s) => {
+    const next = selectedSizes.includes(s) ? selectedSizes.filter(x => x !== s) : [...selectedSizes, s];
+    set('sizeRange', next);
+  };
+
+  // Style number derivation
+  const updateStyleNumber = (patch) => {
+    const next = deriveStyleNumber({
+      season:        patch.season        ?? data.season,
+      collection:    patch.collection    ?? data.collection,
+      productType:   patch.productType   ?? data.productType,
+      productNumber: patch.productNumber ?? data.productNumber,
+    });
+    Object.entries(patch).forEach(([k, v]) => set(k, v));
+    set('styleNumber', next);
+  };
+
+  const styleNumberDisplay = data.styleNumber || deriveStyleNumber({
+    season: data.season, collection: data.collection,
+    productType: data.productType, productNumber: data.productNumber,
+  }) || '—';
+
+  // Fulfillment cost from weight + rate card
+  const fulfillmentCost = useMemo(
+    () => computeFulfillmentCost(data.weightKg, rateCard),
+    [data.weightKg, rateCard]
+  );
+
+  const [assumptionsOpen, setAssumptionsOpen] = useState(false);
+
+  const labelStyle = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+  const chipBase = { padding: '4px 10px', borderRadius: 20, fontSize: 11, cursor: 'pointer', border: `1px solid ${FR.sand}`, transition: 'background 0.15s' };
 
   return (
     <div>
-      <SectionTitle>Cover & Identity</SectionTitle>
+      <SectionTitle>Style Overview</SectionTitle>
 
-      <CoverPhoto label="Product Render" slotKey="cover" images={images} onUpload={onUpload} onRemove={onRemove} />
+      <CoverPhoto
+        label="Ghost Mannequin Product Image"
+        slotKey="cover"
+        images={images}
+        onUpload={onUpload}
+        onRemove={onRemove}
+        portrait
+        uploadPrompt="Click or drop ghost mannequin product image here."
+      />
 
-      <Row>
-        <Input label="Style Name" value={data.styleName} onChange={v => set('styleName', v)} placeholder="e.g. Borderless Basic Hoodie" />
-        <Input label="Style #" value={data.styleNumber} onChange={v => set('styleNumber', v)} placeholder="FR-BB-HD-001" />
-      </Row>
+      {/* Style number — read-only derived display */}
+      <div style={{ marginBottom: 14, padding: '10px 14px', background: FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 6 }}>
+        <div style={{ fontSize: 10, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4 }}>Style #</div>
+        <div style={{ fontFamily: "'ui-monospace','SF Mono',Menlo,monospace", fontSize: 15, color: FR.slate, letterSpacing: 1 }}>
+          {styleNumberDisplay}
+        </div>
+        <div style={{ fontSize: 9, color: FR.stone, marginTop: 3 }}>Product # {data.productNumber || '—'} · auto-generated</div>
+      </div>
 
-      <Row cols="1fr 1fr 1fr">
-        <Input label="SKU Prefix" value={data.skuPrefix} onChange={v => set('skuPrefix', v)} placeholder="FR-BB-HD" />
-        <Select label="Product Tier" value={data.productTier} onChange={v => set('productTier', v)}
-          options={['Tier 1: Staple — Borderless Basics', 'Tier 1: Staple — Snowflake Staples', 'Tier 2: Drop — Destination Designer', 'Tier 2: Drop — Nomadic Necessities', 'Tier 2: Drop — Technical Travel']} />
-        <Select label="Season" value={data.season} onChange={v => set('season', v)}
+      <Row cols="1fr 1fr">
+        <Select label="Season" value={data.season} onChange={v => updateStyleNumber({ season: v })}
           options={['Core (Evergreen)', 'SS26', 'FW26', 'SS27', 'FW27']} />
+        <Select label="Collection" value={data.collection} onChange={v => updateStyleNumber({ collection: v })}
+          options={COLLECTIONS.map(c => c.label)} />
       </Row>
 
-      <Row cols="1fr 1fr 1fr">
-        <Input label="Date Created" value={data.dateCreated} onChange={v => set('dateCreated', v)} placeholder="YYYY-MM-DD" />
+      <Row cols="1fr 1fr">
+        <Select label="Product Type" value={data.productType} onChange={v => updateStyleNumber({ productType: v })}
+          options={PRODUCT_TYPES.map(t => t.label)} />
         <div style={{ marginBottom: 10 }}>
-          <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' }}>Revision</label>
+          <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' }}>Version</label>
           <input readOnly value={data.revision || 'V1.0'}
             style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.stone, background: FR.salt, outline: 'none', boxSizing: 'border-box' }} />
         </div>
-        <EditableSelect label="Vendor" value={data.vendor}
-          onChange={v => set('vendor', v)}
-          options={existingSuppliers}
-          onAddOption={addSupplier}
-          placeholder="Add a new vendor…" />
       </Row>
 
-      <div style={{ marginBottom: 10 }}>
-        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>Colorways</label>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {colorways.map((c, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input value={c.name || ''} onChange={e => updateCWName(i, e.target.value)} placeholder="Colorway name (e.g. Slate Wash)"
-                style={{ flex: 1, padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.white, outline: 'none', boxSizing: 'border-box' }} />
-              {colorways.length > 1 && (
-                <button onClick={() => removeCW(i)} style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 16 }}>×</button>
-              )}
-            </div>
-          ))}
-          <button onClick={addCW} style={{ alignSelf: 'flex-start', padding: '4px 12px', background: 'none', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 10, color: FR.soil, cursor: 'pointer' }}>+ Add colorway</button>
+      <EditableSelect label="Vendor" value={data.vendor}
+        onChange={v => set('vendor', v)}
+        options={existingSuppliers}
+        onAddOption={addSupplier}
+        placeholder="Add a new vendor…" />
+
+      {/* Colorways — chip picker from color library */}
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Colorways</label>
+        {libraryColors.length > 0 ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {libraryColors.map(color => {
+              const active = selectedColorways.some(c => c.frColor === color.name);
+              return (
+                <button key={color.name} type="button" onClick={() => toggleColorway(color)}
+                  style={{ ...chipBase, background: active ? FR.slate : FR.white, color: active ? FR.salt : FR.slate, borderColor: active ? FR.slate : FR.sand, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: color.hex || FR.sand, border: `1px solid ${FR.sand}`, flexShrink: 0 }} />
+                  {color.name}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={{ fontSize: 11, color: FR.stone, fontStyle: 'italic' }}>No colors in library yet — add them in Library → Colors.</div>
+        )}
+        {selectedColorways.length > 0 && (
+          <div style={{ marginTop: 6, fontSize: 10, color: FR.stone }}>
+            Selected: {selectedColorways.map(c => c.name).join(', ')}
+          </div>
+        )}
+      </div>
+
+      {/* Size range — multi-select chips */}
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Size Range</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {SIZE_OPTIONS.map(s => {
+            const active = selectedSizes.includes(s);
+            return (
+              <button key={s} type="button" onClick={() => toggleSize(s)}
+                style={{ ...chipBase, background: active ? FR.slate : FR.white, color: active ? FR.salt : FR.slate, borderColor: active ? FR.slate : FR.sand, minWidth: 42, textAlign: 'center' }}>
+                {s}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <Row cols="1fr 1fr 1fr">
-        <Input label="Size Range" value={data.sizeRange} onChange={v => set('sizeRange', v)} placeholder="S / M / L / XL" />
-        <Input label="Target Retail ($)" value={data.targetRetail} onChange={v => set('targetRetail', v)} placeholder="117" />
-        <Input label="Target FOB ($)" value={data.targetFOB} onChange={v => set('targetFOB', v)} placeholder="28" />
-      </Row>
+      {/* Target Retail + Maximum FOB */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+        <div>
+          <Input label="Target Retail ($)" value={data.targetRetail} onChange={v => set('targetRetail', v)} placeholder="117" />
+        </div>
+        <div>
+          <label style={labelStyle}>Maximum FOB ($)</label>
+          {(() => {
+            const productPercent = parseFloat((data.assumptions || {}).productPercent ?? 0.27);
+            const seaFreightSpot = parseFloat((data.assumptions || {}).seaFreightSpot ?? 4);
+            const retail = parseFloat(data.targetRetail) || 0;
+            if (!retail) return <div style={{ padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.stone, background: FR.salt, fontStyle: 'italic' }}>Enter target retail</div>;
+            const maxFOB = retail * productPercent - seaFreightSpot;
+            return <div style={{ padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.salt, fontFamily: 'monospace' }}>${maxFOB.toFixed(2)}</div>;
+          })()}
+        </div>
+      </div>
+
+      {/* Assumptions — collapsible */}
+      {(() => {
+        const assumptions = data.assumptions || {};
+        return (
+          <div style={{ marginBottom: 14, border: `1px solid ${FR.sand}`, borderRadius: 6, overflow: 'hidden' }}>
+            <button type="button" onClick={() => setAssumptionsOpen(o => !o)}
+              style={{ width: '100%', padding: '8px 12px', background: FR.salt, border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+              Pricing Assumptions
+              <span style={{ fontSize: 12, color: FR.stone }}>{assumptionsOpen ? '▲' : '▼'}</span>
+            </button>
+            {assumptionsOpen && (
+              <div style={{ padding: 12, background: FR.white }}>
+                <Row cols="1fr 1fr">
+                  <Input label="Product %" value={assumptions.productPercent ?? '0.27'}
+                    onChange={v => set('assumptions', { ...assumptions, productPercent: v })}
+                    placeholder="0.27" />
+                  <Input label="Sea Freight Spot ($)" value={assumptions.seaFreightSpot ?? '4'}
+                    onChange={v => set('assumptions', { ...assumptions, seaFreightSpot: v })}
+                    placeholder="4" />
+                </Row>
+                <p style={{ fontSize: 10, color: FR.stone, margin: 0 }}>
+                  Max FOB = (Target Retail × Product %) − Sea Freight Spot. Defaults: 27% product, $4 sea freight.
+                </p>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <Select label="Status" value={data.status} onChange={v => set('status', v)} options={STATUSES} />
       <p style={{ fontSize: 10, color: FR.stone, marginTop: -4, lineHeight: 1.5 }}>
         Labels, Order &amp; Delivery, and Compliance unlock at Pre-Production.
       </p>
 
-      <SectionTitle>Approvals</SectionTitle>
-      <Row cols="1fr 1fr 1fr">
-        <SignatureBlock label="Designed By" value={data.designedBy}
-          onNameChange={v => setSig('designedBy', 'name', v)}
-          onDateChange={v => setSig('designedBy', 'date', v)} />
-        <SignatureBlock label="Approved By" value={data.approvedBy}
-          onNameChange={v => setSig('approvedBy', 'name', v)}
-          onDateChange={v => setSig('approvedBy', 'date', v)} />
-        <SignatureBlock label="Vendor Confirmed" value={data.vendorConfirmed}
-          onNameChange={v => setSig('vendorConfirmed', 'name', v)}
-          onDateChange={v => setSig('vendorConfirmed', 'date', v)} />
-      </Row>
+      {/* Quote tiers */}
+      <div style={{ marginTop: 22, padding: 16, background: FR.white, border: `1px solid ${FR.sand}`, borderRadius: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+          <h4 style={{ margin: 0, fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 18, color: FR.slate }}>Quote</h4>
+          <span style={{ fontSize: 10, color: FR.stone, letterSpacing: 0.5 }}>Pricing &amp; lead times</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 22 }}>
+          <div>
+            <label style={labelStyle}>Cost Tiers</label>
+            <CostTiersTable tiers={data.costTiers || []} onChange={tiers => set('costTiers', tiers)} />
+          </div>
+          <div>
+            <Row cols="1fr 1fr">
+              <Input label="Lead Time (days)" value={data.leadTimeDays} onChange={v => set('leadTimeDays', v)} placeholder="28" />
+              <Input label="Sample Lead Time (days)" value={data.sampleLeadTimeDays} onChange={v => set('sampleLeadTimeDays', v)} placeholder="14" />
+            </Row>
+            <Row cols="1fr 1fr">
+              <Input label="Sample Cost ($)" value={data.sampleCost} onChange={v => set('sampleCost', v)} placeholder="25" />
+              <div />
+            </Row>
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' }}>Quote Provider</label>
+              <input value={data.quoteProviderLink || ''} onChange={e => set('quoteProviderLink', e.target.value)}
+                placeholder="e.g. Dongguan Shengde Clothing Ltd."
+                style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.slate, background: FR.white, outline: 'none', boxSizing: 'border-box' }} />
+              <p style={{ fontSize: 10, color: FR.stone, marginTop: 4 }}>Where this quote came from — manufacturer or sourcing agent.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Weight → fulfillment cost */}
+      <div style={{ marginTop: 16, padding: 16, background: FR.white, border: `1px solid ${FR.sand}`, borderRadius: 6 }}>
+        <label style={labelStyle}>Weight &amp; Fulfillment</label>
+        <Row cols="1fr 1fr">
+          <Input label="Weight (kg)" value={data.weightKg} onChange={v => set('weightKg', v)} placeholder="0.45" />
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' }}>Fulfillment Cost</label>
+            <div style={{ padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: fulfillmentCost != null ? FR.slate : FR.stone, background: FR.salt, fontStyle: fulfillmentCost != null ? 'normal' : 'italic' }}>
+              {fulfillmentCost != null
+                ? `$${fulfillmentCost.toFixed(2)}`
+                : rateCard ? 'Enter weight above' : 'Set a rate card in Fulfillment tab'}
+            </div>
+          </div>
+        </Row>
+      </div>
     </div>
   );
 }

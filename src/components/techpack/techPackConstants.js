@@ -35,7 +35,7 @@ export function isStepLocked(stepIndex, status) {
 
 // 14-step wizard mapping 1:1 to the FR_TechPack_Template_Blank.pdf pages.
 export const STEPS = [
-  { id: 'cover',         title: 'Cover & Identity',                 icon: '01' },
+  { id: 'cover',         title: 'Style Overview',                   icon: '01' },
   { id: 'design',        title: 'Design Overview',                  icon: '02' },
   { id: 'flatlays',      title: 'Technical Flat Lay Diagrams',      icon: '03' },
   { id: 'bom',           title: 'Bill of Materials',                icon: '04' },
@@ -57,8 +57,14 @@ const todayISO = () => {
 };
 
 export const DEFAULT_DATA = {
-  // Page 1 — Cover & Identity
-  styleName: '', productCategory: '', productTier: '', season: '', targetRetail: '', targetFOB: '', status: 'Design',
+  // Page 1 — Style Overview
+  styleName: '', productCategory: '', productTier: '',
+  collection: '', productType: '', productNumber: '',
+  season: '', targetRetail: '', targetFOB: '', status: 'Design',
+  costTiers: [{ quantity: '', unitCost: '' }],
+  leadTimeDays: '', sampleLeadTimeDays: '', sampleCost: '', quoteProviderLink: '',
+  weightKg: '',
+  assumptions: { productPercent: 0.27, seaFreightSpot: 4 },
   styleNumber: '', skuPrefix: '', barcodeMethod: 'Shopify Retail Barcode Labels',
   dateCreated: todayISO(),
   revision: 'V1.0',
@@ -144,6 +150,45 @@ export function resizeImage(file, maxW = 2400) {
     };
     reader.readAsDataURL(file);
   });
+}
+
+// ─── Style number system ─────────────────────────────────────────────────────
+
+export const COLLECTIONS = [
+  { label: 'Borderless Basics',    code: 'BB' },
+  { label: 'Snowflake Staples',    code: 'SK' },
+  { label: 'Nomadic Necessities',  code: 'NN' },
+  { label: 'Technical Travel',     code: 'TT' },
+  { label: 'Destination Designer', code: 'DD' },
+];
+
+export const PRODUCT_TYPES = [
+  { label: 'Zip-up Hoodie',  code: 'ZH' },
+  { label: 'Hoodie',         code: 'HO' },
+  { label: 'Sweatpants',     code: 'SP' },
+  { label: 'T-Shirt',        code: 'TS' },
+  { label: 'Shorts',         code: 'SH' },
+  { label: 'Denim Pants',    code: 'DP' },
+  { label: 'Denim Jacket',   code: 'DJ' },
+  { label: 'Sling Bag',      code: 'SB' },
+  { label: 'Mules',          code: 'ML' },
+];
+
+const SEASON_CODES = {
+  'Core (Evergreen)': 'CORE',
+  'SS26': 'SS26',
+  'FW26': 'FW26',
+  'SS27': 'SS27',
+  'FW27': 'FW27',
+};
+
+export function deriveStyleNumber({ season, collection, productType, productNumber }) {
+  const sc = SEASON_CODES[season] || '';
+  const cc = (COLLECTIONS.find(c => c.label === collection) || {}).code || '';
+  const pc = (PRODUCT_TYPES.find(t => t.label === productType) || {}).code || '';
+  const pn = productNumber || '';
+  if (!sc || !cc || !pc || !pn) return '';
+  return `${sc}-${cc}-${pc}-${pn}`;
 }
 
 export const SAMPLE_TYPES = ['Proto', 'Fit', 'SMS (Salesman)', 'PP (Pre-Production)', 'TOP (Top of Production)'];
