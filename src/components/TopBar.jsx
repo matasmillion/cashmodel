@@ -126,7 +126,15 @@ function HoverMenu({ trigger, children, align = 'left' }) {
   );
 }
 
-function MenuItem({ children, active, onClick, to }) {
+// Detects clicks where the browser should handle navigation itself —
+// Cmd/Ctrl/Shift/Alt-click and middle-click. Returning true means
+// "let the anchor's default behavior run" (open in new tab/window /
+// download). False means "we'll handle it as in-app navigation".
+function isModifiedClick(e) {
+  return e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1;
+}
+
+function MenuItem({ children, active, onClick, to, tabId }) {
   const baseStyle = {
     display: 'flex',
     alignItems: 'center',
@@ -152,6 +160,28 @@ function MenuItem({ children, active, onClick, to }) {
       <Link to={to} onClick={onClick} onMouseEnter={hoverIn} onMouseLeave={hoverOut} style={baseStyle}>
         {children}
       </Link>
+    );
+  }
+  // tabId items render as real anchors so Cmd/Ctrl/Shift-click and
+  // middle-click open the tab in a new window — the standard browser
+  // affordance. Plain clicks are intercepted and run our SPA-style
+  // setTab handler instead of a full page reload.
+  if (tabId) {
+    const handleClick = (e) => {
+      if (isModifiedClick(e)) return; // browser handles it natively
+      e.preventDefault();
+      if (onClick) onClick(e);
+    };
+    return (
+      <a
+        href={`#${tabId}`}
+        onClick={handleClick}
+        onAuxClick={(e) => { /* middle-click — let default run */ }}
+        onMouseEnter={hoverIn}
+        onMouseLeave={hoverOut}
+        style={baseStyle}>
+        {children}
+      </a>
     );
   }
   return (
@@ -255,15 +285,25 @@ export default function TopBar() {
             {PRIMARY_NAV.map((item, idx) => {
               const active = isItemActive(item);
               if (!item.children) {
+                // Render leaf tabs (e.g. Cash) as real anchors so
+                // Cmd/Ctrl/Shift-click and middle-click open them in a
+                // new browser tab. Plain click still goes through the
+                // SPA router via setTab.
+                const onLeafClick = (e) => {
+                  if (isModifiedClick(e)) return;
+                  e.preventDefault();
+                  setTab(item.tabId);
+                };
                 return (
                   <div key={item.id} style={{ display: 'flex', alignItems: 'center' }}>
                     {idx === 0 && <SyncIndicator />}
-                    <button
-                      onClick={() => setTab(item.tabId)}
-                      style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+                    <a
+                      href={`#${item.tabId}`}
+                      onClick={onLeafClick}
+                      style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'none' }}
                     >
                       <PrimaryTrigger label={item.label} active={active} hasChildren={false} open={false} />
-                    </button>
+                    </a>
                   </div>
                 );
               }
@@ -277,6 +317,7 @@ export default function TopBar() {
                   {({ close }) => item.children.map(child => (
                     <MenuItem
                       key={child.tabId}
+                      tabId={child.tabId}
                       active={state.activeTab === child.tabId}
                       onClick={() => { setTab(child.tabId); close(); }}
                     >
@@ -327,6 +368,7 @@ export default function TopBar() {
                       return (
                         <MenuItem
                           key={idx}
+                          tabId={item.tabId}
                           active={state.activeTab === item.tabId}
                           onClick={() => { setTab(item.tabId); close(); }}
                         >
