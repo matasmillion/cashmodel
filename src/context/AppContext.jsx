@@ -199,18 +199,45 @@ function readTabFromHash() {
   return VALID_TABS.has(first) ? first : null;
 }
 
+// Bump when the shape of `assumptions` (or other persisted state) changes
+// in a way that needs older localStorage payloads to be force-corrected.
+// Migrations run at load time and overwrite the offending fields in-place.
+const STATE_SCHEMA_VERSION = 2;
+
+function migrateState(saved) {
+  const v = saved.schemaVersion || 1;
+  if (v >= STATE_SCHEMA_VERSION) return saved;
+  const out = { ...saved };
+
+  if (v < 2) {
+    // v2: fulfillment % dropped from 10% → 9%. Force-correct any
+    // stored value the older default seeded into a user's state and
+    // every saved scenario.
+    out.assumptions = { ...(saved.assumptions || {}), fulfillmentPercent: 0.09 };
+    if (Array.isArray(saved.scenarios)) {
+      out.scenarios = saved.scenarios.map(s => ({
+        ...s,
+        assumptions: { ...(s.assumptions || {}), fulfillmentPercent: 0.09 },
+      }));
+    }
+  }
+
+  out.schemaVersion = STATE_SCHEMA_VERSION;
+  return out;
+}
+
 function loadInitialState() {
   const hashTab = readTabFromHash();
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (raw) {
-      const saved = JSON.parse(raw);
+      const saved = migrateState(JSON.parse(raw));
       return { ...initialState, ...saved, ...(hashTab ? { activeTab: hashTab } : {}) };
     }
   } catch (err) {
     console.error('Failed to load saved state:', err);
   }
-  return { ...initialState, ...(hashTab ? { activeTab: hashTab } : {}) };
+  return { ...initialState, schemaVersion: STATE_SCHEMA_VERSION, ...(hashTab ? { activeTab: hashTab } : {}) };
 }
 
 function reducer(state, action) {

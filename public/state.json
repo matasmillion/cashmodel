@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-04T18:35:00.863Z",
+  "lastUpdated": "2026-05-04T18:40:12.207Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,7 +1044,7 @@
   ],
   "changelog": [
     {
-      "sha": "f081bb9",
+      "sha": "0f1f2ca",
       "date": "2026-05-04T18:34:44+00:00",
       "message": "assumptions: drop fulfillment % from 10% → 9%"
     },
