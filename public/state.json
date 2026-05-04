@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-04T18:23:34.921Z",
+  "lastUpdated": "2026-05-04T18:35:00.863Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,9 +1044,29 @@
   ],
   "changelog": [
     {
-      "sha": "5b7fcb6",
-      "date": "2026-05-04T18:08:19+00:00",
-      "message": "fix(techpack): listFRColors is sync — drop .then() that crashed cover page"
+      "sha": "f081bb9",
+      "date": "2026-05-04T18:34:44+00:00",
+      "message": "assumptions: drop fulfillment % from 10% → 9%"
+    },
+    {
+      "sha": "45f67a1",
+      "date": "2026-05-04T21:33:34+03:00",
+      "message": "techpack(cover): max FOB drops PP%, adds shipping charge, uses full fulfillment cost (#19)"
+    },
+    {
+      "sha": "467280d",
+      "date": "2026-05-04T21:29:15+03:00",
+      "message": "Card font + cover image render fix (#18)"
+    },
+    {
+      "sha": "ab02bc2",
+      "date": "2026-05-04T21:24:15+03:00",
+      "message": "Max FOB formula uses Cash-tab assumptions + rate card (#17)"
+    },
+    {
+      "sha": "40d9061",
+      "date": "2026-05-04T21:08:25+03:00",
+      "message": "fix(techpack): listFRColors is sync — drop .then() that crashed cover page (#16)"
     },
     {
       "sha": "45552f1",
@@ -1072,26 +1092,6 @@
       "sha": "c43fe70",
       "date": "2026-05-04T13:41:13+00:00",
       "message": "chore: regenerate public/state.json"
-    },
-    {
-      "sha": "20ab14e",
-      "date": "2026-05-04T13:40:31+00:00",
-      "message": "Merge sell-through page into main"
-    },
-    {
-      "sha": "9e45c81",
-      "date": "2026-05-04T13:40:03+00:00",
-      "message": "feat(sell-through): tracked-variants filter + star toggle"
-    },
-    {
-      "sha": "93aca66",
-      "date": "2026-05-04T12:52:46+00:00",
-      "message": "feat(sell-through): variant runway page under Product nav"
-    },
-    {
-      "sha": "0fb6aa4",
-      "date": "2026-05-03T12:42:14+00:00",
-      "message": "fix(storage-health): don't abort write test on org visibility failure"
     }
   ]
 }

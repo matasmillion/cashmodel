@@ -11,7 +11,7 @@
 //   MER (0.33)              → CONST.mer
 //   COGS % (0.27)           → CONST.cogsRate (overridable per week)
 //   PP %  (0.04)            → CONST.ppPercent
-//   Fulfillment % (0.10)    → CONST.fulfillmentPercent
+//   Fulfillment % (0.09)    → CONST.fulfillmentPercent
 //   Shopify Capital % (0.06)→ CONST.shopifyCapitalRate
 //   Profit % (0.09)         → CONST.profitPercentForWC
 //   Growth switch date      → CONST.growthSwitchDate (Aug 3, 2026)
@@ -25,7 +25,7 @@ export const CASHFLOW_DEFAULTS = {
   mer: 0.33,
   cogsRate: 0.27,
   ppPercent: 0.04,
-  fulfillmentPercent: 0.10,
+  fulfillmentPercent: 0.09,
   shopifyCapitalRate: 0.06,
   profitPercentForWC: 0.09,
   growthSwitchDate: '2026-08-03',

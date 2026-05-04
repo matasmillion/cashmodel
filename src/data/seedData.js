@@ -96,7 +96,7 @@ export const DEFAULT_ASSUMPTIONS = {
   h2Growth: 1.07,
   growthSwitchDate: '2026-08-03',
   ppPercent: 0.04,
-  fulfillmentPercent: 0.10,
+  fulfillmentPercent: 0.09,
   shopifyCapitalRate: 0.06,
   profitPercentForWC: 0.09,
   creativePercentOfAdSpend: 0,
