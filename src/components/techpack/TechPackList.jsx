@@ -119,13 +119,14 @@ function GridCard({ pack, onOpen, onDuplicate, onDelete, onCreateVariant }) {
       <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}>
         <CostPill amount={pack.total_unit_cost} currency={pack.currency || 'USD'} title="Total unit cost — BOM + colorways" />
       </div>
-      <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer', width: '100%', aspectRatio: '2 / 3', background: FR.salt, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${FR.sand}`, position: 'relative' }}>
-        <Shirt size={32} style={{ color: FR.sand, position: 'absolute' }} />
-        {pack.cover_image && <CoverThumb src={pack.cover_image} alt={pack.style_name || 'Cover'} />}
+      <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer', width: '100%', aspectRatio: '2 / 3', background: FR.salt, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${FR.sand}` }}>
+        {pack.cover_image
+          ? <CoverThumb src={pack.cover_image} alt={pack.style_name || 'Cover'} />
+          : <Shirt size={32} style={{ color: FR.sand }} />}
       </div>
       <div style={{ padding: 12 }}>
         <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer' }}>
-          <div style={{ fontFamily: "'General Sans', 'Inter', sans-serif", fontSize: 14, color: FR.slate, fontWeight: 600, letterSpacing: 0.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontFamily: "'General Sans', 'Inter', sans-serif", fontSize: 14, color: FR.slate, fontWeight: 500, letterSpacing: 0.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {pack.style_name || 'Untitled'}
           </div>
           <div style={{ fontSize: 10, color: FR.stone, marginTop: 2 }}>{pack.product_category || '—'}</div>
