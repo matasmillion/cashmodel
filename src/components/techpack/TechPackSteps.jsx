@@ -4,7 +4,7 @@
 // Page 1 (Cover & Identity) is fully built. All other pages are placeholders
 // that will be replaced in subsequent prompts.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { FR, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, isStepLocked, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
 import { listFRColors } from '../../utils/colorLibrary';
 import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, EditableSelect, FRColorCell } from './TechPackPrimitives';
@@ -12,6 +12,61 @@ import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackin
 import { addSupplier } from '../../utils/plmDirectory';
 import { getFRColor } from '../../utils/colorLibrary';
 import { listTreatments } from '../../utils/treatmentStore';
+import { useApp } from '../../context/AppContext';
+
+const COST_TIER_CAP = 5;
+const SIZE_OPTIONS = ['S', 'M', 'L', 'XL', 'NS', 'W30', 'W32', 'W34', 'W36'];
+
+function CostTiersTable({ tiers, onChange }) {
+  const safe = Array.isArray(tiers) && tiers.length ? tiers : [{ quantity: '', unitCost: '' }];
+  const update = (i, key, val) => onChange(safe.map((t, idx) => idx === i ? { ...t, [key]: val } : t));
+  const add = () => { if (safe.length < COST_TIER_CAP) onChange([...safe, { quantity: '', unitCost: '' }]); };
+  const remove = (i) => onChange(safe.filter((_, idx) => idx !== i));
+  const cell = { padding: '4px 6px', borderBottom: `1px solid ${FR.sand}`, fontSize: 11 };
+  const headerCell = { ...cell, background: FR.slate, color: FR.salt, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', borderBottom: 'none' };
+  return (
+    <div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+        <colgroup><col style={{ width: 60 }} /><col /><col /><col style={{ width: 30 }} /></colgroup>
+        <thead>
+          <tr>
+            <th style={{ ...headerCell, textAlign: 'left' }}>Tier</th>
+            <th style={{ ...headerCell, textAlign: 'left' }}>Quantity</th>
+            <th style={{ ...headerCell, textAlign: 'left' }}>Unit Cost ($)</th>
+            <th style={headerCell} />
+          </tr>
+        </thead>
+        <tbody>
+          {safe.map((t, i) => (
+            <tr key={i} style={{ background: i % 2 === 0 ? FR.salt : FR.white }}>
+              <td style={{ ...cell, color: FR.soil, fontWeight: 600, fontSize: 10 }}>{i === 0 ? 'MOQ' : `T${i + 1}`}</td>
+              <td style={cell}><input value={t.quantity || ''} onChange={e => update(i, 'quantity', e.target.value)} placeholder={i === 0 ? '100' : '1000'} style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '2px 0', color: FR.slate, outline: 'none' }} /></td>
+              <td style={cell}><input value={t.unitCost || ''} onChange={e => update(i, 'unitCost', e.target.value)} placeholder={i === 0 ? '28.00' : '24.00'} style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '2px 0', color: FR.slate, outline: 'none' }} /></td>
+              <td style={{ ...cell, textAlign: 'center' }}>
+                {safe.length > 1 && <button onClick={() => remove(i)} style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>×</button>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {safe.length < COST_TIER_CAP && (
+        <button type="button" onClick={add} style={{ marginTop: 6, padding: '4px 12px', background: 'none', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 10, color: FR.soil, cursor: 'pointer' }}>
+          + Add tier
+        </button>
+      )}
+    </div>
+  );
+}
+
+function computeFulfillmentCost(weightKg, rateCard) {
+  if (!weightKg || !rateCard) return null;
+  const weightLbs = parseFloat(weightKg) * 2.20462;
+  if (!weightLbs || isNaN(weightLbs)) return null;
+  const tier = (rateCard.weightTiers || []).find(t => weightLbs >= t.minLbs && weightLbs < t.maxLbs)
+    || (rateCard.weightTiers || []).slice(-1)[0];
+  if (!tier) return null;
+  return (rateCard.pickPack || 0) + (tier.rate || 0) + (rateCard.packagingMaterials || 0);
+}
 
 function LockedBanner({ status }) {
   return (
@@ -51,11 +106,33 @@ function SignatureBlock({ label, value, onNameChange, onDateChange }) {
 }
 
 export function StepCover({ data, set, images, onUpload, onRemove, existingSuppliers = [] }) {
-  const colorways = data.colorways && data.colorways.length ? data.colorways : [{ name: '', frColor: '', pantone: '', hex: '' }];
-  const updateCWName = (i, v) => set('colorways', colorways.map((r, idx) => idx === i ? { ...r, name: v } : r));
-  const addCW = () => set('colorways', [...colorways, { name: '', frColor: '', pantone: '', hex: '' }]);
-  const removeCW = (i) => set('colorways', colorways.filter((_, idx) => idx !== i));
+  const { state } = useApp();
+  const rateCard = state.rateCard;
 
+  // Library colors for colorway chip picker
+  const [libraryColors, setLibraryColors] = useState([]);
+  useEffect(() => { listFRColors().then(setLibraryColors); }, []);
+
+  // Colorways — array of { name, frColor, hex }
+  const selectedColorways = Array.isArray(data.colorways) ? data.colorways : [];
+  const toggleColorway = (color) => {
+    const idx = selectedColorways.findIndex(c => c.frColor === color.name);
+    if (idx >= 0) {
+      set('colorways', selectedColorways.filter((_, i) => i !== idx));
+    } else {
+      set('colorways', [...selectedColorways, { name: color.name, frColor: color.name, hex: color.hex || '', pantone: '', approvalStatus: 'Pending' }]);
+    }
+  };
+
+  // Size range — array of size strings
+  const selectedSizes = Array.isArray(data.sizeRange) ? data.sizeRange
+    : (data.sizeRange ? String(data.sizeRange).split(/[/,\s]+/).map(s => s.trim()).filter(Boolean) : []);
+  const toggleSize = (s) => {
+    const next = selectedSizes.includes(s) ? selectedSizes.filter(x => x !== s) : [...selectedSizes, s];
+    set('sizeRange', next);
+  };
+
+  // Style number derivation
   const updateStyleNumber = (patch) => {
     const next = deriveStyleNumber({
       season:        patch.season        ?? data.season,
@@ -71,6 +148,15 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
     season: data.season, collection: data.collection,
     productType: data.productType, productNumber: data.productNumber,
   }) || '—';
+
+  // Fulfillment cost from weight + rate card
+  const fulfillmentCost = useMemo(
+    () => computeFulfillmentCost(data.weightKg, rateCard),
+    [data.weightKg, rateCard]
+  );
+
+  const labelStyle = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+  const chipBase = { padding: '4px 10px', borderRadius: 20, fontSize: 11, cursor: 'pointer', border: `1px solid ${FR.sand}`, transition: 'background 0.15s' };
 
   return (
     <div>
@@ -118,32 +204,103 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
         onAddOption={addSupplier}
         placeholder="Add a new vendor…" />
 
-      <div style={{ marginBottom: 10 }}>
-        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>Colorways</label>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {colorways.map((c, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input value={c.name || ''} onChange={e => updateCWName(i, e.target.value)} placeholder="Colorway name (e.g. Slate Wash)"
-                style={{ flex: 1, padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.white, outline: 'none', boxSizing: 'border-box' }} />
-              {colorways.length > 1 && (
-                <button onClick={() => removeCW(i)} style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 16 }}>×</button>
-              )}
-            </div>
-          ))}
-          <button onClick={addCW} style={{ alignSelf: 'flex-start', padding: '4px 12px', background: 'none', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 10, color: FR.soil, cursor: 'pointer' }}>+ Add colorway</button>
+      {/* Colorways — chip picker from color library */}
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Colorways</label>
+        {libraryColors.length > 0 ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {libraryColors.map(color => {
+              const active = selectedColorways.some(c => c.frColor === color.name);
+              return (
+                <button key={color.name} type="button" onClick={() => toggleColorway(color)}
+                  style={{ ...chipBase, background: active ? FR.slate : FR.white, color: active ? FR.salt : FR.slate, borderColor: active ? FR.slate : FR.sand, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: color.hex || FR.sand, border: `1px solid ${FR.sand}`, flexShrink: 0 }} />
+                  {color.name}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={{ fontSize: 11, color: FR.stone, fontStyle: 'italic' }}>No colors in library yet — add them in Library → Colors.</div>
+        )}
+        {selectedColorways.length > 0 && (
+          <div style={{ marginTop: 6, fontSize: 10, color: FR.stone }}>
+            Selected: {selectedColorways.map(c => c.name).join(', ')}
+          </div>
+        )}
+      </div>
+
+      {/* Size range — multi-select chips */}
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Size Range</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {SIZE_OPTIONS.map(s => {
+            const active = selectedSizes.includes(s);
+            return (
+              <button key={s} type="button" onClick={() => toggleSize(s)}
+                style={{ ...chipBase, background: active ? FR.slate : FR.white, color: active ? FR.salt : FR.slate, borderColor: active ? FR.slate : FR.sand, minWidth: 42, textAlign: 'center' }}>
+                {s}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <Row cols="1fr 1fr 1fr">
-        <Input label="Size Range" value={data.sizeRange} onChange={v => set('sizeRange', v)} placeholder="S / M / L / XL" />
+      <Row cols="1fr 1fr">
         <Input label="Target Retail ($)" value={data.targetRetail} onChange={v => set('targetRetail', v)} placeholder="117" />
-        <Input label="Target FOB ($)" value={data.targetFOB} onChange={v => set('targetFOB', v)} placeholder="28" />
       </Row>
 
       <Select label="Status" value={data.status} onChange={v => set('status', v)} options={STATUSES} />
       <p style={{ fontSize: 10, color: FR.stone, marginTop: -4, lineHeight: 1.5 }}>
         Labels, Order &amp; Delivery, and Compliance unlock at Pre-Production.
       </p>
+
+      {/* Quote tiers */}
+      <div style={{ marginTop: 22, padding: 16, background: FR.white, border: `1px solid ${FR.sand}`, borderRadius: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+          <h4 style={{ margin: 0, fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 18, color: FR.slate }}>Quote</h4>
+          <span style={{ fontSize: 10, color: FR.stone, letterSpacing: 0.5 }}>Pricing &amp; lead times</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 22 }}>
+          <div>
+            <label style={labelStyle}>Cost Tiers</label>
+            <CostTiersTable tiers={data.costTiers || []} onChange={tiers => set('costTiers', tiers)} />
+          </div>
+          <div>
+            <Row cols="1fr 1fr">
+              <Input label="Lead Time (days)" value={data.leadTimeDays} onChange={v => set('leadTimeDays', v)} placeholder="28" />
+              <Input label="Sample Lead Time (days)" value={data.sampleLeadTimeDays} onChange={v => set('sampleLeadTimeDays', v)} placeholder="14" />
+            </Row>
+            <Row cols="1fr 1fr">
+              <Input label="Sample Cost ($)" value={data.sampleCost} onChange={v => set('sampleCost', v)} placeholder="25" />
+              <div />
+            </Row>
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' }}>Quote Provider</label>
+              <input value={data.quoteProviderLink || ''} onChange={e => set('quoteProviderLink', e.target.value)}
+                placeholder="e.g. Dongguan Shengde Clothing Ltd."
+                style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.slate, background: FR.white, outline: 'none', boxSizing: 'border-box' }} />
+              <p style={{ fontSize: 10, color: FR.stone, marginTop: 4 }}>Where this quote came from — manufacturer or sourcing agent.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Weight → fulfillment cost */}
+      <div style={{ marginTop: 16, padding: 16, background: FR.white, border: `1px solid ${FR.sand}`, borderRadius: 6 }}>
+        <label style={labelStyle}>Weight &amp; Fulfillment</label>
+        <Row cols="1fr 1fr">
+          <Input label="Weight (kg)" value={data.weightKg} onChange={v => set('weightKg', v)} placeholder="0.45" />
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' }}>Fulfillment Cost</label>
+            <div style={{ padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: fulfillmentCost != null ? FR.slate : FR.stone, background: FR.salt, fontStyle: fulfillmentCost != null ? 'normal' : 'italic' }}>
+              {fulfillmentCost != null
+                ? `$${fulfillmentCost.toFixed(2)}`
+                : rateCard ? 'Enter weight above' : 'Set a rate card in Fulfillment tab'}
+            </div>
+          </div>
+        </Row>
+      </div>
     </div>
   );
 }

@@ -46,13 +46,18 @@ function MetaRow({ x, y, label, value, w = 400 }) {
 function PageCover({ d, images }) {
   const cover = (images || []).find(img => img.slot === 'cover');
   const colorways = (d.colorways || []).filter(c => c && c.name).map(c => c.name).join(', ') || '—';
-  const sig = (s) => s && s.name ? `${s.name}${s.date ? ` · ${s.date}` : ''}` : '—';
+  const sizeRange = Array.isArray(d.sizeRange) ? d.sizeRange.join(' / ') : (d.sizeRange || '—');
 
   // Cover image: 2:3 portrait, right column
   const imgW = 280;
   const imgH = imgW * 3 / 2; // 420
   const imgX = PAGE_W - imgW - 40;
   const imgY = 85;
+  const leftW = imgX - 60; // width of left content column
+
+  // Quote tier stat strip dimensions
+  const tierStripY = 640;
+  const tierStripH = 36;
 
   return (
     <g>
@@ -74,29 +79,63 @@ function PageCover({ d, images }) {
       </text>
 
       {/* Section divider */}
-      <rect x="40" y="188" width={imgX - 60} height="1" fill={FR.sand} />
+      <rect x="40" y="188" width={leftW} height="1" fill={FR.sand} />
       <text x={40} y={206} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="2">STYLE SUMMARY</text>
 
-      {/* Single-column metadata — left of the image */}
+      {/* Two-column metadata — left of the image */}
       {(() => {
-        const x = 40;
-        const colW = imgX - 60;
+        const lx = 40;
+        const rx = 40 + leftW / 2 + 10;
+        const cw = leftW / 2 - 10;
         const startY = 228;
-        const gap = 46;
-        const rows = [
-          { label: 'Style #',        value: d.styleNumber },
-          { label: 'Collection',     value: d.collection },
-          { label: 'Product Type',   value: d.productType },
-          { label: 'Season',         value: d.season },
-          { label: 'Version',        value: d.revision },
-          { label: 'Vendor',         value: d.vendor },
-          { label: 'Colorways',      value: colorways },
-          { label: 'Size Range',     value: Array.isArray(d.sizeRange) ? d.sizeRange.join(' / ') : d.sizeRange },
-          { label: 'Target Retail ($)', value: d.targetRetail },
-          { label: 'Target FOB ($)', value: d.targetFOB },
-          { label: 'Status',         value: d.status },
+        const gap = 44;
+        const left = [
+          { label: 'Style #',      value: d.styleNumber },
+          { label: 'Collection',   value: d.collection },
+          { label: 'Product Type', value: d.productType },
+          { label: 'Season',       value: d.season },
+          { label: 'Version',      value: d.revision },
         ];
-        return rows.map((f, i) => <MetaRow key={i} x={x} y={startY + i * gap} label={f.label} value={f.value} w={colW} />);
+        const right = [
+          { label: 'Vendor',            value: d.vendor },
+          { label: 'Colorways',         value: colorways },
+          { label: 'Size Range',        value: sizeRange },
+          { label: 'Target Retail ($)', value: d.targetRetail },
+          { label: 'Status',            value: d.status },
+        ];
+        return (
+          <>
+            {left.map((f, i)  => <MetaRow key={`L${i}`} x={lx} y={startY + i * gap} label={f.label} value={f.value} w={cw} />)}
+            {right.map((f, i) => <MetaRow key={`R${i}`} x={rx} y={startY + i * gap} label={f.label} value={f.value} w={cw} />)}
+          </>
+        );
+      })()}
+
+      {/* Quote stat strip */}
+      {(() => {
+        const tiers = d.costTiers || [];
+        const moq = tiers[0];
+        const statCells = [
+          { label: 'MOQ',              value: moq ? `${moq.quantity || '—'} units` : '—' },
+          { label: 'MOQ Unit Cost',    value: moq && moq.unitCost ? `$${moq.unitCost}` : '—' },
+          { label: 'Lead Time',        value: d.leadTimeDays ? `${d.leadTimeDays} days` : '—' },
+          { label: 'Sample Lead',      value: d.sampleLeadTimeDays ? `${d.sampleLeadTimeDays} days` : '—' },
+          { label: 'Sample Cost',      value: d.sampleCost ? `$${d.sampleCost}` : '—' },
+        ];
+        const cw = leftW / statCells.length;
+        return (
+          <g>
+            <rect x={40} y={tierStripY - 16} width={leftW} height={1} fill={FR.sand} />
+            <text x={40} y={tierStripY - 4} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="2">QUOTE</text>
+            <rect x={40} y={tierStripY + 4} width={leftW} height={tierStripH} fill={FR.salt} stroke={FR.sand} />
+            {statCells.map((c, i) => (
+              <g key={i}>
+                <text x={40 + i * cw + 8} y={tierStripY + 4 + 14} fontSize="7" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">{esc(c.label.toUpperCase())}</text>
+                <text x={40 + i * cw + 8} y={tierStripY + 4 + 28} fontSize="10" fill={FR.slate}>{esc(c.value)}</text>
+              </g>
+            ))}
+          </g>
+        );
       })()}
     </g>
   );
