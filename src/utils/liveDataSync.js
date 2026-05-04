@@ -445,121 +445,6 @@ export async function syncMetaActuals(creds) {
   });
 }
 
-// ─── Mercury (credentials in Supabase, calls via edge function proxy) ───────
-
-/**
- * Save Mercury API key for the signed-in user to user_integrations (RLS-scoped).
- */
-export async function saveMercuryCredentials({ token }) {
-  if (!IS_SUPABASE_ENABLED) throw new Error('Supabase not configured');
-  const orgId = getCurrentOrgIdSync();
-  if (!orgId) throw new Error('No active organization');
-
-  const db = await getAuthedSupabase();
-  const { error } = await db
-    .from('user_integrations')
-    .upsert(
-      { org_id: orgId, provider: 'mercury', token, metadata: {} },
-      { onConflict: 'org_id,provider' },
-    );
-  if (error) throw new Error(`Failed to save credentials: ${error.message}`);
-}
-
-export async function loadMercuryIntegration() {
-  if (!IS_SUPABASE_ENABLED) return null;
-  const orgId = getCurrentOrgIdSync();
-  if (!orgId) return null;
-  const db = await getAuthedSupabase();
-  const { data, error } = await db
-    .from('user_integrations')
-    .select('metadata, updated_at')
-    .eq('org_id', orgId)
-    .eq('provider', 'mercury')
-    .maybeSingle();
-  if (error || !data) return null;
-  return { updatedAt: data.updated_at };
-}
-
-export async function deleteMercuryCredentials() {
-  if (!IS_SUPABASE_ENABLED) return;
-  const orgId = getCurrentOrgIdSync();
-  if (!orgId) return;
-  const db = await getAuthedSupabase();
-  await db.from('user_integrations').delete().eq('org_id', orgId).eq('provider', 'mercury');
-}
-
-/**
- * Calls the Supabase `mercury-proxy` Edge Function. The function verifies the
- * caller's JWT, looks up their Mercury API key from user_integrations, and
- * forwards the request to Mercury. CORS is handled in the function.
- */
-export async function callMercuryProxy(path, query = null) {
-  if (!IS_SUPABASE_ENABLED || !supabase) {
-    throw new Error('Supabase not configured — cannot reach the Mercury proxy');
-  }
-  const token = await getClerkToken();
-  if (!token) throw new Error('Sign in to use the Mercury proxy');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-  const res = await fetch(`${supabaseUrl}/functions/v1/mercury-proxy`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      apikey: anonKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ path, query }),
-  });
-
-  const text = await res.text();
-  let data;
-  try { data = JSON.parse(text); } catch { data = { raw: text }; }
-  if (!res.ok) {
-    const msg = data?.error || data?.errors || `${res.status} ${res.statusText}`;
-    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
-  }
-  return data;
-}
-
-/**
- * Test the proxy + credentials by listing accounts. Returns a summary.
- *
- * We use `availableBalance` (what you can actually spend right now) rather
- * than `currentBalance` (ledger balance including pending deposits).
- * Pending items shouldn't count as cash on hand for the cash model — they
- * haven't cleared yet.
- */
-export async function testMercuryProxy() {
-  const data = await callMercuryProxy('accounts');
-  const accounts = data.accounts || [];
-  const active = accounts.filter(a => a.status === 'active');
-  const totalBalance = active
-    .filter(a => ['checking', 'savings'].includes(a.kind))
-    .reduce((s, a) => s + (a.availableBalance ?? a.currentBalance ?? 0), 0);
-  return {
-    accountCount: active.length,
-    totalBalance: Math.round(totalBalance * 100) / 100,
-    accountNames: active.map(a => a.name).filter(Boolean),
-  };
-}
-
-/**
- * Pulls account balances from Mercury via the proxy.
- * Returns { accounts, primaryBalance } — primaryBalance is the sum of active
- * checking + savings *available* balances. Uses availableBalance (spendable)
- * not currentBalance (ledger) so pending deposits don't inflate cash-on-hand.
- */
-export async function syncMercuryActuals(/* creds unused — proxy holds creds */) {
-  const data = await callMercuryProxy('accounts');
-  const accounts = data.accounts || [];
-  const primaryBalance = accounts
-    .filter(a => a.status === 'active' && ['checking', 'savings'].includes(a.kind))
-    .reduce((sum, a) => sum + (a.availableBalance ?? a.currentBalance ?? 0), 0);
-  return { accounts, primaryBalance };
-}
-
 // ─── Plaid (multi-institution, via Supabase Edge Function proxy) ────────────
 
 /**
@@ -696,14 +581,8 @@ export async function syncPlaidActuals({ realTime = false } = {}) {
  * Builds a seed data update object from synced API data.
  * Pass null for any source that wasn't synced.
  */
-export function buildSeedUpdate(shopifyWeeks, metaWeeks, mercuryData) {
+export function buildSeedUpdate(shopifyWeeks, metaWeeks) {
   const update = {};
-
-  // Mercury → current cash
-  if (mercuryData?.primaryBalance != null) {
-    update.totalCash = Math.round(mercuryData.primaryBalance * 100) / 100;
-    update.sbMain = Math.round(mercuryData.primaryBalance * 100) / 100;
-  }
 
   // Shopify current week → revenue + orders
   if (shopifyWeeks) {

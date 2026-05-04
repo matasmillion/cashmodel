@@ -5,8 +5,6 @@ import { useApp } from '../context/AppContext';
 import {
   syncShopifyActuals, syncMetaActuals, testShopifyProxy,
   saveShopifyCredentials, loadShopifyIntegration, deleteShopifyCredentials,
-  syncMercuryActuals, testMercuryProxy,
-  saveMercuryCredentials, loadMercuryIntegration, deleteMercuryCredentials,
   createPlaidLinkToken, exchangePlaidPublicToken, listPlaidItems,
   removePlaidItem, syncPlaidActuals,
 } from '../utils/liveDataSync';
@@ -479,160 +477,6 @@ function KlaviyoCard({ creds, onSave, onClear }) {
   );
 }
 
-// ─── Mercury (credentials in Supabase, calls via edge function proxy) ───────
-function MercuryCard({ creds, onSave, onClear, dispatch }) {
-  const [open, setOpen] = useState(!creds?.connected);
-  const [token, setToken] = useState('');
-  const [status, setStatus] = useState(null); // null | 'saving' | 'ok' | 'error'
-  const [stats, setStats] = useState(creds?.stats || null);
-  const [errMsg, setErrMsg] = useState('');
-  const [syncStatus, setSyncStatus] = useState(null);
-  const [syncErrMsg, setSyncErrMsg] = useState('');
-
-  async function handleConnect(e) {
-    e.preventDefault();
-    setStatus('saving');
-    setErrMsg('');
-    try {
-      await saveMercuryCredentials({ token });
-      const result = await testMercuryProxy();
-      setStats(result);
-      setStatus('ok');
-      onSave({ connected: true, stats: result, syncedAt: null });
-      setToken('');
-      setOpen(false);
-    } catch (err) {
-      setStatus('error');
-      setErrMsg(err.message);
-    }
-  }
-
-  async function handleDisconnect() {
-    try { await deleteMercuryCredentials(); } catch {}
-    onClear();
-  }
-
-  async function handleSync() {
-    if (!creds?.connected) return;
-    setSyncStatus('syncing');
-    setSyncErrMsg('');
-    try {
-      const { accounts, primaryBalance } = await syncMercuryActuals();
-      dispatch({
-        type: 'UPDATE_SEED',
-        payload: {
-          totalCash: Math.round(primaryBalance * 100) / 100,
-          sbMain: Math.round(primaryBalance * 100) / 100,
-        },
-      });
-      const syncedAt = new Date().toISOString();
-      onSave({
-        ...creds,
-        syncedAt,
-        lastSync: { syncedAt, primaryBalance, accountCount: accounts.length },
-      });
-      setSyncStatus('ok');
-    } catch (err) {
-      setSyncStatus('error');
-      setSyncErrMsg(err.message);
-    }
-  }
-
-  return (
-    <IntegrationCard
-      name="Mercury"
-      description="Business bank balance — auto-populates Cash on Hand"
-      icon={CreditCard}
-      iconColor={FR.sienna}
-      connected={creds?.connected}
-      open={open}
-      onToggle={() => setOpen(o => !o)}
-      onDisconnect={handleDisconnect}
-    >
-      {!creds?.connected && (
-        <form onSubmit={handleConnect} className="space-y-3 mt-3">
-          <div className="p-2 rounded-lg text-xs flex items-start gap-2" style={{ background: FR.salt, border: `1px solid ${FR.sand}` }}>
-            <Server size={12} style={{ color: FR.soil, marginTop: 2, flexShrink: 0 }} />
-            <span style={{ color: FR.stone }}>
-              Your Mercury API key is stored encrypted in our database, scoped to your account only. The browser calls a proxy — your key never leaves the server.
-            </span>
-          </div>
-
-          <div>
-            <label className="block text-xs mb-1" style={{ color: FR.stone }}>Mercury API key</label>
-            <input value={token} onChange={e => setToken(e.target.value)} type="password"
-              placeholder="secret-token:mercury_••••••••" required
-              className="w-full text-sm px-3 py-2 rounded-lg border"
-              style={{ background: FR.salt, borderColor: FR.sand, color: FR.slate }} />
-          </div>
-
-          <details className="text-xs" style={{ color: FR.stone }}>
-            <summary className="cursor-pointer select-none font-medium" style={{ color: FR.slate }}>How to get your API key</summary>
-            <ol className="mt-2 space-y-1 list-decimal pl-4">
-              <li>Sign into Mercury → <strong>Settings</strong> → <strong>API</strong></li>
-              <li>Click <strong>Generate new token</strong> (read-only is enough — balances + transactions)</li>
-              <li>Copy the token (you can only see it once)</li>
-              <li>Paste it above and click Connect</li>
-            </ol>
-          </details>
-
-          <button type="submit" disabled={status === 'saving' || status === 'ok'}
-            className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm"
-            style={{
-              background: status === 'ok' ? FR.green : status === 'error' ? FR.red : FR.slate,
-              color: 'white', cursor: status === 'saving' ? 'not-allowed' : 'pointer', border: 'none',
-            }}>
-            {status === 'saving' && <Loader size={13} className="animate-spin" />}
-            {status === 'ok' && <CheckCircle size={13} />}
-            {status === 'error' && <XCircle size={13} />}
-            {status === 'ok' ? 'Connected' : status === 'saving' ? 'Saving + testing…' : 'Connect Mercury'}
-          </button>
-          {status === 'error' && errMsg && (
-            <p className="text-xs" style={{ color: FR.red }}>{errMsg}</p>
-          )}
-        </form>
-      )}
-
-      {creds?.connected && (
-        <div className="space-y-2 mt-3">
-          <div className="p-2 rounded-lg text-xs flex items-center justify-between" style={{ background: FR.salt }}>
-            <span>
-              Connected to <strong>{stats?.accountCount ?? '—'} active account{stats?.accountCount === 1 ? '' : 's'}</strong>
-              {stats?.totalBalance != null ? ` — $${stats.totalBalance.toLocaleString()}` : ''}
-            </span>
-            {creds.syncedAt && (
-              <span className="text-[10px]" style={{ color: FR.stone }}>Synced {formatSyncedAt(creds.syncedAt)}</span>
-            )}
-          </div>
-
-          {creds.lastSync && (
-            <div className="p-2 rounded-lg text-xs" style={{ background: 'white', border: `1px solid ${FR.sand}` }}>
-              <div className="flex justify-between" style={{ color: FR.stone }}>
-                <span>Cash on hand (checking + savings)</span>
-                <strong style={{ color: FR.slate }}>${creds.lastSync.primaryBalance?.toLocaleString() ?? '—'}</strong>
-              </div>
-            </div>
-          )}
-
-          <button onClick={handleSync} disabled={syncStatus === 'syncing'}
-            className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm"
-            style={{
-              background: syncStatus === 'ok' ? FR.green : syncStatus === 'error' ? FR.red : FR.slate,
-              color: 'white', cursor: syncStatus === 'syncing' ? 'not-allowed' : 'pointer', border: 'none',
-            }}>
-            {syncStatus === 'syncing' ? <Loader size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-            {syncStatus === 'syncing' ? 'Syncing…' : syncStatus === 'ok' ? 'Synced — cash pushed to model' : 'Sync balance to model'}
-          </button>
-
-          {syncStatus === 'error' && syncErrMsg && (
-            <p className="text-xs" style={{ color: FR.red }}>{syncErrMsg}</p>
-          )}
-        </div>
-      )}
-    </IntegrationCard>
-  );
-}
-
 // ─── Plaid (Chase, AMEX, any bank or card via Plaid Link) ────────────────────
 function PlaidLauncher({ linkToken, onSuccess, disabled, label }) {
   const { open, ready } = usePlaidLink({
@@ -653,6 +497,20 @@ function PlaidLauncher({ linkToken, onSuccess, disabled, label }) {
       <Plus size={13} /> {label}
     </button>
   );
+}
+
+// Build a lookup of balance by account mask from lastSync data.
+// Returns { [mask]: { balance, isCredit } }
+function buildBalanceLookup(lastSync) {
+  if (!lastSync) return {};
+  const map = {};
+  for (const a of (lastSync.depositoryAccounts || [])) {
+    if (a.mask) map[a.mask] = { balance: a.balance, isCredit: false };
+  }
+  for (const a of (lastSync.creditAccounts || [])) {
+    if (a.mask) map[a.mask] = { balance: a.balance, isCredit: true };
+  }
+  return map;
 }
 
 function PlaidCard({ dispatch }) {
@@ -678,6 +536,21 @@ function PlaidCard({ dispatch }) {
   }, []);
 
   useEffect(() => { refreshItems(); }, [refreshItems]);
+
+  // Auto-load cached balances on mount so account rows show numbers immediately.
+  useEffect(() => {
+    if (loading) return;
+    if (items.length === 0) return;
+    syncPlaidActuals({ realTime: false }).then(({ totals, depositoryAccounts, creditAccounts }) => {
+      setLastSync(prev => prev ?? {
+        at: null,
+        depository: totals.depository,
+        credit: totals.credit,
+        depositoryAccounts,
+        creditAccounts,
+      });
+    }).catch(() => {});
+  }, [loading, items.length]);
 
   useEffect(() => {
     if (!loading && items.length === 0) setOpen(true);
@@ -728,8 +601,7 @@ function PlaidCard({ dispatch }) {
       // Auto-sync on page load uses the cached endpoint (free).
       const { totals, depositoryAccounts, creditAccounts } = await syncPlaidActuals({ realTime: true });
 
-      // Push depository cash into the seed (supplements Mercury if they overlap,
-      // so pick whichever feels right — for now Plaid wins if present).
+      // Push depository cash into the seed.
       if (totals.depository > 0) {
         dispatch({
           type: 'UPDATE_SEED',
@@ -802,12 +674,22 @@ function PlaidCard({ dispatch }) {
                   </button>
                 </div>
                 <div className="space-y-0.5" style={{ color: FR.stone }}>
-                  {(item.accounts || []).map((a, i) => (
-                    <div key={i} className="flex justify-between">
-                      <span>{a.name}{a.mask ? ` ••${a.mask}` : ''}</span>
-                      <span className="text-[10px]" style={{ color: FR.stone }}>{a.subtype || a.type}</span>
-                    </div>
-                  ))}
+                  {(item.accounts || []).map((a, i) => {
+                    const balInfo = a.mask ? buildBalanceLookup(lastSync)[a.mask] : null;
+                    const isCredit = balInfo?.isCredit ?? a.type === 'credit';
+                    const bal = balInfo?.balance ?? null;
+                    const displayBal = bal != null
+                      ? (isCredit ? `-$${bal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$${bal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+                      : (a.subtype || a.type);
+                    return (
+                      <div key={i} className="flex justify-between">
+                        <span>{a.name}{a.mask ? ` ••${a.mask}` : ''}</span>
+                        <span className="text-[10px]" style={{ color: bal != null ? (isCredit ? '#A32D2D' : FR.slate) : FR.stone, fontVariantNumeric: 'tabular-nums' }}>
+                          {displayBal}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -997,7 +879,6 @@ export default function IntegrationsPanel() {
         <ShopifyCard creds={creds.shopify} onSave={d => update('shopify', d)} onClear={() => update('shopify', null)} dispatch={dispatch} />
         <MetaAdsCard creds={creds.meta} onSave={d => update('meta', d)} onClear={() => update('meta', null)} dispatch={dispatch} />
         <KlaviyoCard creds={creds.klaviyo} onSave={d => update('klaviyo', d)} onClear={() => update('klaviyo', null)} />
-        <MercuryCard creds={creds.mercury} onSave={d => update('mercury', d)} onClear={() => update('mercury', null)} dispatch={dispatch} />
         <PlaidCard dispatch={dispatch} />
 
         {/* 3PL — handled by the Fulfillment tab */}
