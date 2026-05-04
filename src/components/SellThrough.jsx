@@ -7,7 +7,7 @@
 // every mode/sort/filter toggle.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Search, RefreshCw, Plug } from 'lucide-react';
+import { Search, RefreshCw, Plug, Star } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
   fetchShopifyVariantsWithInventory,
@@ -19,6 +19,8 @@ import {
   unitsInWindow,
   readLocal,
   writeLocal,
+  readTracked,
+  toggleTracked,
 } from '../utils/sellThroughStore';
 
 const FR = {
@@ -34,6 +36,9 @@ const FR = {
 const STOCK_FILTERS = ['all', 'in-stock', 'low', 'out'];
 const STOCK_LABELS = { all: 'All', 'in-stock': 'In stock', low: 'Low (<14d)', out: 'Out of stock' };
 
+const TRACKING_FILTERS = ['all', 'tracked'];
+const TRACKING_LABELS = { all: 'All variants', tracked: 'Tracked only' };
+
 export default function SellThrough() {
   const { dispatch } = useApp();
 
@@ -44,7 +49,14 @@ export default function SellThrough() {
   const [search, setSearch] = useState('');
   const [mode, setMode] = useState('days'); // 'days' | 'units'
   const [stockFilter, setStockFilter] = useState('all');
+  const [trackingFilter, setTrackingFilter] = useState('all'); // 'all' | 'tracked'
+  const [tracked, setTracked] = useState(() => readTracked());
   const [sort, setSort] = useState({ key: 'window-7', dir: 'desc' });
+
+  const onToggleTracked = (variantId) => {
+    const next = toggleTracked(variantId);
+    setTracked(new Set(next));
+  };
 
   // Reset sort direction when mode flips, since "biggest" inverts meaning.
   useEffect(() => {
@@ -89,6 +101,7 @@ export default function SellThrough() {
 
     const q = search.trim().toLowerCase();
     const filtered = decorated.filter(v => {
+      if (trackingFilter === 'tracked' && !tracked.has(v.variantId)) return false;
       if (q) {
         const hay = `${v.productTitle} ${v.variantTitle} ${v.sku}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -115,9 +128,9 @@ export default function SellThrough() {
     });
 
     return sorted;
-  }, [snapshot, search, stockFilter, sort, mode]);
+  }, [snapshot, search, stockFilter, trackingFilter, tracked, sort, mode]);
 
-  const stats = useMemo(() => computeStats(snapshot), [snapshot]);
+  const stats = useMemo(() => computeStats(snapshot, tracked), [snapshot, tracked]);
 
   const onSort = (key) => {
     setSort(prev => {
@@ -142,7 +155,21 @@ export default function SellThrough() {
         onSync={syncFromShopify}
       />
 
-      <FilterChips value={stockFilter} onChange={setStockFilter} />
+      <ChipRow
+        label="Tracking"
+        value={trackingFilter}
+        onChange={setTrackingFilter}
+        options={TRACKING_FILTERS}
+        labels={TRACKING_LABELS}
+      />
+
+      <ChipRow
+        label="Stock"
+        value={stockFilter}
+        onChange={setStockFilter}
+        options={STOCK_FILTERS}
+        labels={STOCK_LABELS}
+      />
 
       {error && (
         <div
@@ -158,7 +185,14 @@ export default function SellThrough() {
       )}
 
       {snapshot && (
-        <Table rows={rows} mode={mode} sort={sort} onSort={onSort} />
+        <Table
+          rows={rows}
+          mode={mode}
+          sort={sort}
+          onSort={onSort}
+          tracked={tracked}
+          onToggleTracked={onToggleTracked}
+        />
       )}
     </div>
   );
@@ -182,9 +216,9 @@ function Header() {
 
 function Stats({ stats, syncedAt }) {
   const items = [
-    { label: 'Variants tracked', value: stats.variantCount, sub: `${stats.productCount} products` },
+    { label: 'Total variants', value: stats.variantCount, sub: `${stats.productCount} products` },
+    { label: 'Tracked', value: stats.trackedCount, sub: 'starred for restock' },
     { label: 'Low stock · <14d', value: stats.low, sub: 'on the 7-day window', tone: stats.low > 0 ? FR.bad : FR.slate },
-    { label: 'Out of stock', value: stats.outOfStock, sub: 'on hand = 0', tone: stats.outOfStock > 0 ? FR.warn : FR.slate },
     { label: 'Last synced', value: syncedAt ? formatRelative(syncedAt) : '—', sub: syncedAt ? new Date(syncedAt).toLocaleString() : 'never' },
   ];
   return (
@@ -297,11 +331,11 @@ function Toolbar({ search, onSearch, mode, onMode, loading, onSync }) {
   );
 }
 
-function FilterChips({ value, onChange }) {
+function ChipRow({ label, value, onChange, options, labels }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: FR.stone, marginRight: 6 }}>Stock</span>
-      {STOCK_FILTERS.map(k => {
+      <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: FR.stone, marginRight: 6, minWidth: 64 }}>{label}</span>
+      {options.map(k => {
         const active = value === k;
         return (
           <button
@@ -319,7 +353,7 @@ function FilterChips({ value, onChange }) {
               fontFamily: "'Inter', sans-serif",
             }}
           >
-            {STOCK_LABELS[k]}
+            {labels[k]}
           </button>
         );
       })}
@@ -327,13 +361,14 @@ function FilterChips({ value, onChange }) {
   );
 }
 
-function Table({ rows, mode, sort, onSort }) {
+function Table({ rows, mode, sort, onSort, tracked, onToggleTracked }) {
   return (
     <div className="rounded-xl overflow-hidden" style={{ background: 'white', border: `0.5px solid rgba(58,58,58,0.15)` }}>
       <div className="overflow-x-auto">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'Inter', sans-serif" }}>
           <thead>
             <tr style={{ background: FR.sand }}>
+              <Th label="" k="tracked" align="center" sort={sort} onSort={onSort} width={40} />
               <Th label="Product" k="product" sort={sort} onSort={onSort} />
               <Th label="Variant" k="variant" sort={sort} onSort={onSort} />
               <Th label="SKU" k="sku" sort={sort} onSort={onSort} />
@@ -354,22 +389,38 @@ function Table({ rows, mode, sort, onSort }) {
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={4 + SELL_THROUGH_WINDOWS.length} style={{ padding: '32px 14px', textAlign: 'center', color: FR.stone, fontSize: 12 }}>
+                <td colSpan={5 + SELL_THROUGH_WINDOWS.length} style={{ padding: '32px 14px', textAlign: 'center', color: FR.stone, fontSize: 12 }}>
                   No variants match.
                 </td>
               </tr>
             )}
-            {rows.map(v => (
-              <tr key={v.variantId} style={{ borderTop: `0.5px solid rgba(58,58,58,0.07)` }}>
-                <td style={{ padding: '13px 14px', fontFamily: "'Cormorant Garamond', serif", fontSize: 15, color: FR.slate }}>{v.productTitle}</td>
-                <td style={{ padding: '13px 14px', color: FR.stone, fontSize: 12.5 }}>{v.variantTitle}</td>
-                <td style={{ padding: '13px 14px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11.5, color: FR.stone, letterSpacing: '0.02em' }}>{v.sku || '—'}</td>
-                <td style={{ padding: '13px 14px', textAlign: 'right', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13, color: FR.slate }}>{v.inventoryQuantity}</td>
-                {SELL_THROUGH_WINDOWS.map(w => (
-                  <MetricCell key={w} window={v.windows[w]} mode={mode} />
-                ))}
-              </tr>
-            ))}
+            {rows.map(v => {
+              const isTracked = tracked.has(v.variantId);
+              return (
+                <tr key={v.variantId} style={{ borderTop: `0.5px solid rgba(58,58,58,0.07)` }}>
+                  <td style={{ padding: '13px 0', textAlign: 'center', width: 40 }}>
+                    <button
+                      onClick={() => onToggleTracked(v.variantId)}
+                      title={isTracked ? 'Untrack this variant' : 'Track this variant'}
+                      style={{
+                        background: 'transparent', border: 'none', cursor: 'pointer',
+                        padding: 4, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        color: isTracked ? FR.sienna : 'rgba(58,58,58,0.25)',
+                      }}
+                    >
+                      <Star size={14} fill={isTracked ? FR.sienna : 'none'} strokeWidth={1.5} />
+                    </button>
+                  </td>
+                  <td style={{ padding: '13px 14px', fontFamily: "'Cormorant Garamond', serif", fontSize: 15, color: FR.slate }}>{v.productTitle}</td>
+                  <td style={{ padding: '13px 14px', color: FR.stone, fontSize: 12.5 }}>{v.variantTitle}</td>
+                  <td style={{ padding: '13px 14px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11.5, color: FR.stone, letterSpacing: '0.02em' }}>{v.sku || '—'}</td>
+                  <td style={{ padding: '13px 14px', textAlign: 'right', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13, color: FR.slate }}>{v.inventoryQuantity}</td>
+                  {SELL_THROUGH_WINDOWS.map(w => (
+                    <MetricCell key={w} window={v.windows[w]} mode={mode} />
+                  ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -377,12 +428,13 @@ function Table({ rows, mode, sort, onSort }) {
   );
 }
 
-function Th({ label, caption, k, align = 'left', sort, onSort }) {
+function Th({ label, caption, k, align = 'left', sort, onSort, width }) {
   const active = sort.key === k;
-  const caret = active ? (sort.dir === 'desc' ? '▼' : '▲') : '▾';
+  const sortable = k !== 'tracked';
+  const caret = !sortable ? '' : active ? (sort.dir === 'desc' ? '▼' : '▲') : '▾';
   return (
     <th
-      onClick={() => onSort(k)}
+      onClick={sortable ? () => onSort(k) : undefined}
       style={{
         textAlign: align,
         verticalAlign: 'bottom',
@@ -393,13 +445,16 @@ function Th({ label, caption, k, align = 'left', sort, onSort }) {
         fontSize: 11,
         textTransform: 'uppercase',
         borderBottom: `0.5px solid rgba(58,58,58,0.12)`,
-        cursor: 'pointer',
+        cursor: sortable ? 'pointer' : 'default',
         userSelect: 'none',
         background: active ? 'rgba(255,255,255,0.45)' : 'transparent',
+        width: width || 'auto',
       }}
     >
       {label}
-      <span style={{ marginLeft: 4, fontSize: 9, color: active ? FR.slate : 'rgba(58,58,58,0.35)' }}>{caret}</span>
+      {sortable && (
+        <span style={{ marginLeft: 4, fontSize: 9, color: active ? FR.slate : 'rgba(58,58,58,0.35)' }}>{caret}</span>
+      )}
       {caption && (
         <span style={{ display: 'block', fontSize: 9.5, fontWeight: 400, color: FR.stone, letterSpacing: '0.06em', marginTop: 3, textTransform: 'uppercase' }}>
           {caption}
@@ -474,15 +529,17 @@ function sortValue(v, key, mode) {
   return 0;
 }
 
-function computeStats(snapshot) {
+function computeStats(snapshot, tracked) {
   if (!snapshot?.variants?.length) {
-    return { variantCount: 0, productCount: 0, low: 0, outOfStock: 0 };
+    return { variantCount: 0, productCount: 0, low: 0, outOfStock: 0, trackedCount: 0 };
   }
   const products = new Set();
   let low = 0;
   let outOfStock = 0;
+  let trackedCount = 0;
   for (const v of snapshot.variants) {
     products.add(v.productTitle);
+    if (tracked?.has(v.variantId)) trackedCount += 1;
     if ((v.inventoryQuantity || 0) <= 0) {
       outOfStock += 1;
       continue;
@@ -495,6 +552,7 @@ function computeStats(snapshot) {
     productCount: products.size,
     low,
     outOfStock,
+    trackedCount,
   };
 }
 

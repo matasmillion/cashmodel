@@ -9,6 +9,7 @@
 // Shopify on demand. Writes overwrite the previous snapshot.
 
 const STORAGE_KEY = 'cashmodel_sell_through_snapshot';
+const TRACKED_KEY = 'cashmodel_sell_through_tracked';
 
 export const SELL_THROUGH_WINDOWS = [7, 14, 30, 60, 90];
 
@@ -62,6 +63,42 @@ export function computeDaysRemaining(salesByDay, inventoryQty, windowDays) {
   if (sold <= 0) return null;
   const avgDaily = sold / windowDays;
   return Math.floor(inventoryQty / avgDaily);
+}
+
+// ─── Tracked variants ────────────────────────────────────────────────────────
+//
+// A user-curated set of variant IDs that they actively manage. Variants
+// outside this set are still fetched and projected, but the "Tracked"
+// filter narrows the table to only the ones the user wants to keep in
+// stock (everything else is one-and-done).
+
+export function readTracked() {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = window.localStorage.getItem(TRACKED_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function writeTracked(set) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(TRACKED_KEY, JSON.stringify([...set]));
+  } catch {
+    // Quota exceeded — silently drop.
+  }
+}
+
+export function toggleTracked(variantId) {
+  const set = readTracked();
+  if (set.has(variantId)) set.delete(variantId);
+  else set.add(variantId);
+  writeTracked(set);
+  return set;
 }
 
 function isoDate(d) {
