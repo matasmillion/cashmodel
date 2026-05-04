@@ -53,7 +53,7 @@ function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onCreateVariant, onDr
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
     >
       <div style={{ display: 'flex', gap: 8 }}>
-        <div style={{ width: 48, height: 48, flexShrink: 0, background: FR.salt, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${FR.sand}` }}>
+        <div style={{ width: 40, height: 60, flexShrink: 0, background: FR.salt, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${FR.sand}` }}>
           {pack.cover_image
             ? <CoverThumb src={pack.cover_image} alt={pack.style_name || 'Cover'} />
             : <Shirt size={18} style={{ color: FR.sand }} />}
@@ -119,7 +119,7 @@ function GridCard({ pack, onOpen, onDuplicate, onDelete, onCreateVariant }) {
       <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}>
         <CostPill amount={pack.total_unit_cost} currency={pack.currency || 'USD'} title="Total unit cost — BOM + colorways" />
       </div>
-      <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer', width: '100%', aspectRatio: '4 / 3', background: FR.salt, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${FR.sand}` }}>
+      <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer', width: '100%', aspectRatio: '2 / 3', background: FR.salt, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${FR.sand}` }}>
         {pack.cover_image
           ? <img src={pack.cover_image} alt={pack.style_name || 'Cover'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           : <Shirt size={32} style={{ color: FR.sand }} />}

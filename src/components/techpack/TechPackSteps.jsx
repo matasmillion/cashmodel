@@ -76,7 +76,15 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
     <div>
       <SectionTitle>Style Overview</SectionTitle>
 
-      <CoverPhoto label="Product Render" slotKey="cover" images={images} onUpload={onUpload} onRemove={onRemove} />
+      <CoverPhoto
+        label="Ghost Mannequin Product Image"
+        slotKey="cover"
+        images={images}
+        onUpload={onUpload}
+        onRemove={onRemove}
+        portrait
+        uploadPrompt="Click or drop ghost mannequin product image here."
+      />
 
       {/* Style number — read-only derived display */}
       <div style={{ marginBottom: 14, padding: '10px 14px', background: FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 6 }}>

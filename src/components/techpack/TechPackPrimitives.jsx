@@ -269,7 +269,7 @@ export function PhotoUpload({ label, slotKey, images, onUpload, onRemove }) {
 // the first step of each builder. Upload replaces the existing photo in the
 // slot so there's only ever one cover. Auto-crop tightens the photo to the
 // bounding box of the subject (background sampled from corners).
-export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height = 240, autoCropOnUpload = true }) {
+export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height = 240, portrait = false, uploadPrompt, autoCropOnUpload = true }) {
   const fileRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const [cropping, setCropping] = useState(false);
@@ -313,7 +313,7 @@ export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height 
           position: 'relative',
           border: `2px dashed ${dragging ? FR.soil : FR.sand}`,
           borderRadius: 8,
-          height,
+          ...(portrait ? { aspectRatio: '2 / 3', height: 'auto' } : { height }),
           cursor: 'pointer',
           background: current ? 'transparent' : (dragging ? FR.sand : FR.salt),
           transition: 'all 0.2s',
@@ -346,7 +346,7 @@ export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height 
         ) : (
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 32, color: FR.sand, lineHeight: 1 }}>+</div>
-            <div style={{ fontSize: 12, color: FR.stone, marginTop: 6 }}>Click or drop the product render here</div>
+            <div style={{ fontSize: 12, color: FR.stone, marginTop: 6 }}>{uploadPrompt || 'Click or drop the product render here'}</div>
             <div style={{ fontSize: 10, color: FR.sand, marginTop: 3 }}>Auto-cropped to the subject · becomes the cover card on the list view</div>
           </div>
         )}

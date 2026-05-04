@@ -48,56 +48,55 @@ function PageCover({ d, images }) {
   const colorways = (d.colorways || []).filter(c => c && c.name).map(c => c.name).join(', ') || '—';
   const sig = (s) => s && s.name ? `${s.name}${s.date ? ` · ${s.date}` : ''}` : '—';
 
+  // Cover image: 2:3 portrait, right column
+  const imgW = 280;
+  const imgH = imgW * 3 / 2; // 420
+  const imgX = PAGE_W - imgW - 40;
+  const imgY = 85;
+
   return (
     <g>
-      {/* Tech Pack wordmark + style number */}
-      <text x={40} y={120} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="46" fill={FR.slate}>Tech Pack</text>
-      <rect x={40} y={132} width="100" height="2" fill={FR.soil} />
-      <text x={40} y={168} fontSize="16" fill={FR.stone}>
-        {clampLine(d.styleNumber || d.styleName || 'Untitled Style', 700, 9)}
-      </text>
-
-      {/* Product render on the right */}
+      {/* Large 2:3 cover image — right column */}
       {cover
-        ? <image href={cover.data} x={PAGE_W - 360 - 40} y={100} width="360" height="240" preserveAspectRatio="xMidYMid meet" />
+        ? <image href={cover.data} x={imgX} y={imgY} width={imgW} height={imgH} preserveAspectRatio="xMidYMid meet" />
         : (
           <g>
-            <rect x={PAGE_W - 360 - 40} y={100} width="360" height="240" fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" />
-            <text x={PAGE_W - 180 - 40} y={225} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">Product render goes here</text>
+            <rect x={imgX} y={imgY} width={imgW} height={imgH} fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" />
+            <text x={imgX + imgW / 2} y={imgY + imgH / 2} textAnchor="middle" fontSize="10" fill={FR.stone} fontStyle="italic">Product render goes here</text>
           </g>
         )}
 
-      {/* Section divider */}
-      <rect x="40" y="360" width={PAGE_W - 80} height="1" fill={FR.sand} />
-      <text x={40} y={380} fontSize="10" fontWeight="bold" fill={FR.soil} letterSpacing="2">STYLE SUMMARY</text>
+      {/* Tech Pack wordmark — left column */}
+      <text x={40} y={120} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="44" fill={FR.slate}>Tech Pack</text>
+      <rect x={40} y={132} width="100" height="2" fill={FR.soil} />
+      <text x={40} y={160} fontSize="15" fill={FR.stone}>
+        {clampLine(d.styleNumber || d.styleName || 'Untitled Style', 600, 8.5)}
+      </text>
 
-      {/* Two-column metadata */}
+      {/* Section divider */}
+      <rect x="40" y="188" width={imgX - 60} height="1" fill={FR.sand} />
+      <text x={40} y={206} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="2">STYLE SUMMARY</text>
+
+      {/* Single-column metadata — left of the image */}
       {(() => {
-        const leftX = 40;
-        const rightX = PAGE_W / 2 + 20;
-        const colW = PAGE_W / 2 - 60;
-        const startY = 410;
-        const gap = 50;
-        const left = [
+        const x = 40;
+        const colW = imgX - 60;
+        const startY = 228;
+        const gap = 46;
+        const rows = [
           { label: 'Style #',        value: d.styleNumber },
-          { label: 'Product Tier',   value: d.productTier },
+          { label: 'Collection',     value: d.collection },
+          { label: 'Product Type',   value: d.productType },
           { label: 'Season',         value: d.season },
           { label: 'Version',        value: d.revision },
-        ];
-        const right = [
-          { label: 'Vendor',            value: d.vendor },
-          { label: 'Colorways',         value: colorways },
-          { label: 'Size Range',        value: d.sizeRange },
+          { label: 'Vendor',         value: d.vendor },
+          { label: 'Colorways',      value: colorways },
+          { label: 'Size Range',     value: Array.isArray(d.sizeRange) ? d.sizeRange.join(' / ') : d.sizeRange },
           { label: 'Target Retail ($)', value: d.targetRetail },
-          { label: 'Target FOB ($)',    value: d.targetFOB },
-          { label: 'Status',            value: d.status },
+          { label: 'Target FOB ($)', value: d.targetFOB },
+          { label: 'Status',         value: d.status },
         ];
-        return (
-          <>
-            {left.map((f, i)  => <MetaRow key={`L${i}`} x={leftX}  y={startY + i * gap} label={f.label} value={f.value} w={colW} />)}
-            {right.map((f, i) => <MetaRow key={`R${i}`} x={rightX} y={startY + i * gap} label={f.label} value={f.value} w={colW} />)}
-          </>
-        );
+        return rows.map((f, i) => <MetaRow key={i} x={x} y={startY + i * gap} label={f.label} value={f.value} w={colW} />);
       })()}
     </g>
   );
