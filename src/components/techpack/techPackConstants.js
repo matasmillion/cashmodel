@@ -133,7 +133,7 @@ export const IMG_STEPS = new Set([3, 4, 5, 6, 7, 8, 9, 10, 11]);
 // with and the final compressForUpload pass produces a high-fidelity
 // WebP. Quality 0.95 retains practically all detail at this stage —
 // real compression happens once at the upload layer.
-export function resizeImage(file, maxW = 2400) {
+export function resizeImage(file, maxW = 1600) {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -144,7 +144,7 @@ export function resizeImage(file, maxW = 2400) {
         if (w > maxW) { h = (maxW / w) * h; w = maxW; }
         canvas.width = w; canvas.height = h;
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', 0.95));
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
       };
       img.src = e.target.result;
     };
