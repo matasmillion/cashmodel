@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { ArrowLeft, History, Plus, CheckCircle, XCircle, Clock, Camera } from 'lucide-react';
 import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STEPS, IMG_STEPS, computeCompletion, isStepLocked, computeBOMCost, computeColorwayCost, SAMPLE_TYPES, SAMPLE_VERDICTS } from './techPackConstants';
 import SendToVendorButton from './SendToVendorButton';
+import { useApp } from '../../context/AppContext';
 import { STEP_FNS } from './TechPackSteps';
 import TechPackPagePreview from './TechPackPagePreview';
 import { saveTechPack } from '../../utils/techPackStore';
@@ -133,6 +134,7 @@ function SamplePanel({ samples, onAdd, onUpdate, onRemove }) {
 
 // ─── Main Builder ────────────────────────────────────────────────────────────
 export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }) {
+  const { state } = useApp();
   // Initial step comes from the URL so refresh keeps you on the same wizard step.
   const [step, setStep] = useState(() => {
     const { packId, step } = parsePLMHash();
@@ -202,13 +204,40 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   const targetFOB = parseFloat(data.targetFOB) || 0;
   const costVariance = targetFOB > 0 ? totalUnitCost - targetFOB : 0;
 
-  // Maximum FOB: (targetRetail × productPercent) - seaFreightSpot
-  const assumptions = data.assumptions || {};
-  const productPercent = parseFloat(assumptions.productPercent ?? 0.27);
-  const seaFreightSpot = parseFloat(assumptions.seaFreightSpot ?? 4);
+  // Maximum FOB: targetRetail × (COGS% + Fulfillment% + PP%) − pickPack − weight-based fulfillment − seaFreightSpot
+  // COGS%, Fulfillment%, PP% pulled from the 13-week cashflow assumptions on the Cash tab.
+  const a = state.assumptions || {};
+  const cogsRate = parseFloat(a.cogsRate ?? 0.27);
+  const fulfillmentPercent = parseFloat(a.fulfillmentPercent ?? 0.10);
+  const ppPercent = parseFloat(a.ppPercent ?? 0.04);
+  const pickPackFee = parseFloat((state.rateCard || {}).pickPack ?? 0);
+  const packAssumptions = data.assumptions || {};
+  const seaFreightSpot = parseFloat(packAssumptions.seaFreightSpot ?? 4);
+  // Re-use the per-unit weight-based fulfillment cost computed in StepCover.
+  const fulfillmentUnitCost = (() => {
+    const w = parseFloat(data.weightKg);
+    const rc = state.rateCard;
+    if (!w || !rc) return 0;
+    const lbs = w * 2.20462;
+    const tier = (rc.weightTiers || []).find(t => lbs >= t.minLbs && lbs < t.maxLbs)
+      || (rc.weightTiers || []).slice(-1)[0];
+    return tier ? (tier.rate || 0) : 0;
+  })();
   const targetRetail = parseFloat(data.targetRetail) || 0;
-  const maxFOB = targetRetail > 0 ? targetRetail * productPercent - seaFreightSpot : 0;
+  const maxFOB = targetRetail > 0
+    ? targetRetail * (cogsRate + fulfillmentPercent + ppPercent) - pickPackFee - fulfillmentUnitCost - seaFreightSpot
+    : 0;
   const fobDelta = maxFOB > 0 ? totalUnitCost - maxFOB : null;
+
+  // Mirror computed maxFOB into data so the SVG preview can render it
+  // without re-pulling AppContext.
+  useEffect(() => {
+    const persisted = parseFloat(data.maxFOB);
+    const next = maxFOB > 0 ? Number(maxFOB.toFixed(2)) : '';
+    if (next !== persisted && !(isNaN(persisted) && next === '')) {
+      setData(p => ({ ...p, maxFOB: next }));
+    }
+  }, [maxFOB, data.maxFOB]);
   const fobDeltaColor = fobDelta === null ? FR.stone
     : fobDelta <= 0 ? '#3B6D11'
     : fobDelta / maxFOB <= 0.10 ? '#854F0B'
