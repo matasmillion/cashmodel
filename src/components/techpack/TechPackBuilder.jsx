@@ -204,16 +204,15 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   const targetFOB = parseFloat(data.targetFOB) || 0;
   const costVariance = targetFOB > 0 ? totalUnitCost - targetFOB : 0;
 
-  // Maximum FOB: targetRetail × (COGS% + Fulfillment% + PP%) − pickPack − weight-based fulfillment − seaFreightSpot
-  // COGS%, Fulfillment%, PP% pulled from the 13-week cashflow assumptions on the Cash tab.
+  // Maximum FOB: targetRetail × (COGS% + Fulfillment%) − fulfillmentCost + shippingCharge − seaFreightSpot
+  // COGS% + Fulfillment% pulled from the 13-week cashflow assumptions on the Cash tab.
+  // fulfillmentCost (per-unit) already includes pickPack + weight-tier rate + packaging materials.
   const a = state.assumptions || {};
   const cogsRate = parseFloat(a.cogsRate ?? 0.27);
   const fulfillmentPercent = parseFloat(a.fulfillmentPercent ?? 0.10);
-  const ppPercent = parseFloat(a.ppPercent ?? 0.04);
-  const pickPackFee = parseFloat((state.rateCard || {}).pickPack ?? 0);
   const packAssumptions = data.assumptions || {};
   const seaFreightSpot = parseFloat(packAssumptions.seaFreightSpot ?? 4);
-  // Re-use the per-unit weight-based fulfillment cost computed in StepCover.
+  const shippingCharge = parseFloat(packAssumptions.shippingCharge ?? 8);
   const fulfillmentUnitCost = (() => {
     const w = parseFloat(data.weightKg);
     const rc = state.rateCard;
@@ -221,11 +220,11 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     const lbs = w * 2.20462;
     const tier = (rc.weightTiers || []).find(t => lbs >= t.minLbs && lbs < t.maxLbs)
       || (rc.weightTiers || []).slice(-1)[0];
-    return tier ? (tier.rate || 0) : 0;
+    return (rc.pickPack || 0) + (tier ? (tier.rate || 0) : 0) + (rc.packagingMaterials || 0);
   })();
   const targetRetail = parseFloat(data.targetRetail) || 0;
   const maxFOB = targetRetail > 0
-    ? targetRetail * (cogsRate + fulfillmentPercent + ppPercent) - pickPackFee - fulfillmentUnitCost - seaFreightSpot
+    ? targetRetail * (cogsRate + fulfillmentPercent) - fulfillmentUnitCost + shippingCharge - seaFreightSpot
     : 0;
   const fobDelta = maxFOB > 0 ? totalUnitCost - maxFOB : null;
 

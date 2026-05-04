@@ -259,13 +259,11 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
             const a = state.assumptions || {};
             const cogsRate = parseFloat(a.cogsRate ?? 0.27);
             const fulfillmentPercent = parseFloat(a.fulfillmentPercent ?? 0.10);
-            const ppPercent = parseFloat(a.ppPercent ?? 0.04);
-            const pickPack = parseFloat((rateCard || {}).pickPack ?? 0);
-            const fulfillUnit = fulfillmentCost != null ? fulfillmentCost - pickPack - parseFloat((rateCard || {}).packagingMaterials ?? 0) : 0;
             const seaFreightSpot = parseFloat((data.assumptions || {}).seaFreightSpot ?? 4);
+            const shippingCharge = parseFloat((data.assumptions || {}).shippingCharge ?? 8);
             const retail = parseFloat(data.targetRetail) || 0;
             if (!retail) return <div style={{ padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.stone, background: FR.salt, fontStyle: 'italic' }}>Enter target retail</div>;
-            const maxFOB = retail * (cogsRate + fulfillmentPercent + ppPercent) - pickPack - fulfillUnit - seaFreightSpot;
+            const maxFOB = retail * (cogsRate + fulfillmentPercent) - (fulfillmentCost || 0) + shippingCharge - seaFreightSpot;
             return <div style={{ padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.salt, fontFamily: 'monospace' }}>${maxFOB.toFixed(2)}</div>;
           })()}
         </div>
@@ -288,19 +286,19 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 10, fontSize: 11 }}>
                   <div><div style={{ fontSize: 9, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.5 }}>COGS %</div><div style={{ color: FR.slate }}>{fmt(a.cogsRate, true)}</div></div>
                   <div><div style={{ fontSize: 9, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.5 }}>Fulfillment %</div><div style={{ color: FR.slate }}>{fmt(a.fulfillmentPercent, true)}</div></div>
-                  <div><div style={{ fontSize: 9, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.5 }}>PP %</div><div style={{ color: FR.slate }}>{fmt(a.ppPercent, true)}</div></div>
-                  <div><div style={{ fontSize: 9, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.5 }}>Pick &amp; Pack</div><div style={{ color: FR.slate }}>{fmt((rateCard || {}).pickPack)}</div></div>
                   <div><div style={{ fontSize: 9, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.5 }}>Fulfillment Cost</div><div style={{ color: FR.slate }}>{fulfillmentCost != null ? `$${fulfillmentCost.toFixed(2)}` : '—'}</div></div>
                 </div>
                 <Row cols="1fr 1fr">
+                  <Input label="Shipping Charge ($)" value={packAssumptions.shippingCharge ?? '8'}
+                    onChange={v => set('assumptions', { ...packAssumptions, shippingCharge: v })}
+                    placeholder="8" />
                   <Input label="Sea Freight Spot ($)" value={packAssumptions.seaFreightSpot ?? '4'}
                     onChange={v => set('assumptions', { ...packAssumptions, seaFreightSpot: v })}
                     placeholder="4" />
-                  <div />
                 </Row>
                 <p style={{ fontSize: 10, color: FR.stone, margin: 0, lineHeight: 1.5 }}>
-                  Max FOB = Retail × (COGS% + Fulfillment% + PP%) − Pick&amp;Pack − Fulfillment Cost − Sea Freight Spot.
-                  COGS%, Fulfillment%, PP% pulled from the Cash tab. Pick&amp;Pack pulled from Fulfillment rate card.
+                  Max FOB = Retail × (COGS% + Fulfillment%) − Fulfillment Cost + Shipping Charge − Sea Freight Spot.
+                  COGS% and Fulfillment% pulled from the Cash tab. Fulfillment Cost includes Pick&amp;Pack + weight-tier rate + packaging from the rate card.
                 </p>
               </div>
             )}
