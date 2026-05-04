@@ -111,6 +111,18 @@ function orphanedPaths(prev, next) {
   return dropped;
 }
 
+// Return the next zero-padded 4-digit product number (e.g. '0003').
+// Scans all non-deleted local packs and increments the max. Starts at '0001'.
+export function nextProductNumber() {
+  const packs = readLocal().filter(p => !p?.deleted_at);
+  let max = 0;
+  for (const p of packs) {
+    const n = parseInt(p.data?.productNumber || '0', 10);
+    if (n > max) max = n;
+  }
+  return String(max + 1).padStart(4, '0');
+}
+
 // List all tech packs. Deliberately do NOT fetch the images JSONB column from
 // Supabase — a pack with reference photos can be multiple MB per row and
 // downloading the full catalogue of images on every list render freezes the
@@ -126,7 +138,7 @@ export async function listTechPacks() {
   const { getFRColorCost } = await import('./colorLibrary');
   const projectLocal = (p) => ({
     id: p.id,
-    style_name: p.data?.styleName || p.style_name || '',
+    style_name: p.data?.styleNumber || p.data?.styleName || p.style_name || '',
     product_category: p.data?.productCategory || p.product_category || '',
     status: p.data?.status || p.status || 'Development',
     completion_pct: p.completion_pct || 0,
@@ -214,13 +226,14 @@ export async function getTechPack(id) {
 export async function createTechPack(defaultData, defaultLibrary) {
   const id = (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());
   const now = new Date().toISOString();
+  const productNumber = nextProductNumber();
   const row = {
     id,
     style_name: '',
     product_category: '',
     status: 'Development',
     completion_pct: 0,
-    data: defaultData,
+    data: { ...defaultData, productNumber },
     images: [],
     library: defaultLibrary,
     created_at: now,
@@ -467,7 +480,7 @@ export async function listDeletedTechPacks() {
   const { getFRColorCost } = await import('./colorLibrary');
   const projectLocal = (p) => ({
     id: p.id,
-    style_name: p.data?.styleName || p.style_name || '',
+    style_name: p.data?.styleNumber || p.data?.styleName || p.style_name || '',
     product_category: p.data?.productCategory || p.product_category || '',
     status: p.data?.status || p.status || 'Development',
     completion_pct: p.completion_pct || 0,
@@ -533,11 +546,19 @@ export async function duplicateTechPack(id) {
     return img;
   }));
 
+  const { deriveStyleNumber } = await import('../components/techpack/techPackConstants');
+  const newProductNumber = nextProductNumber();
+  const baseStyleNumber = deriveStyleNumber({
+    season: source.data?.season,
+    collection: source.data?.collection,
+    productType: source.data?.productType,
+    productNumber: newProductNumber,
+  });
   const copy = {
     ...source,
     id: newId,
-    style_name: (source.style_name || source.data?.styleName || '') + ' (Copy)',
-    data: { ...source.data, styleName: (source.data?.styleName || '') + ' (Copy)' },
+    style_name: baseStyleNumber || (source.style_name || source.data?.styleName || '') + ' (Copy)',
+    data: { ...source.data, productNumber: newProductNumber, styleNumber: baseStyleNumber || (source.data?.styleNumber || '') + '-copy' },
     images: copiedImages,
     cover_image: extractCover(copiedImages),
     created_at: now,

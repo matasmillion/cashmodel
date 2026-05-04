@@ -217,7 +217,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       try {
         const result = await saveTechPack(packIdRef.current, {
           data, images, library,
-          style_name: data.styleName || '',
+          style_name: data.styleNumber || data.styleName || '',
           product_category: data.productCategory || '',
           status: data.status || 'Design',
           completion_pct: computeCompletion(data),
@@ -430,7 +430,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       downloadBlob(svgToBlob(svgString), `${filename}_v${(data.revisions || []).length || 1}.svg`);
       const finalSave = await saveTechPack(packIdRef.current, {
         data, images, library,
-        style_name: data.styleName || '',
+        style_name: data.styleNumber || data.styleName || '',
         product_category: data.productCategory || '',
         status: data.status || 'Design',
         completion_pct: computeCompletion(data),
@@ -478,7 +478,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
               {data.parentStyleName && <span style={{ color: FR.stone, letterSpacing: 0, marginLeft: 8, fontWeight: 400, fontSize: 9 }}>variant of {data.parentStyleName}</span>}
             </div>
             <div style={{ fontFamily: "'Cormorant Garamond','Georgia',serif", color: FR.salt, fontSize: 16, marginTop: 2 }}>
-              {data.styleName || 'New Tech Pack'}
+              {data.styleNumber || data.styleName || 'New Tech Pack'}
             </div>
           </div>
         </div>

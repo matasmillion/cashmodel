@@ -5,7 +5,7 @@
 // that will be replaced in subsequent prompts.
 
 import { useEffect, useState } from 'react';
-import { FR, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, isStepLocked } from './techPackConstants';
+import { FR, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, isStepLocked, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
 import { listFRColors } from '../../utils/colorLibrary';
 import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, EditableSelect, FRColorCell } from './TechPackPrimitives';
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
@@ -56,32 +56,59 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
   const addCW = () => set('colorways', [...colorways, { name: '', frColor: '', pantone: '', hex: '' }]);
   const removeCW = (i) => set('colorways', colorways.filter((_, idx) => idx !== i));
 
+  const updateStyleNumber = (patch) => {
+    const next = deriveStyleNumber({
+      season:        patch.season        ?? data.season,
+      collection:    patch.collection    ?? data.collection,
+      productType:   patch.productType   ?? data.productType,
+      productNumber: patch.productNumber ?? data.productNumber,
+    });
+    Object.entries(patch).forEach(([k, v]) => set(k, v));
+    set('styleNumber', next);
+  };
+
+  const styleNumberDisplay = data.styleNumber || deriveStyleNumber({
+    season: data.season, collection: data.collection,
+    productType: data.productType, productNumber: data.productNumber,
+  }) || '—';
+
   return (
     <div>
       <SectionTitle>Style Overview</SectionTitle>
 
       <CoverPhoto label="Product Render" slotKey="cover" images={images} onUpload={onUpload} onRemove={onRemove} />
 
-      <Row>
-        <Input label="Style #" value={data.styleNumber} onChange={v => set('styleNumber', v)} placeholder="FR-BB-HD-001" />
-        <Select label="Product Tier" value={data.productTier} onChange={v => set('productTier', v)}
-          options={['Tier 1: Staple — Borderless Basics', 'Tier 1: Staple — Snowflake Staples', 'Tier 2: Drop — Destination Designer', 'Tier 2: Drop — Nomadic Necessities', 'Tier 2: Drop — Technical Travel']} />
+      {/* Style number — read-only derived display */}
+      <div style={{ marginBottom: 14, padding: '10px 14px', background: FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 6 }}>
+        <div style={{ fontSize: 10, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4 }}>Style #</div>
+        <div style={{ fontFamily: "'ui-monospace','SF Mono',Menlo,monospace", fontSize: 15, color: FR.slate, letterSpacing: 1 }}>
+          {styleNumberDisplay}
+        </div>
+        <div style={{ fontSize: 9, color: FR.stone, marginTop: 3 }}>Product # {data.productNumber || '—'} · auto-generated</div>
+      </div>
+
+      <Row cols="1fr 1fr">
+        <Select label="Season" value={data.season} onChange={v => updateStyleNumber({ season: v })}
+          options={['Core (Evergreen)', 'SS26', 'FW26', 'SS27', 'FW27']} />
+        <Select label="Collection" value={data.collection} onChange={v => updateStyleNumber({ collection: v })}
+          options={COLLECTIONS.map(c => c.label)} />
       </Row>
 
-      <Row cols="1fr 1fr 1fr">
-        <Select label="Season" value={data.season} onChange={v => set('season', v)}
-          options={['Core (Evergreen)', 'SS26', 'FW26', 'SS27', 'FW27']} />
+      <Row cols="1fr 1fr">
+        <Select label="Product Type" value={data.productType} onChange={v => updateStyleNumber({ productType: v })}
+          options={PRODUCT_TYPES.map(t => t.label)} />
         <div style={{ marginBottom: 10 }}>
           <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' }}>Version</label>
           <input readOnly value={data.revision || 'V1.0'}
             style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.stone, background: FR.salt, outline: 'none', boxSizing: 'border-box' }} />
         </div>
-        <EditableSelect label="Vendor" value={data.vendor}
-          onChange={v => set('vendor', v)}
-          options={existingSuppliers}
-          onAddOption={addSupplier}
-          placeholder="Add a new vendor…" />
       </Row>
+
+      <EditableSelect label="Vendor" value={data.vendor}
+        onChange={v => set('vendor', v)}
+        options={existingSuppliers}
+        onAddOption={addSupplier}
+        placeholder="Add a new vendor…" />
 
       <div style={{ marginBottom: 10 }}>
         <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>Colorways</label>

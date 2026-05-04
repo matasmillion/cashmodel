@@ -50,14 +50,11 @@ function PageCover({ d, images }) {
 
   return (
     <g>
-      {/* Tech Pack wordmark + style name */}
+      {/* Tech Pack wordmark + style number */}
       <text x={40} y={120} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="46" fill={FR.slate}>Tech Pack</text>
       <rect x={40} y={132} width="100" height="2" fill={FR.soil} />
       <text x={40} y={168} fontSize="16" fill={FR.stone}>
-        {clampLine(d.styleName || 'Untitled Style', 700, 9)}
-      </text>
-      <text x={40} y={192} fontSize="11" fill={FR.soil}>
-        {esc(d.styleNumber || 'STYLE-000')}
+        {clampLine(d.styleNumber || d.styleName || 'Untitled Style', 700, 9)}
       </text>
 
       {/* Product render on the right */}
@@ -120,12 +117,12 @@ function InfoStrip({ d }) {
   const y = 90;
   const h = 44;
   const cells = [
-    { label: 'Style #',     value: d.styleNumber },
-    { label: 'Style Name',  value: d.styleName },
+    { label: 'Style #',     value: d.styleNumber || d.styleName },
+    { label: 'Collection',  value: d.collection },
     { label: 'Season',      value: d.season },
-    { label: 'Date',        value: d.dateCreated },
+    { label: 'Version',     value: d.revision },
     { label: 'Colorway',    value: ((d.colorways || []).find(c => c && c.name) || {}).name || '—' },
-    { label: 'Size Range',  value: d.sizeRange },
+    { label: 'Size Range',  value: Array.isArray(d.sizeRange) ? d.sizeRange.join(' / ') : d.sizeRange },
   ];
   const cellW = (PAGE_W - 80) / cells.length;
   return (
