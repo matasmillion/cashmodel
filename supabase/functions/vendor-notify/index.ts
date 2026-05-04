@@ -23,6 +23,23 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.103.0';
 
+function corsHeaders(origin: string) {
+  return {
+    'Access-Control-Allow-Origin': origin || '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'authorization, content-type, x-client-info, apikey',
+    'Access-Control-Max-Age': '86400',
+    'Vary': 'Origin',
+  };
+}
+
+function jsonRes(body: unknown, status: number, origin: string) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders(origin), 'content-type': 'application/json' },
+  });
+}
+
 type EventType = 'po.placed' | 'sample.requested';
 
 interface InvokeBody {
@@ -127,19 +144,20 @@ async function sendOneEmail(opts: { to: string; subject: string; html: string })
 }
 
 Deno.serve(async (req) => {
-  if (req.method !== 'POST') {
-    return new Response('method not allowed', { status: 405 });
-  }
+  const origin = req.headers.get('origin') || '*';
+
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders(origin) });
+  if (req.method !== 'POST') return jsonRes({ error: 'Method not allowed' }, 405, origin);
 
   let body: InvokeBody;
   try {
     body = await req.json();
   } catch {
-    return new Response('bad json', { status: 400 });
+    return jsonRes({ error: 'Bad JSON' }, 400, origin);
   }
 
   if (!body.event_type || !body.vendor_id || !body.subject_id) {
-    return new Response('missing fields', { status: 400 });
+    return jsonRes({ error: 'Missing fields' }, 400, origin);
   }
 
   // Resolve organization_id from the matching audit row inserted by
@@ -156,7 +174,7 @@ Deno.serve(async (req) => {
     .limit(1);
 
   if (auditErr || !auditRows || auditRows.length === 0) {
-    return new Response('audit row not found', { status: 404 });
+    return jsonRes({ error: 'Audit row not found' }, 404, origin);
   }
   const audit = auditRows[0];
 
@@ -171,7 +189,7 @@ Deno.serve(async (req) => {
     await admin.from('vendor_notifications')
       .update({ delivery_status: 'failed', delivery_error: recipErr.message })
       .eq('id', audit.id);
-    return new Response('recipient lookup failed', { status: 500 });
+    return jsonRes({ error: 'Recipient lookup failed' }, 500, origin);
   }
 
   const list = (recipients ?? []) as VendorRecipient[];
@@ -179,7 +197,7 @@ Deno.serve(async (req) => {
     await admin.from('vendor_notifications')
       .update({ delivery_status: 'failed', delivery_error: 'no active vendor_users' })
       .eq('id', audit.id);
-    return new Response('no recipients', { status: 200 });
+    return jsonRes({ ok: true, note: 'No active recipients' }, 200, origin);
   }
 
   // Per-org override of the portal origin, falling back to the
@@ -209,8 +227,5 @@ Deno.serve(async (req) => {
 
   await admin.from('vendor_notifications').update(update).eq('id', audit.id);
 
-  return new Response(JSON.stringify({ ok: errors.length === 0, errors }), {
-    status: 200,
-    headers: { 'content-type': 'application/json' },
-  });
+  return jsonRes({ ok: errors.length === 0, errors }, 200, origin);
 });

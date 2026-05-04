@@ -25,6 +25,23 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.103.0';
 
+function corsHeaders(origin: string) {
+  return {
+    'Access-Control-Allow-Origin': origin || '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'authorization, content-type, x-client-info, apikey',
+    'Access-Control-Max-Age': '86400',
+    'Vary': 'Origin',
+  };
+}
+
+function json(body: unknown, status: number, origin: string) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders(origin), 'content-type': 'application/json' },
+  });
+}
+
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const CLERK_SECRET_KEY = Deno.env.get('CLERK_SECRET_KEY') ?? '';
@@ -211,27 +228,23 @@ async function handleRevoke(claims: JwtClaims, payload: { vendor_name?: string; 
 }
 
 Deno.serve(async (req) => {
-  if (req.method !== 'POST') return new Response('method not allowed', { status: 405 });
+  const origin = req.headers.get('origin') || '*';
+
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders(origin) });
+  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405, origin);
 
   const claims = decodeJwtClaims(req.headers.get('authorization'));
-  if (!claims || !claims.org_id) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401, headers: { 'content-type': 'application/json' },
-    });
-  }
-  // Only internal users can invite. Vendor users (who carry a
-  // vendor_id JWT claim) are blocked.
+  if (!claims || !claims.org_id) return json({ error: 'Unauthorized' }, 401, origin);
+
   if (claims.vendor_id) {
-    return new Response(JSON.stringify({ error: 'Vendor users cannot invite other vendors.' }), {
-      status: 403, headers: { 'content-type': 'application/json' },
-    });
+    return json({ error: 'Vendor users cannot invite other vendors.' }, 403, origin);
   }
 
   let payload: Record<string, unknown>;
   try {
     payload = await req.json();
   } catch {
-    return new Response('bad json', { status: 400 });
+    return json({ error: 'Bad JSON' }, 400, origin);
   }
 
   const action = typeof payload.action === 'string' ? payload.action : 'invite';
@@ -239,8 +252,5 @@ Deno.serve(async (req) => {
     ? await handleRevoke(claims, payload as { vendor_name?: string; clerk_user_id?: string })
     : await handleInvite(claims, payload as { vendor_name?: string; email?: string; preferred_locale?: string });
 
-  return new Response(JSON.stringify(result.body), {
-    status: result.status,
-    headers: { 'content-type': 'application/json' },
-  });
+  return json(result.body, result.status, origin);
 });
