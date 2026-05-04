@@ -35,7 +35,7 @@ export function isStepLocked(stepIndex, status) {
 
 // 14-step wizard mapping 1:1 to the FR_TechPack_Template_Blank.pdf pages.
 export const STEPS = [
-  { id: 'cover',         title: 'Cover & Identity',                 icon: '01' },
+  { id: 'cover',         title: 'Style Overview',                   icon: '01' },
   { id: 'design',        title: 'Design Overview',                  icon: '02' },
   { id: 'flatlays',      title: 'Technical Flat Lay Diagrams',      icon: '03' },
   { id: 'bom',           title: 'Bill of Materials',                icon: '04' },

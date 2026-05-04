@@ -32,7 +32,7 @@ function PageFrame({ title, pageNum, styleInfo, children }) {
   );
 }
 
-// ─── Page 1 — Cover & Identity ──────────────────────────────────────────────
+// ─── Page 1 — Style Overview ──────────────────────────────────────────────
 function MetaRow({ x, y, label, value, w = 400 }) {
   return (
     <g>
@@ -83,12 +83,9 @@ function PageCover({ d, images }) {
         const gap = 50;
         const left = [
           { label: 'Style #',        value: d.styleNumber },
-          { label: 'SKU Prefix',     value: d.skuPrefix },
           { label: 'Product Tier',   value: d.productTier },
           { label: 'Season',         value: d.season },
-          { label: 'Date Created',   value: d.dateCreated },
-          { label: 'Revision',       value: d.revision },
-          { label: 'Designed By',    value: sig(d.designedBy) },
+          { label: 'Version',        value: d.revision },
         ];
         const right = [
           { label: 'Vendor',            value: d.vendor },
@@ -97,13 +94,11 @@ function PageCover({ d, images }) {
           { label: 'Target Retail ($)', value: d.targetRetail },
           { label: 'Target FOB ($)',    value: d.targetFOB },
           { label: 'Status',            value: d.status },
-          { label: 'Approved By',       value: sig(d.approvedBy) },
         ];
         return (
           <>
             {left.map((f, i)  => <MetaRow key={`L${i}`} x={leftX}  y={startY + i * gap} label={f.label} value={f.value} w={colW} />)}
             {right.map((f, i) => <MetaRow key={`R${i}`} x={rightX} y={startY + i * gap} label={f.label} value={f.value} w={colW} />)}
-            <MetaRow x={rightX} y={startY + 7 * gap} label="Vendor Confirmed" value={sig(d.vendorConfirmed)} w={colW} />
           </>
         );
       })()}
@@ -925,7 +920,7 @@ function ComingSoon({ pageNum, title }) {
 }
 
 const PAGE_FNS = [
-  { title: 'Cover & Identity',             body: ({ d, images }) => <PageCover d={d} images={images} /> },
+  { title: 'Style Overview',                body: ({ d, images }) => <PageCover d={d} images={images} /> },
   { title: 'Design Overview',              body: ({ d, images }) => <PageDesignOverview d={d} images={images} /> },
   { title: 'Technical Flat Lay Diagrams',  body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
   { title: 'Bill of Materials',            body: ({ d }) => <PageBOM d={d} /> },

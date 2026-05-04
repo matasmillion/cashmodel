@@ -56,31 +56,23 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
   const addCW = () => set('colorways', [...colorways, { name: '', frColor: '', pantone: '', hex: '' }]);
   const removeCW = (i) => set('colorways', colorways.filter((_, idx) => idx !== i));
 
-  const setSig = (key, field, val) => set(key, { ...(data[key] || { name: '', date: '' }), [field]: val });
-
   return (
     <div>
-      <SectionTitle>Cover & Identity</SectionTitle>
+      <SectionTitle>Style Overview</SectionTitle>
 
       <CoverPhoto label="Product Render" slotKey="cover" images={images} onUpload={onUpload} onRemove={onRemove} />
 
       <Row>
-        <Input label="Style Name" value={data.styleName} onChange={v => set('styleName', v)} placeholder="e.g. Borderless Basic Hoodie" />
         <Input label="Style #" value={data.styleNumber} onChange={v => set('styleNumber', v)} placeholder="FR-BB-HD-001" />
-      </Row>
-
-      <Row cols="1fr 1fr 1fr">
-        <Input label="SKU Prefix" value={data.skuPrefix} onChange={v => set('skuPrefix', v)} placeholder="FR-BB-HD" />
         <Select label="Product Tier" value={data.productTier} onChange={v => set('productTier', v)}
           options={['Tier 1: Staple — Borderless Basics', 'Tier 1: Staple — Snowflake Staples', 'Tier 2: Drop — Destination Designer', 'Tier 2: Drop — Nomadic Necessities', 'Tier 2: Drop — Technical Travel']} />
-        <Select label="Season" value={data.season} onChange={v => set('season', v)}
-          options={['Core (Evergreen)', 'SS26', 'FW26', 'SS27', 'FW27']} />
       </Row>
 
       <Row cols="1fr 1fr 1fr">
-        <Input label="Date Created" value={data.dateCreated} onChange={v => set('dateCreated', v)} placeholder="YYYY-MM-DD" />
+        <Select label="Season" value={data.season} onChange={v => set('season', v)}
+          options={['Core (Evergreen)', 'SS26', 'FW26', 'SS27', 'FW27']} />
         <div style={{ marginBottom: 10 }}>
-          <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' }}>Revision</label>
+          <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' }}>Version</label>
           <input readOnly value={data.revision || 'V1.0'}
             style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.stone, background: FR.salt, outline: 'none', boxSizing: 'border-box' }} />
         </div>
@@ -117,19 +109,6 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
       <p style={{ fontSize: 10, color: FR.stone, marginTop: -4, lineHeight: 1.5 }}>
         Labels, Order &amp; Delivery, and Compliance unlock at Pre-Production.
       </p>
-
-      <SectionTitle>Approvals</SectionTitle>
-      <Row cols="1fr 1fr 1fr">
-        <SignatureBlock label="Designed By" value={data.designedBy}
-          onNameChange={v => setSig('designedBy', 'name', v)}
-          onDateChange={v => setSig('designedBy', 'date', v)} />
-        <SignatureBlock label="Approved By" value={data.approvedBy}
-          onNameChange={v => setSig('approvedBy', 'name', v)}
-          onDateChange={v => setSig('approvedBy', 'date', v)} />
-        <SignatureBlock label="Vendor Confirmed" value={data.vendorConfirmed}
-          onNameChange={v => setSig('vendorConfirmed', 'name', v)}
-          onDateChange={v => setSig('vendorConfirmed', 'date', v)} />
-      </Row>
     </div>
   );
 }
