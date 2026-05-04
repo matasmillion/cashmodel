@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-03T09:47:40.682Z",
+  "lastUpdated": "2026-05-04T13:40:35.309Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,54 +1044,54 @@
   ],
   "changelog": [
     {
-      "sha": "503e19b",
-      "date": "2026-05-03T09:38:59+00:00",
-      "message": "docs(plm): fix plan for cloud-save RLS error on component_packs"
+      "sha": "20ab14e",
+      "date": "2026-05-04T13:40:31+00:00",
+      "message": "Merge sell-through page into main"
     },
     {
-      "sha": "095302d",
-      "date": "2026-05-03T09:25:10+00:00",
-      "message": "feat(plm): live cloud-write test in Storage Health diagnostics"
+      "sha": "9e45c81",
+      "date": "2026-05-04T13:40:03+00:00",
+      "message": "feat(sell-through): tracked-variants filter + star toggle"
     },
     {
-      "sha": "18c6068",
-      "date": "2026-05-03T09:20:55+00:00",
-      "message": "feat(plm): live scan progress on Storage Health (spinner + per-phase status)"
+      "sha": "93aca66",
+      "date": "2026-05-04T12:52:46+00:00",
+      "message": "feat(sell-through): variant runway page under Product nav"
     },
     {
-      "sha": "ea5d0e4",
-      "date": "2026-05-03T09:14:22+00:00",
-      "message": "fix(plm): server-side JWT probe + storage-health route + scan resilience"
+      "sha": "0fb6aa4",
+      "date": "2026-05-03T12:42:14+00:00",
+      "message": "fix(storage-health): don't abort write test on org visibility failure"
     },
     {
-      "sha": "9138850",
-      "date": "2026-05-03T09:04:07+00:00",
-      "message": "fix(plm): orphan recovery now also restores rows that exist only in localStorage"
+      "sha": "f525dfe",
+      "date": "2026-05-03T10:27:30+00:00",
+      "message": "fix(plm): auto-create org row before PLM saves (FK bootstrap fix)"
     },
     {
-      "sha": "360a53b",
-      "date": "2026-05-03T08:56:09+00:00",
-      "message": "feat(plm): Storage Health → Recover orphan uploads back to their original packs"
+      "sha": "cc03a5e",
+      "date": "2026-05-03T10:23:44+00:00",
+      "message": "fix(storage-health): switch write test to plain INSERT + add org FK pre-check"
     },
     {
-      "sha": "81f81bf",
-      "date": "2026-05-03T08:50:26+00:00",
-      "message": "feat(plm): JWT diagnostics on Storage Health surface RLS / org_id mismatches"
+      "sha": "eb389ff",
+      "date": "2026-05-03T10:02:44+00:00",
+      "message": "Merge branch 'Cloud_File_Saving_Optimization' (Backup B)"
     },
     {
-      "sha": "dbb351d",
-      "date": "2026-05-03T08:35:18+00:00",
-      "message": "fix(plm): saves are now upsert — duplicates that don't reach cloud heal on first edit"
+      "sha": "4d0421d",
+      "date": "2026-05-03T10:02:36+00:00",
+      "message": "fix(plm): adopt-and-rotate id when cloud row is RLS-locked to another org"
     },
     {
-      "sha": "946f211",
-      "date": "2026-05-03T08:24:58+00:00",
-      "message": "fix(plm): duplicate now auto-opens the new pack instead of relying on a click"
+      "sha": "d523d62",
+      "date": "2026-05-03T09:49:49+00:00",
+      "message": "Merge branch 'Cloud_File_Saving_Optimization'"
     },
     {
-      "sha": "51955e5",
-      "date": "2026-05-03T08:13:30+00:00",
-      "message": "feat(plm): trim pack attachments accept raster + font files (PNG, JPG, OTF, TTF…)"
+      "sha": "9be3dcf",
+      "date": "2026-05-03T09:48:50+00:00",
+      "message": "chore: regenerate public/state.json"
     }
   ]
 }
