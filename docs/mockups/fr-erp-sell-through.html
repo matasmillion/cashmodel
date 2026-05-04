@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FR ERP · Sell-Through</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --salt:#F5F0E8;
+    --slate:#3A3A3A;
+    --sand:#EBE5D5;
+    --sienna:#D4956A;
+    --stone:#716F70;
+    --soil:#9A816B;
+    --sea:#B5C7D3;
+    --sage:#ADBDA3;
+    --good:#3B6D11;
+    --warn:#854F0B;
+    --bad:#A32D2D;
+    --serif:'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+    --sans:'Inter', system-ui, -apple-system, 'Helvetica Neue', sans-serif;
+    --mono:ui-monospace, SFMono-Regular, 'Menlo', monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--salt);
+    color:var(--slate);
+    font-family:var(--sans);
+    font-size:14px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    padding:24px 16px 64px;
+  }
+  .page{max-width:1200px;margin:0 auto;}
+
+  /* Top nav — mimics the live ERP chrome */
+  .appbar{
+    display:flex;align-items:flex-end;justify-content:space-between;
+    padding-bottom:14px;border-bottom:0.5px solid rgba(58,58,58,0.15);
+    margin-bottom:28px;
+  }
+  .wordmark{font-family:var(--serif);font-size:20px;letter-spacing:0.06em;text-transform:uppercase;line-height:1.1;}
+  .subline{font-family:var(--serif);font-size:11px;font-style:italic;letter-spacing:0.14em;color:var(--stone);margin-top:3px;text-transform:uppercase;}
+  .nav{display:flex;gap:2px;font-size:13px;align-items:center;}
+  .nav span{padding:6px 12px;border-radius:6px;color:var(--stone);cursor:pointer;letter-spacing:0.02em;}
+  .nav span.active{background:var(--sand);color:var(--slate);}
+  .nav .gear{margin-left:8px;width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;color:var(--stone);}
+
+  /* Page header */
+  .hdr{margin-bottom:22px;}
+  .hdr h2{font-family:var(--serif);font-size:32px;line-height:1;margin:0;letter-spacing:0.01em;}
+  .hdr p{margin:8px 0 0;font-size:13px;color:var(--stone);max-width:640px;}
+
+  /* Stat strip */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px;}
+  .stat{background:#fff;border:0.5px solid rgba(58,58,58,0.15);border-radius:8px;padding:16px 18px;}
+  .stat-label{font-size:10px;color:rgba(58,58,58,0.55);letter-spacing:0.08em;margin-bottom:8px;text-transform:uppercase;}
+  .stat-value{font-family:var(--serif);font-size:28px;line-height:1;}
+  .stat-sub{font-size:11px;color:var(--stone);margin-top:6px;letter-spacing:0.02em;}
+
+  /* Toolbar */
+  .toolbar{
+    background:#fff;border:0.5px solid rgba(58,58,58,0.15);border-radius:8px;
+    padding:14px 16px;margin-bottom:14px;
+    display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+  }
+  .search{
+    flex:1;min-width:240px;
+    display:flex;align-items:center;gap:8px;
+    background:var(--salt);border:0.5px solid rgba(58,58,58,0.1);border-radius:6px;
+    padding:8px 12px;
+  }
+  .search svg{width:13px;height:13px;color:var(--stone);}
+  .search input{flex:1;border:none;background:transparent;outline:none;font:inherit;color:var(--slate);font-size:12.5px;}
+  .search input::placeholder{color:var(--stone);}
+
+  .seg{display:inline-flex;background:var(--salt);border:0.5px solid rgba(58,58,58,0.1);border-radius:6px;padding:2px;}
+  .seg button{
+    border:none;background:transparent;color:var(--stone);
+    font:inherit;font-size:12px;letter-spacing:0.02em;
+    padding:6px 12px;border-radius:4px;cursor:pointer;
+  }
+  .seg button.on{background:#fff;color:var(--slate);box-shadow:0 0 0 0.5px rgba(58,58,58,0.1);}
+
+  .sync{
+    display:inline-flex;align-items:center;gap:6px;
+    background:var(--slate);color:var(--salt);
+    border:none;border-radius:6px;padding:8px 14px;
+    font:inherit;font-size:12px;letter-spacing:0.02em;cursor:pointer;
+  }
+  .sync svg{width:12px;height:12px;}
+
+  /* Filter chips row */
+  .chips{display:flex;gap:6px;margin-bottom:10px;align-items:center;}
+  .chips .lbl{font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--stone);margin-right:6px;min-width:64px;}
+  .chip{
+    font-size:11px;letter-spacing:0.04em;padding:5px 12px;border-radius:5px;
+    border:0.5px solid rgba(58,58,58,0.15);background:#fff;color:var(--stone);cursor:pointer;
+  }
+  .chip.on{background:var(--sand);color:var(--slate);border-color:transparent;}
+
+  /* Tracked star column */
+  .star-cell{padding:13px 0;text-align:center;width:40px;}
+  .star{background:transparent;border:none;cursor:pointer;padding:4px;display:inline-flex;color:rgba(58,58,58,0.25);}
+  .star.on{color:var(--sienna);}
+  .star svg{width:14px;height:14px;}
+
+  /* Table */
+  .tablewrap{background:#fff;border:0.5px solid rgba(58,58,58,0.15);border-radius:8px;overflow:hidden;}
+  table{width:100%;border-collapse:collapse;}
+  thead{background:var(--sand);}
+  thead th{
+    text-align:left;font-weight:500;padding:12px 14px;
+    color:var(--slate);letter-spacing:0.04em;font-size:11px;text-transform:uppercase;
+    border-bottom:0.5px solid rgba(58,58,58,0.12);
+    cursor:pointer;user-select:none;vertical-align:bottom;
+  }
+  thead th .cap{display:block;font-size:9.5px;font-weight:400;color:var(--stone);letter-spacing:0.06em;margin-top:3px;text-transform:uppercase;}
+  thead th .caret{display:inline-block;margin-left:4px;font-size:9px;color:rgba(58,58,58,0.35);}
+  thead th.sorted{background:rgba(255,255,255,0.45);}
+  thead th.sorted .caret{color:var(--slate);}
+  th.r,td.r{text-align:right;}
+
+  tbody td{padding:13px 14px;border-bottom:0.5px solid rgba(58,58,58,0.07);font-size:13px;vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:rgba(235,229,213,0.18);}
+  td.product{font-family:var(--serif);font-size:15px;color:var(--slate);}
+  td.variant{color:var(--stone);font-size:12.5px;}
+  td.sku{font-family:var(--mono);font-size:11.5px;color:var(--stone);letter-spacing:0.02em;}
+  td.onhand{font-family:var(--mono);font-size:13px;color:var(--slate);}
+  td.metric{font-family:var(--mono);font-size:13px;}
+  td.metric.bad{color:var(--bad);}
+  td.metric.warn{color:var(--warn);}
+  td.metric.good{color:var(--good);}
+  td.metric.none{color:var(--stone);}
+
+  .footnote{font-size:11px;color:var(--stone);margin-top:14px;text-align:right;letter-spacing:0.02em;}
+
+  @media (max-width:900px){
+    .stats{grid-template-columns:repeat(2,1fr);}
+    .nav{display:none;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- App chrome -->
+  <header class="appbar">
+    <div>
+      <div class="wordmark">Enterprise Resource Planning</div>
+      <div class="subline">Foreign Resource</div>
+    </div>
+    <nav class="nav">
+      <span>Cash</span>
+      <span>Marketing</span>
+      <span class="active">Product</span>
+      <span>Operations</span>
+      <span class="gear">⚙</span>
+    </nav>
+  </header>
+
+  <!-- Page header -->
+  <section class="hdr">
+    <h2>Sell-Through</h2>
+    <p>Days of inventory remaining for every variant, projected from trailing daily sell-through across five windows. Switch to <em>Units sold</em> to rank what moved.</p>
+  </section>
+
+  <!-- Stat strip -->
+  <section class="stats">
+    <div class="stat">
+      <div class="stat-label">Total variants</div>
+      <div class="stat-value">186</div>
+      <div class="stat-sub">across 42 products</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Tracked</div>
+      <div class="stat-value">38</div>
+      <div class="stat-sub">starred for restock</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Low stock · &lt;14d</div>
+      <div class="stat-value" style="color:var(--bad)">23</div>
+      <div class="stat-sub">on the 7-day window</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Last synced</div>
+      <div class="stat-value">2m</div>
+      <div class="stat-sub">May 4 · 14:08 PT</div>
+    </div>
+  </section>
+
+  <!-- Toolbar -->
+  <section class="toolbar">
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input placeholder="Search product, variant or SKU…">
+    </div>
+    <div class="seg" role="tablist" aria-label="Display mode">
+      <button class="on">Days remaining</button>
+      <button>Units sold</button>
+    </div>
+    <button class="sync">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/><path d="M3 21v-5h5"/></svg>
+      Sync Shopify
+    </button>
+  </section>
+
+  <!-- Tracking filter chips — star products you actually want to restock -->
+  <div class="chips">
+    <span class="lbl">Tracking</span>
+    <button class="chip">All variants</button>
+    <button class="chip on">Tracked only</button>
+  </div>
+
+  <!-- Stock filter chips -->
+  <div class="chips" style="margin-bottom:14px;">
+    <span class="lbl">Stock</span>
+    <button class="chip on">All</button>
+    <button class="chip">In stock</button>
+    <button class="chip">Low (&lt;14d)</button>
+    <button class="chip">Out of stock</button>
+  </div>
+
+  <!-- Table -->
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:40px;text-align:center;cursor:default;"></th>
+          <th>Product</th>
+          <th>Variant</th>
+          <th>SKU</th>
+          <th class="r">On hand</th>
+          <th class="r sorted">7d <span class="caret">▼</span><span class="cap">Days remaining</span></th>
+          <th class="r">14d <span class="caret">▾</span><span class="cap">Days remaining</span></th>
+          <th class="r">30d <span class="caret">▾</span><span class="cap">Days remaining</span></th>
+          <th class="r">60d <span class="caret">▾</span><span class="cap">Days remaining</span></th>
+          <th class="r">90d <span class="caret">▾</span><span class="cap">Days remaining</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="star-cell"><button class="star on" title="Tracked"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg></button></td>
+          <td class="product">Heritage Hoodie</td>
+          <td class="variant">Stone · M</td>
+          <td class="sku">AP-HD-STN-M</td>
+          <td class="r onhand">42</td>
+          <td class="r metric bad">9</td>
+          <td class="r metric warn">14</td>
+          <td class="r metric warn">21</td>
+          <td class="r metric good">31</td>
+          <td class="r metric good">37</td>
+        </tr>
+        <tr>
+          <td class="star-cell"><button class="star on" title="Tracked"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg></button></td>
+          <td class="product">Heritage Hoodie</td>
+          <td class="variant">Stone · L</td>
+          <td class="sku">AP-HD-STN-L</td>
+          <td class="r onhand">18</td>
+          <td class="r metric bad">4</td>
+          <td class="r metric bad">7</td>
+          <td class="r metric warn">15</td>
+          <td class="r metric warn">22</td>
+          <td class="r metric warn">28</td>
+        </tr>
+        <tr>
+          <td class="star-cell"><button class="star" title="Track this variant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg></button></td>
+          <td class="product">Studio Tee</td>
+          <td class="variant">Salt · S</td>
+          <td class="sku">AP-TE-SLT-S</td>
+          <td class="r onhand">214</td>
+          <td class="r metric good">63</td>
+          <td class="r metric good">71</td>
+          <td class="r metric good">82</td>
+          <td class="r metric good">96</td>
+          <td class="r metric good">104</td>
+        </tr>
+        <tr>
+          <td class="star-cell"><button class="star on" title="Tracked"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg></button></td>
+          <td class="product">Studio Tee</td>
+          <td class="variant">Salt · M</td>
+          <td class="sku">AP-TE-SLT-M</td>
+          <td class="r onhand">96</td>
+          <td class="r metric warn">19</td>
+          <td class="r metric warn">24</td>
+          <td class="r metric good">33</td>
+          <td class="r metric good">41</td>
+          <td class="r metric good">48</td>
+        </tr>
+        <tr>
+          <td class="star-cell"><button class="star on" title="Tracked"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg></button></td>
+          <td class="product">Studio Tee</td>
+          <td class="variant">Slate · L</td>
+          <td class="sku">AP-TE-SLA-L</td>
+          <td class="r onhand">8</td>
+          <td class="r metric bad">2</td>
+          <td class="r metric bad">3</td>
+          <td class="r metric bad">5</td>
+          <td class="r metric bad">9</td>
+          <td class="r metric bad">12</td>
+        </tr>
+        <tr>
+          <td class="star-cell"><button class="star" title="Track this variant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg></button></td>
+          <td class="product">Field Cap</td>
+          <td class="variant">Sand · OS</td>
+          <td class="sku">AC-CP-SND-OS</td>
+          <td class="r onhand">312</td>
+          <td class="r metric good">88</td>
+          <td class="r metric good">102</td>
+          <td class="r metric good">119</td>
+          <td class="r metric good">134</td>
+          <td class="r metric good">142</td>
+        </tr>
+        <tr>
+          <td class="star-cell"><button class="star on" title="Tracked"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg></button></td>
+          <td class="product">Selvedge Denim</td>
+          <td class="variant">Indigo · 30</td>
+          <td class="sku">AP-DN-IND-30</td>
+          <td class="r onhand">26</td>
+          <td class="r metric warn">17</td>
+          <td class="r metric warn">22</td>
+          <td class="r metric good">31</td>
+          <td class="r metric good">38</td>
+          <td class="r metric good">42</td>
+        </tr>
+        <tr>
+          <td class="star-cell"><button class="star on" title="Tracked"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg></button></td>
+          <td class="product">Selvedge Denim</td>
+          <td class="variant">Indigo · 32</td>
+          <td class="sku">AP-DN-IND-32</td>
+          <td class="r onhand">11</td>
+          <td class="r metric bad">5</td>
+          <td class="r metric bad">8</td>
+          <td class="r metric bad">11</td>
+          <td class="r metric warn">14</td>
+          <td class="r metric warn">17</td>
+        </tr>
+        <tr>
+          <td class="star-cell"><button class="star" title="Track this variant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg></button></td>
+          <td class="product">Field Jacket</td>
+          <td class="variant">Olive · M</td>
+          <td class="sku">AP-JK-OLV-M</td>
+          <td class="r onhand">54</td>
+          <td class="r metric good">36</td>
+          <td class="r metric good">44</td>
+          <td class="r metric good">52</td>
+          <td class="r metric good">61</td>
+          <td class="r metric good">68</td>
+        </tr>
+        <tr>
+          <td class="star-cell"><button class="star" title="Track this variant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg></button></td>
+          <td class="product">Field Jacket</td>
+          <td class="variant">Olive · L</td>
+          <td class="sku">AP-JK-OLV-L</td>
+          <td class="r onhand">0</td>
+          <td class="r metric none">—</td>
+          <td class="r metric none">—</td>
+          <td class="r metric none">—</td>
+          <td class="r metric none">—</td>
+          <td class="r metric none">—</td>
+        </tr>
+        <tr>
+          <td class="star-cell"><button class="star on" title="Tracked"><svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg></button></td>
+          <td class="product">Linen Shirt</td>
+          <td class="variant">Salt · M</td>
+          <td class="sku">AP-LS-SLT-M</td>
+          <td class="r onhand">73</td>
+          <td class="r metric good">41</td>
+          <td class="r metric good">49</td>
+          <td class="r metric good">57</td>
+          <td class="r metric good">64</td>
+          <td class="r metric good">71</td>
+        </tr>
+        <tr>
+          <td class="star-cell"><button class="star" title="Track this variant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg></button></td>
+          <td class="product">Wool Beanie</td>
+          <td class="variant">Charcoal · OS</td>
+          <td class="sku">AC-BN-CHR-OS</td>
+          <td class="r onhand">47</td>
+          <td class="r metric warn">22</td>
+          <td class="r metric good">31</td>
+          <td class="r metric good">38</td>
+          <td class="r metric good">45</td>
+          <td class="r metric good">51</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="footnote">Projections assume current sell-through holds. Click any window column to sort.</p>
+</div>
+</body>
+</html>

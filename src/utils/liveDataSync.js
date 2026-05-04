@@ -268,6 +268,140 @@ export async function syncShopifyActuals(/* creds unused — proxy holds creds *
   });
 }
 
+// ─── Shopify variants + per-day sales (Sell-Through page) ────────────────────
+
+/**
+ * Pulls every product variant with its current on-hand inventory.
+ * Paginates 250-per-page via cursor.
+ *
+ * Requires `read_products` (and `read_inventory` if you later want to split
+ * by location — `inventoryQuantity` is already total on-hand across locations).
+ *
+ * Returns: [{ variantId, sku, productTitle, variantTitle, inventoryQuantity }]
+ */
+export async function fetchShopifyVariantsWithInventory() {
+  const gqlQuery = `
+    query FetchVariants($cursor: String) {
+      productVariants(first: 250, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        edges {
+          node {
+            id
+            sku
+            title
+            inventoryQuantity
+            product { id title }
+          }
+        }
+      }
+    }
+  `;
+
+  const out = [];
+  let cursor = null;
+  for (let page = 0; page < 40; page++) {  // 40 * 250 = 10k variants
+    const data = await callShopifyProxy('graphql.json', null, {
+      query: gqlQuery,
+      variables: { cursor },
+    });
+
+    if (data.errors?.length) {
+      throw new Error(`Shopify: ${data.errors.map(e => e.message).join('; ')}`);
+    }
+
+    const conn = data.data?.productVariants;
+    if (!conn) break;
+
+    for (const edge of conn.edges) {
+      const n = edge.node;
+      out.push({
+        variantId: n.id,
+        sku: n.sku || '',
+        productTitle: n.product?.title || '',
+        variantTitle: n.title || '',
+        inventoryQuantity: typeof n.inventoryQuantity === 'number' ? n.inventoryQuantity : 0,
+      });
+    }
+    if (!conn.pageInfo.hasNextPage) break;
+    cursor = conn.pageInfo.endCursor;
+  }
+  return out;
+}
+
+/**
+ * Pulls orders over the trailing `days` window (max 90) and aggregates
+ * line-item quantities per variant per calendar day (UTC date of processedAt).
+ *
+ * Returns: { 'gid://shopify/ProductVariant/123': { 'YYYY-MM-DD': units } }
+ *
+ * Excludes cancelled / test orders, mirroring `syncShopifyActuals`.
+ * Requires `read_orders`.
+ */
+export async function fetchShopifyVariantSalesByDay({ days = 90 } = {}) {
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  const sinceStr = since.toISOString().split('T')[0];
+
+  const gqlQuery = `
+    query FetchSales($cursor: String, $q: String!) {
+      orders(first: 250, after: $cursor, query: $q, sortKey: PROCESSED_AT) {
+        pageInfo { hasNextPage endCursor }
+        edges {
+          node {
+            processedAt
+            cancelledAt
+            test
+            lineItems(first: 100) {
+              edges {
+                node {
+                  quantity
+                  variant { id }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+  const queryFilter = `processed_at:>=${sinceStr} NOT status:cancelled NOT test:true`;
+
+  const salesByVariant = {};
+  let cursor = null;
+  for (let page = 0; page < 40; page++) {
+    const data = await callShopifyProxy('graphql.json', null, {
+      query: gqlQuery,
+      variables: { cursor, q: queryFilter },
+    });
+
+    if (data.errors?.length) {
+      throw new Error(`Shopify: ${data.errors.map(e => e.message).join('; ')}`);
+    }
+
+    const orders = data.data?.orders;
+    if (!orders) break;
+
+    for (const edge of orders.edges) {
+      const o = edge.node;
+      if (o.cancelledAt || o.test) continue;
+      const d = new Date(o.processedAt);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      for (const liEdge of (o.lineItems?.edges || [])) {
+        const li = liEdge.node;
+        const vid = li.variant?.id;
+        if (!vid) continue;
+        const qty = typeof li.quantity === 'number' ? li.quantity : 0;
+        if (qty <= 0) continue;
+        if (!salesByVariant[vid]) salesByVariant[vid] = {};
+        salesByVariant[vid][key] = (salesByVariant[vid][key] || 0) + qty;
+      }
+    }
+    if (!orders.pageInfo.hasNextPage) break;
+    cursor = orders.pageInfo.endCursor;
+  }
+  return salesByVariant;
+}
+
 // ─── Meta Ads ─────────────────────────────────────────────────────────────────
 /**
  * Fetches weekly ad spend from the Meta Graph API for the past 13 weeks.
