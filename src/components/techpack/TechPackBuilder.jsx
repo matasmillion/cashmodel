@@ -212,7 +212,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   const fulfillmentPercent = parseFloat(a.fulfillmentPercent ?? 0.10);
   const packAssumptions = data.assumptions || {};
   const seaFreightSpot = parseFloat(packAssumptions.seaFreightSpot ?? 4);
-  const shippingCharge = parseFloat(packAssumptions.shippingCharge ?? 8);
+  const shippingCharge = parseFloat(packAssumptions.shippingCharge ?? 0);
   const fulfillmentUnitCost = (() => {
     const w = parseFloat(data.weightKg);
     const rc = state.rateCard;

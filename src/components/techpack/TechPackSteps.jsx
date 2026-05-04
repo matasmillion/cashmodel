@@ -260,7 +260,7 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
             const cogsRate = parseFloat(a.cogsRate ?? 0.27);
             const fulfillmentPercent = parseFloat(a.fulfillmentPercent ?? 0.10);
             const seaFreightSpot = parseFloat((data.assumptions || {}).seaFreightSpot ?? 4);
-            const shippingCharge = parseFloat((data.assumptions || {}).shippingCharge ?? 8);
+            const shippingCharge = parseFloat((data.assumptions || {}).shippingCharge ?? 0);
             const retail = parseFloat(data.targetRetail) || 0;
             if (!retail) return <div style={{ padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.stone, background: FR.salt, fontStyle: 'italic' }}>Enter target retail</div>;
             const maxFOB = retail * (cogsRate + fulfillmentPercent) - (fulfillmentCost || 0) + shippingCharge - seaFreightSpot;
@@ -289,9 +289,9 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
                   <div><div style={{ fontSize: 9, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.5 }}>Fulfillment Cost</div><div style={{ color: FR.slate }}>{fulfillmentCost != null ? `$${fulfillmentCost.toFixed(2)}` : '—'}</div></div>
                 </div>
                 <Row cols="1fr 1fr">
-                  <Input label="Shipping Charge ($)" value={packAssumptions.shippingCharge ?? '8'}
+                  <Input label="Shipping Revenue Offset ($)" value={packAssumptions.shippingCharge ?? '0'}
                     onChange={v => set('assumptions', { ...packAssumptions, shippingCharge: v })}
-                    placeholder="8" />
+                    placeholder="0" />
                   <Input label="Sea Freight Spot ($)" value={packAssumptions.seaFreightSpot ?? '4'}
                     onChange={v => set('assumptions', { ...packAssumptions, seaFreightSpot: v })}
                     placeholder="4" />
