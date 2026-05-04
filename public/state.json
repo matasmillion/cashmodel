@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-04T13:40:35.309Z",
+  "lastUpdated": "2026-05-04T18:23:34.921Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,36 @@
   ],
   "changelog": [
     {
+      "sha": "5b7fcb6",
+      "date": "2026-05-04T18:08:19+00:00",
+      "message": "fix(techpack): listFRColors is sync — drop .then() that crashed cover page"
+    },
+    {
+      "sha": "45552f1",
+      "date": "2026-05-04T21:05:52+03:00",
+      "message": "Tech Pack cover page buildout — Style Overview (#15)"
+    },
+    {
+      "sha": "03f0411",
+      "date": "2026-05-04T17:28:32+00:00",
+      "message": "fix(db): user_integrations org-scope migration was incomplete — Shopify save broken"
+    },
+    {
+      "sha": "f24bac1",
+      "date": "2026-05-04T15:07:46+00:00",
+      "message": "feat(topbar): tabs are anchors so Cmd/Ctrl/Shift-click opens new browser tab"
+    },
+    {
+      "sha": "d26677a",
+      "date": "2026-05-04T14:21:46+00:00",
+      "message": "feat(plm): vendor name is editable from the modal header (cascading rename)"
+    },
+    {
+      "sha": "c43fe70",
+      "date": "2026-05-04T13:41:13+00:00",
+      "message": "chore: regenerate public/state.json"
+    },
+    {
       "sha": "20ab14e",
       "date": "2026-05-04T13:40:31+00:00",
       "message": "Merge sell-through page into main"
@@ -1062,36 +1092,6 @@
       "sha": "0fb6aa4",
       "date": "2026-05-03T12:42:14+00:00",
       "message": "fix(storage-health): don't abort write test on org visibility failure"
-    },
-    {
-      "sha": "f525dfe",
-      "date": "2026-05-03T10:27:30+00:00",
-      "message": "fix(plm): auto-create org row before PLM saves (FK bootstrap fix)"
-    },
-    {
-      "sha": "cc03a5e",
-      "date": "2026-05-03T10:23:44+00:00",
-      "message": "fix(storage-health): switch write test to plain INSERT + add org FK pre-check"
-    },
-    {
-      "sha": "eb389ff",
-      "date": "2026-05-03T10:02:44+00:00",
-      "message": "Merge branch 'Cloud_File_Saving_Optimization' (Backup B)"
-    },
-    {
-      "sha": "4d0421d",
-      "date": "2026-05-03T10:02:36+00:00",
-      "message": "fix(plm): adopt-and-rotate id when cloud row is RLS-locked to another org"
-    },
-    {
-      "sha": "d523d62",
-      "date": "2026-05-03T09:49:49+00:00",
-      "message": "Merge branch 'Cloud_File_Saving_Optimization'"
-    },
-    {
-      "sha": "9be3dcf",
-      "date": "2026-05-03T09:48:50+00:00",
-      "message": "chore: regenerate public/state.json"
     }
   ]
 }

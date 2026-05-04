@@ -47,11 +47,7 @@ function PageCover({ d, images }) {
   const cover = (images || []).find(img => img.slot === 'cover');
   const colorways = (d.colorways || []).filter(c => c && c.name).map(c => c.name).join(', ') || '—';
   const sizeRange = Array.isArray(d.sizeRange) ? d.sizeRange.join(' / ') : (d.sizeRange || '—');
-  const assumptions = d.assumptions || {};
-  const productPercent = parseFloat(assumptions.productPercent ?? 0.27);
-  const seaFreightSpot = parseFloat(assumptions.seaFreightSpot ?? 4);
-  const targetRetailNum = parseFloat(d.targetRetail) || 0;
-  const maxFOB = targetRetailNum > 0 ? (targetRetailNum * productPercent - seaFreightSpot).toFixed(2) : '—';
+  const maxFOB = d.maxFOB != null && d.maxFOB !== '' ? parseFloat(d.maxFOB).toFixed(2) : '—';
 
   // Cover image: 2:3 portrait, right column
   const imgW = 280;
