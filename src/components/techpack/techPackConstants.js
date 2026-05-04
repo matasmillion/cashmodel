@@ -64,6 +64,7 @@ export const DEFAULT_DATA = {
   costTiers: [{ quantity: '', unitCost: '' }],
   leadTimeDays: '', sampleLeadTimeDays: '', sampleCost: '', quoteProviderLink: '',
   weightKg: '',
+  assumptions: { productPercent: 0.27, seaFreightSpot: 4 },
   styleNumber: '', skuPrefix: '', barcodeMethod: 'Shopify Retail Barcode Labels',
   dateCreated: todayISO(),
   revision: 'V1.0',

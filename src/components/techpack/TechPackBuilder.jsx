@@ -202,6 +202,18 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   const targetFOB = parseFloat(data.targetFOB) || 0;
   const costVariance = targetFOB > 0 ? totalUnitCost - targetFOB : 0;
 
+  // Maximum FOB: (targetRetail × productPercent) - seaFreightSpot
+  const assumptions = data.assumptions || {};
+  const productPercent = parseFloat(assumptions.productPercent ?? 0.27);
+  const seaFreightSpot = parseFloat(assumptions.seaFreightSpot ?? 4);
+  const targetRetail = parseFloat(data.targetRetail) || 0;
+  const maxFOB = targetRetail > 0 ? targetRetail * productPercent - seaFreightSpot : 0;
+  const fobDelta = maxFOB > 0 ? totalUnitCost - maxFOB : null;
+  const fobDeltaColor = fobDelta === null ? FR.stone
+    : fobDelta <= 0 ? '#3B6D11'
+    : fobDelta / maxFOB <= 0.10 ? '#854F0B'
+    : '#A32D2D';
+
   // Debounced auto-save. Waits for any in-flight Storage uploads before
   // persisting so we never save a placeholder image entry without a path.
   useEffect(() => {
@@ -490,16 +502,16 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
               ? <span style={{ fontSize: 10, color: FR.sage }}>Saving…</span>
               : saveError && <span title={saveError} style={{ fontSize: 10, color: '#A32D2D', maxWidth: 460, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>⚠︎ Save failed (kept locally): {saveError}</span>}
           {/* Cost roll-up — BOM + colorway (wash/dye). */}
-          <div style={{ textAlign: 'right' }} title={`BOM ${formatCost(bomCost)}  ·  Colorways ${formatCost(colorwayCost)}`}>
+          <div style={{ textAlign: 'right' }} title={`BOM ${formatCost(bomCost)}  ·  Colorways ${formatCost(colorwayCost)}${maxFOB > 0 ? `  ·  Max FOB ${formatCost(maxFOB)}` : ''}`}>
             <div style={{ fontSize: 9, color: FR.stone }}>Total Unit Cost</div>
-            <div style={{ fontSize: 13, color: totalUnitCost > 0 ? (costVariance > 0 ? '#D4956A' : FR.sage) : FR.stone, fontWeight: 600 }}>
+            <div style={{ fontSize: 13, color: totalUnitCost > 0 ? FR.salt : FR.stone, fontWeight: 600 }}>
               {formatCost(totalUnitCost)}
-              {targetFOB > 0 && costVariance !== 0 && (
-                <span style={{ fontSize: 9, marginLeft: 4, color: costVariance > 0 ? '#C0392B' : FR.sage }}>
-                  ({costVariance > 0 ? '+' : ''}{costVariance.toFixed(2)} vs target)
-                </span>
-              )}
             </div>
+            {fobDelta !== null && (
+              <div style={{ fontSize: 9, color: fobDeltaColor, fontWeight: 600, marginTop: 1 }}>
+                {fobDelta > 0 ? '+' : ''}{fobDelta.toFixed(2)} vs max FOB
+              </div>
+            )}
             <div style={{ fontSize: 8, color: FR.stone, marginTop: 1 }}>
               BOM {formatCost(bomCost)} · Color {formatCost(colorwayCost)}
             </div>

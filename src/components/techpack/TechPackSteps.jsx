@@ -155,6 +155,8 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
     [data.weightKg, rateCard]
   );
 
+  const [assumptionsOpen, setAssumptionsOpen] = useState(false);
+
   const labelStyle = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
   const chipBase = { padding: '4px 10px', borderRadius: 20, fontSize: 11, cursor: 'pointer', border: `1px solid ${FR.sand}`, transition: 'background 0.15s' };
 
@@ -246,9 +248,52 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
         </div>
       </div>
 
-      <Row cols="1fr 1fr">
-        <Input label="Target Retail ($)" value={data.targetRetail} onChange={v => set('targetRetail', v)} placeholder="117" />
-      </Row>
+      {/* Target Retail + Maximum FOB */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+        <div>
+          <Input label="Target Retail ($)" value={data.targetRetail} onChange={v => set('targetRetail', v)} placeholder="117" />
+        </div>
+        <div>
+          <label style={labelStyle}>Maximum FOB ($)</label>
+          {(() => {
+            const productPercent = parseFloat((data.assumptions || {}).productPercent ?? 0.27);
+            const seaFreightSpot = parseFloat((data.assumptions || {}).seaFreightSpot ?? 4);
+            const retail = parseFloat(data.targetRetail) || 0;
+            if (!retail) return <div style={{ padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.stone, background: FR.salt, fontStyle: 'italic' }}>Enter target retail</div>;
+            const maxFOB = retail * productPercent - seaFreightSpot;
+            return <div style={{ padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.salt, fontFamily: 'monospace' }}>${maxFOB.toFixed(2)}</div>;
+          })()}
+        </div>
+      </div>
+
+      {/* Assumptions — collapsible */}
+      {(() => {
+        const assumptions = data.assumptions || {};
+        return (
+          <div style={{ marginBottom: 14, border: `1px solid ${FR.sand}`, borderRadius: 6, overflow: 'hidden' }}>
+            <button type="button" onClick={() => setAssumptionsOpen(o => !o)}
+              style={{ width: '100%', padding: '8px 12px', background: FR.salt, border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+              Pricing Assumptions
+              <span style={{ fontSize: 12, color: FR.stone }}>{assumptionsOpen ? '▲' : '▼'}</span>
+            </button>
+            {assumptionsOpen && (
+              <div style={{ padding: 12, background: FR.white }}>
+                <Row cols="1fr 1fr">
+                  <Input label="Product %" value={assumptions.productPercent ?? '0.27'}
+                    onChange={v => set('assumptions', { ...assumptions, productPercent: v })}
+                    placeholder="0.27" />
+                  <Input label="Sea Freight Spot ($)" value={assumptions.seaFreightSpot ?? '4'}
+                    onChange={v => set('assumptions', { ...assumptions, seaFreightSpot: v })}
+                    placeholder="4" />
+                </Row>
+                <p style={{ fontSize: 10, color: FR.stone, margin: 0 }}>
+                  Max FOB = (Target Retail × Product %) − Sea Freight Spot. Defaults: 27% product, $4 sea freight.
+                </p>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <Select label="Status" value={data.status} onChange={v => set('status', v)} options={STATUSES} />
       <p style={{ fontSize: 10, color: FR.stone, marginTop: -4, lineHeight: 1.5 }}>
