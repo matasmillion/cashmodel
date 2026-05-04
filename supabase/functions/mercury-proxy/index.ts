@@ -62,19 +62,28 @@ serve(async (req) => {
   }
   const jwt = authHeader.slice('Bearer '.length);
 
+  // Decode Clerk JWT directly — supabase.auth.getUser would reject Clerk tokens.
+  let userId: string | null = null;
+  let orgId: string | null = null;
+  try {
+    const payload = JSON.parse(atob(jwt.split('.')[1]));
+    userId = payload.sub || null;
+    orgId = payload.org_id || null;
+  } catch {
+    return json({ error: 'Invalid session token' }, 401, origin);
+  }
+  if (!userId) return json({ error: 'Invalid session token' }, 401, origin);
+  if (!orgId) return json({ error: 'No active organization — create one first' }, 403, origin);
+
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
   });
 
-  const { data: userData, error: userErr } = await supabase.auth.getUser(jwt);
-  if (userErr || !userData?.user) {
-    return json({ error: 'Invalid session token' }, 401, origin);
-  }
-
-  // ── 2. Look up this user's Mercury credentials ─────────────────────────
+  // ── 2. Look up this org's Mercury credentials ─────────────────────────
   const { data: integration, error: intErr } = await supabase
     .from('user_integrations')
     .select('token, metadata')
+    .eq('org_id', orgId)
     .eq('provider', 'mercury')
     .maybeSingle();
 

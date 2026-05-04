@@ -80,21 +80,31 @@ serve(async (req) => {
   }
   const jwt = authHeader.slice('Bearer '.length);
 
+  // Decode Clerk JWT directly — we use Clerk auth, not Supabase native auth.
+  // supabase.auth.getUser(jwt) would always fail here because Clerk-issued
+  // tokens aren't validated by Supabase Auth.
+  let userId: string | null = null;
+  let orgId: string | null = null;
+  try {
+    const payload = JSON.parse(atob(jwt.split('.')[1]));
+    userId = payload.sub || null;
+    orgId = payload.org_id || null;
+  } catch {
+    return json({ error: 'Invalid session token' }, 401, origin);
+  }
+  if (!userId) return json({ error: 'Invalid session token' }, 401, origin);
+  if (!orgId) return json({ error: 'No active organization — create one first' }, 403, origin);
+
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
   });
 
-  const { data: userData, error: userErr } = await supabase.auth.getUser(jwt);
-  if (userErr || !userData?.user) {
-    return json({ error: 'Invalid session token' }, 401, origin);
-  }
-  const userId = userData.user.id;
-
-  // ── 2. Look up this user's Shopify credentials ──────────────────────────
-  // RLS ensures the query only returns rows owned by userId.
+  // ── 2. Look up this org's Shopify credentials ──────────────────────────
+  // RLS gates by org_id via jwt_org_id(); the explicit .eq is belt + braces.
   const { data: integration, error: intErr } = await supabase
     .from('user_integrations')
     .select('token, metadata')
+    .eq('org_id', orgId)
     .eq('provider', 'shopify')
     .maybeSingle();
 
