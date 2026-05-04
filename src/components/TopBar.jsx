@@ -41,6 +41,7 @@ const PRIMARY_NAV = [
     children: [
       { tabId: 'unit-economics', label: 'Unit Economics' },
       { tabId: 'product', label: 'PLM' },
+      { tabId: 'sell-through', label: 'Sell-Through' },
       { tabId: 'po-schedule', label: 'PO Schedule' },
       { tabId: 'pos', label: 'New PO' },
     ],

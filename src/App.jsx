@@ -17,6 +17,7 @@ import RevenueForecast from './components/RevenueForecast';
 import AdUnitModel from './components/AdUnitModel';
 import RateCardManager from './components/RateCardManager';
 import PLMView from './components/techpack/PLMView';
+import SellThrough from './components/SellThrough';
 import RequireAuth from './components/auth/RequireAuth';
 import SignInPage from './components/auth/SignInPage';
 import SignUpPage from './components/auth/SignUpPage';
@@ -72,6 +73,7 @@ function Dashboard() {
         {state.activeTab === 'ad-units' && <AdUnitModel />}
         {state.activeTab === 'unit-economics' && <UnitEconomics />}
         {state.activeTab === 'product' && <PLMView />}
+        {state.activeTab === 'sell-through' && <SellThrough />}
         {state.activeTab === 'fulfillment' && <RateCardManager />}
         {state.activeTab === 'po-schedule' && <POSchedule />}
         {state.activeTab === 'pos' && <POBuilder />}

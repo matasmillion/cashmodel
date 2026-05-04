@@ -187,7 +187,7 @@ const PERSISTED_KEYS = [
 
 const VALID_TABS = new Set([
   'dashboard', 'revenue', 'cashflow', 'ad-units', 'unit-economics',
-  'product', 'fulfillment', 'po-schedule', 'pos', 'opex', 'scenarios', 'integrations',
+  'product', 'sell-through', 'fulfillment', 'po-schedule', 'pos', 'opex', 'scenarios', 'integrations',
   'org-settings',
 ]);
 
