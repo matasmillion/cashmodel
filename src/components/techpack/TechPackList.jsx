@@ -60,7 +60,7 @@ function KanbanCard({ pack, onOpen, onDuplicate, onDelete, onCreateVariant, onDr
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-            <div style={{ flex: 1, minWidth: 0, fontFamily: "'Cormorant Garamond', serif", fontSize: 13, color: FR.slate, fontWeight: 500, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div style={{ flex: 1, minWidth: 0, fontFamily: "'General Sans', 'Inter', sans-serif", fontSize: 13, color: FR.slate, fontWeight: 600, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {pack.style_name || 'Untitled'}
             </div>
             <CostPill amount={pack.total_unit_cost} currency={pack.currency || 'USD'} title="Total unit cost — BOM + colorways" />
@@ -119,14 +119,13 @@ function GridCard({ pack, onOpen, onDuplicate, onDelete, onCreateVariant }) {
       <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}>
         <CostPill amount={pack.total_unit_cost} currency={pack.currency || 'USD'} title="Total unit cost — BOM + colorways" />
       </div>
-      <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer', width: '100%', aspectRatio: '2 / 3', background: FR.salt, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${FR.sand}` }}>
-        {pack.cover_image
-          ? <img src={pack.cover_image} alt={pack.style_name || 'Cover'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          : <Shirt size={32} style={{ color: FR.sand }} />}
+      <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer', width: '100%', aspectRatio: '2 / 3', background: FR.salt, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${FR.sand}`, position: 'relative' }}>
+        <Shirt size={32} style={{ color: FR.sand, position: 'absolute' }} />
+        {pack.cover_image && <CoverThumb src={pack.cover_image} alt={pack.style_name || 'Cover'} />}
       </div>
       <div style={{ padding: 12 }}>
         <div onClick={() => onOpen(pack.id)} style={{ cursor: 'pointer' }}>
-          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 16, color: FR.slate, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontFamily: "'General Sans', 'Inter', sans-serif", fontSize: 14, color: FR.slate, fontWeight: 600, letterSpacing: 0.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {pack.style_name || 'Untitled'}
           </div>
           <div style={{ fontSize: 10, color: FR.stone, marginTop: 2 }}>{pack.product_category || '—'}</div>
