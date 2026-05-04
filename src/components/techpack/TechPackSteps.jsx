@@ -111,7 +111,7 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
 
   // Library colors for colorway chip picker
   const [libraryColors, setLibraryColors] = useState([]);
-  useEffect(() => { listFRColors().then(setLibraryColors); }, []);
+  useEffect(() => { setLibraryColors(listFRColors()); }, []);
 
   // Colorways — array of { name, frColor, hex }
   const selectedColorways = Array.isArray(data.colorways) ? data.colorways : [];
