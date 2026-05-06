@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-06T14:00:56.921Z",
+  "lastUpdated": "2026-05-06T18:15:31.044Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "429f691",
+      "date": "2026-05-06T17:52:26+00:00",
+      "message": "fix: make creative_knowledge migration self-contained"
+    },
+    {
+      "sha": "951b057",
+      "date": "2026-05-06T14:01:33+00:00",
+      "message": "feat: knowledge files moved to DB with structured editor"
+    },
+    {
       "sha": "58c2000",
       "date": "2026-05-06T13:41:06+00:00",
       "message": "chore: regenerate state.json after Phase 2 build"
@@ -1082,16 +1092,6 @@
       "sha": "8fa175f",
       "date": "2026-05-04T18:40:35+00:00",
       "message": "state: migrate stale fulfillmentPercent in localStorage to 9%"
-    },
-    {
-      "sha": "a913823",
-      "date": "2026-05-04T21:39:38+03:00",
-      "message": "techpack: lighter card font, drop bleed-through shirt icon, default shipping offset to 0 (#20)"
-    },
-    {
-      "sha": "0f1f2ca",
-      "date": "2026-05-04T18:34:44+00:00",
-      "message": "assumptions: drop fulfillment % from 10% → 9%"
     }
   ]
 }

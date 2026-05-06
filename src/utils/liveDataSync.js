@@ -828,6 +828,48 @@ export async function callGenerateBrief({ sprint_id }) {
 }
 
 /**
+ * Ask Claude to read uploaded files and suggest values for a knowledge
+ * kind. Used by the Knowledge editor's "Analyze with AI" buttons.
+ *
+ * @param {{
+ *   kind: string,                       // 'avatar' | 'brand' | 'product' | 'models'
+ *   scope?: 'kind' | 'sku_item',        // defaults to 'kind'
+ *   attachment_paths: string[],         // Storage paths inside plm-assets
+ *   existing_fields?: object,           // current form state, optional
+ * }} params
+ * @returns {Promise<object>}            // suggestions object matching the schema
+ */
+export async function callAnalyzeKnowledgeUpload({ kind, scope = 'kind', attachment_paths, existing_fields }) {
+  if (!IS_SUPABASE_ENABLED || !supabase) {
+    throw new Error('Supabase not configured — cannot reach analyze-knowledge-upload');
+  }
+  const token = await getClerkToken();
+  if (!token) throw new Error('Sign in to analyze files');
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/analyze-knowledge-upload`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: anonKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ kind, scope, attachment_paths, existing_fields }),
+  });
+
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!res.ok) {
+    const msg = data?.error || `${res.status} ${res.statusText}`;
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+  }
+  return data.suggestions;
+}
+
+/**
  * Test the anthropic-proxy by sending a minimal ping message.
  * Returns { model, usage } on success.
  */

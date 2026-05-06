@@ -12,6 +12,10 @@
 //   'list'        list of strings (one bullet per line)
 //   'group'       { repeating: true, fields: [...] }  — used for the
 //                 avatar's multi-persona schema and model lanes
+//   'photos'      list of asset refs (Storage paths). Renders as a
+//                 thumbnail grid with upload + remove. Inside a
+//                 repeating-group item this also unlocks the
+//                 per-item "Analyze with AI" button.
 
 /** @type {Record<string, { label: string, description: string, fields: any[] }>} */
 export const KNOWLEDGE_SCHEMAS = {
@@ -67,7 +71,9 @@ export const KNOWLEDGE_SCHEMAS = {
         type: 'group',
         repeating: true,
         addLabel: 'Add another SKU',
+        analyzeScope: 'sku_item',
         fields: [
+          { key: 'photos', label: 'Product photos', type: 'photos', hint: 'Upload from multiple angles. Click "Analyze with AI" to auto-fill the rest of this card.' },
           { key: 'name', label: 'SKU name', type: 'text', placeholder: 'e.g. Snowflake Staple Hoodie', required: true },
           { key: 'price_usd', label: 'Retail price (USD)', type: 'text', placeholder: 'e.g. 117' },
           { key: 'material_story', label: 'Material story', type: 'textarea', hint: 'Composition, GSM, hand feel, wash treatment' },
