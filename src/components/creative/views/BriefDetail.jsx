@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { getSprint, saveSprint } from '../../../utils/sprintStore';
 import { listBriefs, saveBrief, createBrief } from '../../../utils/briefStore';
-import { callGenerateBrief } from '../../../utils/liveDataSync';
+import { listRenders } from '../../../utils/renderStore';
+import { callGenerateBrief, callDispatchRender } from '../../../utils/liveDataSync';
 import { SPRINT_STATUSES } from '../../../types/creative';
 
 const FR = { slate: '#3A3A3A', salt: '#F5F0E8', sand: '#EBE5D5', stone: '#716F70' };
@@ -18,19 +19,29 @@ const LANE_LABEL = { ai: 'AI', high_production: 'High Production', creator: 'Cre
 export default function BriefDetail({ sprintId }) {
   const [sprint, setSprint] = useState(null);
   const [briefs, setBriefs] = useState(null);
+  const [renders, setRenders] = useState([]);
   const [activeBriefIdx, setActiveBriefIdx] = useState(0);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState(null);
+  const [dispatching, setDispatching] = useState(false);
+  const [dispatchError, setDispatchError] = useState(null);
 
   useEffect(() => {
     if (!sprintId) return;
     setSprint(null);
     setBriefs(null);
+    setRenders([]);
     setActiveBriefIdx(0);
     setGenError(null);
-    Promise.all([getSprint(sprintId), listBriefs({ sprintId })]).then(([s, bs]) => {
+    setDispatchError(null);
+    Promise.all([
+      getSprint(sprintId),
+      listBriefs({ sprintId }),
+      listRenders({ sprintId }),
+    ]).then(([s, bs, rs]) => {
       setSprint(s);
       setBriefs(bs);
+      setRenders(rs);
     });
   }, [sprintId]);
 
@@ -85,6 +96,26 @@ export default function BriefDetail({ sprintId }) {
     setBriefs(prev => prev.map(b => b.id === brief.id ? { ...b, status: 'revised' } : b));
     handleGenerate();
   };
+
+  const handleDispatch = async () => {
+    if (!brief || brief.status !== 'approved') return;
+    setDispatching(true);
+    setDispatchError(null);
+    try {
+      const { renders: newRenders, errors } = await callDispatchRender({ brief_id: brief.id });
+      setRenders(prev => [...(newRenders || []), ...prev]);
+      setSprint(prev => ({ ...prev, status: SPRINT_STATUSES.RENDERING }));
+      if (Array.isArray(errors) && errors.length) {
+        setDispatchError(`Some variants failed: ${errors.map(e => e.error).join(' · ')}`);
+      }
+    } catch (err) {
+      setDispatchError(err.message);
+    } finally {
+      setDispatching(false);
+    }
+  };
+
+  const briefRenders = brief ? renders.filter(r => r.brief_id === brief.id) : [];
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 24, alignItems: 'start' }}>
@@ -161,9 +192,37 @@ export default function BriefDetail({ sprintId }) {
           )}
 
           {brief.status === 'approved' && (
-            <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: '#D4EDDA', color: '#3B6D11' }}>Approved</span>
-              <span style={{ fontSize: 11, color: FR.stone }}>Ready to dispatch render in Phase 3.</span>
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: briefRenders.length > 0 ? 8 : 0, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: '#D4EDDA', color: '#3B6D11' }}>Approved</span>
+                {briefRenders.length === 0 ? (
+                  <button
+                    onClick={handleDispatch}
+                    disabled={dispatching}
+                    style={{
+                      fontSize: 12, padding: '5px 12px', borderRadius: 6,
+                      border: 'none', background: dispatching ? FR.sand : FR.slate,
+                      color: dispatching ? FR.stone : FR.salt,
+                      cursor: dispatching ? 'not-allowed' : 'pointer',
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                    }}
+                  >
+                    {dispatching ? (
+                      <>
+                        <span style={{ display: 'inline-block', width: 10, height: 10, border: `1.5px solid ${FR.stone}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                        Dispatching…
+                      </>
+                    ) : 'Dispatch Render'}
+                  </button>
+                ) : (
+                  <span style={{ fontSize: 11, color: FR.stone }}>
+                    {briefRenders.length} render{briefRenders.length === 1 ? '' : 's'} dispatched · check Production / Render Queue
+                  </span>
+                )}
+              </div>
+              {dispatchError && (
+                <p style={{ fontSize: 11, color: '#A32D2D', marginTop: 0, marginBottom: 0, wordBreak: 'break-word' }}>{dispatchError}</p>
+              )}
             </div>
           )}
 

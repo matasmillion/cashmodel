@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ShoppingBag, BarChart3, CreditCard, Mail, Truck, CheckCircle, XCircle, Loader, ChevronDown, ChevronUp, ExternalLink, RefreshCw, Copy, Server, Landmark, Plus, Trash2, Sparkles } from 'lucide-react';
+import { ShoppingBag, BarChart3, CreditCard, Mail, Truck, CheckCircle, XCircle, Loader, ChevronDown, ChevronUp, ExternalLink, RefreshCw, Copy, Server, Landmark, Plus, Trash2, Sparkles, Film, Camera } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { useApp } from '../context/AppContext';
 import {
@@ -10,6 +10,8 @@ import {
   createPlaidLinkToken, exchangePlaidPublicToken, listPlaidItems,
   removePlaidItem, syncPlaidActuals,
   saveAnthropicCredentials, loadAnthropicIntegration, deleteAnthropicCredentials, testAnthropicProxy,
+  saveFalCredentials, deleteFalCredentials, testFalProxy,
+  saveHiggsfieldCredentials, deleteHiggsfieldCredentials, testHiggsfieldProxy,
 } from '../utils/liveDataSync';
 
 const FR = { slate: '#3A3A3A', salt: '#F5F0E8', sand: '#EBE5D5', stone: '#716F70', soil: '#9A816B', sea: '#B5C7D3', sage: '#ADBDA3', sienna: '#D4956A', green: '#4CAF7D', red: '#C0392B' };
@@ -973,6 +975,150 @@ function AnthropicCard({ creds, onSave, onClear }) {
   );
 }
 
+// ─── fal.ai (image / video generation via edge proxy) ─────────────────────────
+function FalCard({ creds, onSave, onClear }) {
+  const [open, setOpen] = useState(!creds?.connected);
+  const [token, setToken] = useState('');
+  const [status, setStatus] = useState(null);
+  const [errMsg, setErrMsg] = useState('');
+
+  async function handleConnect(e) {
+    e.preventDefault();
+    setStatus('saving');
+    setErrMsg('');
+    try {
+      await saveFalCredentials({ token });
+      await testFalProxy();
+      setStatus('ok');
+      onSave({ connected: true, savedAt: new Date().toISOString() });
+      setToken('');
+      setOpen(false);
+    } catch (err) {
+      setStatus('error');
+      setErrMsg(err.message);
+    }
+  }
+
+  async function handleDisconnect() {
+    try { await deleteFalCredentials(); } catch {}
+    onClear();
+  }
+
+  return (
+    <IntegrationCard
+      name="fal.ai"
+      description="Generates AI-lane video variants for the Creative Engine"
+      icon={Film}
+      iconColor={FR.sienna}
+      connected={creds?.connected}
+      open={open}
+      onToggle={() => setOpen(o => !o)}
+      onDisconnect={handleDisconnect}
+    >
+      {!creds?.connected ? (
+        <form onSubmit={handleConnect} className="space-y-3 mt-3">
+          <div className="p-2 rounded-lg text-xs flex items-start gap-2" style={{ background: FR.salt, border: `1px solid ${FR.sand}` }}>
+            <Server size={12} style={{ color: FR.soil, marginTop: 2, flexShrink: 0 }} />
+            <span style={{ color: FR.stone }}>
+              Your fal API key is stored encrypted in our database, scoped to your org. The browser calls a proxy — your key never reaches the client.
+            </span>
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: FR.stone }}>API Key</label>
+            <input
+              type="password"
+              value={token}
+              onChange={e => setToken(e.target.value)}
+              placeholder="fal-…"
+              required
+              className="w-full px-3 py-2 rounded-lg text-sm border"
+              style={{ borderColor: FR.sand, fontFamily: 'ui-monospace, SF Mono, Menlo, monospace' }}
+            />
+          </div>
+          <StatusButton status={status} label="Save & Test" errMsg={errMsg} />
+        </form>
+      ) : (
+        <div className="mt-3 text-xs space-y-1" style={{ color: FR.stone }}>
+          <p>Connected — API key stored securely.</p>
+          {creds.savedAt && <p>Saved {new Date(creds.savedAt).toLocaleDateString()}</p>}
+        </div>
+      )}
+    </IntegrationCard>
+  );
+}
+
+// ─── Higgsfield (Marketing Studio + Soul, via edge proxy) ─────────────────────
+function HiggsfieldCard({ creds, onSave, onClear }) {
+  const [open, setOpen] = useState(!creds?.connected);
+  const [token, setToken] = useState('');
+  const [status, setStatus] = useState(null);
+  const [errMsg, setErrMsg] = useState('');
+
+  async function handleConnect(e) {
+    e.preventDefault();
+    setStatus('saving');
+    setErrMsg('');
+    try {
+      await saveHiggsfieldCredentials({ token });
+      await testHiggsfieldProxy();
+      setStatus('ok');
+      onSave({ connected: true, savedAt: new Date().toISOString() });
+      setToken('');
+      setOpen(false);
+    } catch (err) {
+      setStatus('error');
+      setErrMsg(err.message);
+    }
+  }
+
+  async function handleDisconnect() {
+    try { await deleteHiggsfieldCredentials(); } catch {}
+    onClear();
+  }
+
+  return (
+    <IntegrationCard
+      name="Higgsfield"
+      description="Powers High Production, Creator, and Founder lane renders"
+      icon={Camera}
+      iconColor={FR.sienna}
+      connected={creds?.connected}
+      open={open}
+      onToggle={() => setOpen(o => !o)}
+      onDisconnect={handleDisconnect}
+    >
+      {!creds?.connected ? (
+        <form onSubmit={handleConnect} className="space-y-3 mt-3">
+          <div className="p-2 rounded-lg text-xs flex items-start gap-2" style={{ background: FR.salt, border: `1px solid ${FR.sand}` }}>
+            <Server size={12} style={{ color: FR.soil, marginTop: 2, flexShrink: 0 }} />
+            <span style={{ color: FR.stone }}>
+              Your Higgsfield API key is stored encrypted in our database, scoped to your org. The browser calls a proxy — your key never reaches the client.
+            </span>
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: FR.stone }}>API Key</label>
+            <input
+              type="password"
+              value={token}
+              onChange={e => setToken(e.target.value)}
+              placeholder="hf-…"
+              required
+              className="w-full px-3 py-2 rounded-lg text-sm border"
+              style={{ borderColor: FR.sand, fontFamily: 'ui-monospace, SF Mono, Menlo, monospace' }}
+            />
+          </div>
+          <StatusButton status={status} label="Save & Test" errMsg={errMsg} />
+        </form>
+      ) : (
+        <div className="mt-3 text-xs space-y-1" style={{ color: FR.stone }}>
+          <p>Connected — API key stored securely.</p>
+          {creds.savedAt && <p>Saved {new Date(creds.savedAt).toLocaleDateString()}</p>}
+        </div>
+      )}
+    </IntegrationCard>
+  );
+}
+
 // ─── Shared components ────────────────────────────────────────────────────────
 function IntegrationCard({ name, description, icon: Icon, iconColor, connected, open, onToggle, onDisconnect, children }) {
   return (
@@ -1073,6 +1219,8 @@ export default function IntegrationsPanel() {
         <MercuryCard creds={creds.mercury} onSave={d => update('mercury', d)} onClear={() => update('mercury', null)} dispatch={dispatch} />
         <PlaidCard dispatch={dispatch} />
         <AnthropicCard creds={creds.anthropic} onSave={d => update('anthropic', d)} onClear={() => update('anthropic', null)} />
+        <FalCard creds={creds.fal} onSave={d => update('fal', d)} onClear={() => update('fal', null)} />
+        <HiggsfieldCard creds={creds.higgsfield} onSave={d => update('higgsfield', d)} onClear={() => update('higgsfield', null)} />
 
         {/* 3PL — handled by the Fulfillment tab */}
         <div className="rounded-xl border p-4 flex items-center gap-3" style={{ background: 'white', borderColor: FR.sand }}>

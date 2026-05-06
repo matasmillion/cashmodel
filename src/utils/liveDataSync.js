@@ -906,3 +906,196 @@ export async function testAnthropicProxy() {
   }
   return { model: data.model, usage: data.usage };
 }
+
+// ─── fal.ai (image / video generation) ───────────────────────────────
+
+export async function saveFalCredentials({ token }) {
+  if (!IS_SUPABASE_ENABLED) throw new Error('Supabase not configured');
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) throw new Error('No active organization');
+  const db = await getAuthedSupabase();
+  const { error } = await db
+    .from('user_integrations')
+    .upsert(
+      { org_id: orgId, provider: 'fal', token, metadata: {} },
+      { onConflict: 'org_id,provider' },
+    );
+  if (error) throw new Error(`Failed to save credentials: ${error.message}`);
+}
+
+export async function loadFalIntegration() {
+  if (!IS_SUPABASE_ENABLED) return null;
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) return null;
+  const db = await getAuthedSupabase();
+  const { data, error } = await db
+    .from('user_integrations')
+    .select('updated_at')
+    .eq('org_id', orgId)
+    .eq('provider', 'fal')
+    .maybeSingle();
+  if (error || !data) return null;
+  return { updatedAt: data.updated_at };
+}
+
+export async function deleteFalCredentials() {
+  if (!IS_SUPABASE_ENABLED) return;
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) return;
+  const db = await getAuthedSupabase();
+  await db.from('user_integrations').delete().eq('org_id', orgId).eq('provider', 'fal');
+}
+
+/** Ping fal-proxy with a no-op endpoint to verify the saved key. */
+export async function testFalProxy() {
+  return await callProxyEndpoint('fal-proxy', {
+    endpoint: 'health',
+    method: 'GET',
+  }, { allowAnyStatus: true });
+}
+
+// ─── Higgsfield (Marketing Studio + Soul) ────────────────────────────
+
+export async function saveHiggsfieldCredentials({ token }) {
+  if (!IS_SUPABASE_ENABLED) throw new Error('Supabase not configured');
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) throw new Error('No active organization');
+  const db = await getAuthedSupabase();
+  const { error } = await db
+    .from('user_integrations')
+    .upsert(
+      { org_id: orgId, provider: 'higgsfield', token, metadata: {} },
+      { onConflict: 'org_id,provider' },
+    );
+  if (error) throw new Error(`Failed to save credentials: ${error.message}`);
+}
+
+export async function loadHiggsfieldIntegration() {
+  if (!IS_SUPABASE_ENABLED) return null;
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) return null;
+  const db = await getAuthedSupabase();
+  const { data, error } = await db
+    .from('user_integrations')
+    .select('updated_at')
+    .eq('org_id', orgId)
+    .eq('provider', 'higgsfield')
+    .maybeSingle();
+  if (error || !data) return null;
+  return { updatedAt: data.updated_at };
+}
+
+export async function deleteHiggsfieldCredentials() {
+  if (!IS_SUPABASE_ENABLED) return;
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) return;
+  const db = await getAuthedSupabase();
+  await db.from('user_integrations').delete().eq('org_id', orgId).eq('provider', 'higgsfield');
+}
+
+export async function testHiggsfieldProxy() {
+  return await callProxyEndpoint('higgsfield-proxy', {
+    endpoint: 'health',
+    method: 'GET',
+  }, { allowAnyStatus: true });
+}
+
+// ─── Render dispatch + polling ───────────────────────────────────────
+
+/**
+ * Submit an approved brief for rendering. Creates one or more
+ * `renders` rows depending on the sprint's lane.
+ *
+ * @param {{ brief_id: string }} params
+ * @returns {Promise<{ renders: any[], errors: any[] }>}
+ */
+export async function callDispatchRender({ brief_id }) {
+  return await callEdgeFunction('dispatch-render', { brief_id });
+}
+
+/**
+ * Poll the upstream provider for a single render's status. Idempotent.
+ *
+ * @param {{ render_id: string }} params
+ * @returns {Promise<{ render: any }>}
+ */
+export async function callCheckRenderStatus({ render_id }) {
+  return await callEdgeFunction('check-render-status', { render_id });
+}
+
+// ─── Internal: shared edge-function caller ───────────────────────────
+
+async function callEdgeFunction(name, body) {
+  if (!IS_SUPABASE_ENABLED || !supabase) {
+    throw new Error(`Supabase not configured — cannot reach ${name}`);
+  }
+  const token = await getClerkToken();
+  if (!token) throw new Error('Sign in first');
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/${name}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: anonKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!res.ok) {
+    const msg = data?.error || `${res.status} ${res.statusText}`;
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+  }
+  return data;
+}
+
+// Like callEdgeFunction but for proxy endpoints that may legitimately
+// return non-2xx (e.g. fal returning 404 for a stub /health path) —
+// we treat reaching the proxy at all as success for the purpose of
+// the connection test.
+async function callProxyEndpoint(name, body, opts = {}) {
+  if (!IS_SUPABASE_ENABLED || !supabase) {
+    throw new Error(`Supabase not configured — cannot reach ${name}`);
+  }
+  const token = await getClerkToken();
+  if (!token) throw new Error('Sign in first');
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/${name}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: anonKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  // 401/404 from the proxy itself = real failure. Anything past the
+  // proxy (e.g. 4xx/5xx returned by fal/higgsfield because /health
+  // isn't a real path) means the proxy + key combo is wired up.
+  if (res.status === 401 || res.status === 404) {
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = { raw: text }; }
+    const msg = data?.error || `${res.status} ${res.statusText}`;
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+  }
+
+  if (!opts.allowAnyStatus && !res.ok) {
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = { raw: text }; }
+    const msg = data?.error || `${res.status} ${res.statusText}`;
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+  }
+  return { ok: true, status: res.status };
+}
