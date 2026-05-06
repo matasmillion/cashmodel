@@ -148,6 +148,36 @@ If a prompt is more than 30 days old, re-read the current codebase first and fla
 
 ---
 
+## Creative Module Conventions
+
+All Creative Engine code lives in `src/components/creative/`. Stores in `src/utils/` (one file per data type, mirroring `treatmentStore.js`). Types in `src/types/creative.js` (JSDoc, no TypeScript). Hash routing via `src/utils/creativeRouting.js` mirroring `plmRouting.js`.
+
+**Stack:** Plain JavaScript + JSDoc. No Zustand, no TypeScript, no Zod. localStorage primary + Supabase cloud mirror. `getAuthedSupabase()` for every store cloud call.
+
+**Palette:** FR brand (Salt `#F5F0E8` / Slate `#3A3A3A` / Sand `#EBE5D5`) for all surfaces. Navy `#1B2741` reserved as single accent: `<LiveAds />` table `<thead>` and `<TodayView />` budget guardrail bar only.
+
+**Hash grammar:** `#creative-engine/{view}[/{id}]`
+Views: `today | knowledge | pulse | sprints | brief | jobs | production | queue | ads | library | learnings`
+
+**Lane enum:** `ai | high_production | creator | founder`
+
+**Sprint status enum:** `drafting | brief_ready | rendering | in_queue | live | closed`
+
+**Render status enum:** `pending | processing | done | approved | rejected`
+
+**Ad status enum:** `paused | active | killed | scaled`
+
+**Ad naming:** `S{sprintNumber}_{lane}_{slug}_v{version}` — all Meta ads created PAUSED.
+
+**Append-only enforcement** (at JS store layer, not DB): `learnings`, `metrics_daily`, `agent_interaction`. Reject any update/delete calls.
+
+**Credential storage:** New providers `anthropic`, `fal`, `higgsfield`, `slack`, `transloadit`, `apify` stored in `user_integrations (org_id, provider)` with RLS. Proxies use `.maybeSingle()` — never `.eq('org_id', ...)` (RLS handles org isolation).
+
+**Design reference:** `docs/mockups/creative-engine-v5.html` (1055 lines, 11 sub-views, locked V5 spec).
+
+---
+
 ## Changelog
 
 - 2026-04-25 — initial conventions established (folder structure, module boundaries, brand system, append-only collections, vendor surface hard rules)
+- 2026-05-06 — Creative Module Conventions added (Creative Engine phase 0)

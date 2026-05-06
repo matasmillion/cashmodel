@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-04T18:40:12.207Z",
+  "lastUpdated": "2026-05-06T13:14:47.659Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,21 @@
   ],
   "changelog": [
     {
+      "sha": "f80ed0e",
+      "date": "2026-05-06T15:41:25+03:00",
+      "message": "Add files via upload"
+    },
+    {
+      "sha": "8fa175f",
+      "date": "2026-05-04T18:40:35+00:00",
+      "message": "state: migrate stale fulfillmentPercent in localStorage to 9%"
+    },
+    {
+      "sha": "a913823",
+      "date": "2026-05-04T21:39:38+03:00",
+      "message": "techpack: lighter card font, drop bleed-through shirt icon, default shipping offset to 0 (#20)"
+    },
+    {
       "sha": "0f1f2ca",
       "date": "2026-05-04T18:34:44+00:00",
       "message": "assumptions: drop fulfillment % from 10% → 9%"
@@ -1077,21 +1092,6 @@
       "sha": "03f0411",
       "date": "2026-05-04T17:28:32+00:00",
       "message": "fix(db): user_integrations org-scope migration was incomplete — Shopify save broken"
-    },
-    {
-      "sha": "f24bac1",
-      "date": "2026-05-04T15:07:46+00:00",
-      "message": "feat(topbar): tabs are anchors so Cmd/Ctrl/Shift-click opens new browser tab"
-    },
-    {
-      "sha": "d26677a",
-      "date": "2026-05-04T14:21:46+00:00",
-      "message": "feat(plm): vendor name is editable from the modal header (cascading rename)"
-    },
-    {
-      "sha": "c43fe70",
-      "date": "2026-05-04T13:41:13+00:00",
-      "message": "chore: regenerate public/state.json"
     }
   ]
 }

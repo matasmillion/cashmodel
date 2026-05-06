@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FR ERP — Creative Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --cream:       #F2EAD8;
+  --cream-light: #F8F3EA;
+  --sand:        #C4A97D;
+  --sand-light:  #DDD0B8;
+  --soil:        #1C1915;
+  --soil-mid:    #2D2823;
+  --navy:        #1B2741;
+  --slate:       #8A8580;
+  --slate-light: #B8B4AF;
+  --green:       #2D7D4F;
+  --green-light: #E8F5EE;
+  --red:         #C0392B;
+  --red-light:   #FDEDEB;
+  --amber:       #C07B2B;
+  --amber-light: #FEF3E2;
+  --blue:        #2563EB;
+  --blue-light:  #EFF6FF;
+  --purple:      #6D28D9;
+  --purple-light:#F5F3FF;
+  --teal:        #0D7A5F;
+  --teal-light:  #ECFDF5;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--soil);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+button{font-family:inherit;cursor:pointer;border:none;background:none;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--sand-light);border-radius:4px;}
+
+/* ─── LAYOUT ─── */
+.shell{display:flex;flex-direction:column;height:100vh;}
+.content{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+.view{display:none;flex:1;overflow-y:auto;}
+.view.on{display:block;}
+.view-flex{display:none;}
+.view-flex.on{display:flex;overflow:hidden;}
+.view-flex.on>*{overflow-y:auto;}
+
+/* ─── HEADER ─── */
+header{
+  background:var(--cream-light);border-bottom:1px solid rgba(0,0,0,0.09);
+  padding:0 28px;height:52px;display:flex;align-items:center;
+  justify-content:space-between;position:sticky;top:0;z-index:100;flex-shrink:0;
+}
+.brand-main{font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:300;letter-spacing:0.04em;}
+.brand-sub{font-family:'Cormorant Garamond',serif;font-size:11px;font-style:italic;color:var(--slate);letter-spacing:0.06em;margin-top:1px;}
+.top-nav{display:flex;align-items:center;gap:2px;}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#E53E3E;margin-right:10px;animation:livePulse 2s infinite;}
+@keyframes livePulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+.tnav{font-size:13px;color:var(--slate);padding:6px 14px;border-radius:7px;transition:all .15s;display:flex;align-items:center;gap:4px;}
+.tnav:hover{background:rgba(0,0,0,.05);color:var(--soil);}
+.tnav.on{background:var(--soil);color:white;}
+.tnav.on-parent{background:rgba(0,0,0,.06);color:var(--soil);}
+.arrow{font-size:9px;}
+.gear-btn{padding:6px 8px;border-radius:7px;color:var(--slate);}
+.gear-btn:hover{background:rgba(0,0,0,.05);}
+.dd-wrap{position:relative;}
+.dd{position:absolute;top:calc(100% + 6px);right:0;background:white;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.12);min-width:180px;padding:6px;z-index:200;border:1px solid rgba(0,0,0,.08);display:none;}
+.dd.open{display:block;}
+.dd-item{padding:8px 12px;border-radius:7px;font-size:13px;cursor:pointer;color:var(--soil);display:flex;align-items:center;gap:8px;transition:background .1s;}
+.dd-item:hover{background:var(--cream);}
+.dd-item.on{background:var(--cream);font-weight:500;}
+.dd-div{height:1px;background:rgba(0,0,0,.06);margin:4px 0;}
+
+/* ─── METRIC STRIP ─── */
+.metric-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;padding:14px 28px;border-bottom:1px solid rgba(0,0,0,.07);flex-shrink:0;}
+.mc{background:var(--cream-light);border:1px solid rgba(0,0,0,.07);border-radius:10px;padding:14px 16px;transition:border-color .15s;}
+.mc:hover{border-color:var(--sand-light);}
+.mc-label{font-size:10px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:var(--slate);margin-bottom:6px;display:flex;align-items:center;gap:5px;}
+.mc-value{font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:400;line-height:1;color:var(--soil);}
+.mc-sub{font-size:11px;color:var(--slate);margin-top:4px;}
+
+/* ─── TABS ─── */
+.tabs{display:flex;align-items:center;gap:0;padding:0 28px;border-bottom:1px solid rgba(0,0,0,.08);background:var(--cream-light);flex-shrink:0;overflow-x:auto;}
+.tab{padding:11px 16px;font-size:13px;cursor:pointer;color:var(--slate);border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;display:flex;align-items:center;gap:6px;}
+.tab:hover:not(.on){color:var(--soil);}
+.tab.on{color:var(--soil);border-bottom-color:var(--soil);font-weight:500;}
+.tab-badge{display:inline-flex;align-items:center;justify-content:center;background:var(--sand);color:white;border-radius:10px;font-size:10px;padding:1px 6px;font-weight:600;}
+.tab-pip{width:6px;height:6px;border-radius:50%;background:var(--amber);display:inline-block;}
+
+/* ─── PILLS ─── */
+.pill{display:inline-flex;align-items:center;gap:3px;padding:2px 9px;border-radius:100px;font-size:11px;font-weight:500;}
+.pill-green{background:var(--green-light);color:var(--green);}
+.pill-red{background:var(--red-light);color:var(--red);}
+.pill-amber{background:var(--amber-light);color:var(--amber);}
+.pill-blue{background:var(--blue-light);color:var(--blue);}
+.pill-purple{background:var(--purple-light);color:var(--purple);}
+.pill-neutral{background:rgba(0,0,0,.06);color:var(--slate);}
+.pill-sand{background:#FFF6E8;color:#92400E;}
+.pill-teal{background:var(--teal-light);color:var(--teal);}
+.pill-navy{background:var(--navy);color:white;}
+.dot-status{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0;}
+.dot-green{background:var(--green);}
+.dot-amber{background:var(--amber);animation:livePulse 1.5s infinite;}
+.dot-red{background:var(--red);}
+.dot-grey{background:var(--sand-light);}
+
+/* ─── ATOMS ─── */
+.font-display{font-family:'Cormorant Garamond',serif;}
+.font-mono{font-family:'DM Mono',monospace;}
+.label-caps{font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--slate);}
+
+/* ─── BUTTONS ─── */
+.btn-primary{background:var(--soil);color:white;padding:7px 16px;border-radius:7px;font-size:13px;font-weight:500;transition:opacity .15s;}
+.btn-primary:hover{opacity:.85;}
+.btn-ghost{background:transparent;color:var(--soil);padding:7px 16px;border-radius:7px;font-size:13px;font-weight:500;border:1px solid rgba(0,0,0,.12);transition:all .15s;}
+.btn-ghost:hover{background:white;}
+.btn-kill{background:var(--red-light);color:var(--red);border:1px solid #FECACA;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:500;}
+.btn-scale{background:var(--green-light);color:var(--green);border:1px solid #A7F3D0;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:500;}
+
+/* ─── CARDS ─── */
+.card{background:white;border:1px solid rgba(0,0,0,.07);border-radius:12px;}
+.card-pad{padding:18px 20px;}
+
+/* ─── TODAY ─── */
+#view-today{padding:40px 36px 60px;}
+.today-title{font-family:'Cormorant Garamond',serif;font-size:44px;font-weight:300;margin-bottom:4px;}
+.today-sub{font-size:13px;color:var(--slate);margin-bottom:44px;}
+.today-section{max-width:700px;margin-bottom:40px;}
+.today-section-label{font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--slate);margin-bottom:16px;}
+.today-item{display:flex;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid rgba(0,0,0,.06);}
+.today-item:last-child{border-bottom:none;}
+.today-cb{width:16px;height:16px;border:1.5px solid var(--sand-light);border-radius:3px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.today-cb:hover{border-color:var(--soil);}
+.today-cb.done{background:var(--green);border-color:var(--green);}
+.today-text{flex:1;font-size:13px;line-height:1.5;}
+.today-cta{font-size:11px;color:var(--blue);cursor:pointer;white-space:nowrap;font-weight:500;}
+.today-cta.red{color:var(--red);}
+.done-item{display:flex;align-items:flex-start;gap:14px;padding:10px 0;border-bottom:1px solid rgba(0,0,0,.05);opacity:.65;}
+.done-item:last-child{border-bottom:none;}
+.done-check{color:var(--green);font-size:11px;margin-top:2px;flex-shrink:0;width:16px;}
+.done-text{font-size:12px;color:var(--slate);line-height:1.5;}
+.budget-track{height:3px;background:rgba(0,0,0,.08);border-radius:2px;max-width:280px;margin-top:10px;overflow:hidden;}
+.budget-fill{height:100%;background:var(--amber);border-radius:2px;}
+
+/* ─── KNOWLEDGE FILES ─── */
+#view-knowledge{padding:28px 28px 60px;}
+.kf-banner{background:var(--soil);border-radius:14px;padding:24px 28px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:32px;}
+.kf-banner-title{font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:300;color:white;letter-spacing:.01em;}
+.kf-banner-sub{font-size:12px;color:var(--sand-light);margin-top:6px;line-height:1.6;max-width:520px;}
+.kf-banner-right{flex-shrink:0;text-align:right;}
+.kf-banner-label{font-size:10px;color:var(--sand-light);letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px;}
+.kf-banner-time{font-family:'DM Mono',monospace;font-size:13px;color:white;}
+.kf-banner-ctx{font-size:11px;color:var(--slate-light);margin-top:2px;}
+
+.kf-routing{background:white;border:1px solid rgba(0,0,0,.07);border-radius:12px;padding:16px 20px;margin-bottom:22px;}
+.kf-routing-title{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);margin-bottom:14px;}
+.kf-routing-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(0,0,0,.06);border-radius:8px;overflow:hidden;}
+.kf-routing-cell{background:white;padding:12px 14px;}
+.kf-r-lane{margin-bottom:10px;}
+.kf-r-row{display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:5px;}
+.kf-check{color:var(--green);font-size:10px;}
+.kf-dash{color:var(--sand-light);font-size:10px;}
+
+.kf-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+.kf-card{background:white;border:1px solid rgba(0,0,0,.07);border-radius:14px;overflow:hidden;border-left:4px solid var(--sand);}
+.kf-card.warn{border-left-color:var(--amber);}
+.kf-cp{padding:20px 22px;}
+.kf-card-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;}
+.kf-card-num{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);margin-bottom:4px;}
+.kf-card-name{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:400;}
+.kf-card-status{display:flex;align-items:center;gap:5px;justify-content:flex-end;margin-bottom:3px;}
+.kf-card-date{font-family:'DM Mono',monospace;font-size:10px;color:var(--slate);}
+.kf-lanes{display:flex;gap:5px;margin-bottom:14px;flex-wrap:wrap;}
+.kf-mini{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+.kf-mini-cell{background:var(--cream);border-radius:9px;padding:12px;}
+.kf-mini-name{font-size:12px;font-weight:600;margin-bottom:4px;}
+.kf-mini-desc{font-size:11px;color:var(--slate);line-height:1.5;}
+.kf-filter{background:var(--soil);border-radius:9px;padding:12px 14px;margin-bottom:14px;}
+.kf-filter-label{font-size:9px;color:var(--sand);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px;}
+.kf-filter-text{font-family:'Cormorant Garamond',serif;font-size:15px;font-style:italic;color:white;}
+.kf-warn-box{background:var(--amber-light);border-radius:9px;padding:12px 14px;margin-bottom:14px;border:1px solid rgba(192,123,43,.2);}
+.kf-card-foot{display:flex;align-items:center;justify-content:space-between;}
+.kf-foot-meta{font-size:11px;color:var(--slate);}
+
+/* ─── SYSTEM PULSE ─── */
+#view-pulse{padding:28px 28px 40px;}
+.pulse-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:22px;}
+.pulse-title{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:400;}
+.pulse-sub{font-size:12px;color:var(--slate);margin-top:2px;}
+.pulse-live{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--slate);}
+
+.pipeline-card{background:white;border:1px solid rgba(0,0,0,.07);border-radius:14px;padding:28px 24px;margin-bottom:20px;overflow-x:auto;}
+.pipeline{display:flex;align-items:flex-start;gap:0;}
+.pipe-stage{display:flex;flex-direction:column;align-items:center;min-width:120px;flex-shrink:0;}
+.pipe-node{background:white;border:1.5px solid rgba(0,0,0,.1);border-radius:10px;padding:12px 14px;text-align:center;cursor:pointer;transition:all .2s;width:110px;position:relative;}
+.pipe-node:hover{border-color:var(--sand);box-shadow:0 4px 12px rgba(0,0,0,.08);}
+.pipe-node.active-n{border-color:var(--amber);}
+.pipe-node.live-n{border-color:var(--green);}
+.pipe-sdot{width:8px;height:8px;border-radius:50%;position:absolute;top:-3px;right:-3px;}
+.pipe-sdot.a{background:var(--amber);animation:livePulse 1.5s infinite;}
+.pipe-sdot.g{background:var(--green);animation:livePulse 2s infinite;}
+.pipe-sdot.x{background:var(--sand-light);}
+.pipe-count{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:400;line-height:1;}
+.pipe-count.amber{color:var(--amber);}
+.pipe-count.green{color:var(--green);}
+.pipe-count.muted{color:var(--sand-light);}
+.pipe-label{font-size:11px;color:var(--slate);margin-top:3px;font-weight:500;}
+.pipe-sub{font-size:10px;color:var(--slate-light);margin-top:2px;}
+.pipe-tag{font-size:10px;color:var(--slate);max-width:110px;line-height:1.4;margin-top:8px;text-align:center;}
+.pipe-conn{display:flex;align-items:center;padding-top:28px;}
+.pipe-line{height:1px;width:32px;background:var(--sand-light);}
+.pipe-arrow{color:var(--sand-light);font-size:12px;margin-left:-4px;}
+
+.pulse-grid{display:grid;grid-template-columns:2fr 1fr;gap:18px;}
+.pulse-table-card{background:white;border:1px solid rgba(0,0,0,.07);border-radius:14px;overflow:hidden;}
+.ptc-head{padding:14px 20px;border-bottom:1px solid rgba(0,0,0,.06);display:flex;align-items:center;justify-content:space-between;}
+.st-head{display:grid;grid-template-columns:48px 1fr 90px 120px 70px 60px;gap:14px;padding:10px 20px;background:var(--navy);color:white;}
+.st-head .label-caps{color:rgba(255,255,255,.7);}
+.st-row{display:grid;grid-template-columns:48px 1fr 90px 120px 70px 60px;gap:14px;padding:13px 20px;border-bottom:1px solid rgba(0,0,0,.05);align-items:center;cursor:pointer;transition:background .1s;}
+.st-row:hover{background:var(--cream);}
+.st-row:last-child{border-bottom:none;}
+
+.feed-card{background:white;border:1px solid rgba(0,0,0,.07);border-radius:14px;overflow:hidden;}
+.feed-head{padding:14px 20px;border-bottom:1px solid rgba(0,0,0,.06);}
+.feed-item{display:flex;align-items:flex-start;gap:10px;padding:10px 20px;border-bottom:1px solid rgba(0,0,0,.05);}
+.feed-item:last-child{border-bottom:none;}
+.feed-dot{width:7px;height:7px;border-radius:50%;margin-top:5px;flex-shrink:0;}
+.feed-text{font-size:12px;line-height:1.5;}
+.feed-time{font-family:'DM Mono',monospace;font-size:10px;color:var(--slate-light);white-space:nowrap;}
+
+/* ─── SPRINTS ─── */
+#view-sprints{overflow:auto;}
+.sprints-top{display:flex;align-items:center;justify-content:space-between;padding:24px 28px 0;margin-bottom:20px;}
+.sprints-title{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:400;}
+.kanban{display:flex;gap:16px;padding:0 28px 32px;overflow-x:auto;align-items:flex-start;}
+.kcol{min-width:200px;width:200px;flex-shrink:0;}
+.kcol-head{display:flex;align-items:center;gap:6px;margin-bottom:12px;}
+.kcard{background:white;border-radius:10px;padding:14px;cursor:pointer;transition:all .15s;border:1px solid rgba(0,0,0,.06);margin-bottom:10px;}
+.kcard:hover{box-shadow:0 4px 14px rgba(0,0,0,.08);transform:translateY(-1px);}
+.kcard-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.kcard-n{font-family:'DM Mono',monospace;font-size:11px;color:var(--slate);}
+.kcard-hyp{font-family:'Cormorant Garamond',serif;font-size:15px;line-height:1.4;font-weight:400;margin-bottom:10px;}
+.kcard-foot{font-size:11px;color:var(--slate);}
+.kcard-metrics{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px;}
+.kcard-mv{font-family:'DM Mono',monospace;font-size:13px;font-weight:500;}
+.kcard-ml{font-size:10px;color:var(--slate);margin-top:1px;}
+.kcard-bar{height:3px;background:rgba(0,0,0,.06);border-radius:2px;margin-top:10px;overflow:hidden;}
+.kcard-bar-fill{height:100%;background:var(--sand);border-radius:2px;}
+
+/* ─── BRIEF ─── */
+#view-brief{padding:0;}
+.brief-rail{width:240px;flex-shrink:0;border-right:1px solid rgba(0,0,0,.08);overflow-y:auto;padding:20px 0;background:var(--cream-light);}
+.brief-rail-label{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);padding:0 20px;margin-bottom:10px;}
+.brief-rail-item{padding:12px 20px;cursor:pointer;border-left:2px solid transparent;transition:all .15s;}
+.brief-rail-item:hover{background:var(--cream);}
+.brief-rail-item.on{background:var(--cream);border-left-color:var(--soil);}
+.bri-n{font-family:'DM Mono',monospace;font-size:9px;color:var(--slate);margin-bottom:4px;}
+.bri-hyp{font-size:12px;line-height:1.4;}
+.bri-meta{font-size:10px;color:var(--slate);margin-top:3px;}
+
+.brief-doc{flex:1;overflow-y:auto;padding:44px 56px;max-width:840px;}
+.brief-crumb{display:flex;align-items:center;gap:10px;margin-bottom:32px;flex-wrap:wrap;}
+.brief-crumb-sep{color:var(--sand-light);}
+.brief-actions{display:flex;gap:10px;align-items:center;}
+.brief-hyp{font-family:'Cormorant Garamond',serif;font-size:38px;font-weight:300;line-height:1.15;letter-spacing:-.01em;margin-bottom:28px;max-width:600px;}
+.brief-kf{display:flex;align-items:center;gap:8px;margin-bottom:32px;flex-wrap:wrap;}
+.brief-kf-chip{font-size:10px;color:var(--slate);border:1px solid rgba(0,0,0,.1);padding:3px 10px;border-radius:3px;display:flex;align-items:center;gap:5px;}
+.brief-kf-off{opacity:.35;}
+.brief-section{padding:26px 0;border-top:1px solid rgba(0,0,0,.07);}
+.brief-section-label{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);margin-bottom:14px;}
+.brief-hook{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:300;font-style:italic;line-height:1.35;max-width:520px;}
+.brief-payoff{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:300;line-height:1.45;max-width:500px;}
+.brief-shot{display:flex;gap:20px;padding:14px 0;border-bottom:1px solid rgba(0,0,0,.05);}
+.brief-shot:last-child{border-bottom:none;}
+.brief-shot-n{font-family:'DM Mono',monospace;font-size:10px;color:var(--slate);margin-top:3px;flex-shrink:0;width:24px;}
+.brief-shot-title{font-size:13px;font-weight:600;margin-bottom:3px;}
+.brief-shot-desc{font-size:12px;color:var(--slate);line-height:1.6;}
+.brief-caption{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:300;line-height:1.7;max-width:460px;}
+.brief-prompt-box{background:var(--soil);border-radius:7px;padding:18px 22px;}
+.brief-prompt-label{font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--sand);margin-bottom:10px;}
+.brief-prompt-text{font-family:'DM Mono',monospace;font-size:11px;color:rgba(242,234,216,.88);line-height:1.75;}
+
+/* Past Learnings consulted */
+.brief-learnings-box{background:var(--cream);border:1px solid rgba(0,0,0,.07);border-radius:8px;padding:16px 18px;}
+.brief-learning-row{display:flex;align-items:flex-start;gap:14px;padding:10px 0;border-bottom:1px solid rgba(0,0,0,.05);}
+.brief-learning-row:last-child{border-bottom:none;}
+.brief-learning-tag{font-family:'DM Mono',monospace;font-size:10px;width:44px;flex-shrink:0;margin-top:3px;}
+
+/* ─── JOB QUEUE ─── */
+#view-queue-jobs{padding:28px 28px 60px;}
+.jq-title{font-family:'Cormorant Garamond',serif;font-size:34px;font-weight:400;margin-bottom:4px;}
+.jq-sub{font-size:13px;color:var(--slate);margin-bottom:32px;}
+.jq-section{margin-bottom:28px;}
+.jq-card{background:white;border:1px solid rgba(0,0,0,.07);border-radius:12px;overflow:hidden;}
+.jq-card-head{padding:12px 20px;border-bottom:1px solid rgba(0,0,0,.06);background:var(--cream-light);display:flex;align-items:center;gap:10px;}
+.jq-card-label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;}
+.jq-card-count{font-family:'DM Mono',monospace;font-size:10px;color:var(--slate);margin-left:auto;}
+.jq-item{display:flex;align-items:center;gap:16px;padding:13px 20px;border-bottom:1px solid rgba(0,0,0,.05);}
+.jq-item:last-child{border-bottom:none;}
+.jq-sprint{font-family:'DM Mono',monospace;font-size:10px;color:var(--slate);width:36px;flex-shrink:0;}
+.jq-desc{flex:1;font-size:12px;line-height:1.4;}
+.jq-meta{font-size:10px;color:var(--slate);margin-top:2px;}
+.jq-cta{font-size:11px;color:var(--blue);cursor:pointer;white-space:nowrap;font-weight:500;}
+.jq-bar{width:60px;height:3px;background:rgba(0,0,0,.08);border-radius:2px;overflow:hidden;flex-shrink:0;}
+.jq-bar-fill{height:100%;background:var(--amber);border-radius:2px;}
+
+/* ─── PRODUCTION ─── */
+#view-production{padding:28px 28px 60px;}
+.prod-title{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:400;margin-bottom:4px;}
+.prod-sub{font-size:13px;color:var(--slate);margin-bottom:28px;}
+.prod-lanes{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+.prod-lane{background:white;border:1px solid rgba(0,0,0,.07);border-radius:12px;overflow:hidden;}
+.prod-lane-head{padding:14px 18px;border-bottom:1px solid rgba(0,0,0,.06);display:flex;align-items:center;justify-content:space-between;}
+.prod-lane-title{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;}
+.prod-lane-source{font-size:11px;color:var(--slate);}
+.prod-job{padding:14px 18px;border-bottom:1px solid rgba(0,0,0,.05);}
+.prod-job:last-child{border-bottom:none;}
+.prod-job-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:4px;}
+.prod-job-name{font-size:12px;font-weight:500;}
+.prod-job-meta{font-size:11px;color:var(--slate);}
+.progress-bar{height:3px;background:rgba(0,0,0,.06);border-radius:2px;overflow:hidden;margin-top:8px;}
+.progress-fill{height:100%;border-radius:2px;}
+.progress-amber{background:var(--amber);}
+.progress-green{background:var(--green);}
+
+/* ─── QUEUE ─── */
+#view-queue{padding:28px 28px 60px;}
+.queue-title{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:400;margin-bottom:4px;}
+.queue-sub{font-size:13px;color:var(--slate);margin-bottom:28px;}
+.queue-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+.qcard{background:white;border:1px solid rgba(0,0,0,.07);border-radius:10px;overflow:hidden;}
+.qcard-img{width:100%;aspect-ratio:4/5;display:flex;align-items:center;justify-content:center;}
+.qcard-body{padding:14px 16px;}
+.qcard-meta{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.qcard-ref{font-family:'DM Mono',monospace;font-size:10px;color:var(--slate);}
+.qcard-desc{font-size:12px;color:var(--slate);line-height:1.5;margin-bottom:14px;}
+.qcard-actions{display:flex;align-items:center;gap:8px;}
+.qa-btn{width:32px;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid rgba(0,0,0,.08);transition:all .15s;font-size:14px;}
+.qa-btn:hover{transform:scale(1.08);}
+.qa-approve{background:var(--green-light);color:var(--green);border-color:#A7F3D0;}
+.qa-revise{background:var(--amber-light);color:var(--amber);border-color:#FCD34D;}
+.qa-reject{background:var(--red-light);color:var(--red);border-color:#FECACA;}
+.encode-badge{margin-left:auto;font-family:'DM Mono',monospace;font-size:9px;color:var(--green);font-weight:500;letter-spacing:.06em;text-transform:uppercase;}
+.encode-pending{color:var(--slate);}
+
+/* ─── LIVE ADS ─── */
+#view-ads{padding:28px 28px 60px;}
+.ads-title{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:400;margin-bottom:4px;}
+.ads-sub{font-size:13px;color:var(--slate);margin-bottom:14px;}
+.ads-budget-row{display:flex;align-items:center;gap:14px;margin-bottom:22px;font-size:11px;color:var(--slate);background:var(--amber-light);border:1px solid rgba(192,123,43,.2);border-radius:8px;padding:10px 16px;}
+.ads-budget-track{flex:1;max-width:240px;height:3px;background:rgba(0,0,0,.1);border-radius:2px;overflow:hidden;}
+.ads-budget-fill{height:100%;background:var(--amber);border-radius:2px;}
+.ads-table{background:white;border:1px solid rgba(0,0,0,.07);border-radius:12px;overflow:hidden;}
+.ads-thead{display:grid;grid-template-columns:1fr 80px 70px 70px 80px 120px;gap:14px;padding:11px 20px;background:var(--navy);color:white;}
+.ads-thead .label-caps{color:rgba(255,255,255,.7);}
+.ads-row{display:grid;grid-template-columns:1fr 80px 70px 70px 80px 120px;gap:14px;padding:14px 20px;border-bottom:1px solid rgba(0,0,0,.05);align-items:center;transition:background .1s;cursor:pointer;}
+.ads-row:hover{background:var(--cream);}
+.ads-row:last-child{border-bottom:none;}
+.ads-name{font-size:12px;font-weight:500;}
+.ads-name-sub{display:flex;align-items:center;gap:6px;margin-top:3px;}
+.ads-num{font-family:'DM Mono',monospace;font-size:13px;color:var(--slate);}
+.ads-cpa-g{font-family:'DM Mono',monospace;font-size:14px;color:var(--green);font-weight:500;}
+.ads-cpa-a{font-family:'DM Mono',monospace;font-size:14px;color:var(--amber);font-weight:500;}
+.ads-cpa-r{font-family:'DM Mono',monospace;font-size:14px;color:var(--red);font-weight:500;}
+.ads-actions{display:flex;gap:8px;align-items:center;}
+.ads-rules{margin-top:12px;font-size:11px;color:var(--slate);display:flex;gap:14px;flex-wrap:wrap;}
+
+/* ─── LIBRARY ─── */
+#view-library{padding:0;}
+.lib-side{width:200px;flex-shrink:0;border-right:1px solid rgba(0,0,0,.08);padding:20px 0;overflow-y:auto;background:var(--cream-light);}
+.lib-side-label{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);padding:0 20px;margin-bottom:8px;}
+.lib-side-item{padding:9px 20px;cursor:pointer;font-size:12px;color:var(--slate);border-left:2px solid transparent;transition:all .15s;}
+.lib-side-item:hover{color:var(--soil);background:var(--cream);}
+.lib-side-item.on{color:var(--soil);background:var(--cream);border-left-color:var(--soil);}
+.lib-div{height:1px;background:rgba(0,0,0,.06);margin:10px 0;}
+.lib-folder{display:flex;align-items:center;gap:7px;padding:7px 20px;font-size:11px;color:var(--slate);cursor:pointer;}
+.lib-folder:hover{color:var(--soil);}
+.lib-main{flex:1;overflow-y:auto;padding:28px 28px;}
+.brand-pills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:24px;}
+.brand-pill{font-size:11px;padding:5px 14px;border-radius:100px;cursor:pointer;border:1px solid rgba(0,0,0,.1);color:var(--slate);background:white;transition:all .15s;}
+.brand-pill:hover{border-color:var(--soil);color:var(--soil);}
+.brand-pill.on{background:var(--soil);color:white;border-color:var(--soil);}
+.comp-insight{background:var(--blue-light);border:1px solid rgba(37,99,235,.15);border-radius:8px;padding:16px 20px;margin-bottom:24px;}
+.comp-insight-label{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--blue);margin-bottom:5px;}
+.comp-insight-text{font-size:12px;color:var(--soil);line-height:1.6;}
+.comp-seed-btn{margin-top:10px;font-size:11px;color:var(--blue);font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:4px;}
+.comp-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px;}
+.comp-card{background:white;border:1px solid rgba(0,0,0,.07);border-radius:8px;overflow:hidden;cursor:pointer;transition:all .15s;}
+.comp-card:hover{box-shadow:0 4px 12px rgba(0,0,0,.08);transform:translateY(-1px);}
+.comp-card-img{width:100%;height:130px;display:flex;align-items:center;justify-content:center;}
+.comp-card-body{padding:10px 12px;}
+.comp-card-title{font-size:11px;font-weight:500;margin-bottom:3px;}
+.comp-card-meta{font-size:10px;color:var(--slate);}
+
+/* ─── LEARNINGS ─── */
+#view-learnings{padding:28px 28px 60px;}
+.learn-title{font-family:'Cormorant Garamond',serif;font-size:34px;font-weight:400;margin-bottom:4px;}
+.learn-sub{font-size:13px;color:var(--slate);margin-bottom:32px;}
+.learn-summary{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px;}
+.learn-summary-card{background:white;border:1px solid rgba(0,0,0,.07);border-radius:12px;padding:18px 22px;}
+.learn-summary-label{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);margin-bottom:10px;}
+.learn-summary-text{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:400;line-height:1.4;}
+.learn-summary-meta{font-size:11px;color:var(--slate);margin-top:6px;}
+.learn-list{background:white;border:1px solid rgba(0,0,0,.07);border-radius:12px;overflow:hidden;}
+.learn-row{padding:20px 24px;border-bottom:1px solid rgba(0,0,0,.05);transition:background .1s;cursor:pointer;}
+.learn-row:hover{background:var(--cream);}
+.learn-row:last-child{border-bottom:none;}
+.learn-row-meta{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.learn-hyp{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:400;line-height:1.35;margin-bottom:10px;}
+.learn-patterns{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;}
+.learn-pattern{font-size:11px;line-height:1.6;}
+
+/* ─── EXT POPUP ─── */
+.ext-popup{width:320px;border:1px solid rgba(0,0,0,.1);border-radius:10px;overflow:hidden;box-shadow:0 24px 56px rgba(0,0,0,.12);}
+.ext-head{background:var(--soil);padding:13px 16px;display:flex;align-items:center;justify-content:space-between;}
+.ext-logo{font-size:9px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:white;}
+.ext-section{padding:14px 16px;border-bottom:1px solid rgba(0,0,0,.07);background:white;}
+.ext-label{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--slate);margin-bottom:8px;}
+.ext-detected{display:flex;gap:10px;align-items:center;}
+.ext-thumb{width:60px;height:60px;border-radius:4px;flex-shrink:0;}
+.ext-dn{font-size:12px;font-weight:500;margin-bottom:2px;}
+.ext-dm{font-size:10px;color:var(--slate);}
+.ext-select{width:100%;font-size:12px;padding:8px 10px;border:1px solid rgba(0,0,0,.1);border-radius:5px;background:var(--cream);color:var(--soil);margin-bottom:8px;font-family:'DM Sans',sans-serif;}
+.ext-tags{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:4px;}
+.ext-tag{font-size:10px;padding:3px 8px;border-radius:3px;border:1px solid rgba(0,0,0,.1);color:var(--slate);cursor:pointer;}
+.ext-tag.on{background:var(--soil);color:white;border-color:var(--soil);}
+.ext-save{padding:14px 16px;background:var(--cream-light);}
+.ext-save-btn{width:100%;background:var(--soil);color:white;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;padding:11px;border-radius:5px;cursor:pointer;transition:opacity .15s;}
+.ext-save-btn:hover{opacity:.85;}
+.ext-save-note{text-align:center;font-size:9px;color:var(--slate);margin-top:7px;}
+
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.6;transform:scale(.95);}}
+@keyframes dotPulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+@keyframes ringPulse{0%{opacity:.6;transform:scale(1);}100%{opacity:0;transform:scale(2.2);}}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- HEADER -->
+<header>
+  <div>
+    <div class="brand-main">ENTERPRISE RESOURCE PLANNING</div>
+    <div class="brand-sub">FOREIGN RESOURCE</div>
+  </div>
+  <nav class="top-nav">
+    <div class="live-dot"></div>
+    <button class="tnav" onclick="alert('Cash')">Cash</button>
+    <div class="dd-wrap">
+      <button class="tnav on-parent" onclick="toggleDD('mkt')">Marketing <span class="arrow">▾</span></button>
+      <div class="dd" id="dd-mkt">
+        <div class="dd-item on">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Creative Engine
+        </div>
+        <div class="dd-div"></div>
+        <div class="dd-item">Email · Klaviyo</div>
+        <div class="dd-item">Meta Ads</div>
+      </div>
+    </div>
+    <button class="tnav">Product <span class="arrow">▾</span></button>
+    <button class="tnav">Operations <span class="arrow">▾</span></button>
+    <button class="gear-btn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93L17.66 6.34A8 8 0 1 0 19.07 19.07l-1.41-1.41"/></svg>
+    </button>
+  </nav>
+</header>
+
+<!-- METRIC STRIP -->
+<div class="metric-strip">
+  <div class="mc">
+    <div class="mc-label"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Active Sprints</div>
+    <div class="mc-value">6</div>
+    <div class="mc-sub">18 closed all-time</div>
+  </div>
+  <div class="mc">
+    <div class="mc-label">Rendering</div>
+    <div class="mc-value" style="color:var(--amber);">3</div>
+    <div class="mc-sub">fal × 2 · Higgsfield × 1</div>
+  </div>
+  <div class="mc">
+    <div class="mc-label">Queue Pending</div>
+    <div class="mc-value" style="color:var(--purple);">3</div>
+    <div class="mc-sub">Awaiting your approval</div>
+  </div>
+  <div class="mc">
+    <div class="mc-label">Live Ads</div>
+    <div class="mc-value" style="color:var(--green);">4</div>
+    <div class="mc-sub">$180 spend today</div>
+  </div>
+  <div class="mc">
+    <div class="mc-label">Avg CPA</div>
+    <div class="mc-value">$31</div>
+    <div class="mc-sub">Target: $30 · ↓$4 vs last</div>
+  </div>
+  <div class="mc">
+    <div class="mc-label">Learnings Banked</div>
+    <div class="mc-value">18</div>
+    <div class="mc-sub">12 winning · 6 losing</div>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab on" onclick="go('today')" id="tab-today">Today</div>
+  <div class="tab" onclick="go('knowledge')" id="tab-knowledge">Knowledge Files</div>
+  <div class="tab" onclick="go('pulse')" id="tab-pulse">System Pulse</div>
+  <div class="tab" onclick="go('sprints')" id="tab-sprints">Sprints</div>
+  <div class="tab" onclick="go('brief')" id="tab-brief">Brief <span class="tab-pip"></span></div>
+  <div class="tab" onclick="go('queue-jobs')" id="tab-queue-jobs">Job Queue</div>
+  <div class="tab" onclick="go('production')" id="tab-production">Production <span class="tab-badge">3</span></div>
+  <div class="tab" onclick="go('queue')" id="tab-queue">Queue <span class="tab-badge">3</span></div>
+  <div class="tab" onclick="go('ads')" id="tab-ads">Live Ads</div>
+  <div class="tab" onclick="go('library')" id="tab-library">Library</div>
+  <div class="tab" onclick="go('learnings')" id="tab-learnings">Learnings</div>
+</div>
+
+<div class="content">
+
+<!-- TODAY -->
+<div class="view on" id="view-today">
+  <div class="today-title">Wednesday, May 6</div>
+  <div class="today-sub">The agent ran 4 sprints overnight · 3 things need you today</div>
+  <div class="today-section">
+    <div class="today-section-label">Decisions needed</div>
+    <div class="today-item">
+      <div class="today-cb" onclick="this.classList.toggle('done');this.innerHTML=this.classList.contains('done')?'<svg width=10 height=10 viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'white\' stroke-width=3><polyline points=\'20 6 9 17 4 12\'/></svg>':''"></div>
+      <div class="today-text"><strong>S25 brief ready for review</strong><br><span style="color:var(--slate);">Creator lane · Arrival vs departure energy · Generated 2h ago</span></div>
+      <div class="today-cta" onclick="go('brief')">Open Brief →</div>
+    </div>
+    <div class="today-item">
+      <div class="today-cb" onclick="this.classList.toggle('done');this.innerHTML=this.classList.contains('done')?'<svg width=10 height=10 viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'white\' stroke-width=3><polyline points=\'20 6 9 17 4 12\'/></svg>':''"></div>
+      <div class="today-text"><strong>S23 — 3 renders complete, awaiting approval</strong><br><span style="color:var(--slate);">High Production · Arrival vs vista · Encoder pass done</span></div>
+      <div class="today-cta" onclick="go('queue')">Open Queue →</div>
+    </div>
+    <div class="today-item" style="border-bottom:none;">
+      <div class="today-cb" onclick="this.classList.toggle('done');this.innerHTML=this.classList.contains('done')?'<svg width=10 height=10 viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'white\' stroke-width=3><polyline points=\'20 6 9 17 4 12\'/></svg>':''"></div>
+      <div class="today-text"><strong style="color:var(--red);">S21_ai_raw-output_v1 hit kill threshold</strong><br><span style="color:var(--slate);">$47 CPA after 3 days · Agent holding for your call</span></div>
+      <div style="display:flex;gap:12px;"><div class="today-cta red" onclick="go('ads')">Kill</div><div class="today-cta" onclick="go('ads')">Override →</div></div>
+    </div>
+  </div>
+  <div class="today-section">
+    <div class="today-section-label">Agent ran overnight · No action needed</div>
+    <div class="done-item"><div class="done-check">✓</div><div class="done-text">Brief generated for S25 (Creator) — Avatar, Brand, Product files used. 2 past learnings consulted.</div></div>
+    <div class="done-item"><div class="done-check">✓</div><div class="done-text">S24 dispatched to fal.ai — 4 renders queued, 2 complete</div></div>
+    <div class="done-item"><div class="done-check">✓</div><div class="done-text">S22 scaled +30% — under CPA target 3 consecutive days</div></div>
+    <div class="done-item"><div class="done-check">✓</div><div class="done-text">Daily evaluation ran — 4 ads assessed · 2 scale recs · 1 kill rec</div></div>
+    <div class="done-item" style="border-bottom:none;"><div class="done-check">✓</div><div class="done-text">S21 raw-output flagged for kill — $47 CPA after 100 imp · Threshold $45</div></div>
+  </div>
+  <div class="today-section" style="margin-bottom:0;">
+    <div class="today-section-label">Budget · This week</div>
+    <div style="font-size:11px;color:var(--slate);margin-bottom:8px;">$1,240 of $2,000 weekly cap · Agent will pause new ad launches at 90%</div>
+    <div class="budget-track"><div class="budget-fill" style="width:62%;"></div></div>
+  </div>
+</div>
+
+<!-- KNOWLEDGE FILES -->
+<div class="view" id="view-knowledge">
+  <div class="kf-banner">
+    <div>
+      <div class="kf-banner-title">Update these. The system does the rest.</div>
+      <div class="kf-banner-sub">These four files are the only human input the creative engine needs. Every brief, every render, every ad is generated from what's here. Keep them current — the machine compounds from there.</div>
+    </div>
+    <div class="kf-banner-right">
+      <div class="kf-banner-label">Last system read</div>
+      <div class="kf-banner-time">2h 04m ago</div>
+      <div class="kf-banner-ctx">S25 brief generation</div>
+    </div>
+  </div>
+  <div class="kf-routing">
+    <div class="kf-routing-title">Lane Routing — Which Files Feed Which Lane</div>
+    <div class="kf-routing-grid">
+      <div class="kf-routing-cell">
+        <div class="kf-r-lane"><span class="pill pill-purple" style="font-size:9px;">AI</span></div>
+        <div class="kf-r-row"><span class="kf-check">✓</span> Customer Avatar</div>
+        <div class="kf-r-row"><span class="kf-check">✓</span> Brand Guidelines</div>
+        <div class="kf-r-row"><span class="kf-check">✓</span> Product</div>
+        <div class="kf-r-row"><span class="kf-check">✓</span> Models</div>
+      </div>
+      <div class="kf-routing-cell">
+        <div class="kf-r-lane"><span class="pill pill-teal" style="font-size:9px;">High Prod</span></div>
+        <div class="kf-r-row"><span class="kf-check">✓</span> Customer Avatar</div>
+        <div class="kf-r-row"><span class="kf-check">✓</span> Brand Guidelines</div>
+        <div class="kf-r-row"><span class="kf-check">✓</span> Product</div>
+        <div class="kf-r-row"><span class="kf-check">✓</span> Models</div>
+      </div>
+      <div class="kf-routing-cell">
+        <div class="kf-r-lane"><span class="pill pill-sand" style="font-size:9px;">Creator</span></div>
+        <div class="kf-r-row"><span class="kf-check">✓</span> Customer Avatar</div>
+        <div class="kf-r-row"><span class="kf-check">✓</span> Brand Guidelines</div>
+        <div class="kf-r-row"><span class="kf-check">✓</span> Product</div>
+        <div class="kf-r-row"><span class="kf-dash">—</span> <span style="color:var(--slate-light);">Models (human is model)</span></div>
+      </div>
+      <div class="kf-routing-cell">
+        <div class="kf-r-lane"><span class="pill pill-sand" style="font-size:9px;">Founder</span></div>
+        <div class="kf-r-row"><span class="kf-check">✓</span> Customer Avatar</div>
+        <div class="kf-r-row"><span class="kf-check">✓</span> Brand Guidelines</div>
+        <div class="kf-r-row"><span class="kf-check">✓</span> Product</div>
+        <div class="kf-r-row"><span class="kf-dash">—</span> <span style="color:var(--slate-light);">Models (human is model)</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="kf-grid">
+    <!-- Avatar -->
+    <div class="kf-card">
+      <div class="kf-cp">
+        <div class="kf-card-head">
+          <div><div class="kf-card-num">Knowledge File 01</div><div class="kf-card-name">Customer Avatar</div></div>
+          <div><div class="kf-card-status"><div class="dot-status dot-green"></div><span style="font-size:11px;color:var(--green);font-weight:500;">Current</span></div><div class="kf-card-date">Updated Mar 15</div></div>
+        </div>
+        <div class="kf-lanes"><span class="pill pill-purple" style="font-size:9px;">AI</span><span class="pill pill-teal" style="font-size:9px;">High Prod</span><span class="pill pill-sand" style="font-size:9px;">Creator</span><span class="pill pill-sand" style="font-size:9px;">Founder</span></div>
+        <div class="kf-mini">
+          <div class="kf-mini-cell"><div class="kf-mini-name">Destination Designer</div><div class="kf-mini-desc">Style-led, logo-aware. Buys for the signal. 22–28, US urban.</div></div>
+          <div class="kf-mini-cell"><div class="kf-mini-name">Borderless Basic</div><div class="kf-mini-desc">Comfort-first but brand-aware. Everyday loungewear. 19–25.</div></div>
+          <div class="kf-mini-cell"><div class="kf-mini-name">Technical Traveler</div><div class="kf-mini-desc">Frequent flyer. Function + form. Looks intentional in transit.</div></div>
+          <div class="kf-mini-cell"><div class="kf-mini-name">Dream Lifestyle Avatar</div><div class="kf-mini-desc">Aspires to global travel. Buys the life. Responds to story.</div></div>
+        </div>
+        <div class="kf-filter"><div class="kf-filter-label">Content Filter</div><div class="kf-filter-text">"Does this make someone want to travel?"</div></div>
+        <div class="kf-card-foot"><div class="kf-foot-meta">Used 47× this quarter</div><button class="btn-ghost" style="font-size:11px;padding:5px 12px;">Edit File →</button></div>
+      </div>
+    </div>
+    <!-- Brand -->
+    <div class="kf-card">
+      <div class="kf-cp">
+        <div class="kf-card-head">
+          <div><div class="kf-card-num">Knowledge File 02</div><div class="kf-card-name">Brand Guidelines</div></div>
+          <div><div class="kf-card-status"><div class="dot-status dot-green"></div><span style="font-size:11px;color:var(--green);font-weight:500;">Current</span></div><div class="kf-card-date">Updated Mar 1 · V3</div></div>
+        </div>
+        <div class="kf-lanes"><span class="pill pill-purple" style="font-size:9px;">AI</span><span class="pill pill-teal" style="font-size:9px;">High Prod</span><span class="pill pill-sand" style="font-size:9px;">Creator</span><span class="pill pill-sand" style="font-size:9px;">Founder</span></div>
+        <div class="kf-mini">
+          <div class="kf-mini-cell"><div class="kf-mini-name">Tone of Voice</div><div class="kf-mini-desc">Confident not loud · Warm not soft · Global not generic</div></div>
+          <div class="kf-mini-cell"><div class="kf-mini-name">Visual System</div><div class="kf-mini-desc">Salt/Slate/Sand palette. Cormorant + General Sans. Never pure white.</div></div>
+          <div class="kf-mini-cell"><div class="kf-mini-name">Mission</div><div class="kf-mini-desc">Inspire global travel. "Freedom through confidence." Never discount.</div></div>
+          <div class="kf-mini-cell"><div class="kf-mini-name">References</div><div class="kf-mini-desc">Jacquemus · Aimé Leon Dore (storytelling only, not visual)</div></div>
+        </div>
+        <div class="kf-filter"><div class="kf-filter-label">Single Brand Rule</div><div class="kf-filter-text">Story-led, never discount-driven. Logo-forward always.</div></div>
+        <div class="kf-card-foot"><div class="kf-foot-meta">Used in 100% of briefs</div><button class="btn-ghost" style="font-size:11px;padding:5px 12px;">Edit File →</button></div>
+      </div>
+    </div>
+    <!-- Product (warn) -->
+    <div class="kf-card warn">
+      <div class="kf-cp">
+        <div class="kf-card-head">
+          <div><div class="kf-card-num">Knowledge File 03</div><div class="kf-card-name">Product</div></div>
+          <div><div class="kf-card-status"><div class="dot-status dot-amber"></div><span style="font-size:11px;color:var(--amber);font-weight:500;">Update before Aug 1</span></div><div class="kf-card-date">Updated Apr 12</div></div>
+        </div>
+        <div class="kf-lanes"><span class="pill pill-purple" style="font-size:9px;">AI</span><span class="pill pill-teal" style="font-size:9px;">High Prod</span><span class="pill pill-sand" style="font-size:9px;">Creator</span><span class="pill pill-sand" style="font-size:9px;">Founder</span></div>
+        <div class="kf-mini">
+          <div class="kf-mini-cell"><div class="kf-mini-name">Hero · Snowflake Hoodie</div><div class="kf-mini-desc">Jufeng 380gsm French terry · Garment dyed · $117 · Aug 1 launch</div></div>
+          <div class="kf-mini-cell"><div class="kf-mini-name">Colorways</div><div class="kf-mini-desc">Salt · Slate · Stone. Two-tone snowflake + back wordmark.</div></div>
+          <div class="kf-mini-cell"><div class="kf-mini-name">Hero Feature</div><div class="kf-mini-desc">Hidden zip passport pocket. Oversized travel cut.</div></div>
+          <div class="kf-mini-cell"><div class="kf-mini-name">Pricing</div><div class="kf-mini-desc">$117. Afterpay/Klarna/Shop Pay required. Never discount.</div></div>
+        </div>
+        <div class="kf-warn-box"><div style="font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--amber);margin-bottom:4px;">⚠ Action needed</div><div style="font-size:11px;color:var(--soil);line-height:1.5;">Add post-launch SKU expansion (Transit Set, Phase 2) before relaunch</div></div>
+        <div class="kf-card-foot"><div class="kf-foot-meta">Used in 47 briefs</div><button class="btn-ghost" style="font-size:11px;padding:5px 12px;">Edit File →</button></div>
+      </div>
+    </div>
+    <!-- Models -->
+    <div class="kf-card">
+      <div class="kf-cp">
+        <div class="kf-card-head">
+          <div><div class="kf-card-num">Knowledge File 04</div><div class="kf-card-name">Models</div></div>
+          <div><div class="kf-card-status"><div class="dot-status dot-green"></div><span style="font-size:11px;color:var(--green);font-weight:500;">Current</span></div><div class="kf-card-date">Updated May 1</div></div>
+        </div>
+        <div class="kf-lanes"><span class="pill pill-purple" style="font-size:9px;">AI</span><span class="pill pill-teal" style="font-size:9px;">High Prod</span><span style="font-size:11px;color:var(--slate-light);align-self:center;">Creator + Founder: human</span></div>
+        <div class="kf-mini">
+          <div class="kf-mini-cell"><div class="kf-mini-name">AI · fal.ai</div><div class="kf-mini-desc" style="font-family:'DM Mono',monospace;font-size:10px;">Nano Banana 2 (NB2) · 4-shot structure</div></div>
+          <div class="kf-mini-cell"><div class="kf-mini-name">High Prod · Higgsfield</div><div class="kf-mini-desc" style="font-family:'DM Mono',monospace;font-size:10px;">Marketing Studio · cinematic-travel-hero</div></div>
+          <div class="kf-mini-cell"><div class="kf-mini-name">Soul Configs</div><div class="kf-mini-desc" style="font-family:'DM Mono',monospace;font-size:10px;">generic-male-01 · matias-soul-01</div></div>
+          <div class="kf-mini-cell"><div class="kf-mini-name">Negative Prompts</div><div class="kf-mini-desc" style="font-family:'DM Mono',monospace;font-size:10px;">stock photo, overexposed, watermark</div></div>
+        </div>
+        <div class="kf-card-foot"><div class="kf-foot-meta">Last used: S24 + S23 · 4h ago</div><button class="btn-ghost" style="font-size:11px;padding:5px 12px;">Edit File →</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="card card-pad">
+    <div class="label-caps" style="margin-bottom:14px;">Recent System Reads</div>
+    <div style="display:flex;flex-direction:column;gap:9px;">
+      <div style="display:flex;align-items:center;gap:12px;font-size:12px;"><span class="font-mono" style="color:var(--slate);font-size:10px;width:80px;">2h 04m ago</span><span>S25 brief generated</span><span class="pill pill-sand" style="font-size:9px;">Creator</span><span style="color:var(--slate);">Avatar, Brand, Product</span></div>
+      <div style="display:flex;align-items:center;gap:12px;font-size:12px;"><span class="font-mono" style="color:var(--slate);font-size:10px;width:80px;">4h 31m ago</span><span>S24 brief generated</span><span class="pill pill-purple" style="font-size:9px;">AI</span><span style="color:var(--slate);">All 4 files</span></div>
+      <div style="display:flex;align-items:center;gap:12px;font-size:12px;"><span class="font-mono" style="color:var(--slate);font-size:10px;width:80px;">Yesterday</span><span>S23 brief generated</span><span class="pill pill-teal" style="font-size:9px;">High Prod</span><span style="color:var(--slate);">All 4 files</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- SYSTEM PULSE -->
+<div class="view" id="view-pulse">
+  <div class="pulse-head">
+    <div><div class="pulse-title">System Pulse</div><div class="pulse-sub">Live view of every sprint in the pipeline · Updated every 60s</div></div>
+    <div class="pulse-live"><div class="live-dot"></div><span>Live · Last updated 0:34 ago</span></div>
+  </div>
+  <div class="pipeline-card">
+    <div class="pipeline">
+      <div class="pipe-stage"><div class="pipe-node active-n" onclick="go('sprints')"><div class="pipe-sdot a"></div><div class="pipe-count amber">1</div><div class="pipe-label">New Sprint</div><div class="pipe-sub">Drafting</div></div><div class="pipe-tag">S26 · Lifestyle</div></div>
+      <div class="pipe-conn"><div class="pipe-line"></div><div class="pipe-arrow">▶</div></div>
+      <div class="pipe-stage"><div class="pipe-node active-n" onclick="go('brief')"><div class="pipe-sdot a"></div><div class="pipe-count" style="color:var(--blue);">1</div><div class="pipe-label">Brief</div><div class="pipe-sub">Ready for review</div></div><div class="pipe-tag">S25 · Arrival energy</div></div>
+      <div class="pipe-conn"><div class="pipe-line"></div><div class="pipe-arrow">▶</div></div>
+      <div class="pipe-stage"><div class="pipe-node active-n" onclick="go('production')"><div class="pipe-sdot a"></div><div class="pipe-count amber">3</div><div class="pipe-label">Production</div><div class="pipe-sub">Active renders</div></div><div class="pipe-tag">S24, S25, S23-C</div></div>
+      <div class="pipe-conn"><div class="pipe-line"></div><div class="pipe-arrow">▶</div></div>
+      <div class="pipe-stage"><div class="pipe-node"><div class="pipe-sdot x"></div><div class="pipe-count muted">0</div><div class="pipe-label">Encoder</div><div class="pipe-sub">Auto</div></div><div class="pipe-tag">FFmpeg pass</div></div>
+      <div class="pipe-conn"><div class="pipe-line"></div><div class="pipe-arrow">▶</div></div>
+      <div class="pipe-stage"><div class="pipe-node active-n" onclick="go('queue')"><div class="pipe-sdot a"></div><div class="pipe-count" style="color:var(--purple);">3</div><div class="pipe-label">Queue</div><div class="pipe-sub">Awaiting you</div></div><div class="pipe-tag">S23 — 3 renders</div></div>
+      <div class="pipe-conn"><div class="pipe-line"></div><div class="pipe-arrow">▶</div></div>
+      <div class="pipe-stage"><div class="pipe-node live-n" onclick="go('ads')"><div class="pipe-sdot g"></div><div class="pipe-count green">4</div><div class="pipe-label">Testing</div><div class="pipe-sub">Live on Meta</div></div><div class="pipe-tag">$180 today</div></div>
+      <div class="pipe-conn"><div class="pipe-line"></div><div class="pipe-arrow">▶</div></div>
+      <div class="pipe-stage"><div class="pipe-node" style="display:flex;flex-direction:column;gap:6px;width:110px;padding:10px 12px;"><div style="display:flex;justify-content:space-between;align-items:center;"><span class="pipe-count green" style="font-size:20px;">2</span><span style="font-size:9px;color:var(--green);font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Scale</span></div><div style="height:1px;background:rgba(0,0,0,.07);"></div><div style="display:flex;justify-content:space-between;align-items:center;"><span class="pipe-count" style="font-size:20px;color:var(--red);">1</span><span style="font-size:9px;color:var(--red);font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Kill</span></div></div><div class="pipe-tag">Decision time</div></div>
+      <div class="pipe-conn"><div class="pipe-line"></div><div class="pipe-arrow">▶</div></div>
+      <div class="pipe-stage"><div class="pipe-node" onclick="go('learnings')"><div class="pipe-count">18</div><div class="pipe-label">Learnings</div><div class="pipe-sub">Banked</div></div><div class="pipe-tag">12 W · 6 L</div></div>
+    </div>
+  </div>
+  <div class="pulse-grid">
+    <div class="pulse-table-card">
+      <div class="ptc-head"><div style="font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--slate);">All Active Sprints</div><div style="font-size:11px;color:var(--slate);">6 in flight</div></div>
+      <div class="st-head"><div class="label-caps">Sprint</div><div class="label-caps">Hypothesis</div><div class="label-caps">Lane</div><div class="label-caps">Stage</div><div class="label-caps">CPA</div><div class="label-caps">Wk</div></div>
+      <div class="st-row" onclick="go('sprints')"><div class="font-mono" style="font-size:10px;color:var(--slate);">S26</div><div style="font-size:12px;">Lifestyle vs product-focus</div><div><span class="pill pill-purple" style="font-size:9px;">AI</span></div><div style="display:flex;align-items:center;gap:6px;"><div class="dot-status dot-grey"></div><span style="font-size:11px;color:var(--slate);">Drafting</span></div><div class="font-mono" style="font-size:11px;color:var(--slate);">—</div><div class="font-mono" style="font-size:11px;color:var(--slate);">1</div></div>
+      <div class="st-row" onclick="go('brief')"><div class="font-mono" style="font-size:10px;color:var(--slate);">S25</div><div style="font-size:12px;">Arrival vs departure energy</div><div><span class="pill pill-sand" style="font-size:9px;">Creator</span></div><div style="display:flex;align-items:center;gap:6px;"><div class="dot-status dot-amber"></div><span style="font-size:11px;color:var(--amber);">Brief ready</span></div><div class="font-mono" style="font-size:11px;color:var(--slate);">—</div><div class="font-mono" style="font-size:11px;color:var(--slate);">1</div></div>
+      <div class="st-row" onclick="go('production')"><div class="font-mono" style="font-size:10px;color:var(--slate);">S24</div><div style="font-size:12px;">Mission caption vs product copy</div><div><span class="pill pill-purple" style="font-size:9px;">AI</span></div><div style="display:flex;align-items:center;gap:6px;"><div class="dot-status dot-amber"></div><span style="font-size:11px;color:var(--amber);">Rendering</span></div><div class="font-mono" style="font-size:11px;color:var(--slate);">—</div><div class="font-mono" style="font-size:11px;color:var(--slate);">2</div></div>
+      <div class="st-row" onclick="go('queue')"><div class="font-mono" style="font-size:10px;color:var(--slate);">S23</div><div style="font-size:12px;">Arrival shot vs vista shot</div><div><span class="pill pill-teal" style="font-size:9px;">High Prod</span></div><div style="display:flex;align-items:center;gap:6px;"><div class="dot-status dot-amber"></div><span style="font-size:11px;color:var(--purple);">In queue</span></div><div class="font-mono" style="font-size:11px;color:var(--slate);">—</div><div class="font-mono" style="font-size:11px;color:var(--slate);">2</div></div>
+      <div class="st-row" onclick="go('ads')"><div class="font-mono" style="font-size:10px;color:var(--slate);">S22</div><div style="font-size:12px;">Airport raw vs color-graded</div><div><span class="pill pill-sand" style="font-size:9px;">Founder</span></div><div style="display:flex;align-items:center;gap:6px;"><div class="dot-status dot-green"></div><span style="font-size:11px;color:var(--green);">Live</span></div><div class="font-mono" style="font-size:11px;color:var(--green);">$28</div><div class="font-mono" style="font-size:11px;color:var(--slate);">3</div></div>
+      <div class="st-row" onclick="go('ads')"><div class="font-mono" style="font-size:10px;color:var(--slate);">S21</div><div style="font-size:12px;">Cinematic grade vs raw AI</div><div><span class="pill pill-purple" style="font-size:9px;">AI</span></div><div style="display:flex;align-items:center;gap:6px;"><div class="dot-status dot-red"></div><span style="font-size:11px;color:var(--red);">Kill rec</span></div><div class="font-mono" style="font-size:11px;color:var(--red);">$47</div><div class="font-mono" style="font-size:11px;color:var(--slate);">4</div></div>
+    </div>
+    <div class="feed-card">
+      <div class="feed-head"><div style="font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--slate);">Activity</div></div>
+      <div class="feed-item"><div class="feed-dot" style="background:var(--amber);"></div><div style="flex:1;"><div class="feed-text">fal.ai render started — S24-B · Mission caption</div><div class="feed-time">2m ago</div></div></div>
+      <div class="feed-item"><div class="feed-dot" style="background:var(--green);"></div><div style="flex:1;"><div class="feed-text">S22 scaled +30% · $26 → $34/day</div><div class="feed-time">47m</div></div></div>
+      <div class="feed-item"><div class="feed-dot" style="background:var(--amber);"></div><div style="flex:1;"><div class="feed-text">Higgsfield complete — S23-C · In queue</div><div class="feed-time">1h 12m</div></div></div>
+      <div class="feed-item"><div class="feed-dot" style="background:var(--green);"></div><div style="flex:1;"><div class="feed-text">Brief generated — S25 · Creator · 2 learnings consulted</div><div class="feed-time">2h 04m</div></div></div>
+      <div class="feed-item"><div class="feed-dot" style="background:var(--slate-light);"></div><div style="flex:1;"><div class="feed-text">Daily eval ran — 4 ads · 2 scale · 1 kill rec</div><div class="feed-time">9:30am</div></div></div>
+      <div class="feed-item" style="border-bottom:none;"><div class="feed-dot" style="background:var(--green);"></div><div style="flex:1;"><div class="feed-text">Learning banked — S20 · Vista + human: +41% CPA</div><div class="feed-time">Yesterday</div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- SPRINTS -->
+<div class="view" id="view-sprints">
+  <div class="sprints-top">
+    <div><div class="sprints-title">Sprints</div><div style="font-size:12px;color:var(--slate);margin-top:2px;">6 active · 18 closed</div></div>
+    <button class="btn-primary">+ New Sprint</button>
+  </div>
+  <div class="kanban">
+    <div class="kcol">
+      <div class="kcol-head"><span class="pill pill-neutral">Drafting</span><span class="font-mono" style="font-size:10px;color:var(--slate);">1</span></div>
+      <div class="kcard"><div class="kcard-head"><span class="kcard-n">S26</span><span class="pill pill-purple" style="font-size:9px;">AI</span></div><div class="kcard-hyp">Does lifestyle context outperform product-focus for cold AI traffic?</div><div class="kcard-foot">Constraint: $30 CPA · 100 imp min</div><div class="kcard-bar"><div class="kcard-bar-fill" style="width:10%;"></div></div></div>
+    </div>
+    <div class="kcol">
+      <div class="kcol-head"><span class="pill pill-blue">Brief Ready</span><span class="font-mono" style="font-size:10px;color:var(--slate);">1</span></div>
+      <div class="kcard" onclick="go('brief')"><div class="kcard-head"><span class="kcard-n">S25</span><span class="pill pill-sand" style="font-size:9px;">Creator</span></div><div class="kcard-hyp">Does arrival energy outperform departure energy as a hook?</div><div class="kcard-foot" style="color:var(--blue);">Awaiting your brief review →</div></div>
+    </div>
+    <div class="kcol">
+      <div class="kcol-head"><span class="pill pill-amber">Rendering</span><span class="font-mono" style="font-size:10px;color:var(--slate);">1</span></div>
+      <div class="kcard" onclick="go('production')"><div class="kcard-head"><span class="kcard-n">S24</span><span class="pill pill-purple" style="font-size:9px;">AI</span></div><div class="kcard-hyp">Mission caption vs product copy — does it lift CTR?</div><div style="display:flex;align-items:center;gap:6px;"><div class="dot-status dot-amber"></div><span style="font-size:11px;color:var(--amber);">fal.ai · 2 of 4 rendering...</span></div></div>
+    </div>
+    <div class="kcol">
+      <div class="kcol-head"><span class="pill pill-purple">In Queue</span><span class="font-mono" style="font-size:10px;color:var(--slate);">1</span></div>
+      <div class="kcard" onclick="go('queue')"><div class="kcard-head"><span class="kcard-n">S23</span><span class="pill pill-teal" style="font-size:9px;">High Prod</span></div><div class="kcard-hyp">Arrival shot vs vista shot — which framing converts colder?</div><div class="kcard-foot" style="color:var(--purple);">3 renders ready for approval →</div></div>
+    </div>
+    <div class="kcol">
+      <div class="kcol-head"><span class="pill pill-green">Live</span><span class="font-mono" style="font-size:10px;color:var(--slate);">2</span></div>
+      <div class="kcard" onclick="go('ads')"><div class="kcard-head"><span class="kcard-n">S22</span><span class="pill pill-sand" style="font-size:9px;">Founder</span></div><div class="kcard-hyp">Airport footage — raw vs color-graded</div><div class="kcard-metrics"><div><div class="kcard-mv" style="color:var(--green);">$28</div><div class="kcard-ml">CPA</div></div><div><div class="kcard-mv">3.2×</div><div class="kcard-ml">ROAS</div></div><div><div class="kcard-mv">4d</div><div class="kcard-ml">Live</div></div></div></div>
+      <div class="kcard" onclick="go('ads')"><div class="kcard-head"><span class="kcard-n">S21</span><span class="pill pill-purple" style="font-size:9px;">AI</span></div><div class="kcard-hyp">Cinematic grade vs raw AI output</div><div class="kcard-metrics"><div><div class="kcard-mv" style="color:var(--red);">$47</div><div class="kcard-ml">CPA</div></div><div><div class="kcard-mv">1.4×</div><div class="kcard-ml">ROAS</div></div><div><div class="kcard-mv">3d</div><div class="kcard-ml">Live</div></div></div></div>
+    </div>
+    <div class="kcol">
+      <div class="kcol-head"><span class="pill pill-neutral">Closed</span><span class="font-mono" style="font-size:10px;color:var(--slate);">18</span></div>
+      <div class="kcard" onclick="go('learnings')"><div class="kcard-head"><span class="kcard-n">S20</span><span class="pill pill-teal" style="font-size:9px;">High Prod</span></div><div class="kcard-hyp">Vista + person in frame → 41% CPA lift</div><div class="kcard-foot" style="color:var(--green);">✓ Winner banked</div></div>
+      <div class="kcard" onclick="go('learnings')" style="opacity:.6;"><div class="kcard-head"><span class="kcard-n">S19</span><span class="pill pill-purple" style="font-size:9px;">AI</span></div><div class="kcard-hyp">Mission hook didn't lift CTR on cold traffic</div><div class="kcard-foot" style="color:var(--red);">✗ Losing pattern banked</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- BRIEF -->
+<div class="view view-flex" id="view-brief">
+  <div class="brief-rail">
+    <div class="brief-rail-label">Active</div>
+    <div class="brief-rail-item on"><div class="bri-n">S25 · Creator · v1</div><div class="bri-hyp">Arrival vs departure energy as hook</div><div class="bri-meta" style="color:var(--amber);">Awaiting your review</div></div>
+    <div class="brief-rail-item" style="opacity:.5;"><div class="bri-n">S26 · AI · Generating...</div><div class="bri-hyp">Lifestyle vs product-focus</div></div>
+    <div style="height:1px;background:rgba(0,0,0,.07);margin:14px 0;"></div>
+    <div class="brief-rail-label">Recent</div>
+    <div class="brief-rail-item" style="opacity:.5;"><div class="bri-n">S24 · AI · Approved</div><div class="bri-hyp">Mission caption vs product copy</div></div>
+    <div class="brief-rail-item" style="opacity:.5;"><div class="bri-n">S23 · High Prod · Approved</div><div class="bri-hyp">Arrival shot vs vista shot</div></div>
+  </div>
+  <div class="brief-doc">
+    <div class="brief-crumb">
+      <span style="font-size:11px;color:var(--slate);">Sprint 25</span>
+      <span class="brief-crumb-sep">·</span>
+      <span class="pill pill-sand" style="font-size:10px;">Creator</span>
+      <span class="brief-crumb-sep">·</span>
+      <span style="font-size:11px;color:var(--slate);">v1 · Generated 2h ago</span>
+      <div style="flex:1;"></div>
+      <div class="brief-actions"><button class="btn-primary" style="background:var(--green);">Approve</button><button class="btn-ghost">Revise</button><button style="font-size:12px;color:var(--red);padding:6px 0;">Reject</button></div>
+    </div>
+    <div class="brief-hyp">Does arrival energy outperform departure energy as a hook?</div>
+    <div class="brief-kf">
+      <div class="brief-kf-chip"><div class="dot-status dot-green" style="width:5px;height:5px;"></div>Customer Avatar</div>
+      <div class="brief-kf-chip"><div class="dot-status dot-green" style="width:5px;height:5px;"></div>Brand Guidelines</div>
+      <div class="brief-kf-chip"><div class="dot-status dot-green" style="width:5px;height:5px;"></div>Product</div>
+      <div class="brief-kf-chip brief-kf-off">— Models · not used · Creator lane</div>
+    </div>
+    <div class="brief-section">
+      <div class="brief-section-label">Past learnings consulted — 2 patterns applied</div>
+      <div class="brief-learnings-box">
+        <div class="brief-learning-row">
+          <div class="brief-learning-tag" style="color:var(--green);">S20 ✓</div>
+          <div style="font-size:13px;line-height:1.6;">Vista shots with person in frame won by 41% — brief includes human subject in arrival shot, not empty landscape.</div>
+        </div>
+        <div class="brief-learning-row" style="border-bottom:none;">
+          <div class="brief-learning-tag" style="color:var(--red);">S19 ✗</div>
+          <div style="font-size:13px;line-height:1.6;">Mission hook failed on cold traffic — brief avoids mission-first hook, uses arrival emotion as lead instead.</div>
+        </div>
+      </div>
+    </div>
+    <div class="brief-section">
+      <div class="brief-section-label">Constraint</div>
+      <div style="font-size:16px;">CTR &gt; 3.5% · 200 impressions minimum · Arrival wins by ≥20% lift</div>
+    </div>
+    <div class="brief-section">
+      <div class="brief-section-label">Hook</div>
+      <div class="brief-hook">You just landed. The city doesn't know you yet. But you do.</div>
+    </div>
+    <div class="brief-section">
+      <div class="brief-section-label">Payoff</div>
+      <div class="brief-payoff">Foreign Resource. Wear what the world feels like when you first arrive somewhere new.</div>
+    </div>
+    <div class="brief-section">
+      <div class="brief-section-label">Shot List</div>
+      <div class="brief-shot"><div class="brief-shot-n">01</div><div><div class="brief-shot-title">Arrival exit — airport doors into city light</div><div class="brief-shot-desc">Golden hour. Light bloom through glass. Creator walking toward camera. Hoodie, Slate colorway. Snowflake emblem visible.</div></div></div>
+      <div class="brief-shot"><div class="brief-shot-n">02</div><div><div class="brief-shot-title">Hero product mid-shot — full silhouette</div><div class="brief-shot-desc">Side profile or ¾ turn. Garment-dyed texture visible. Natural outdoor light only. No indoor studio.</div></div></div>
+      <div class="brief-shot"><div class="brief-shot-n">03</div><div><div class="brief-shot-title">End card — FR logo · 2 second hold</div><div class="brief-shot-desc">Sand wordmark on Slate. foreignresource.com below. No animation.</div></div></div>
+    </div>
+    <div class="brief-section">
+      <div class="brief-section-label">Caption</div>
+      <div class="brief-caption">The first 30 seconds in a new city hit different. That's the feeling we design for.<br><br>Shop the Snowflake Staple — link in bio.</div>
+    </div>
+    <div class="brief-section">
+      <div class="brief-section-label">Auto-sent to Creator — Higgsfield Soul Brief</div>
+      <div class="brief-prompt-box"><div class="brief-prompt-label">Prompt blueprint</div><div class="brief-prompt-text">Soul Character render. Subject: [creator]. Scene: arriving at international airport exit, golden hour, light bloom. Wearing: oversized French terry hoodie, garment-dyed Slate colorway, FR snowflake emblem visible on chest. Camera: wide-to-close push, slight handheld. Mood: confident arrival. Avoid: suitcases in foreground, departure signage, indoor fluorescent light.</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- JOB QUEUE -->
+<div class="view" id="view-queue-jobs">
+  <div class="jq-title">Job Queue</div>
+  <div class="jq-sub">Every parallel job the agent is running · 6 active sprints</div>
+  <div class="jq-section">
+    <div class="jq-card">
+      <div class="jq-card-head"><div class="dot-status dot-amber"></div><div class="jq-card-label" style="color:var(--amber);">Waiting on you</div><div class="jq-card-count">2 jobs</div></div>
+      <div class="jq-item"><div class="dot-status dot-amber"></div><div class="jq-sprint">S25</div><div class="jq-desc">Brief review · Arrival vs departure energy <span class="pill pill-sand" style="font-size:9px;margin-left:6px;">Creator</span><div class="jq-meta">Generated 2h 04m ago · v1</div></div><div class="jq-cta" onclick="go('brief')">Open Brief →</div></div>
+      <div class="jq-item"><div class="dot-status dot-amber"></div><div class="jq-sprint">S23</div><div class="jq-desc">3 render approvals · Arrival vs vista <span class="pill pill-teal" style="font-size:9px;margin-left:6px;">High Prod</span><div class="jq-meta">Renders complete 1h 12m ago · Encoder done</div></div><div class="jq-cta" onclick="go('queue')">Open Queue →</div></div>
+    </div>
+  </div>
+  <div class="jq-section">
+    <div class="jq-card">
+      <div class="jq-card-head"><div class="dot-status dot-amber"></div><div class="jq-card-label" style="color:var(--soil);">Agent running</div><div class="jq-card-count">3 jobs</div></div>
+      <div class="jq-item"><div class="dot-status dot-amber"></div><div class="jq-sprint">S24-B</div><div class="jq-desc">fal.ai render · NB2 · Mission caption · Airport scene · Slate colorway<div class="jq-meta">~2 min remaining</div></div><div class="jq-bar"><div class="jq-bar-fill" style="width:62%;"></div></div></div>
+      <div class="jq-item"><div class="dot-status dot-amber"></div><div class="jq-sprint">S25</div><div class="jq-desc">Higgsfield Soul render · Arrival energy · Airport exit scene<div class="jq-meta">~8 min remaining</div></div><div class="jq-bar"><div class="jq-bar-fill" style="width:35%;"></div></div></div>
+      <div class="jq-item"><div class="dot-status dot-amber"></div><div class="jq-sprint">S23-C</div><div class="jq-desc">Encoder pass · FFmpeg · Vista wide angle · Final render<div class="jq-meta">~1 min remaining</div></div><div class="jq-bar"><div class="jq-bar-fill" style="width:75%;"></div></div></div>
+    </div>
+  </div>
+  <div class="jq-section">
+    <div class="jq-card">
+      <div class="jq-card-head"><div class="dot-status dot-grey"></div><div class="jq-card-label">Waiting on creator</div><div class="jq-card-count">2 jobs</div></div>
+      <div class="jq-item"><div class="dot-status dot-grey"></div><div class="jq-sprint">S25</div><div class="jq-desc">@jorge.travels · Brief auto-sent · Opened 6h ago<div class="jq-meta">No footage submitted · Follow-up queued at 48h</div></div></div>
+      <div class="jq-item"><div class="dot-status dot-grey"></div><div class="jq-sprint">S25</div><div class="jq-desc">@anamoves · Brief auto-sent · Not opened<div class="jq-meta">6h ago · Follow-up queued at 48h</div></div></div>
+    </div>
+  </div>
+  <div class="jq-section" style="margin-bottom:0;">
+    <div class="jq-card">
+      <div class="jq-card-head"><div class="dot-status dot-grey"></div><div class="jq-card-label">Scheduled</div><div class="jq-card-count">2 jobs</div></div>
+      <div class="jq-item"><div class="dot-status dot-grey"></div><div class="jq-sprint"></div><div class="jq-desc">Daily evaluation · Pull Meta metrics, apply kill/scale thresholds, post Slack digest<div class="jq-meta">9:30am tomorrow</div></div></div>
+      <div class="jq-item"><div class="dot-status dot-grey"></div><div class="jq-sprint"></div><div class="jq-desc">Weekly learning synthesis · Read sprint results, draft patterns, seed next sprint<div class="jq-meta">Sunday 6pm · Posts as DRAFT for your discussion</div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- PRODUCTION -->
+<div class="view" id="view-production">
+  <div class="prod-title">Production</div>
+  <div class="prod-sub">3 active jobs · fal.ai × 2 · Higgsfield × 1</div>
+  <div class="prod-lanes">
+    <div class="prod-lane">
+      <div class="prod-lane-head"><div class="prod-lane-title"><span class="pill pill-purple" style="font-size:9px;">AI Lane</span> 2 active</div><div class="prod-lane-source">fal.ai · Nano Banana 2</div></div>
+      <div class="prod-job"><div class="prod-job-row"><div><div class="prod-job-name">S24-A · Mission caption · Lifestyle · Salt</div><div class="prod-job-meta">fal.ai · NB2 · Complete</div></div><div style="display:flex;align-items:center;gap:6px;"><div class="dot-status dot-green"></div><span style="font-size:11px;color:var(--green);">Complete</span></div></div><div class="progress-bar"><div class="progress-fill progress-green" style="width:100%;"></div></div></div>
+      <div class="prod-job"><div class="prod-job-row"><div><div class="prod-job-name">S24-B · Mission caption · Airport · Slate</div><div class="prod-job-meta">fal.ai · NB2 · ETA ~2 min</div></div><div style="display:flex;align-items:center;gap:6px;"><div class="dot-status dot-amber"></div><span style="font-size:11px;color:var(--amber);">62%</span></div></div><div class="progress-bar"><div class="progress-fill progress-amber" style="width:62%;"></div></div></div>
+      <div class="prod-job" style="opacity:.5;"><div class="prod-job-row"><div><div class="prod-job-name">S24-C · Product copy · Lifestyle</div><div class="prod-job-meta">Queued</div></div><span style="font-size:11px;color:var(--slate);">Queued</span></div></div>
+      <div class="prod-job" style="opacity:.5;"><div class="prod-job-row"><div><div class="prod-job-name">S24-D · Product copy · Airport</div><div class="prod-job-meta">Queued</div></div><span style="font-size:11px;color:var(--slate);">Queued</span></div></div>
+    </div>
+    <div class="prod-lane">
+      <div class="prod-lane-head"><div class="prod-lane-title"><span class="pill pill-teal" style="font-size:9px;">High Production</span> 3 done</div><div class="prod-lane-source">Higgsfield Marketing Studio</div></div>
+      <div class="prod-job"><div class="prod-job-row"><div><div class="prod-job-name">S23-A · Arrival · Vista angle</div><div class="prod-job-meta">Encoded ✓ · Sent to Queue</div></div><span style="font-size:11px;color:var(--green);">In Queue</span></div><div class="progress-bar"><div class="progress-fill progress-green" style="width:100%;"></div></div></div>
+      <div class="prod-job"><div class="prod-job-row"><div><div class="prod-job-name">S23-B · Arrival · Close-up</div><div class="prod-job-meta">Encoded ✓ · Sent to Queue</div></div><span style="font-size:11px;color:var(--green);">In Queue</span></div><div class="progress-bar"><div class="progress-fill progress-green" style="width:100%;"></div></div></div>
+      <div class="prod-job"><div class="prod-job-row"><div><div class="prod-job-name">S23-C · Vista · Wide angle</div><div class="prod-job-meta">Encoding · ETA ~1 min</div></div><span style="font-size:11px;color:var(--amber);">75%</span></div><div class="progress-bar"><div class="progress-fill progress-amber" style="width:75%;"></div></div></div>
+    </div>
+    <div class="prod-lane">
+      <div class="prod-lane-head"><div class="prod-lane-title"><span class="pill pill-sand" style="font-size:9px;">Creator Lane</span> 3 outstanding</div><div class="prod-lane-source">Soul render + creator briefs</div></div>
+      <div class="prod-job"><div class="prod-job-row"><div><div class="prod-job-name">S25 · Soul render · Airport exit</div><div class="prod-job-meta">Higgsfield Soul · ETA ~8 min</div></div><span style="font-size:11px;color:var(--amber);">35%</span></div><div class="progress-bar"><div class="progress-fill progress-amber" style="width:35%;"></div></div></div>
+      <div class="prod-job"><div class="prod-job-row"><div><div class="prod-job-name">@jorge.travels — brief auto-sent</div><div class="prod-job-meta">Opened 6h ago · No response</div></div><span style="font-size:11px;color:var(--slate);">Pending</span></div></div>
+      <div class="prod-job"><div class="prod-job-row"><div><div class="prod-job-name">@anamoves — brief auto-sent</div><div class="prod-job-meta">Not opened · 6h ago</div></div><span style="font-size:11px;color:var(--slate);">Unseen</span></div></div>
+    </div>
+    <div class="prod-lane">
+      <div class="prod-lane-head"><div class="prod-lane-title"><span class="pill pill-sand" style="font-size:9px;">Founder Lane</span> No active</div><div class="prod-lane-source">Matias Soul</div></div>
+      <div class="prod-job" style="opacity:.6;"><div class="prod-job-row"><div><div class="prod-job-name">S22 · Airport raw · Delivered</div><div class="prod-job-meta">$28 CPA · Scaling · Live</div></div><span style="font-size:11px;color:var(--green);">Live</span></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- QUEUE -->
+<div class="view" id="view-queue">
+  <div class="queue-title">Render Queue</div>
+  <div class="queue-sub">S23 · Arrival vs Vista · 3 renders awaiting approval</div>
+  <div class="queue-grid">
+    <div class="qcard">
+      <div class="qcard-img" style="background:linear-gradient(135deg,#2A2520,#4A4038 60%,#9A816B);"><span style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.3);">Preview</span></div>
+      <div class="qcard-body"><div class="qcard-meta"><span class="qcard-ref">S23-A</span><span class="pill pill-teal" style="font-size:9px;">High Prod</span></div><div class="qcard-desc">Arrival shot · Vista angle · Higgsfield Marketing Studio</div><div class="qcard-actions"><button class="qa-btn qa-approve" title="Approve">✓</button><button class="qa-btn qa-revise" title="Revise">↻</button><button class="qa-btn qa-reject" title="Reject">✕</button><div class="encode-badge">Encoded ✓</div></div></div>
+    </div>
+    <div class="qcard">
+      <div class="qcard-img" style="background:linear-gradient(145deg,#1A2535,#2D3F55 60%,#9A816B);"><span style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.3);">Preview</span></div>
+      <div class="qcard-body"><div class="qcard-meta"><span class="qcard-ref">S23-B</span><span class="pill pill-teal" style="font-size:9px;">High Prod</span></div><div class="qcard-desc">Arrival shot · Close-up angle · Higgsfield Marketing Studio</div><div class="qcard-actions"><button class="qa-btn qa-approve">✓</button><button class="qa-btn qa-revise">↻</button><button class="qa-btn qa-reject">✕</button><div class="encode-badge">Encoded ✓</div></div></div>
+    </div>
+    <div class="qcard">
+      <div class="qcard-img" style="background:linear-gradient(145deg,#2A1E10,#3D2E1A 60%,#9A816B);"><span style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.3);">Preview</span></div>
+      <div class="qcard-body"><div class="qcard-meta"><span class="qcard-ref">S23-C</span><span class="pill pill-teal" style="font-size:9px;">High Prod</span></div><div class="qcard-desc">Vista shot · Wide angle · Higgsfield Marketing Studio</div><div class="qcard-actions"><button class="qa-btn qa-approve">✓</button><button class="qa-btn qa-revise">↻</button><button class="qa-btn qa-reject">✕</button><div class="encode-badge encode-pending">Encoding...</div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- LIVE ADS -->
+<div class="view" id="view-ads">
+  <div class="ads-title">Live Ads</div>
+  <div class="ads-sub">4 ads testing · 2 scaling · 1 at kill threshold · 1 watching</div>
+  <div class="ads-budget-row">
+    <strong>Weekly Budget</strong>
+    <span class="font-mono">$1,240 / $2,000</span>
+    <div class="ads-budget-track"><div class="ads-budget-fill" style="width:62%;"></div></div>
+    <span>62% used · Agent will pause new launches at 90%</span>
+  </div>
+  <div class="ads-table">
+    <div class="ads-thead"><div class="label-caps">Ad</div><div class="label-caps">CPA</div><div class="label-caps">ROAS</div><div class="label-caps">CTR</div><div class="label-caps">Spend</div><div class="label-caps">Action</div></div>
+    <div class="ads-row"><div><div class="ads-name">S22_founder_airport-raw_v1</div><div class="ads-name-sub"><div class="dot-status dot-green" style="width:5px;height:5px;"></div><span class="pill pill-sand" style="font-size:9px;">Founder</span><span style="color:var(--slate);font-size:11px;">4 days · Scaling</span></div></div><div class="ads-cpa-g">$28</div><div class="ads-num" style="color:var(--green);">3.2×</div><div class="ads-num">3.8%</div><div class="ads-num">$420</div><div class="ads-actions"><button class="btn-scale">Scale +30%</button></div></div>
+    <div class="ads-row"><div><div class="ads-name">S22_founder_airport-graded_v1</div><div class="ads-name-sub"><div class="dot-status dot-green" style="width:5px;height:5px;"></div><span class="pill pill-sand" style="font-size:9px;">Founder</span><span style="color:var(--slate);font-size:11px;">4 days · Watching</span></div></div><div class="ads-cpa-g">$32</div><div class="ads-num">2.8×</div><div class="ads-num">2.9%</div><div class="ads-num">$310</div><div class="ads-actions"><button class="btn-scale">Scale +15%</button></div></div>
+    <div class="ads-row"><div><div class="ads-name">S21_ai_cinematic-grade_v2</div><div class="ads-name-sub"><div class="dot-status dot-amber" style="width:5px;height:5px;"></div><span class="pill pill-purple" style="font-size:9px;">AI</span><span style="color:var(--slate);font-size:11px;">8 days · Watching</span></div></div><div class="ads-cpa-a">$38</div><div class="ads-num">1.8×</div><div class="ads-num">2.3%</div><div class="ads-num">$380</div><div class="ads-actions"><button class="btn-kill">Kill</button></div></div>
+    <div class="ads-row"><div><div class="ads-name">S21_ai_raw-output_v1</div><div class="ads-name-sub"><div class="dot-status dot-red" style="width:5px;height:5px;"></div><span class="pill pill-purple" style="font-size:9px;">AI</span><span style="color:var(--red);font-size:11px;font-weight:500;">Kill threshold hit</span></div></div><div class="ads-cpa-r">$47</div><div class="ads-num" style="color:var(--red);">1.4×</div><div class="ads-num">1.8%</div><div class="ads-num">$130</div><div class="ads-actions"><button class="btn-kill" style="font-weight:700;">Kill Now</button></div></div>
+  </div>
+  <div class="ads-rules"><span><strong>Kill rule:</strong> CPA &gt; $45 after 100 imp</span><span style="color:var(--sand-light);">·</span><span><strong>Scale rule:</strong> CPA &lt; $25 after 200 imp</span><span style="color:var(--sand-light);">·</span><span><strong>Target:</strong> $30</span></div>
+</div>
+
+<!-- LIBRARY -->
+<div class="view view-flex" id="view-library">
+  <div class="lib-side">
+    <div class="lib-side-label">Library</div>
+    <div class="lib-side-item on" onclick="libGo('competitor',this)">Competitor Ads</div>
+    <div class="lib-side-item" onclick="libGo('inspiration',this)">Inspiration</div>
+    <div class="lib-side-item" onclick="libGo('extension',this)">Chrome Extension</div>
+    <div class="lib-div"></div>
+    <div class="lib-side-label">Folders</div>
+    <div class="lib-folder">📁 Hooks</div>
+    <div class="lib-folder">📁 Product Shots</div>
+    <div class="lib-folder">📁 Travel Aesthetic</div>
+    <div class="lib-folder">📁 Competitor Ref</div>
+    <div class="lib-folder" style="color:var(--slate);font-size:10px;margin-top:4px;">+ New Folder</div>
+  </div>
+  <div class="lib-main">
+    <div id="lib-competitor">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:400;margin-bottom:4px;">Competitor Ads</div>
+      <div style="font-size:12px;color:var(--slate);margin-bottom:22px;">Meta Ad Library API · Auto-refreshes every 24h</div>
+      <div class="brand-pills"><div class="brand-pill on">COMFRT</div><div class="brand-pill">Represent</div><div class="brand-pill">ALD</div><div class="brand-pill">Jacquemus</div><div class="brand-pill">Madhappy</div><div class="brand-pill" style="color:var(--blue);">+ Add brand</div></div>
+      <div class="comp-insight"><div class="comp-insight-label">Pattern detected · COMFRT</div><div class="comp-insight-text">5 of 23 active ads feature the founder this week — all video, 3 launched in last 4 days. Consider a Founder lane sprint to see how FR's take compares.</div><div class="comp-seed-btn" onclick="go('sprints')">→ Seed as Sprint Hypothesis</div></div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:400;margin-bottom:12px;">COMFRT <span style="font-size:11px;color:var(--slate);font-family:'DM Sans',sans-serif;font-style:normal;">23 active · Updated 6h ago</span></div>
+      <div class="comp-grid">
+        <div class="comp-card"><div class="comp-card-img" style="background:linear-gradient(145deg,#1a1a2e,#7b5ea7);"></div><div class="comp-card-body"><div class="comp-card-title">Hoodie lifestyle · Airport</div><div class="comp-card-meta">Active 14d · Static</div></div></div>
+        <div class="comp-card"><div class="comp-card-img" style="background:linear-gradient(145deg,#0f1f35,#2563eb);"></div><div class="comp-card-body"><div class="comp-card-title">UGC creator · Morning routine</div><div class="comp-card-meta">Active 8d · Video</div></div></div>
+        <div class="comp-card"><div class="comp-card-img" style="background:linear-gradient(145deg,#2d1b69,#9333ea);"></div><div class="comp-card-body"><div class="comp-card-title">Mission copy · Text hook</div><div class="comp-card-meta">Active 3d · Carousel</div></div></div>
+        <div class="comp-card"><div class="comp-card-img" style="background:linear-gradient(145deg,#3d1a00,#b45309);"></div><div class="comp-card-body"><div class="comp-card-title">Founder story · Brand origin</div><div class="comp-card-meta" style="color:var(--red);">Stopped 2d ago · Video</div></div></div>
+      </div>
+    </div>
+    <div id="lib-inspiration" style="display:none;">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:400;margin-bottom:4px;">Inspiration</div>
+      <div style="font-size:12px;color:var(--slate);margin-bottom:22px;">Saved from Chrome extension · Any platform</div>
+      <div style="columns:4;column-gap:12px;">
+        <div style="break-inside:avoid;margin-bottom:12px;border-radius:6px;overflow:hidden;border:1px solid rgba(0,0,0,.07);"><div style="height:180px;background:linear-gradient(135deg,#2A2520,#9A816B);"></div></div>
+        <div style="break-inside:avoid;margin-bottom:12px;border-radius:6px;overflow:hidden;border:1px solid rgba(0,0,0,.07);"><div style="height:120px;background:linear-gradient(135deg,#1A2535,#4A7FA5);"></div></div>
+        <div style="break-inside:avoid;margin-bottom:12px;border-radius:6px;overflow:hidden;border:1px solid rgba(0,0,0,.07);"><div style="height:200px;background:linear-gradient(135deg,#2A1F0E,#9A816B);"></div></div>
+        <div style="break-inside:avoid;margin-bottom:12px;border-radius:6px;overflow:hidden;border:1px solid rgba(0,0,0,.07);"><div style="height:140px;background:linear-gradient(135deg,#1a3a2a,#4A7A5A);"></div></div>
+        <div style="break-inside:avoid;margin-bottom:12px;border-radius:6px;overflow:hidden;border:1px solid rgba(0,0,0,.07);"><div style="height:160px;background:linear-gradient(135deg,#1B2741,#4A6FA5);"></div></div>
+        <div style="break-inside:avoid;margin-bottom:12px;border-radius:6px;overflow:hidden;border:1px solid rgba(0,0,0,.07);"><div style="height:110px;background:linear-gradient(135deg,#3d2010,#D4956A);"></div></div>
+      </div>
+    </div>
+    <div id="lib-extension" style="display:none;">
+      <div style="display:flex;gap:48px;align-items:flex-start;">
+        <div style="flex:1;max-width:380px;">
+          <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:400;margin-bottom:4px;">Chrome Extension</div>
+          <div style="font-size:12px;color:var(--slate);margin-bottom:22px;">Save creative from any platform into your FR Library in one click. Syncs to Supabase instantly.</div>
+          <div style="margin-bottom:20px;"><div class="label-caps" style="margin-bottom:8px;">Works on</div><div style="font-size:12px;color:var(--slate);line-height:1.8;">Pinterest · Instagram · Facebook Ad Library<br>TikTok · Any webpage</div></div>
+          <div style="margin-bottom:20px;"><div class="label-caps" style="margin-bottom:8px;">Captures</div><div style="font-size:12px;color:var(--slate);line-height:1.8;">Image or video URL · Source page · Platform<br>Your folder + tags · Sprint link (optional)</div></div>
+          <div><div class="label-caps" style="margin-bottom:8px;">Build spec</div><div class="font-mono" style="color:var(--slate);line-height:1.9;font-size:11px;">manifest.json (MV3) · popup.html<br>content.js (platform detection)<br>background.js (service worker)<br>Supabase SDK → creative_library table<br>Clerk auth token passthrough</div></div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--slate);margin-bottom:8px;letter-spacing:.06em;text-transform:uppercase;">Extension popup</div>
+          <div class="ext-popup">
+            <div class="ext-head"><div class="ext-logo">Foreign Resource</div><div class="dot-status dot-green"></div></div>
+            <div class="ext-section"><div class="ext-label">Detected on Instagram · @comfrt</div><div class="ext-detected"><div class="ext-thumb" style="background:linear-gradient(135deg,#2d1b69,#7b5ea7);"></div><div><div class="ext-dn">Reel · UGC creator · Morning routine</div><div class="ext-dm">Video · Competitor · Hoodie lifestyle</div></div></div></div>
+            <div class="ext-section"><div class="ext-label">Save to folder</div><select class="ext-select"><option>📁 Competitor Ref</option><option>📁 Hooks</option><option>📁 Travel Aesthetic</option></select><div class="ext-label" style="margin-top:10px;">Tags</div><div class="ext-tags"><div class="ext-tag on">ugc</div><div class="ext-tag">morning</div><div class="ext-tag">hoodie</div><div class="ext-tag" style="color:var(--blue);">+ add</div></div></div>
+            <div class="ext-save"><button class="ext-save-btn">Save to FR Library</button><div class="ext-save-note">Syncs instantly · Available in Library tab</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LEARNINGS -->
+<div class="view" id="view-learnings">
+  <div class="learn-title">Learnings</div>
+  <div class="learn-sub">18 sprints closed · 12 winning patterns · 6 losing patterns · Feeds next sprint automatically</div>
+  <div class="learn-summary">
+    <div class="learn-summary-card" style="border-left:4px solid var(--green);"><div class="learn-summary-label">Top winning pattern</div><div class="learn-summary-text" style="color:var(--green);">Human in frame outperforms empty travel shot on cold traffic</div><div class="learn-summary-meta">↑ 41% avg CPA improvement across 4 sprints</div></div>
+    <div class="learn-summary-card" style="border-left:4px solid var(--red);"><div class="learn-summary-label">Top losing pattern</div><div class="learn-summary-text" style="color:var(--red);">Mission hook reduces CTR vs product lead on cold audiences</div><div class="learn-summary-meta">Works in caption — not as first-frame hook</div></div>
+  </div>
+  <div class="learn-list">
+    <div class="learn-row"><div class="learn-row-meta"><span class="font-mono" style="font-size:10px;">S20</span><span class="pill pill-teal" style="font-size:9px;">High Prod</span><span style="font-size:11px;color:var(--green);font-weight:500;">✓ Winner</span><span style="margin-left:auto;font-size:11px;color:var(--slate);">Apr 29 · $28 final CPA</span></div><div class="learn-hyp">Vista shots with person in frame converted 41% better than empty landscape</div><div class="learn-patterns"><div class="learn-pattern" style="color:var(--green);">✓ Always include human subject in travel shot for cold traffic</div><div class="learn-pattern" style="color:var(--red);">✗ Landscape-only hooks fail to create identification for new audiences</div></div><button style="font-size:11px;color:var(--blue);cursor:pointer;font-weight:500;">Seed as S27 starting point →</button></div>
+    <div class="learn-row"><div class="learn-row-meta"><span class="font-mono" style="font-size:10px;">S19</span><span class="pill pill-purple" style="font-size:9px;">AI</span><span style="font-size:11px;color:var(--red);font-weight:500;">✗ Losing</span><span style="margin-left:auto;font-size:11px;color:var(--slate);">Apr 22 · $44 final CPA</span></div><div class="learn-hyp">Foreign Fund mission hook didn't lift CTR vs direct product copy</div><div class="learn-patterns"><div class="learn-pattern" style="color:var(--green);">✓ Mission angle resonates in caption and body copy position</div><div class="learn-pattern" style="color:var(--red);">✗ Mission as first-frame hook reduces scroll-stop on cold traffic</div></div><button style="font-size:11px;color:var(--blue);cursor:pointer;font-weight:500;">Retry as mid-scroll test →</button></div>
+    <div class="learn-row"><div class="learn-row-meta"><span class="font-mono" style="font-size:10px;">S18</span><span class="pill pill-sand" style="font-size:9px;">Creator</span><span style="font-size:11px;color:var(--green);font-weight:500;">✓ Winner</span><span style="margin-left:auto;font-size:11px;color:var(--slate);">Apr 15 · $24 final CPA</span></div><div class="learn-hyp">Creator UGC-feel in Higgsfield Soul outperformed polished AI stills by 28% CPA</div><div class="learn-patterns"><div class="learn-pattern" style="color:var(--green);">✓ Natural movement + authentic lighting in Soul = better cold CTR</div><div class="learn-pattern" style="color:var(--red);">✗ Over-produced studio renders feel too branded for scroll-stop</div></div></div>
+  </div>
+</div>
+
+</div><!-- .content -->
+</div><!-- .shell -->
+
+<script>
+function go(tab){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  document.getElementById('view-'+tab)?.classList.add('on');
+  document.getElementById('tab-'+tab)?.classList.add('on');
+  closeAllDD();
+}
+function toggleDD(n){
+  const el=document.getElementById('dd-'+n);
+  const open=el.classList.contains('open');
+  closeAllDD();
+  if(!open)el.classList.add('open');
+}
+function closeAllDD(){document.querySelectorAll('.dd').forEach(d=>d.classList.remove('open'));}
+function libGo(tab,el){
+  ['competitor','inspiration','extension'].forEach(t=>{const v=document.getElementById('lib-'+t);if(v)v.style.display='none';});
+  document.querySelectorAll('.lib-side-item').forEach(i=>i.classList.remove('on'));
+  const target=document.getElementById('lib-'+tab);
+  if(target)target.style.display='block';
+  if(el)el.classList.add('on');
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.dd-wrap'))closeAllDD();});
+libGo('competitor',document.querySelector('.lib-side-item'));
+</script>
+</body>
+</html>
