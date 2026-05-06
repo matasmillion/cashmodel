@@ -1000,6 +1000,44 @@ export async function testHiggsfieldProxy() {
   }, { allowAnyStatus: true });
 }
 
+// ─── Slack (notifications + interactivity) ──────────────────────────
+
+export async function saveSlackCredentials({ token }) {
+  if (!IS_SUPABASE_ENABLED) throw new Error('Supabase not configured');
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) throw new Error('No active organization');
+  const db = await getAuthedSupabase();
+  const { error } = await db
+    .from('user_integrations')
+    .upsert(
+      { org_id: orgId, provider: 'slack', token, metadata: {} },
+      { onConflict: 'org_id,provider' },
+    );
+  if (error) throw new Error(`Failed to save credentials: ${error.message}`);
+}
+
+export async function deleteSlackCredentials() {
+  if (!IS_SUPABASE_ENABLED) return;
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) return;
+  const db = await getAuthedSupabase();
+  await db.from('user_integrations').delete().eq('org_id', orgId).eq('provider', 'slack');
+}
+
+export async function callSlackProxy({ method = 'POST', path, body, query }) {
+  return await callEdgeFunction('slack-proxy', { method, path, body, query });
+}
+
+/** Manually trigger evaluate-daily for the current org (cron also runs nightly). */
+export async function callEvaluateDaily() {
+  return await callEdgeFunction('evaluate-daily', {});
+}
+
+/** Manually trigger synthesize-weekly for the current org. */
+export async function callSynthesizeWeekly() {
+  return await callEdgeFunction('synthesize-weekly', {});
+}
+
 // ─── Transloadit (video encoder pass) ────────────────────────────────
 
 export async function saveTransloaditCredentials({ authKey, authSecret }) {

@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-06T18:46:41.006Z",
+  "lastUpdated": "2026-05-06T18:53:21.187Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "44b4a58",
+      "date": "2026-05-06T18:47:01+00:00",
+      "message": "feat: Creative Engine Phases 3.5 + 4 — encoder + Meta publish"
+    },
+    {
       "sha": "42f29f3",
       "date": "2026-05-06T18:34:34+00:00",
       "message": "feat: Creative Engine Phase 3 — render dispatch"
@@ -1087,11 +1092,6 @@
       "sha": "61990a6",
       "date": "2026-05-06T13:15:42+00:00",
       "message": "chore: update public/state.json (prebuild regeneration)"
-    },
-    {
-      "sha": "d62aba1",
-      "date": "2026-05-06T13:15:16+00:00",
-      "message": "feat: Creative Engine Phase 0 + Phase 1 foundation"
     }
   ]
 }
