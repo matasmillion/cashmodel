@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Settings, ChevronDown, LogOut } from 'lucide-react';
+import { Settings, ChevronDown, LogOut, Sparkles } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useCurrentOrg, useSignOut, useCurrentUser } from '../lib/auth';
 import SyncIndicator from './SyncIndicator';
@@ -31,7 +31,8 @@ const PRIMARY_NAV = [
     id: 'marketing',
     label: 'Marketing',
     children: [
-      { tabId: 'ad-units', label: 'Creative' },
+      { tabId: 'creative-engine', label: 'Creative Engine', icon: Sparkles },
+      { tabId: 'ad-units', label: 'Schedule Units' },
       { tabId: 'revenue', label: 'Revenue' },
     ],
   },
@@ -321,7 +322,9 @@ export default function TopBar() {
                       active={state.activeTab === child.tabId}
                       onClick={() => { setTab(child.tabId); close(); }}
                     >
-                      {child.label}
+                      {child.icon
+                        ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><child.icon size={11} strokeWidth={1.5} />{child.label}</span>
+                        : child.label}
                     </MenuItem>
                   ))}
                 </HoverMenu>
