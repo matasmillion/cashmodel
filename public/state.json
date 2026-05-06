@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-06T13:22:56.899Z",
+  "lastUpdated": "2026-05-06T13:40:09.060Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "f06ebf8",
+      "date": "2026-05-06T13:23:10+00:00",
+      "message": "feat: Creative Engine Phase 2 — brief generation"
+    },
+    {
       "sha": "5a8c653",
       "date": "2026-05-06T13:16:47+00:00",
       "message": "feat: Creative Engine Phase 0 + Phase 1 foundation"
@@ -1087,11 +1092,6 @@
       "sha": "467280d",
       "date": "2026-05-04T21:29:15+03:00",
       "message": "Card font + cover image render fix (#18)"
-    },
-    {
-      "sha": "ab02bc2",
-      "date": "2026-05-04T21:24:15+03:00",
-      "message": "Max FOB formula uses Cash-tab assumptions + rate card (#17)"
     }
   ]
 }
