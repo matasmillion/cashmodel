@@ -152,10 +152,8 @@ serve(async (req) => {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
   });
 
-  const { data: userData, error: userErr } = await supabase.auth.getUser(jwt);
-  if (userErr || !userData?.user) {
-    return json({ error: 'Invalid session token' }, 401, origin);
-  }
+  // No supabase.auth.getUser() call — Clerk JWTs aren't recognised by
+  // that endpoint. RLS via jwt_org_id() handles auth on every query.
 
   // ── 2. Parse request body ───────────────────────────────────────────────
   let body: { sprint_id?: string; knowledge?: { avatar: string; brand: string; product: string; models: string | null } };

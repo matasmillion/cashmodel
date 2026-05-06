@@ -60,10 +60,11 @@ serve(async (req) => {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
   });
 
-  const { data: userData, error: userErr } = await supabase.auth.getUser(jwt);
-  if (userErr || !userData?.user) {
-    return json({ error: 'Invalid session token' }, 401, origin);
-  }
+  // We don't call supabase.auth.getUser() here — that endpoint only
+  // recognises Supabase-native JWTs, and ours are Clerk-issued. Instead
+  // we rely on RLS to enforce auth: the user_integrations lookup below
+  // uses jwt_org_id() which returns null for invalid JWTs, so the row
+  // simply won't be found and we return 404 ("not connected").
 
   // ── 2. Look up this org's Anthropic API key ────────────────────────────
   const { data: integration, error: intErr } = await supabase
