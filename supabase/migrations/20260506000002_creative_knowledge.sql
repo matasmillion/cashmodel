@@ -10,6 +10,16 @@
 -- shape — the JS layer does — so we can iterate on the schemas without
 -- migrations.
 
+-- Idempotent helper definition so this migration can run standalone
+-- (i.e. before or independently of 20260506000001_creative_schema.sql).
+create or replace function public.set_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
 create table if not exists public.creative_knowledge (
   id              text        primary key default gen_random_uuid()::text,
   organization_id text        not null references public.organizations(id) on delete cascade,
