@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ShoppingBag, BarChart3, CreditCard, Mail, Truck, CheckCircle, XCircle, Loader, ChevronDown, ChevronUp, ExternalLink, RefreshCw, Copy, Server, Landmark, Plus, Trash2 } from 'lucide-react';
+import { ShoppingBag, BarChart3, CreditCard, Mail, Truck, CheckCircle, XCircle, Loader, ChevronDown, ChevronUp, ExternalLink, RefreshCw, Copy, Server, Landmark, Plus, Trash2, Sparkles } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { useApp } from '../context/AppContext';
 import {
@@ -9,6 +9,7 @@ import {
   saveMercuryCredentials, loadMercuryIntegration, deleteMercuryCredentials,
   createPlaidLinkToken, exchangePlaidPublicToken, listPlaidItems,
   removePlaidItem, syncPlaidActuals,
+  saveAnthropicCredentials, loadAnthropicIntegration, deleteAnthropicCredentials, testAnthropicProxy,
 } from '../utils/liveDataSync';
 
 const FR = { slate: '#3A3A3A', salt: '#F5F0E8', sand: '#EBE5D5', stone: '#716F70', soil: '#9A816B', sea: '#B5C7D3', sage: '#ADBDA3', sienna: '#D4956A', green: '#4CAF7D', red: '#C0392B' };
@@ -900,6 +901,78 @@ function guessCardIdFromMask(mask) {
   return match?.id || null;
 }
 
+// ─── Anthropic (API key stored in Supabase, calls via edge function proxy) ────
+function AnthropicCard({ creds, onSave, onClear }) {
+  const [open, setOpen] = useState(!creds?.connected);
+  const [token, setToken] = useState('');
+  const [status, setStatus] = useState(null); // null | 'saving' | 'ok' | 'error'
+  const [errMsg, setErrMsg] = useState('');
+
+  async function handleConnect(e) {
+    e.preventDefault();
+    setStatus('saving');
+    setErrMsg('');
+    try {
+      await saveAnthropicCredentials({ token });
+      await testAnthropicProxy();
+      setStatus('ok');
+      onSave({ connected: true, savedAt: new Date().toISOString() });
+      setToken('');
+      setOpen(false);
+    } catch (err) {
+      setStatus('error');
+      setErrMsg(err.message);
+    }
+  }
+
+  async function handleDisconnect() {
+    try { await deleteAnthropicCredentials(); } catch {}
+    onClear();
+  }
+
+  return (
+    <IntegrationCard
+      name="Anthropic"
+      description="Powers brief generation and weekly synthesis in the Creative Engine"
+      icon={Sparkles}
+      iconColor={FR.sienna}
+      connected={creds?.connected}
+      open={open}
+      onToggle={() => setOpen(o => !o)}
+      onDisconnect={handleDisconnect}
+    >
+      {!creds?.connected ? (
+        <form onSubmit={handleConnect} className="space-y-3 mt-3">
+          <div className="p-2 rounded-lg text-xs flex items-start gap-2" style={{ background: FR.salt, border: `1px solid ${FR.sand}` }}>
+            <Server size={12} style={{ color: FR.soil, marginTop: 2, flexShrink: 0 }} />
+            <span style={{ color: FR.stone }}>
+              Your Anthropic API key is stored encrypted in our database, scoped to your org. The browser calls a proxy — your key never reaches the client.
+            </span>
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: FR.stone }}>API Key</label>
+            <input
+              type="password"
+              value={token}
+              onChange={e => setToken(e.target.value)}
+              placeholder="sk-ant-…"
+              required
+              className="w-full px-3 py-2 rounded-lg text-sm border"
+              style={{ borderColor: FR.sand, fontFamily: 'ui-monospace, SF Mono, Menlo, monospace' }}
+            />
+          </div>
+          <StatusButton status={status} label="Save & Test" errMsg={errMsg} />
+        </form>
+      ) : (
+        <div className="mt-3 text-xs space-y-1" style={{ color: FR.stone }}>
+          <p>Connected — API key stored securely.</p>
+          {creds.savedAt && <p>Saved {new Date(creds.savedAt).toLocaleDateString()}</p>}
+        </div>
+      )}
+    </IntegrationCard>
+  );
+}
+
 // ─── Shared components ────────────────────────────────────────────────────────
 function IntegrationCard({ name, description, icon: Icon, iconColor, connected, open, onToggle, onDisconnect, children }) {
   return (
@@ -999,6 +1072,7 @@ export default function IntegrationsPanel() {
         <KlaviyoCard creds={creds.klaviyo} onSave={d => update('klaviyo', d)} onClear={() => update('klaviyo', null)} />
         <MercuryCard creds={creds.mercury} onSave={d => update('mercury', d)} onClear={() => update('mercury', null)} dispatch={dispatch} />
         <PlaidCard dispatch={dispatch} />
+        <AnthropicCard creds={creds.anthropic} onSave={d => update('anthropic', d)} onClear={() => update('anthropic', null)} />
 
         {/* 3PL — handled by the Fulfillment tab */}
         <div className="rounded-xl border p-4 flex items-center gap-3" style={{ background: 'white', borderColor: FR.sand }}>

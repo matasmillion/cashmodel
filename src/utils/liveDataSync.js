@@ -749,3 +749,118 @@ export function mergeActualWeeks(shopifyWeeks, metaWeeks) {
     };
   });
 }
+
+// ─── Anthropic (API key stored in Supabase, calls via edge function proxy) ───
+
+export async function saveAnthropicCredentials({ token }) {
+  if (!IS_SUPABASE_ENABLED) throw new Error('Supabase not configured');
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) throw new Error('No active organization');
+  const db = await getAuthedSupabase();
+  const { error } = await db
+    .from('user_integrations')
+    .upsert(
+      { org_id: orgId, provider: 'anthropic', token, metadata: {} },
+      { onConflict: 'org_id,provider' },
+    );
+  if (error) throw new Error(`Failed to save credentials: ${error.message}`);
+}
+
+export async function loadAnthropicIntegration() {
+  if (!IS_SUPABASE_ENABLED) return null;
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) return null;
+  const db = await getAuthedSupabase();
+  const { data, error } = await db
+    .from('user_integrations')
+    .select('metadata, updated_at')
+    .eq('org_id', orgId)
+    .eq('provider', 'anthropic')
+    .maybeSingle();
+  if (error || !data) return null;
+  return { updatedAt: data.updated_at };
+}
+
+export async function deleteAnthropicCredentials() {
+  if (!IS_SUPABASE_ENABLED) return;
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) return;
+  const db = await getAuthedSupabase();
+  await db.from('user_integrations').delete().eq('org_id', orgId).eq('provider', 'anthropic');
+}
+
+/**
+ * Calls the `generate-brief` edge function to generate a brief for a sprint.
+ * Knowledge file contents must be passed in from the client (they live in the
+ * repo bundle via getKnowledgeForLane()).
+ *
+ * @param {{ sprint_id: string, knowledge: { avatar: string, brand: string, product: string, models: string|null } }} params
+ * @returns {Promise<import('../types/creative').Brief>}
+ */
+export async function callGenerateBrief({ sprint_id, knowledge }) {
+  if (!IS_SUPABASE_ENABLED || !supabase) {
+    throw new Error('Supabase not configured — cannot reach generate-brief');
+  }
+  const token = await getClerkToken();
+  if (!token) throw new Error('Sign in to generate a brief');
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/generate-brief`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: anonKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ sprint_id, knowledge }),
+  });
+
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!res.ok) {
+    const msg = data?.error || `${res.status} ${res.statusText}`;
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+  }
+  return data.brief;
+}
+
+/**
+ * Test the anthropic-proxy by sending a minimal ping message.
+ * Returns { model, usage } on success.
+ */
+export async function testAnthropicProxy() {
+  if (!IS_SUPABASE_ENABLED || !supabase) {
+    throw new Error('Supabase not configured');
+  }
+  const token = await getClerkToken();
+  if (!token) throw new Error('Sign in first');
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/anthropic-proxy`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: anonKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 16,
+      messages: [{ role: 'user', content: 'Reply with just the word "ok".' }],
+    }),
+  });
+
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!res.ok) {
+    const msg = data?.error || `${res.status} ${res.statusText}`;
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+  }
+  return { model: data.model, usage: data.usage };
+}
