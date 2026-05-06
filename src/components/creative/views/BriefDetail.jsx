@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { getSprint, saveSprint } from '../../../utils/sprintStore';
 import { listBriefs, saveBrief, createBrief } from '../../../utils/briefStore';
 import { callGenerateBrief } from '../../../utils/liveDataSync';
-import { getKnowledgeForLane } from '../knowledge/index';
 import { SPRINT_STATUSES } from '../../../types/creative';
 
 const FR = { slate: '#3A3A3A', salt: '#F5F0E8', sand: '#EBE5D5', stone: '#716F70' };
@@ -53,8 +52,7 @@ export default function BriefDetail({ sprintId }) {
     setGenerating(true);
     setGenError(null);
     try {
-      const knowledge = getKnowledgeForLane(sprint.lane);
-      const newBrief = await callGenerateBrief({ sprint_id: sprintId, knowledge });
+      const newBrief = await callGenerateBrief({ sprint_id: sprintId });
       // Mirror sprint status change locally (the edge function already updated DB)
       setSprint(prev => ({ ...prev, status: SPRINT_STATUSES.BRIEF_READY }));
       setBriefs(prev => [newBrief, ...(prev || [])]);

@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-06T13:40:09.060Z",
+  "lastUpdated": "2026-05-06T14:00:56.921Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "58c2000",
+      "date": "2026-05-06T13:41:06+00:00",
+      "message": "chore: regenerate state.json after Phase 2 build"
+    },
+    {
+      "sha": "9777fd8",
+      "date": "2026-05-06T13:40:37+00:00",
+      "message": "fix: drop supabase.auth.getUser() from creative proxies"
+    },
+    {
       "sha": "f06ebf8",
       "date": "2026-05-06T13:23:10+00:00",
       "message": "feat: Creative Engine Phase 2 — brief generation"
@@ -1082,16 +1092,6 @@
       "sha": "0f1f2ca",
       "date": "2026-05-04T18:34:44+00:00",
       "message": "assumptions: drop fulfillment % from 10% → 9%"
-    },
-    {
-      "sha": "45f67a1",
-      "date": "2026-05-04T21:33:34+03:00",
-      "message": "techpack(cover): max FOB drops PP%, adds shipping charge, uses full fulfillment cost (#19)"
-    },
-    {
-      "sha": "467280d",
-      "date": "2026-05-04T21:29:15+03:00",
-      "message": "Card font + cover image render fix (#18)"
     }
   ]
 }

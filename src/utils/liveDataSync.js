@@ -791,13 +791,13 @@ export async function deleteAnthropicCredentials() {
 
 /**
  * Calls the `generate-brief` edge function to generate a brief for a sprint.
- * Knowledge file contents must be passed in from the client (they live in the
- * repo bundle via getKnowledgeForLane()).
+ * Knowledge is read from the creative_knowledge DB table by the function
+ * itself — no client-side payload needed.
  *
- * @param {{ sprint_id: string, knowledge: { avatar: string, brand: string, product: string, models: string|null } }} params
+ * @param {{ sprint_id: string }} params
  * @returns {Promise<import('../types/creative').Brief>}
  */
-export async function callGenerateBrief({ sprint_id, knowledge }) {
+export async function callGenerateBrief({ sprint_id }) {
   if (!IS_SUPABASE_ENABLED || !supabase) {
     throw new Error('Supabase not configured — cannot reach generate-brief');
   }
@@ -814,7 +814,7 @@ export async function callGenerateBrief({ sprint_id, knowledge }) {
       apikey: anonKey,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ sprint_id, knowledge }),
+    body: JSON.stringify({ sprint_id }),
   });
 
   const text = await res.text();
