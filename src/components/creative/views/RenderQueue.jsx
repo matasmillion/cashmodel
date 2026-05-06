@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { listRenders, saveRender } from '../../../utils/renderStore';
-import { callCheckRenderStatus } from '../../../utils/liveDataSync';
+import { callCheckRenderStatus, callEncoderPass } from '../../../utils/liveDataSync';
 import { RENDER_STATUSES } from '../../../types/creative';
 
 const FR = { slate: '#3A3A3A', salt: '#F5F0E8', sand: '#EBE5D5', stone: '#716F70' };
@@ -73,6 +73,12 @@ export default function RenderQueue() {
   const handleApprove = async (r) => {
     await saveRender(r.id, { status: RENDER_STATUSES.APPROVED, approved_at: new Date().toISOString() });
     setRenders(prev => (prev || []).filter(x => x.id !== r.id));
+    // Fire encoder-pass in the background — UI optimistically removes the
+    // card from the queue. Failures are surfaced in Production view via
+    // encoder_passed=false state.
+    callEncoderPass({ render_id: r.id }).catch(err => {
+      console.warn('encoder-pass failed:', err.message);
+    });
   };
 
   const handleReject = async (r) => {

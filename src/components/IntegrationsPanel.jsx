@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ShoppingBag, BarChart3, CreditCard, Mail, Truck, CheckCircle, XCircle, Loader, ChevronDown, ChevronUp, ExternalLink, RefreshCw, Copy, Server, Landmark, Plus, Trash2, Sparkles, Film, Camera } from 'lucide-react';
+import { ShoppingBag, BarChart3, CreditCard, Mail, Truck, CheckCircle, XCircle, Loader, ChevronDown, ChevronUp, ExternalLink, RefreshCw, Copy, Server, Landmark, Plus, Trash2, Sparkles, Film, Camera, Wand2 } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { useApp } from '../context/AppContext';
 import {
@@ -12,6 +12,8 @@ import {
   saveAnthropicCredentials, loadAnthropicIntegration, deleteAnthropicCredentials, testAnthropicProxy,
   saveFalCredentials, deleteFalCredentials, testFalProxy,
   saveHiggsfieldCredentials, deleteHiggsfieldCredentials, testHiggsfieldProxy,
+  saveTransloaditCredentials, deleteTransloaditCredentials,
+  saveMetaCredentialsServer, deleteMetaCredentialsServer,
 } from '../utils/liveDataSync';
 
 const FR = { slate: '#3A3A3A', salt: '#F5F0E8', sand: '#EBE5D5', stone: '#716F70', soil: '#9A816B', sea: '#B5C7D3', sage: '#ADBDA3', sienna: '#D4956A', green: '#4CAF7D', red: '#C0392B' };
@@ -292,6 +294,12 @@ function MetaAdsCard({ creds, onSave, onClear, dispatch }) {
       setStats(s);
       setStatus('ok');
       onSave({ accountId: id, token, connected: true, stats: s, syncedAt: null });
+      // Also mirror creds into user_integrations so the publish-side
+      // edge functions can read them. Failure here doesn't break the
+      // existing read flow — log only.
+      saveMetaCredentialsServer({ token, accountId: id }).catch(err =>
+        console.warn('Meta server-side save failed:', err.message)
+      );
       setOpen(false);
     } catch (err) {
       setStatus('error');
@@ -1119,6 +1127,91 @@ function HiggsfieldCard({ creds, onSave, onClear }) {
   );
 }
 
+// ─── Transloadit (video encoder pass for Meta-spec normalization) ─────────────
+function TransloaditCard({ creds, onSave, onClear }) {
+  const [open, setOpen] = useState(!creds?.connected);
+  const [authKey, setAuthKey] = useState('');
+  const [authSecret, setAuthSecret] = useState('');
+  const [status, setStatus] = useState(null);
+  const [errMsg, setErrMsg] = useState('');
+
+  async function handleConnect(e) {
+    e.preventDefault();
+    setStatus('saving');
+    setErrMsg('');
+    try {
+      await saveTransloaditCredentials({ authKey, authSecret });
+      setStatus('ok');
+      onSave({ connected: true, savedAt: new Date().toISOString() });
+      setAuthKey('');
+      setAuthSecret('');
+      setOpen(false);
+    } catch (err) {
+      setStatus('error');
+      setErrMsg(err.message);
+    }
+  }
+
+  async function handleDisconnect() {
+    try { await deleteTransloaditCredentials(); } catch {}
+    onClear();
+  }
+
+  return (
+    <IntegrationCard
+      name="Transloadit"
+      description="Re-encodes approved renders to Meta's 9:16 spec before publishing"
+      icon={Wand2}
+      iconColor={FR.sienna}
+      connected={creds?.connected}
+      open={open}
+      onToggle={() => setOpen(o => !o)}
+      onDisconnect={handleDisconnect}
+    >
+      {!creds?.connected ? (
+        <form onSubmit={handleConnect} className="space-y-3 mt-3">
+          <div className="p-2 rounded-lg text-xs flex items-start gap-2" style={{ background: FR.salt, border: `1px solid ${FR.sand}` }}>
+            <Server size={12} style={{ color: FR.soil, marginTop: 2, flexShrink: 0 }} />
+            <span style={{ color: FR.stone }}>
+              Auth Key + Auth Secret from your Transloadit account. Both stored encrypted, scoped to your org. The browser only ever talks to the encoder-pass proxy.
+            </span>
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: FR.stone }}>Auth Key</label>
+            <input
+              type="text"
+              value={authKey}
+              onChange={e => setAuthKey(e.target.value)}
+              placeholder="public auth key"
+              required
+              className="w-full px-3 py-2 rounded-lg text-sm border"
+              style={{ borderColor: FR.sand, fontFamily: 'ui-monospace, SF Mono, Menlo, monospace' }}
+            />
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: FR.stone }}>Auth Secret</label>
+            <input
+              type="password"
+              value={authSecret}
+              onChange={e => setAuthSecret(e.target.value)}
+              placeholder="secret"
+              required
+              className="w-full px-3 py-2 rounded-lg text-sm border"
+              style={{ borderColor: FR.sand, fontFamily: 'ui-monospace, SF Mono, Menlo, monospace' }}
+            />
+          </div>
+          <StatusButton status={status} label="Save" errMsg={errMsg} />
+        </form>
+      ) : (
+        <div className="mt-3 text-xs space-y-1" style={{ color: FR.stone }}>
+          <p>Connected — auth key + secret stored securely.</p>
+          {creds.savedAt && <p>Saved {new Date(creds.savedAt).toLocaleDateString()}</p>}
+        </div>
+      )}
+    </IntegrationCard>
+  );
+}
+
 // ─── Shared components ────────────────────────────────────────────────────────
 function IntegrationCard({ name, description, icon: Icon, iconColor, connected, open, onToggle, onDisconnect, children }) {
   return (
@@ -1221,6 +1314,7 @@ export default function IntegrationsPanel() {
         <AnthropicCard creds={creds.anthropic} onSave={d => update('anthropic', d)} onClear={() => update('anthropic', null)} />
         <FalCard creds={creds.fal} onSave={d => update('fal', d)} onClear={() => update('fal', null)} />
         <HiggsfieldCard creds={creds.higgsfield} onSave={d => update('higgsfield', d)} onClear={() => update('higgsfield', null)} />
+        <TransloaditCard creds={creds.transloadit} onSave={d => update('transloadit', d)} onClear={() => update('transloadit', null)} />
 
         {/* 3PL — handled by the Fulfillment tab */}
         <div className="rounded-xl border p-4 flex items-center gap-3" style={{ background: 'white', borderColor: FR.sand }}>

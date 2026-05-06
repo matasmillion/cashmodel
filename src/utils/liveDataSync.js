@@ -1000,6 +1000,91 @@ export async function testHiggsfieldProxy() {
   }, { allowAnyStatus: true });
 }
 
+// ─── Transloadit (video encoder pass) ────────────────────────────────
+
+export async function saveTransloaditCredentials({ authKey, authSecret }) {
+  if (!IS_SUPABASE_ENABLED) throw new Error('Supabase not configured');
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) throw new Error('No active organization');
+  const db = await getAuthedSupabase();
+  const { error } = await db
+    .from('user_integrations')
+    .upsert(
+      { org_id: orgId, provider: 'transloadit', token: authSecret, metadata: { auth_key: authKey } },
+      { onConflict: 'org_id,provider' },
+    );
+  if (error) throw new Error(`Failed to save credentials: ${error.message}`);
+}
+
+export async function deleteTransloaditCredentials() {
+  if (!IS_SUPABASE_ENABLED) return;
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) return;
+  const db = await getAuthedSupabase();
+  await db.from('user_integrations').delete().eq('org_id', orgId).eq('provider', 'transloadit');
+}
+
+/**
+ * Run encoder-pass on a single render. Re-encodes raw_url to Meta-spec
+ * 9:16 H.264 + AAC and stores the result URL on the render row.
+ *
+ * @param {{ render_id: string }} params
+ * @returns {Promise<{ render: any, assembly_id: string }>}
+ */
+export async function callEncoderPass({ render_id }) {
+  return await callEdgeFunction('encoder-pass', { render_id });
+}
+
+// ─── Meta ad publishing (writes — read flow stays direct from browser) ───
+
+/**
+ * Save Meta credentials into user_integrations for the publish flow.
+ * The existing MetaAdsCard read path keeps its localStorage cache too —
+ * this is purely additive so server-side functions can pick up the
+ * creds.
+ */
+export async function saveMetaCredentialsServer({ token, accountId, pageId }) {
+  if (!IS_SUPABASE_ENABLED) return;
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) return;
+  const db = await getAuthedSupabase();
+  const metadata = { account_id: accountId };
+  if (pageId) metadata.page_id = pageId;
+  const { error } = await db
+    .from('user_integrations')
+    .upsert(
+      { org_id: orgId, provider: 'meta', token, metadata },
+      { onConflict: 'org_id,provider' },
+    );
+  if (error) console.error('saveMetaCredentialsServer:', error);
+}
+
+export async function deleteMetaCredentialsServer() {
+  if (!IS_SUPABASE_ENABLED) return;
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) return;
+  const db = await getAuthedSupabase();
+  await db.from('user_integrations').delete().eq('org_id', orgId).eq('provider', 'meta');
+}
+
+/**
+ * Publish an approved + encoded render as a PAUSED Meta ad.
+ *
+ * @param {{ render_id: string, daily_budget_usd?: number }} params
+ * @returns {Promise<{ ad: any, guardrail: any }>}
+ */
+export async function callUploadMetaAd({ render_id, daily_budget_usd }) {
+  return await callEdgeFunction('upload-meta-ad', { render_id, daily_budget_usd });
+}
+
+/**
+ * Generic Meta proxy call. Used for Kill (status=PAUSED) and Scale
+ * (daily_budget=...).
+ */
+export async function callMetaProxy({ method, path, body }) {
+  return await callEdgeFunction('meta-proxy', { method, path, body });
+}
+
 // ─── Render dispatch + polling ───────────────────────────────────────
 
 /**
