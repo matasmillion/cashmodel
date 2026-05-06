@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ShoppingBag, BarChart3, CreditCard, Mail, Truck, CheckCircle, XCircle, Loader, ChevronDown, ChevronUp, ExternalLink, RefreshCw, Copy, Server, Landmark, Plus, Trash2, Sparkles, Film, Camera, Wand2, Hash } from 'lucide-react';
+import { ShoppingBag, BarChart3, CreditCard, Mail, Truck, CheckCircle, XCircle, Loader, ChevronDown, ChevronUp, ExternalLink, RefreshCw, Copy, Server, Landmark, Plus, Trash2, Sparkles, Film, Camera, Wand2, Hash, Globe } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { useApp } from '../context/AppContext';
 import {
@@ -15,6 +15,7 @@ import {
   saveTransloaditCredentials, deleteTransloaditCredentials,
   saveMetaCredentialsServer, deleteMetaCredentialsServer,
   saveSlackCredentials, deleteSlackCredentials,
+  saveApifyCredentials, deleteApifyCredentials,
 } from '../utils/liveDataSync';
 
 const FR = { slate: '#3A3A3A', salt: '#F5F0E8', sand: '#EBE5D5', stone: '#716F70', soil: '#9A816B', sea: '#B5C7D3', sage: '#ADBDA3', sienna: '#D4956A', green: '#4CAF7D', red: '#C0392B' };
@@ -1128,6 +1129,77 @@ function HiggsfieldCard({ creds, onSave, onClear }) {
   );
 }
 
+// ─── Apify (competitor ad library scraping) ──────────────────────────────────
+function ApifyCard({ creds, onSave, onClear }) {
+  const [open, setOpen] = useState(!creds?.connected);
+  const [token, setToken] = useState('');
+  const [status, setStatus] = useState(null);
+  const [errMsg, setErrMsg] = useState('');
+
+  async function handleConnect(e) {
+    e.preventDefault();
+    setStatus('saving');
+    setErrMsg('');
+    try {
+      await saveApifyCredentials({ token });
+      setStatus('ok');
+      onSave({ connected: true, savedAt: new Date().toISOString() });
+      setToken('');
+      setOpen(false);
+    } catch (err) {
+      setStatus('error');
+      setErrMsg(err.message);
+    }
+  }
+
+  async function handleDisconnect() {
+    try { await deleteApifyCredentials(); } catch {}
+    onClear();
+  }
+
+  return (
+    <IntegrationCard
+      name="Apify"
+      description="Scrapes Meta Ad Library for competitor inspiration"
+      icon={Globe}
+      iconColor={FR.sienna}
+      connected={creds?.connected}
+      open={open}
+      onToggle={() => setOpen(o => !o)}
+      onDisconnect={handleDisconnect}
+    >
+      {!creds?.connected ? (
+        <form onSubmit={handleConnect} className="space-y-3 mt-3">
+          <div className="p-2 rounded-lg text-xs flex items-start gap-2" style={{ background: FR.salt, border: `1px solid ${FR.sand}` }}>
+            <Server size={12} style={{ color: FR.soil, marginTop: 2, flexShrink: 0 }} />
+            <span style={{ color: FR.stone }}>
+              API token from Apify (apify.com → Settings → Integrations). Stored encrypted, scoped to your org.
+            </span>
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: FR.stone }}>API Token</label>
+            <input
+              type="password"
+              value={token}
+              onChange={e => setToken(e.target.value)}
+              placeholder="apify_api_…"
+              required
+              className="w-full px-3 py-2 rounded-lg text-sm border"
+              style={{ borderColor: FR.sand, fontFamily: 'ui-monospace, SF Mono, Menlo, monospace' }}
+            />
+          </div>
+          <StatusButton status={status} label="Save" errMsg={errMsg} />
+        </form>
+      ) : (
+        <div className="mt-3 text-xs space-y-1" style={{ color: FR.stone }}>
+          <p>Connected — API token stored securely.</p>
+          {creds.savedAt && <p>Saved {new Date(creds.savedAt).toLocaleDateString()}</p>}
+        </div>
+      )}
+    </IntegrationCard>
+  );
+}
+
 // ─── Slack (digests + interactive button approvals) ───────────────────────────
 function SlackCard({ creds, onSave, onClear }) {
   const [open, setOpen] = useState(!creds?.connected);
@@ -1388,6 +1460,7 @@ export default function IntegrationsPanel() {
         <HiggsfieldCard creds={creds.higgsfield} onSave={d => update('higgsfield', d)} onClear={() => update('higgsfield', null)} />
         <TransloaditCard creds={creds.transloadit} onSave={d => update('transloadit', d)} onClear={() => update('transloadit', null)} />
         <SlackCard creds={creds.slack} onSave={d => update('slack', d)} onClear={() => update('slack', null)} />
+        <ApifyCard creds={creds.apify} onSave={d => update('apify', d)} onClear={() => update('apify', null)} />
 
         {/* 3PL — handled by the Fulfillment tab */}
         <div className="rounded-xl border p-4 flex items-center gap-3" style={{ background: 'white', borderColor: FR.sand }}>

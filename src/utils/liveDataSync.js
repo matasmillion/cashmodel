@@ -1000,6 +1000,45 @@ export async function testHiggsfieldProxy() {
   }, { allowAnyStatus: true });
 }
 
+// ─── Apify (competitor ad scraping) ─────────────────────────────────
+
+export async function saveApifyCredentials({ token }) {
+  if (!IS_SUPABASE_ENABLED) throw new Error('Supabase not configured');
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) throw new Error('No active organization');
+  const db = await getAuthedSupabase();
+  const { error } = await db
+    .from('user_integrations')
+    .upsert(
+      { org_id: orgId, provider: 'apify', token, metadata: {} },
+      { onConflict: 'org_id,provider' },
+    );
+  if (error) throw new Error(`Failed to save credentials: ${error.message}`);
+}
+
+export async function deleteApifyCredentials() {
+  if (!IS_SUPABASE_ENABLED) return;
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) return;
+  const db = await getAuthedSupabase();
+  await db.from('user_integrations').delete().eq('org_id', orgId).eq('provider', 'apify');
+}
+
+/**
+ * Fire the Meta Ad Library scraper and return the dataset items.
+ *
+ * @param {{ search_terms: string[], country?: string, ad_active_status?: string }} input
+ * @returns {Promise<any[]>} array of ads as returned by the actor
+ */
+export async function callApifyMetaAdsScrape(input) {
+  const result = await callEdgeFunction('apify-proxy', {
+    method: 'POST',
+    path: 'v2/acts/apify~meta-ads-library-scraper/run-sync-get-dataset-items',
+    body: { search_terms: input.search_terms || [], country: input.country || 'US', ad_active_status: input.ad_active_status || 'active' },
+  });
+  return Array.isArray(result) ? result : (result?.items || []);
+}
+
 // ─── Slack (notifications + interactivity) ──────────────────────────
 
 export async function saveSlackCredentials({ token }) {
