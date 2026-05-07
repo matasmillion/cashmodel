@@ -84,6 +84,9 @@ export const DEFAULT_DATA = {
 
   // Page 2+
   vendor: '', vendorContact: '', fabricType: '',
+  designContextPrompt: '',
+  designStyle: 'ghost-mannequin',  // 'ghost-mannequin' | 'flat-lay'
+  designBgColor: 'salt',           // FR color name (lowercased)
   designNotes: '', fit: '', keyFeatures: '', flatLayNotes: '',
   keyDesignNotes: [{ detail: '', description: '', reference: '' }],
   fabrics: [{ component: '', fabricType: '', composition: '', weightGsm: '', colorPantone: '', supplier: '', notes: '' }],
