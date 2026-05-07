@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T12:34:27.911Z",
+  "lastUpdated": "2026-05-07T12:40:59.071Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "992bb85",
+      "date": "2026-05-07T15:35:52+03:00",
+      "message": "fix(integrations): testProxy distinguishes proxy 404 from upstream 404 (#32)"
+    },
+    {
+      "sha": "baf3125",
+      "date": "2026-05-07T15:27:28+03:00",
+      "message": "Add files via upload"
+    },
+    {
       "sha": "e609d2f",
       "date": "2026-05-07T15:24:02+03:00",
       "message": "techpack: progress bars + NB2 payload fix + better error surfacing (#31)"
@@ -1082,16 +1092,6 @@
       "sha": "7596491",
       "date": "2026-05-07T13:31:55+03:00",
       "message": "Tech Pack Phase 1: split BOM into Fabrics/Trims + Labels/Files pages (#24)"
-    },
-    {
-      "sha": "5e2567e",
-      "date": "2026-05-07T11:32:29+03:00",
-      "message": "techpack: reorder by mfg stage + redesign cover preview (#23)"
-    },
-    {
-      "sha": "9db2927",
-      "date": "2026-05-07T10:50:51+03:00",
-      "message": "techpack: redesign Style Overview into 4 structured zones (#22)"
     }
   ]
 }

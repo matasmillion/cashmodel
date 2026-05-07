@@ -376,34 +376,38 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
 const VIEW_LABELS = { front: 'Front View', back: 'Back View', side: 'Side View' };
 const VIEWS = ['front', 'back', 'side'];
 
-function ProgressBar({ pct }) {
-  const value = Math.max(0, Math.min(100, pct || 0));
+// Indeterminate "still working" bar — a slate blob that loops left to
+// right inside a sand track. No percentage, since we don't actually
+// know when fal will finish.
+function LoopingBar() {
   return (
-    <div style={{ width: '100%', height: 4, background: FR.sand, borderRadius: 2, overflow: 'hidden' }}>
-      <div style={{
-        width: `${value}%`,
-        height: '100%',
-        background: FR.slate,
-        transition: 'width 0.25s linear',
-      }} />
-    </div>
+    <>
+      <style>{`
+        @keyframes fr-loop-bar {
+          0%   { left: -45%; }
+          100% { left: 100%; }
+        }
+      `}</style>
+      <div style={{ position: 'relative', width: '100%', height: 3, background: FR.sand, borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          width: '40%',
+          height: '100%',
+          background: FR.slate,
+          borderRadius: 2,
+          animation: 'fr-loop-bar 1.6s ease-in-out infinite',
+        }} />
+      </div>
+    </>
   );
 }
 
-// Smooth progress simulation. NB2 jobs typically finish in 25–60s; this
-// fills 0 → 95% over EXPECTED_MS, then sticks at 95 until the real result
-// returns and we jump to 100. Any leftover variance reads as "almost done"
-// rather than "stuck".
-const EXPECTED_GEN_MS = 35000;
-const TICK_MS = 250;
-
 function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
   const [phase, setPhase]       = useState('analyzing'); // analyzing | generating | done | error
-  const [analyzeProg, setAnalyzeProg] = useState(0); // 0..100 during analyzing
   const [description, setDesc]  = useState('');
   const [views, setViews]       = useState({ front: null, back: null, side: null });
   const [vstatus, setVstatus]   = useState({ front: 'pending', back: 'pending', side: 'pending' });
-  const [vprog, setVprog]       = useState({ front: 0, back: 0, side: 0 });
   const [verrors, setVerrors]   = useState({ front: '', back: '', side: '' });
   const [errMsg, setErrMsg]     = useState('');
 
@@ -413,32 +417,15 @@ function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
     return (typeof e?.message === 'string' ? e.message : String(e)) || 'Unknown error';
   }
 
-  // Returns a cleanup fn that stops the progress simulation for `view`.
-  function startProgressSim(view) {
-    const startedAt = Date.now();
-    const timer = setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      const pct = Math.min(95, (elapsed / EXPECTED_GEN_MS) * 100);
-      setVprog(p => ({ ...p, [view]: pct }));
-    }, TICK_MS);
-    return () => clearInterval(timer);
-  }
-
   async function runOneView(view, desc) {
     setVstatus(vs => ({ ...vs, [view]: 'loading' }));
-    setVprog(p => ({ ...p, [view]: 0 }));
     setVerrors(ve => ({ ...ve, [view]: '' }));
-    const stopSim = startProgressSim(view);
     try {
       const url = await generateGarmentView(desc, view);
-      stopSim();
-      setVprog(p => ({ ...p, [view]: 100 }));
       setViews(vs => ({ ...vs, [view]: url }));
       setVstatus(vs => ({ ...vs, [view]: 'done' }));
     } catch (e) {
-      stopSim();
       console.error(`[techpack-views] ${view} failed:`, e);
-      setVprog(p => ({ ...p, [view]: 0 }));
       setVstatus(vs => ({ ...vs, [view]: 'error' }));
       setVerrors(ve => ({ ...ve, [view]: toMsg(e) }));
     }
@@ -449,24 +436,12 @@ function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
       let desc = existingDesc;
       if (!desc) {
         setPhase('analyzing');
-        // Fake progress for the analyze step — Claude vision usually 4–10s
-        const startA = Date.now();
-        const aTimer = setInterval(() => {
-          const pct = Math.min(95, ((Date.now() - startA) / 8000) * 100);
-          setAnalyzeProg(pct);
-        }, TICK_MS);
-
-        try {
-          const dataUrl = await imageEntryToDataUrl(srcEntry);
-          if (!dataUrl) throw new Error('Could not read source image');
-          const mime = dataUrl.match(/^data:([^;]+);/)?.[1] || 'image/jpeg';
-          const b64  = dataUrl.replace(/^data:[^;]+;base64,/, '');
-          desc = await analyzeGarmentImage(b64, mime);
-          setDesc(desc);
-          setAnalyzeProg(100);
-        } finally {
-          clearInterval(aTimer);
-        }
+        const dataUrl = await imageEntryToDataUrl(srcEntry);
+        if (!dataUrl) throw new Error('Could not read source image');
+        const mime = dataUrl.match(/^data:([^;]+);/)?.[1] || 'image/jpeg';
+        const b64  = dataUrl.replace(/^data:[^;]+;base64,/, '');
+        desc = await analyzeGarmentImage(b64, mime);
+        setDesc(desc);
       }
 
       setPhase('generating');
@@ -520,13 +495,13 @@ function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: FR.stone, lineHeight: 1, padding: 0 }}>×</button>
         </div>
 
-        {/* Analyzing phase — single progress bar across the modal */}
+        {/* Analyzing phase — single looping bar across the modal */}
         {phase === 'analyzing' && (
           <div style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 12, color: FR.stone, marginBottom: 8, fontStyle: 'italic' }}>
+            <div style={{ fontSize: 12, color: FR.stone, marginBottom: 10, fontStyle: 'italic' }}>
               Analyzing garment with Claude Vision…
             </div>
-            <ProgressBar pct={analyzeProg} />
+            <LoopingBar />
           </div>
         )}
 
@@ -548,9 +523,9 @@ function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
                   position: 'relative',
                 }}>
                   {vstatus[view] === 'loading' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '0 12px', width: '100%' }}>
-                      <div style={{ fontSize: 11, color: FR.stone }}>Generating… {Math.round(vprog[view])}%</div>
-                      <ProgressBar pct={vprog[view]} />
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '0 16px', width: '100%' }}>
+                      <div style={{ fontSize: 11, color: FR.stone, fontStyle: 'italic' }}>Generating…</div>
+                      <LoopingBar />
                     </div>
                   )}
                   {vstatus[view] === 'error' && (
