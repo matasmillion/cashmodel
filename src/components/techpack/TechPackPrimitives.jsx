@@ -222,7 +222,7 @@ export function ArrayTable({ headers, rows, onUpdate, onAdd, onRemove }) {
   );
 }
 
-export function PhotoUpload({ label, slotKey, images, onUpload, onRemove }) {
+export function PhotoUpload({ label, slotKey, images, onUpload, onRemove, aspect }) {
   const fileRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const handleFiles = async (files) => {
@@ -232,6 +232,10 @@ export function PhotoUpload({ label, slotKey, images, onUpload, onRemove }) {
     }
   };
   const slotImages = (images || []).filter(img => img.slot === slotKey);
+  // Fixed-aspect drop zones (e.g. 2:3 garment views) need to skip the
+  // dynamic padding hack — instead, set aspectRatio + use flex centering so
+  // the empty / populated states both fill the box.
+  const isFixedAspect = !!aspect && slotImages.length === 0;
   return (
     <div style={{ marginBottom: 14 }}>
       <label style={labelStyle}>{label}</label>
@@ -239,7 +243,17 @@ export function PhotoUpload({ label, slotKey, images, onUpload, onRemove }) {
         onDrop={e => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files); }}
         onDragOver={e => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
-        style={{ border: `2px dashed ${dragging ? FR.soil : FR.sand}`, borderRadius: 6, padding: slotImages.length ? 10 : 24, textAlign: 'center', cursor: 'pointer', background: dragging ? FR.sand : FR.white, transition: 'all 0.2s', minHeight: 50 }}>
+        style={{
+          border: `2px dashed ${dragging ? FR.soil : FR.sand}`,
+          borderRadius: 6,
+          padding: aspect ? 10 : (slotImages.length ? 10 : 24),
+          textAlign: 'center',
+          cursor: 'pointer',
+          background: dragging ? FR.sand : FR.white,
+          transition: 'all 0.2s',
+          minHeight: 50,
+          ...(aspect ? { aspectRatio: aspect, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' } : null),
+        }}>
         <input ref={fileRef} type="file" accept="image/*" multiple onChange={e => { if (e.target.files.length) handleFiles(e.target.files); e.target.value = ''; }} style={{ display: 'none' }} />
         {slotImages.length === 0 ? (
           <>
@@ -248,7 +262,7 @@ export function PhotoUpload({ label, slotKey, images, onUpload, onRemove }) {
             <div style={{ fontSize: 9, color: FR.sand, marginTop: 2 }}>JPG, PNG — auto-resized</div>
           </>
         ) : (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: aspect ? 'center' : 'flex-start' }}>
             {slotImages.map((img, i) => (
               <div key={i} style={{ position: 'relative', width: 100, height: 100, borderRadius: 4, overflow: 'hidden', border: `1px solid ${FR.sand}` }}>
                 <AssetImage image={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
