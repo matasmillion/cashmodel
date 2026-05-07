@@ -1280,21 +1280,22 @@ export function StepRevision({ data, set, onSubmit, submitting, submitResult, on
   );
 }
 
+// Order mirrors STEPS in techPackConstants.js — by manufacturing stage.
 export const STEP_FNS = [
-  StepCover,
-  StepDesignOverview,
-  StepFlatlays,
-  StepBOM,
-  StepColor,
-  StepConstruction,
-  StepSketches,
-  StepPattern,
-  StepPom,
-  StepTreatments,
-  StepLabels,
-  StepOrder,
-  StepCompliance,
-  StepRevision,
+  StepCover,            // 01 Design
+  StepDesignOverview,   // 02 Design
+  StepFlatlays,         // 03 Design
+  StepBOM,              // 04 Materials
+  StepConstruction,     // 05 Cut & Sew
+  StepSketches,         // 06 Cut & Sew
+  StepPattern,          // 07 Cut & Sew
+  StepPom,              // 08 Cut & Sew
+  StepColor,            // 09 Embellishments
+  StepTreatments,       // 10 Treatments
+  StepCompliance,       // 11 QC
+  StepLabels,           // 12 Packaging
+  StepOrder,            // 13 Logistics
+  StepRevision,         // 14 Sign-off
 ];
 
 // Backwards-compat aliases so older references keep resolving during the

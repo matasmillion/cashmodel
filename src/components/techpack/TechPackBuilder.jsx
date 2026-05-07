@@ -599,21 +599,29 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       <div style={{ display: 'flex' }}>
         {/* Sidebar */}
         <div style={{ width: 220, minWidth: 220, borderRight: `1px solid ${FR.sand}`, background: FR.salt, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '14px 0', flex: 1 }}>
+          <div style={{ padding: '8px 0', flex: 1, overflowY: 'auto' }}>
             {STEPS.map((s, i) => {
               const stepLocked = isStepLocked(i, data.status);
               const stepSkipped = skippedSteps.includes(i);
+              const phaseChanged = i === 0 || STEPS[i - 1].phase !== s.phase;
               return (
-                <button key={s.id} onClick={() => setStep(i)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 16px', border: 'none', cursor: 'pointer', background: i === step ? FR.white : 'transparent', borderLeft: i === step ? `3px solid ${FR.soil}` : '3px solid transparent' }}>
-                  <span style={{ fontSize: 10, color: stepSkipped ? '#C0392B' : (i === step ? FR.soil : FR.stone), fontWeight: 700, width: 18 }}>
-                    {stepSkipped ? '×' : s.icon}
-                  </span>
-                  <span style={{ fontSize: 11, color: i === step ? FR.slate : FR.stone, textAlign: 'left', flex: 1, textDecoration: stepSkipped ? 'line-through' : 'none', opacity: stepSkipped ? 0.55 : (stepLocked ? 0.5 : 1) }}>
-                    {s.title}
-                  </span>
-                  {stepLocked && !stepSkipped && <span style={{ fontSize: 10, color: FR.stone }}>🔒</span>}
-                </button>
+                <div key={s.id}>
+                  {phaseChanged && (
+                    <div style={{ padding: i === 0 ? '10px 16px 6px' : '14px 16px 6px', fontSize: 8, color: FR.soil, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', borderTop: i === 0 ? 'none' : `1px solid ${FR.sand}`, marginTop: i === 0 ? 0 : 6 }}>
+                      {s.phase}
+                    </div>
+                  )}
+                  <button onClick={() => setStep(i)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 16px', border: 'none', cursor: 'pointer', background: i === step ? FR.white : 'transparent', borderLeft: i === step ? `3px solid ${FR.soil}` : '3px solid transparent' }}>
+                    <span style={{ fontSize: 10, color: stepSkipped ? '#C0392B' : (i === step ? FR.soil : FR.stone), fontWeight: 700, width: 18, fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace" }}>
+                      {stepSkipped ? '×' : s.icon}
+                    </span>
+                    <span style={{ fontSize: 11, color: i === step ? FR.slate : FR.stone, textAlign: 'left', flex: 1, textDecoration: stepSkipped ? 'line-through' : 'none', opacity: stepSkipped ? 0.55 : (stepLocked ? 0.5 : 1) }}>
+                      {s.title}
+                    </span>
+                    {stepLocked && !stepSkipped && <span style={{ fontSize: 10, color: FR.stone }}>🔒</span>}
+                  </button>
+                </div>
               );
             })}
           </div>
