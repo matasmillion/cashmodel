@@ -200,13 +200,11 @@ function fabricSpec(row) {
     parseFloat(d?.costPerMeter) || 0;
   const weightGsm = row?.weight_gsm || d?.weight_gsm;
   return {
-    name:        row?.code || d.name || row?.name || 'Untitled fabric',
+    name:        row?.name || d.name || row?.mill_fabric_no || 'Untitled fabric',
     composition: row?.composition || d?.composition || '—',
     weight:      weightGsm ? `${weightGsm} GSM` : '—',
     weave:       row?.weave || d?.weave || '—',
     millId:      row?.mill_id || d?.mill_id || d?.supplier || row?.supplier || row?.mill || '',
-    // Cover prefers explicit cover_image, falls back to front_image_url
-    // (the canonical hero swatch in fabricLibrary.emptyFabric()).
     cover:       row?.cover_image || row?.front_image_url || d?.cover_image || d?.front_image_url || null,
     colors:      row?.color_card_images || d?.color_card_images || [],
     unitCost,
@@ -371,7 +369,8 @@ export function StepFabrics({ data, set }) {
                 <button onClick={() => setSlot(i, null)} style={{ position: 'absolute', top: 8, right: 8, width: 22, height: 22, borderRadius: 11, background: FR.slate, color: FR.salt, border: 'none', fontSize: 12, cursor: 'pointer' }}>×</button>
               </div>
               <div style={{ padding: 12 }}>
-                <div style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4 }}>
+                <div style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span>Area of product:</span>
                   <select
                     value={entry.role || ''}
                     onChange={e => setSlot(i, { ...entry, role: e.target.value })}
@@ -471,22 +470,16 @@ export function StepFabrics({ data, set }) {
 const MAX_TRIMS = 6;
 
 // Read the most useful spec fields from a Component Pack data row.
-// `cover` prefers the Construction measurement diagram (full trim with
-// dimensions, that's what the factory needs) and falls back to the
-// cover_image. `color` reads from the Colorways picker on the pack.
+// `cover` is just the Component Pack cover image — designers manage
+// what shows there in the library, and the BOM card mirrors it.
 export function readComponentSpec(fullData) {
   const c = fullData?.data || {};
-  const m = (c.materials || [])[0] || {};
   const tier = (c.costTiers || [])[0];
   const unitCost = parseFloat(tier?.unitCost) || parseFloat(fullData?.cost_per_unit) || parseFloat(c?.targetUnitCost) || 0;
   return {
     name:     fullData?.component_name || c.componentName || '—',
     type:     c.componentType || fullData?.component_category || '',
-    cover:    fullData?._constructionDiagram || fullData?.cover_image || c.cover_image || null,
-    vendor:   m.vendor || c.supplier || fullData?.supplier || '—',
-    color:    (c.colorwayPicks || [])[0] || (c.colorwaysList || [])[0]?.frColor || m.color || '—',
-    length:   m.length || '—',
-    size:     m.size || '—',
+    cover:    fullData?.cover_image || c.cover_image || null,
     unitCost,
     currency: c.currency || tier?.currency || 'USD',
   };
@@ -519,41 +512,32 @@ function ComponentSlotCard({ entry, fullData, onClear, onChangeRole, onChangeQty
 
   return (
     <div style={{ background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 6, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      {/* Wider 3:2 image area — trim photos are horizontal, this fits the
-          measurement diagram without dwarfing the text below. */}
-      <div style={{ aspectRatio: '3 / 2', background: FR.salt, position: 'relative' }}>
+      {/* Cover image — taller now since we dropped the spec table. */}
+      <div style={{ aspectRatio: '4 / 3', background: FR.salt, position: 'relative' }}>
         {s.cover ? (
-          // contain (not cover) so the full trim image is always visible —
-          // factory-facing pages mustn't crop the measurement diagram.
           <img src={s.cover} alt={s.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: FR.stone, fontSize: 9, fontStyle: 'italic' }}>No image</div>
         )}
         <button onClick={onClear} style={{ position: 'absolute', top: 4, right: 4, width: 18, height: 18, borderRadius: 9, background: FR.slate, color: FR.salt, border: 'none', fontSize: 10, cursor: 'pointer', lineHeight: 1 }}>×</button>
       </div>
-      <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <div style={{ fontSize: 8, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', color: FR.soil }}>
+      <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', color: FR.soil }}>
           {roleLabel}: {s.type || '—'}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
-          <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 13, color: FR.slate, lineHeight: 1.15, flex: 1 }}>{s.name}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+          <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 14, color: FR.slate, lineHeight: 1.15, flex: 1 }}>{s.name}</div>
           {packHref && (
             <a
               href={packHref}
-              style={{ fontSize: 9, color: FR.soil, textDecoration: 'none', borderBottom: `0.5px solid ${FR.soil}`, paddingBottom: 1, whiteSpace: 'nowrap' }}
+              style={{ fontSize: 10, color: FR.soil, textDecoration: 'none', borderBottom: `0.5px solid ${FR.soil}`, paddingBottom: 1, whiteSpace: 'nowrap' }}
               title="Open this component pack in the Library"
             >
               View pack ↗
             </a>
           )}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 8px', fontSize: 9, color: FR.stone, lineHeight: 1.3 }}>
-          <div><span style={{ color: FR.soil, fontWeight: 600 }}>Vendor</span> {s.vendor}</div>
-          <div><span style={{ color: FR.soil, fontWeight: 600 }}>Color</span> {s.color}</div>
-          <div><span style={{ color: FR.soil, fontWeight: 600 }}>Length</span> {s.length}</div>
-          <div><span style={{ color: FR.soil, fontWeight: 600 }}>Size</span> {s.size}</div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, paddingTop: 6, borderTop: `0.5px solid ${FR.sand}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingTop: 4, borderTop: `0.5px solid ${FR.sand}` }}>
           <span style={{ fontSize: 9, fontWeight: 600, color: FR.soil, letterSpacing: 0.4, textTransform: 'uppercase' }}>Qty</span>
           <input
             type="text"

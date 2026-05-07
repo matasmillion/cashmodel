@@ -516,7 +516,7 @@ function PageFabrics({ d, fabricsById = {} }) {
                 )}
                 <text x={x + 16} y={cy}
                   fontSize={9} fontWeight={600} fill={FR.soil} letterSpacing={1}>
-                  {(entry.role || `Fabric ${i + 1}`).toUpperCase()}
+                  AREA OF PRODUCT: {(entry.role || `Fabric ${i + 1}`).toUpperCase()}
                 </text>
                 <text x={x + 16} y={cy + 22}
                   fontSize={16} fill={FR.slate} fontFamily="'Cormorant Garamond', Georgia, serif">
@@ -617,22 +617,18 @@ function ComponentGridPage({ entries, subtitle, componentsById = {} }) {
         const entry = entries[i];
         const full = entry ? componentsById[entry.componentId] : null;
         const cd = full?.data || {};
-        const m = (cd.materials || [])[0] || {};
         const tier = (cd.costTiers || [])[0];
         const unitCost = parseFloat(tier?.unitCost) || parseFloat(full?.cost_per_unit) || parseFloat(cd?.targetUnitCost) || 0;
         const qtyNum = parseFloat(String(entry?.quantity || '').replace(/[^0-9.]/g, '')) || 1;
         const lineCost = unitCost * qtyNum;
         const formatM = (n) => n > 0 ? `$${n.toFixed(2)}` : '$0.00';
-        // Prefer the construction measurement diagram so the factory sees
-        // the full trim with dimensions; fall back to cover_image.
-        const cover  = full?._constructionDiagram || full?.cover_image || cd.cover_image;
+        const cover  = full?.cover_image || cd.cover_image;
         const name   = full?.component_name || cd.componentName || (entry ? 'Loading…' : '');
         const type   = cd.componentType || full?.component_category || (entry?.role || '');
-        const vendor = m.vendor || cd.supplier || full?.supplier || '—';
-        const color  = (cd.colorwayPicks || [])[0] || (cd.colorwaysList || [])[0]?.frColor || m.color || '—';
-        const length = m.length || '—';
-        const size   = m.size || '—';
         const qty    = entry?.quantity || '—';
+        const packHref = entry?.componentId
+          ? `${(typeof window !== 'undefined' ? window.location.origin : '')}/#plm/library/trims/${entry.componentId}`
+          : null;
         return (
           <g key={i}>
             <rect x={x} y={y} width={cardW} height={cardH}
@@ -645,32 +641,36 @@ function ComponentGridPage({ entries, subtitle, componentsById = {} }) {
               <>
                 <rect x={x} y={y} width={cardW} height={imgH} fill={FR.salt} rx={6} />
                 {cover ? (
-                  // `meet` (not slice) so the full trim image is always
-                  // visible — measurement diagrams must never be cropped.
+                  // `meet` so the full image is visible without cropping.
                   <image href={cover} x={x + 4} y={y + 4} width={cardW - 8} height={imgH - 8}
                     preserveAspectRatio="xMidYMid meet" />
                 ) : (
                   <text x={x + cardW / 2} y={y + imgH / 2 + 4} textAnchor="middle"
-                    fontSize={9} fill={FR.stone} fontStyle="italic">measurement diagram</text>
+                    fontSize={9} fill={FR.stone} fontStyle="italic">cover image</text>
                 )}
-                <text x={x + 14} y={y + imgH + 18}
+                <text x={x + 14} y={y + imgH + 22}
                   fontSize={9} fontWeight={600} fill={FR.soil} letterSpacing={1}>
                   {String(type || `Slot ${i + 1}`).toUpperCase()}
                 </text>
-                <text x={x + 14} y={y + imgH + 38}
-                  fontSize={13} fill={FR.slate} fontFamily="'Cormorant Garamond', Georgia, serif">
+                <text x={x + 14} y={y + imgH + 44}
+                  fontSize={14} fill={FR.slate} fontFamily="'Cormorant Garamond', Georgia, serif">
                   {name}
                 </text>
-                <text x={x + 14} y={y + imgH + 56} fontSize={9} fill={FR.stone}>
-                  Vendor · {vendor}    Color · {color}
-                </text>
-                <text x={x + 14} y={y + imgH + 70} fontSize={9} fill={FR.stone}>
-                  Length · {length}    Size · {size}
-                </text>
-                <text x={x + 14} y={y + imgH + 88} fontSize={9} fill={FR.stone}>
+                {packHref && (
+                  <a href={packHref} target="_blank" rel="noopener">
+                    <text x={x + cardW - 14} y={y + imgH + 44} textAnchor="end"
+                      fontSize={10} fill={FR.soil}
+                      style={{ textDecoration: 'underline', cursor: 'pointer' }}>
+                      View pack ↗
+                    </text>
+                  </a>
+                )}
+                <text x={x + 14} y={y + cardH - 32} fontSize={9} fill={FR.stone}>
                   Quantity · {qty}    Unit · {formatM(unitCost)}
                 </text>
-                <text x={cardW + x - 14} y={y + cardH - 14} textAnchor="end" fontSize={11} fontWeight={700} fill={FR.slate} fontFamily="ui-monospace, Menlo, monospace">
+                <text x={cardW + x - 14} y={y + cardH - 14} textAnchor="end"
+                  fontSize={12} fontWeight={700} fill={FR.slate}
+                  fontFamily="ui-monospace, Menlo, monospace">
                   {formatM(lineCost)}
                 </text>
               </>

@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T19:11:34.933Z",
+  "lastUpdated": "2026-05-07T19:32:29.390Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "b9f96b2",
+      "date": "2026-05-07T19:20:27+00:00",
+      "message": "techpack: simplify trim cards + clickable View pack in editor / SVG / PDF"
+    },
+    {
+      "sha": "0ebc008",
+      "date": "2026-05-07T22:14:43+03:00",
+      "message": "techpack: mirror fabric editor card to live preview SVG (#59)"
+    },
+    {
       "sha": "aeea8f6",
       "date": "2026-05-07T22:08:56+03:00",
       "message": "techpack: fabric vendor + color picker + cost / m label (#57)"
@@ -1082,16 +1092,6 @@
       "sha": "057a314",
       "date": "2026-05-07T21:15:54+03:00",
       "message": "techpack: BOM 2x3 grid + stale-image fix + Design Sketch fallback (#51)"
-    },
-    {
-      "sha": "cd21fc9",
-      "date": "2026-05-07T20:57:47+03:00",
-      "message": "techpack: trim slot — wider 3:2 image, per-card pack link, drop files footer (#50)"
-    },
-    {
-      "sha": "1b14aa7",
-      "date": "2026-05-07T20:37:02+03:00",
-      "message": "techpack: trim slot — full image, measurement diagram, quantity, type as text (#48)"
     }
   ]
 }
