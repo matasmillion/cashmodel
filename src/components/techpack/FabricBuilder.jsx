@@ -225,16 +225,25 @@ export default function FabricBuilder({ fabric, onBack }) {
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 240 }}>
+          {/* Title row: mill fabric # is the primary identifier (matches
+              the way the mill labels its own card), descriptive name is
+              an optional subtitle. The auto-generated FB-* code is no
+              longer surfaced here — it's an internal handle, not a thing
+              the user should be reading. */}
+          <input
+            value={draft.mill_fabric_no || ''}
+            onChange={e => set({ mill_fabric_no: e.target.value })}
+            placeholder="Mill fabric #"
+            style={{ fontFamily: "'General Sans', 'Inter', system-ui, sans-serif", fontWeight: 600, fontSize: 26, color: FR.slate, border: 'none', outline: 'none', background: 'transparent', width: '100%', letterSpacing: 0.2 }}
+          />
           <input
             value={draft.name || ''}
             onChange={e => set({ name: e.target.value })}
-            placeholder="Untitled fabric"
-            style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, color: FR.slate, border: 'none', outline: 'none', background: 'transparent', width: '100%' }}
+            placeholder="Descriptive name (optional)"
+            style={{ fontFamily: "'General Sans', 'Inter', system-ui, sans-serif", fontWeight: 400, fontSize: 14, color: FR.stone, border: 'none', outline: 'none', background: 'transparent', width: '100%', marginTop: 2 }}
           />
-          <div style={{ fontSize: 10, color: FR.stone, marginTop: 2, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span>{draft.code}</span>
-            {draft.mill_fabric_no && <span>·  Mill # {draft.mill_fabric_no}</span>}
-            <span>·  {FABRIC_WEAVE_LABEL[draft.weave] || draft.weave}</span>
+          <div style={{ fontSize: 10, color: FR.stone, marginTop: 4, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span>{FABRIC_WEAVE_LABEL[draft.weave] || draft.weave}</span>
             <span>·  {(category || 'knit').toUpperCase()}</span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', background: FR.salt, borderRadius: 3, color: FR.slate }}>
               {draft.version}
@@ -304,10 +313,7 @@ export default function FabricBuilder({ fabric, onBack }) {
                 ))}
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-              <Field label="Mill fabric #">
-                <input value={draft.mill_fabric_no || ''} onChange={e => set({ mill_fabric_no: e.target.value })} placeholder="FT-340-OE" style={{ ...INPUT_STYLE, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }} />
-              </Field>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
               <Field label="Weave">
                 <select value={draft.weave} onChange={e => setWeave(e.target.value)} style={INPUT_STYLE}>
                   {availableWeaves.map(w => <option key={w.id} value={w.id}>{w.label}</option>)}

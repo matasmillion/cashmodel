@@ -130,11 +130,10 @@ export default function FabricAIExtract({ onClose, onApply }) {
     fields.forEach(k => {
       if (result[k] != null && result[k] !== '') patch[k] = result[k];
     });
-    // Mill fabric # IS the canonical fabric name in our system — fall
-    // back to it whenever the model didn't extract a separate name.
-    if ((!patch.name || !String(patch.name).trim()) && patch.mill_fabric_no) {
-      patch.name = patch.mill_fabric_no;
-    }
+    // Mill fabric # is the primary handle (rendered as the card title).
+    // The descriptive `name` is an optional subtitle — leave it null
+    // when the card didn't carry one, so the title shows the number
+    // alone instead of "B1750 B1750".
     // The model is told to capture each price exactly as the card shows
     // it (RMB/m, RMB/kg, USD/m, …) without converting. Fill in the
     // missing side of each pair using the live FX rate so the builder
