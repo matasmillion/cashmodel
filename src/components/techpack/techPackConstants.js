@@ -84,6 +84,7 @@ export const DEFAULT_DATA = {
 
   // Page 2+
   vendor: '', vendorContact: '', fabricType: '',
+  designContextPrompt: '',
   designNotes: '', fit: '', keyFeatures: '', flatLayNotes: '',
   keyDesignNotes: [{ detail: '', description: '', reference: '' }],
   fabrics: [{ component: '', fabricType: '', composition: '', weightGsm: '', colorPantone: '', supplier: '', notes: '' }],

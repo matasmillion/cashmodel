@@ -403,9 +403,10 @@ function LoopingBar() {
   );
 }
 
-function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
+function GenerateViewsModal({ srcEntries, customContext, onAccept, onClose }) {
   const [phase, setPhase]       = useState('analyzing'); // analyzing | generating | done | error
   const [description, setDesc]  = useState('');
+  const [refDataUrls, setRefs]  = useState([]); // base64 data URIs
   const [views, setViews]       = useState({ front: null, back: null, side: null });
   const [vstatus, setVstatus]   = useState({ front: 'pending', back: 'pending', side: 'pending' });
   const [verrors, setVerrors]   = useState({ front: '', back: '', side: '' });
@@ -417,11 +418,14 @@ function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
     return (typeof e?.message === 'string' ? e.message : String(e)) || 'Unknown error';
   }
 
-  async function runOneView(view, desc) {
+  async function runOneView(view, desc, refs, ctx) {
     setVstatus(vs => ({ ...vs, [view]: 'loading' }));
     setVerrors(ve => ({ ...ve, [view]: '' }));
     try {
-      const url = await generateGarmentView(desc, view);
+      const url = await generateGarmentView(desc, view, {
+        references: refs,
+        customContext: ctx,
+      });
       setViews(vs => ({ ...vs, [view]: url }));
       setVstatus(vs => ({ ...vs, [view]: 'done' }));
     } catch (e) {
@@ -431,21 +435,31 @@ function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
     }
   }
 
-  async function startAll(viewsToRun = VIEWS, existingDesc = null) {
+  async function startAll(viewsToRun = VIEWS, existingDesc = null, existingRefs = null) {
     try {
       let desc = existingDesc;
+      let refs = existingRefs;
+
+      if (!refs) {
+        setPhase('analyzing');
+        const resolved = await Promise.all((srcEntries || []).map(imageEntryToDataUrl));
+        refs = resolved.filter(Boolean);
+        if (!refs.length) throw new Error('Could not read any source images');
+        setRefs(refs);
+      }
+
       if (!desc) {
         setPhase('analyzing');
-        const dataUrl = await imageEntryToDataUrl(srcEntry);
-        if (!dataUrl) throw new Error('Could not read source image');
-        const mime = dataUrl.match(/^data:([^;]+);/)?.[1] || 'image/jpeg';
-        const b64  = dataUrl.replace(/^data:[^;]+;base64,/, '');
+        // First reference drives the technical garment description.
+        const first = refs[0];
+        const mime = first.match(/^data:([^;]+);/)?.[1] || 'image/jpeg';
+        const b64  = first.replace(/^data:[^;]+;base64,/, '');
         desc = await analyzeGarmentImage(b64, mime);
         setDesc(desc);
       }
 
       setPhase('generating');
-      await Promise.all(viewsToRun.map(view => runOneView(view, desc)));
+      await Promise.all(viewsToRun.map(view => runOneView(view, desc, refs, customContext)));
       setPhase('done');
     } catch (e) {
       console.error('[techpack-views] analyze failed:', e);
@@ -455,9 +469,9 @@ function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
   }
 
   async function regenView(view) {
-    if (!description) return;
+    if (!description || !refDataUrls.length) return;
     setViews(vs => ({ ...vs, [view]: null }));
-    await runOneView(view, description);
+    await runOneView(view, description, refDataUrls, customContext);
   }
 
   async function handleAccept() {
@@ -569,49 +583,75 @@ function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
   );
 }
 
-export function StepDesignOverview({ images, onUpload, onRemove }) {
+export function StepDesignOverview({ data, set, images, onUpload, onRemove }) {
   const [showModal, setShowModal] = useState(false);
 
-  const srcEntry = (images || []).find(i => i.slot === 'design-source');
+  const srcEntries    = (images || []).filter(i => i.slot === 'design-source');
+  const customContext = data?.designContextPrompt || '';
 
   return (
     <div>
       <SectionTitle>Design Overview</SectionTitle>
 
-      {/* Reference image for AI view generation */}
-      <div style={{ marginBottom: 20 }}>
-        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>Reference Image</label>
-        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-end' }}>
-          <div style={{ flex: 1 }}>
-            <PhotoUpload
-              label="Upload any source — CLO3D render, flat lay, sketch, photo"
-              slotKey="design-source"
-              images={images}
-              onUpload={onUpload}
-              onRemove={onRemove}
-            />
-          </div>
-          {srcEntry && (
-            <button
-              onClick={() => setShowModal(true)}
-              style={{
-                marginBottom: 14,
-                padding: '9px 18px',
-                background: FR.slate,
-                color: FR.salt,
-                border: 'none',
-                borderRadius: 6,
-                cursor: 'pointer',
-                fontSize: 11,
-                letterSpacing: 0.5,
-                textTransform: 'uppercase',
-                whiteSpace: 'nowrap',
-                flexShrink: 0,
-              }}>
-              Generate Views with AI
-            </button>
-          )}
-        </div>
+      {/* Reference images (multi-upload) for AI view generation */}
+      <div style={{ marginBottom: 14 }}>
+        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>Reference Images</label>
+        <PhotoUpload
+          label="Upload up to 6 — CLO3D renders, flat lays, sketches, swatches, mood images"
+          slotKey="design-source"
+          images={images}
+          onUpload={onUpload}
+          onRemove={onRemove}
+        />
+      </div>
+
+      {/* Free-form context for the AI prompt */}
+      <div style={{ marginBottom: 18 }}>
+        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>Additional Context for AI</label>
+        <textarea
+          value={customContext}
+          onChange={e => set('designContextPrompt', e.target.value)}
+          placeholder='e.g., "oversized boxy fit, drop shoulder, garment-dyed Slate, invisible kangaroo pocket, raw flat hem, 400gsm heavyweight french terry"'
+          rows={3}
+          style={{
+            width: '100%',
+            padding: '10px 12px',
+            border: `1px solid ${FR.sand}`,
+            borderRadius: 4,
+            fontSize: 12,
+            color: FR.slate,
+            background: FR.white,
+            resize: 'vertical',
+            fontFamily: "'Helvetica Neue', sans-serif",
+            lineHeight: 1.5,
+            boxSizing: 'border-box',
+          }}
+        />
+      </div>
+
+      {/* Generate button — disabled until at least one reference image */}
+      <div style={{ marginBottom: 22 }}>
+        <button
+          onClick={() => setShowModal(true)}
+          disabled={!srcEntries.length}
+          style={{
+            padding: '10px 22px',
+            background: srcEntries.length ? FR.slate : FR.sand,
+            color: srcEntries.length ? FR.salt : FR.stone,
+            border: 'none',
+            borderRadius: 6,
+            cursor: srcEntries.length ? 'pointer' : 'not-allowed',
+            fontSize: 11,
+            letterSpacing: 0.5,
+            textTransform: 'uppercase',
+          }}>
+          Generate Views with AI
+        </button>
+        {!srcEntries.length && (
+          <span style={{ marginLeft: 12, fontSize: 11, color: FR.stone, fontStyle: 'italic' }}>
+            Upload at least one reference image to enable
+          </span>
+        )}
       </div>
 
       {/* Manual / generated garment views */}
@@ -624,9 +664,10 @@ export function StepDesignOverview({ images, onUpload, onRemove }) {
         </Row>
       </div>
 
-      {showModal && srcEntry && (
+      {showModal && srcEntries.length > 0 && (
         <GenerateViewsModal
-          srcEntry={srcEntry}
+          srcEntries={srcEntries}
+          customContext={customContext}
           onAccept={(slot, dataUrl) => onUpload(slot, dataUrl, `${slot}-generated.jpg`)}
           onClose={() => setShowModal(false)}
         />
