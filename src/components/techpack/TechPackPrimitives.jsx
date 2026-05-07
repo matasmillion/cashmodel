@@ -222,43 +222,46 @@ export function ArrayTable({ headers, rows, onUpdate, onAdd, onRemove }) {
   );
 }
 
-export function PhotoUpload({ label, slotKey, images, onUpload, onRemove, aspect }) {
+export function PhotoUpload({ label, slotKey, images, onUpload, onRemove, aspect, single }) {
   const fileRef = useRef(null);
   const [dragging, setDragging] = useState(false);
+  const slotImages = (images || []).filter(img => img.slot === slotKey);
+
   const handleFiles = async (files) => {
     for (const f of files) {
       if (!f.type.startsWith('image/')) continue;
+      // single-image slot — replace the existing image rather than append.
+      if (single && slotImages.length > 0) {
+        for (let i = slotImages.length - 1; i >= 0; i--) onRemove(slotKey, i);
+      }
       onUpload(slotKey, await resizeImage(f), f.name);
+      if (single) break; // only take the first dropped/selected file
     }
   };
-  const slotImages = (images || []).filter(img => img.slot === slotKey);
-  // Fixed-aspect drop zones (e.g. 2:3 garment views) need to skip the
-  // dynamic padding hack — instead, set aspectRatio + use flex centering so
-  // the empty / populated states both fill the box.
-  const isFixedAspect = !!aspect && slotImages.length === 0;
+  const atCapacity = single && slotImages.length >= 1;
   return (
     <div style={{ marginBottom: 14 }}>
       <label style={labelStyle}>{label}</label>
-      <div onClick={() => fileRef.current?.click()}
-        onDrop={e => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files); }}
-        onDragOver={e => { e.preventDefault(); setDragging(true); }}
+      <div onClick={() => { if (!atCapacity) fileRef.current?.click(); }}
+        onDrop={e => { e.preventDefault(); setDragging(false); if (!atCapacity) handleFiles(e.dataTransfer.files); }}
+        onDragOver={e => { e.preventDefault(); if (!atCapacity) setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         style={{
           border: `2px dashed ${dragging ? FR.soil : FR.sand}`,
           borderRadius: 6,
           padding: aspect ? 10 : (slotImages.length ? 10 : 24),
           textAlign: 'center',
-          cursor: 'pointer',
+          cursor: atCapacity ? 'default' : 'pointer',
           background: dragging ? FR.sand : FR.white,
           transition: 'all 0.2s',
           minHeight: 50,
           ...(aspect ? { aspectRatio: aspect, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' } : null),
         }}>
-        <input ref={fileRef} type="file" accept="image/*" multiple onChange={e => { if (e.target.files.length) handleFiles(e.target.files); e.target.value = ''; }} style={{ display: 'none' }} />
+        <input ref={fileRef} type="file" accept="image/*" multiple={!single} onChange={e => { if (e.target.files.length) handleFiles(e.target.files); e.target.value = ''; }} style={{ display: 'none' }} />
         {slotImages.length === 0 ? (
           <>
             <div style={{ fontSize: 20, color: FR.sand }}>+</div>
-            <div style={{ fontSize: 11, color: FR.stone }}>Click or drag photos here</div>
+            <div style={{ fontSize: 11, color: FR.stone }}>Click or drag {single ? 'a photo' : 'photos'} here</div>
             <div style={{ fontSize: 9, color: FR.sand, marginTop: 2 }}>JPG, PNG — auto-resized</div>
           </>
         ) : (
@@ -271,7 +274,9 @@ export function PhotoUpload({ label, slotKey, images, onUpload, onRemove, aspect
                 <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(58,58,58,0.7)', padding: '2px 4px', fontSize: 8, color: FR.salt, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{img.name || `Photo ${i + 1}`}</div>
               </div>
             ))}
-            <div style={{ width: 100, height: 100, borderRadius: 4, border: `2px dashed ${FR.sand}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: FR.stone, fontSize: 24 }}>+</div>
+            {!single && (
+              <div style={{ width: 100, height: 100, borderRadius: 4, border: `2px dashed ${FR.sand}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: FR.stone, fontSize: 24 }}>+</div>
+            )}
           </div>
         )}
       </div>

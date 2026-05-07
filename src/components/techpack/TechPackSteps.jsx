@@ -410,6 +410,7 @@ function GenerateViewsModal({ viewSources, sharedRefs, customContext, style, bgC
   const [views, setViews]       = useState({ front: null, back: null, side: null });
   const [vstatus, setVstatus]   = useState({ front: 'pending', back: 'pending', side: 'pending' });
   const [verrors, setVerrors]   = useState({ front: '', back: '', side: '' });
+  const [regenInput, setRegen]  = useState({ front: '', back: '', side: '' });
   const [errMsg, setErrMsg]     = useState('');
 
   useEffect(() => { startAll(); }, []);
@@ -418,13 +419,21 @@ function GenerateViewsModal({ viewSources, sharedRefs, customContext, style, bgC
     return (typeof e?.message === 'string' ? e.message : String(e)) || 'Unknown error';
   }
 
-  async function runOneView(view, desc, refs) {
+  // Combine the top-level designer context with any per-regeneration feedback.
+  function buildCtx(extra) {
+    const trimmed = (extra || '').trim();
+    if (!trimmed) return customContext;
+    const feedback = `Designer feedback for this iteration: ${trimmed}`;
+    return customContext ? `${customContext}\n\n${feedback}` : feedback;
+  }
+
+  async function runOneView(view, desc, refs, ctx) {
     setVstatus(vs => ({ ...vs, [view]: 'loading' }));
     setVerrors(ve => ({ ...ve, [view]: '' }));
     try {
       const url = await generateGarmentView(desc, view, {
         references: refs,
-        customContext,
+        customContext: ctx,
         style,
         bgColorName,
       });
@@ -451,14 +460,12 @@ function GenerateViewsModal({ viewSources, sharedRefs, customContext, style, bgC
 
       const sharedClean = sharedUrls.filter(Boolean);
 
-      // Per-view refs: that view's own source (if any) + all shared refs
       const refs = {
         front: [frontUrl, ...sharedClean].filter(Boolean),
         back:  [backUrl,  ...sharedClean].filter(Boolean),
         side:  [sideUrl,  ...sharedClean].filter(Boolean),
       };
 
-      // Need at least one ref somewhere to drive the analysis
       const seed = frontUrl || backUrl || sideUrl || sharedClean[0];
       if (!seed) throw new Error('Could not read any reference images');
       setPVR(refs);
@@ -469,7 +476,7 @@ function GenerateViewsModal({ viewSources, sharedRefs, customContext, style, bgC
       setDesc(desc);
 
       setPhase('generating');
-      await Promise.all(viewsToRun.map(view => runOneView(view, desc, refs[view])));
+      await Promise.all(viewsToRun.map(view => runOneView(view, desc, refs[view], customContext)));
       setPhase('done');
     } catch (e) {
       console.error('[techpack-views] analyze failed:', e);
@@ -480,8 +487,11 @@ function GenerateViewsModal({ viewSources, sharedRefs, customContext, style, bgC
 
   async function regenView(view) {
     if (!description) return;
+    const extra = regenInput[view];
+    const ctx = buildCtx(extra);
+    setRegen(p => ({ ...p, [view]: '' }));
     setViews(vs => ({ ...vs, [view]: null }));
-    await runOneView(view, description, perViewRefs[view] || []);
+    await runOneView(view, description, perViewRefs[view] || [], ctx);
   }
 
   async function handleAccept() {
@@ -562,11 +572,33 @@ function GenerateViewsModal({ viewSources, sharedRefs, customContext, style, bgC
                   )}
                 </div>
                 {(vstatus[view] === 'done' || vstatus[view] === 'error') && (
-                  <button
-                    onClick={() => regenView(view)}
-                    style={{ marginTop: 6, width: '100%', fontSize: 10, background: 'none', border: `0.5px solid ${FR.sand}`, borderRadius: 4, padding: '4px 0', cursor: 'pointer', color: FR.stone, letterSpacing: 0.3 }}>
-                    Regenerate
-                  </button>
+                  <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <textarea
+                      value={regenInput[view]}
+                      onChange={e => setRegen(p => ({ ...p, [view]: e.target.value }))}
+                      placeholder="What to improve? (optional)"
+                      rows={2}
+                      style={{
+                        width: '100%',
+                        padding: '6px 8px',
+                        border: `0.5px solid ${FR.sand}`,
+                        borderRadius: 4,
+                        fontSize: 10,
+                        color: FR.slate,
+                        background: FR.white,
+                        resize: 'none',
+                        fontFamily: "'Helvetica Neue', sans-serif",
+                        lineHeight: 1.35,
+                        boxSizing: 'border-box',
+                        outline: 'none',
+                      }}
+                    />
+                    <button
+                      onClick={() => regenView(view)}
+                      style={{ width: '100%', fontSize: 10, background: 'none', border: `0.5px solid ${FR.sand}`, borderRadius: 4, padding: '5px 0', cursor: 'pointer', color: FR.stone, letterSpacing: 0.3 }}>
+                      Regenerate
+                    </button>
+                  </div>
                 )}
               </div>
             ))}
@@ -692,16 +724,17 @@ export function StepDesignOverview({ data, set, images, onUpload, onRemove }) {
       {/* Per-view source images (CLO3D workflow) */}
       <GenSection label="Reference Per View — CLO3D Renders or Sketches">
         <Row cols="1fr 1fr 1fr">
-          <PhotoUpload label="Front Reference" slotKey="design-source-front" images={images} onUpload={onUpload} onRemove={onRemove} />
-          <PhotoUpload label="Back Reference"  slotKey="design-source-back"  images={images} onUpload={onUpload} onRemove={onRemove} />
-          <PhotoUpload label="Side Reference"  slotKey="design-source-side"  images={images} onUpload={onUpload} onRemove={onRemove} />
+          <PhotoUpload single label="Front Reference" slotKey="design-source-front" images={images} onUpload={onUpload} onRemove={onRemove} />
+          <PhotoUpload single label="Back Reference"  slotKey="design-source-back"  images={images} onUpload={onUpload} onRemove={onRemove} />
+          <PhotoUpload single label="Side Reference"  slotKey="design-source-side"  images={images} onUpload={onUpload} onRemove={onRemove} />
         </Row>
       </GenSection>
 
       {/* Treatments / wash references */}
-      <GenSection label="Treatment & Wash References — Fabric Finish, Dye, Distressing">
+      <GenSection label="Treatment & Wash Reference — Fabric Finish, Dye, Distressing">
         <PhotoUpload
-          label="Upload swatches or imagery showing the wash, dye, or fabric finish"
+          single
+          label="Upload one swatch or image showing the wash, dye, or fabric finish"
           slotKey="design-treatment-ref"
           images={images}
           onUpload={onUpload}
@@ -710,9 +743,10 @@ export function StepDesignOverview({ data, set, images, onUpload, onRemove }) {
       </GenSection>
 
       {/* Embellishment / artwork references */}
-      <GenSection label="Embellishment References — Graphics, Embroidery, Hardware">
+      <GenSection label="Embellishment Reference — Graphics, Embroidery, Hardware">
         <PhotoUpload
-          label="Upload artwork, prints, embroidery samples, or hardware references"
+          single
+          label="Upload one artwork, print, embroidery, or hardware reference"
           slotKey="design-embellishment-ref"
           images={images}
           onUpload={onUpload}
@@ -772,9 +806,9 @@ export function StepDesignOverview({ data, set, images, onUpload, onRemove }) {
       {/* Manual / generated garment views */}
       <GenSection label="Garment Views">
         <Row cols="1fr 1fr 1fr">
-          <PhotoUpload label="Front View" slotKey="design-front" images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
-          <PhotoUpload label="Back View"  slotKey="design-back"  images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
-          <PhotoUpload label="Side View"  slotKey="design-side"  images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
+          <PhotoUpload single label="Front View" slotKey="design-front" images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
+          <PhotoUpload single label="Back View"  slotKey="design-back"  images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
+          <PhotoUpload single label="Side View"  slotKey="design-side"  images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
         </Row>
       </GenSection>
 
@@ -785,7 +819,12 @@ export function StepDesignOverview({ data, set, images, onUpload, onRemove }) {
           customContext={customContext}
           style={style}
           bgColorName={bgColor}
-          onAccept={(slot, dataUrl) => onUpload(slot, dataUrl, `${slot}-generated.jpg`)}
+          onAccept={(slot, dataUrl) => {
+            // Replace any existing image in this slot — single-image enforcement.
+            const existing = (images || []).filter(i => i.slot === slot);
+            for (let i = existing.length - 1; i >= 0; i--) onRemove(slot, i);
+            onUpload(slot, dataUrl, `${slot}-generated.jpg`);
+          }}
           onClose={() => setShowModal(false)}
         />
       )}

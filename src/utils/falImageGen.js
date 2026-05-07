@@ -28,15 +28,16 @@ const MAX_POLLS = 40; // ~2 min
 
 // ─── FR brand color translation ──────────────────────────────────────────────
 // Hex alone reads as near-black on NB2. Always pair with descriptive language.
+// Hex is included AFTER the description as a secondary anchor.
 export const FR_COLOR_PROMPT = {
-  slate:  'medium-dark slate grey, the color of weathered concrete, approximately 25% lightness, warm neutral undertone — clearly distinguishable as GREY, NOT near-black, NOT charcoal',
-  salt:   'warm cream ivory, the color of unbleached raw linen — warm off-white with subtle tan warmth, NOT pure white, NOT yellow',
-  sand:   'warm sand beige, the color of dry beach sand — between cream and khaki, desaturated warm mid-tone',
-  stone:  'mid-tone grey-brown, the color of river stone — balanced neutral, approximately 45% lightness',
-  soil:   'warm earth brown, the color of dry clay soil — muted, desaturated, NOT orange, NOT chocolate',
-  sea:    'dusty steel blue, the color of overcast ocean — muted, desaturated, soft blue-grey',
-  sage:   'muted sage green, the color of dried eucalyptus — desaturated, grey-green, NOT lime, NOT forest',
-  sienna: 'warm sienna orange-brown, the color of terracotta clay — earthy, muted, NOT bright orange',
+  slate:  'medium-dark slate grey hex #3A3A3A, the color of weathered concrete, approximately 25% lightness, warm neutral undertone — clearly distinguishable as GREY, NOT near-black, NOT charcoal',
+  salt:   'warm cream ivory hex #F5F0E8, the color of unbleached raw linen — warm off-white with subtle tan warmth, NOT pure white, NOT yellow',
+  sand:   'warm sand beige hex #EBE5D5, the color of dry beach sand — between cream and khaki, desaturated warm mid-tone',
+  stone:  'mid-tone grey-brown hex #716F70, the color of river stone — balanced neutral, approximately 45% lightness',
+  soil:   'warm earth brown hex #9A816B, the color of dry clay soil — muted, desaturated, NOT orange, NOT chocolate',
+  sea:    'dusty steel blue hex #B5C7D3, the color of overcast ocean — muted, desaturated, soft blue-grey',
+  sage:   'muted sage green hex #ADBDA3, the color of dried eucalyptus — desaturated, grey-green, NOT lime, NOT forest',
+  sienna: 'warm sienna orange-brown hex #D4956A, the color of terracotta clay — earthy, muted, NOT bright orange',
 };
 
 // ─── Brand photography defaults ──────────────────────────────────────────────
@@ -152,20 +153,20 @@ export async function analyzeGarmentImage(imageBase64, mediaType = 'image/jpeg')
 
 // ─── Background color resolution ─────────────────────────────────────────────
 // Translate an FR color name into descriptive language for the prompt.
-// Returns null for unknown colors so the caller can fall back.
+// Surface mode: 'mannequin' = "background"; 'flat' = "surface".
 function describeBackground(colorName, surfaceMode) {
   const key = (colorName || '').toLowerCase();
   const desc = FR_COLOR_PROMPT[key];
   if (!desc) {
     return surfaceMode === 'mannequin'
-      ? 'pure white seamless studio background'
-      : 'pure white seamless paper surface';
+      ? 'pure white seamless studio background filling every pixel uniformly'
+      : 'pure white seamless paper surface filling every pixel uniformly';
   }
-  // For ghost mannequin, the bg is a "seamless background"; for flat lay it's
-  // a "surface" the garment rests on.
+  // Critical-spec wording — every pixel must read the specified color, no
+  // gradients, no white halo, no spillover. NB2 needs the emphatic phrasing.
   return surfaceMode === 'mannequin'
-    ? `seamless ${desc} studio background — the entire negative space behind the garment is this color`
-    : `${desc} flat surface — the entire surface beneath and around the garment is this color`;
+    ? `seamless ${desc} studio background. EVERY pixel of background behind, above, below, and around the garment must be this exact color — no white, no gradient, no other tones. Solid uniform fill of ${desc}.`
+    : `${desc} flat surface. EVERY pixel of surface beneath and around the garment must be this exact color — no white, no gradient, no other tones. Solid uniform fill of ${desc}.`;
 }
 
 // ─── Ghost Mannequin generator (default for tech pack design overview) ─────
@@ -208,10 +209,13 @@ export async function generateGhostMannequin({
     ? `Using the reference image${trimmedRefs.length > 1 ? 's' : ''} as the source for garment shape, color, fabric texture, construction details, treatments, and embellishments — preserve those elements exactly. `
     : '';
 
+  // Skill rule: critical specs FIRST. The vertical 2:3 portrait composition
+  // and the background color are non-negotiable, so they lead.
   const prompt = [
-    refClause + `Professional e-commerce product photograph.`,
-    `${garmentDescription}, ghost mannequin invisible mannequin presentation, garment perfectly three-dimensional as if worn by an invisible body, floating against ${bg}.`,
-    `${GHOST_MANNEQUIN_VIEW_ANGLE[view]}, centered, full garment visible from collar to hem.`,
+    refClause + `Professional e-commerce product photograph in a strict vertical 2:3 portrait aspect ratio composition. The garment must fill the frame from near the top edge to near the bottom edge with consistent margin on both sides — minimal negative space above the collar or below the hem.`,
+    `BACKGROUND: ${bg}`,
+    `${garmentDescription}, ghost mannequin invisible mannequin presentation, garment perfectly three-dimensional as if worn by an invisible body, centered horizontally and vertically against the background.`,
+    `${GHOST_MANNEQUIN_VIEW_ANGLE[view]}, centered, full garment visible from collar to hem, garment scaled large to fill the vertical frame.`,
     `Visible interior at neckline showing hollow collar construction and any rib trim. Realistic garment volume and natural drape from shoulders, no flat or pasted-on appearance.`,
     customContext ? `Additional designer direction: ${customContext}` : '',
     `Soft even diffuse studio lighting, neutral white balance, no harsh shadows. Sharp focus across entire garment, high-resolution editorial quality, professional fashion product photography.`,
@@ -225,7 +229,8 @@ export async function generateGhostMannequin({
       prompt,
       num_images: 1,
       output_format: 'jpeg',
-      image_size: RES.ghostMannequin,
+      image_size: RES.ghostMannequin,        // 1360 × 2032 (2:3 portrait)
+      aspect_ratio: '2:3',                   // belt-and-suspenders for NB2
       ...(usingRefs ? { image_urls: trimmedRefs } : {}),
     },
     onStatus,
@@ -268,17 +273,15 @@ export async function generateFlatLay({
   const endpoint = usingRefs ? NB2_EDIT : NB2_TXT2IMG;
   const surface = describeBackground(bgColorName, 'flat');
 
-  // Skill rule: with references, lead with explicit preservation language so
-  // the model treats unmentioned elements as creative freedom.
   const refClause = usingRefs
     ? `Using the reference image${trimmedRefs.length > 1 ? 's' : ''} as the source for garment shape, color, fabric texture, construction details, treatments, and embellishments — preserve those elements exactly. `
     : '';
 
-  // Skill rule: critical specs FIRST.
   const prompt = [
-    refClause + `Professional flat lay product photograph, top-down overhead orthographic view.`,
-    `${garmentDescription}, ${FLAT_LAY_VIEW_ANGLE[view]}, on ${surface}.`,
-    `Garment fully spread, no wrinkles, centered composition with small consistent margin around edges.`,
+    refClause + `Professional flat lay product photograph in a strict vertical 2:3 portrait aspect ratio composition. The garment must fill the vertical frame from near the top edge to near the bottom edge with consistent margin on both sides — minimal negative space at the top or bottom.`,
+    `SURFACE: ${surface}`,
+    `Top-down overhead orthographic view. ${garmentDescription}, ${FLAT_LAY_VIEW_ANGLE[view]}.`,
+    `Garment fully spread, no wrinkles, centered composition with small consistent margin around edges, garment scaled large to fill the vertical frame.`,
     customContext ? `Additional designer direction: ${customContext}` : '',
     `Soft diffuse overhead studio lighting, even illumination, minimal shadows. Sharp focus across entire garment, fabric texture visible. E-commerce catalog standard, professional product photography.`,
     BRAND_DEFAULTS,
@@ -291,7 +294,8 @@ export async function generateFlatLay({
       prompt,
       num_images: 1,
       output_format: 'jpeg',
-      image_size: RES.flatLay,
+      image_size: { width: 1360, height: 2032 }, // override to 2:3 portrait per UI requirement
+      aspect_ratio: '2:3',
       ...(usingRefs ? { image_urls: trimmedRefs } : {}),
     },
     onStatus,
