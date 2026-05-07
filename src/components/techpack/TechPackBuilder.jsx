@@ -234,6 +234,12 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   const bomCost = computeBOMCost(data);
   const colorwayCost = computeColorwayCost(data, getFRColorCost);
   const totalUnitCost = bomCost + colorwayCost;
+
+  // Per-phase cost subtotals shown as pills in the sidebar phase headers.
+  const phaseCosts = {
+    'Materials': bomCost,
+    'Embellishments': colorwayCost,
+  };
   const targetFOB = parseFloat(data.targetFOB) || 0;
   const costVariance = targetFOB > 0 ? totalUnitCost - targetFOB : 0;
 
@@ -608,8 +614,13 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
               return (
                 <div key={s.id}>
                   {phaseChanged && (
-                    <div style={{ padding: i === 0 ? '10px 16px 6px' : '14px 16px 6px', fontSize: 8, color: FR.soil, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', borderTop: i === 0 ? 'none' : `1px solid ${FR.sand}`, marginTop: i === 0 ? 0 : 6 }}>
-                      {s.phase}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: i === 0 ? '10px 16px 6px' : '14px 16px 6px', borderTop: i === 0 ? 'none' : `1px solid ${FR.sand}`, marginTop: i === 0 ? 0 : 6 }}>
+                      <span style={{ fontSize: 8, color: FR.soil, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase' }}>{s.phase}</span>
+                      {phaseCosts[s.phase] > 0 && (
+                        <span style={{ fontSize: 9, color: FR.soil, background: FR.sand, borderRadius: 4, padding: '2px 6px', fontWeight: 600, fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace" }}>
+                          {formatCost(phaseCosts[s.phase])}
+                        </span>
+                      )}
                     </div>
                   )}
                   <button onClick={() => setStep(i)}
