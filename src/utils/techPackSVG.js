@@ -196,9 +196,9 @@ export function generateTechPackSVG(pack) {
   svg += `<g id="page-5-construction" transform="translate(0 ${yOff})">`;
   svg += pageFrame('Construction Details', null, 5, numPages, styleInfo);
   svg += sectionHeading('Seam Specifications', 40, 110);
-  const seamRows = (d.seams || []).filter(s => s.operation).map(s => [s.operation, s.seamType, s.stitchType, s.spiSpcm, s.threadColor, s.notes]);
+  const seamRows = (d.seams || []).filter(s => s.operation).map(s => [s.operation, s.seamType, s.stitchType, s.machine, s.spiSpcm, s.threadColor, s.notes]);
   if (seamRows.length) {
-    const t2 = table(40, 140, ['Operation', 'Seam Type', 'Stitch', 'SPI', 'Thread', 'Notes'], seamRows, [180, 140, 100, 60, 140, 423]);
+    const t2 = table(40, 140, ['Operation', 'Seam Type', 'Stitch', 'Machine', 'SPI', 'Thread', 'Notes'], seamRows, [150, 120, 90, 150, 60, 120, 353]);
     svg += t2.svg;
   }
   svg += skipIf(10);

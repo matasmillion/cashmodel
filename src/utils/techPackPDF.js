@@ -173,6 +173,69 @@ export async function generateTechPackPDF(pack) {
     }
   }
 
+  // Construction Details page renderer — 2:3 reference image on the left
+  // plus a 2x2 grid of detail cards on the right. Each card has its own
+  // image, red number, title, and description so the factory sees the
+  // close-up alongside the instruction.
+  function drawConstructionDetailsPage(title, stepIdx, entries) {
+    newPage(title, null, stepIdx);
+    const margin = 10;
+    const top = 26;
+    const colGap = 6;
+    const refW = 80;
+    const refH = refW * 1.5; // 2:3 vertical
+    const callout = images.find(i => i.slot === `sketch-callout-${title.endsWith('Page 2') ? 'page2' : 'page1'}`);
+    if (callout) {
+      try { doc.addImage(callout.data, 'JPEG', margin, top, refW, refH, undefined, 'FAST'); }
+      catch (err) { console.error('callout embed:', err); }
+    } else {
+      doc.setDrawColor(...hex(FR.sand));
+      doc.setLineDashPattern([1, 1], 0);
+      doc.rect(margin, top, refW, refH);
+      doc.setLineDashPattern([], 0);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(...hex(FR.stone));
+      doc.text('(reference)', margin + refW / 2, top + refH / 2, { align: 'center' });
+    }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(...hex(FR.soil));
+    doc.text('REFERENCE (2:3)', margin, top + refH + 4);
+
+    const rightX = margin + refW + colGap;
+    const rightW = W - margin - rightX;
+    const rowGap = 4;
+    const cellW = (rightW - colGap) / 2;
+    const cellH = (refH - rowGap) / 2;
+    const imgH  = cellH * 0.55;
+    (entries || []).slice(0, 4).forEach((entry, i) => {
+      const cx = rightX + (i % 2) * (cellW + colGap);
+      const cy = top    + Math.floor(i / 2) * (cellH + rowGap);
+      doc.setDrawColor(...hex(FR.sand));
+      doc.setLineWidth(0.2);
+      doc.roundedRect(cx, cy, cellW, cellH, 1, 1);
+      addImage(`construction-detail-${entry.num}`, cx + 1, cy + 1, cellW - 2, imgH - 1);
+      // Red number circle
+      doc.setFillColor(163, 45, 45);
+      doc.circle(cx + 5, cy + imgH + 5, 3, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.text(String(entry.num), cx + 5, cy + imgH + 6.5, { align: 'center' });
+      // Title
+      doc.setTextColor(...hex(FR.slate));
+      doc.setFontSize(8);
+      doc.text(String(entry.title || `Detail ${entry.num}`).slice(0, 28), cx + 10, cy + imgH + 6.5);
+      // Description
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(...hex(FR.slate));
+      const descY = cy + imgH + 11;
+      doc.text(String(entry.description || ''), cx + 2, descY, { maxWidth: cellW - 4 });
+    });
+  }
+
   // ─── Page 000: Competitor Landscape (Merchandising) ───
   newPage('Competitor Landscape', null, 0);
   let y = 28;
@@ -454,44 +517,64 @@ export async function generateTechPackPDF(pack) {
   });
 
   // ─── Cut & Sew → Flat Lay Diagrams (stepIdx 7) ───
+  // A4 landscape page is 297×210mm. Two side-by-side cells maximised to
+  // fill the printable area: ~138×125mm each at 10mm margin / 5mm gutter.
   newPage('Flat Lay Diagrams', null, 7);
-  addImage('flatlay-front', 10, 28, 85, 90);
-  addImage('flatlay-back', 105, 28, 85, 90);
-  addImage('flatlay-detail', 200, 28, 85, 90);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7);
-  doc.setTextColor(...hex(FR.soil));
-  doc.text('FRONT', 10, 125);
-  doc.text('BACK', 105, 125);
-  doc.text('DETAIL', 200, 125);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(...hex(FR.slate));
-  doc.text(d.flatLayNotes || '', 10, 140, { maxWidth: W - 20 });
+  {
+    const top = 28;
+    const margin = 10;
+    const gutter = 5;
+    const cellW = (W - margin * 2 - gutter) / 2;
+    const cellH = 125;
+    addImage('flatlay-front', margin,                top, cellW, cellH);
+    addImage('flatlay-back',  margin + cellW + gutter, top, cellW, cellH);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(...hex(FR.soil));
+    doc.text('FRONT', margin, top + cellH + 6);
+    doc.text('BACK',  margin + cellW + gutter, top + cellH + 6);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(...hex(FR.slate));
+    doc.text(d.flatLayNotes || '', margin, top + cellH + 16, { maxWidth: W - margin * 2 });
+  }
 
   // ─── Cut & Sew → Construction Details Page 1 (stepIdx 5) ───
-  newPage('Construction Details — Page 1', null, 8);
-  y = 28;
-  sectionHeading('Detail Callouts', y); y += 8;
-  const cdRows1 = (d.constructionDetailsPage1 || []).map(c =>
-    [String(c.num), c.title || '', c.description || '']);
-  table(['#', 'Title', 'Description'], cdRows1, 10, y, [15, 60, 202]);
-
+  drawConstructionDetailsPage('Construction Details — Page 1', 8, d.constructionDetailsPage1);
   // ─── Cut & Sew → Construction Details Page 2 (stepIdx 6) ───
-  newPage('Construction Details — Page 2', null, 9);
-  y = 28;
-  sectionHeading('Detail Callouts', y); y += 8;
-  const cdRows2 = (d.constructionDetailsPage2 || []).map(c =>
-    [String(c.num), c.title || '', c.description || '']);
-  table(['#', 'Title', 'Description'], cdRows2, 10, y, [15, 60, 202]);
+  drawConstructionDetailsPage('Construction Details — Page 2', 9, d.constructionDetailsPage2);
 
   // ─── Cut & Sew → Seam & Stitch (now stepIdx 7) ───
   newPage('Seam & Stitch Specifications', null, 10);
-  y = 28;
-  sectionHeading('Seam Specifications', y); y += 8;
-  const seamRows = (d.seams || []).filter(s => s.operation).map(s =>
-    [s.operation, s.seamType, s.stitchType, s.spiSpcm, s.threadColor, s.notes]);
-  table(['Operation', 'Seam Type', 'Stitch', 'SPI', 'Thread', 'Notes'], seamRows, 10, y, [50, 40, 30, 20, 40, 97]);
+  {
+    // Stitch reference strip — six image cells across the top.
+    const stripTop = 24;
+    const stripH = 32;
+    const margin = 10;
+    const gap = 2;
+    const cellW = (W - margin * 2 - gap * 5) / 6;
+    const stitchBlocks = (d.seamStitchBlocks && d.seamStitchBlocks.length)
+      ? d.seamStitchBlocks
+      : [1, 2, 3, 4, 5, 6].map(num => ({ num, label: '' }));
+    stitchBlocks.slice(0, 6).forEach((b, i) => {
+      const cx = margin + i * (cellW + gap);
+      addImage(`seam-stitch-${b.num}`, cx, stripTop, cellW, stripH);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6);
+      doc.setTextColor(...hex(FR.soil));
+      doc.text(`STITCH ${b.num}`, cx, stripTop + stripH + 4);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(...hex(FR.slate));
+      doc.text(String(b.label || '—').slice(0, 22), cx, stripTop + stripH + 8.5);
+    });
+    y = stripTop + stripH + 14;
+    sectionHeading('Seam Specifications', y); y += 6;
+    const seamRows = (d.seams || []).filter(s => s.operation).map(s =>
+      [s.operation, s.seamType, s.stitchType, s.machine, s.spiSpcm, s.threadColor, s.notes]);
+    table(['Operation', 'Seam Type', 'Stitch', 'Machine', 'SPI', 'Thread', 'Notes'],
+      seamRows, 10, y, [40, 35, 25, 50, 18, 35, 74]);
+  }
 
   // ─── Cut & Sew → Pattern & Cutting ───
   newPage('Pattern Pieces & Cutting', null, 11);
