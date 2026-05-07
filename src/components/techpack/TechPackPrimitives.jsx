@@ -313,7 +313,7 @@ export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height 
           position: 'relative',
           border: `2px dashed ${dragging ? FR.soil : FR.sand}`,
           borderRadius: 8,
-          ...(portrait ? { aspectRatio: '2 / 3', height: 'auto' } : { height }),
+          ...(portrait ? { aspectRatio: '2 / 3', height: 'auto', maxWidth: 220, width: '100%' } : { height }),
           cursor: 'pointer',
           background: current ? 'transparent' : (dragging ? FR.sand : FR.salt),
           transition: 'all 0.2s',
@@ -328,7 +328,7 @@ export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height 
         {current ? (
           <>
             <AssetImage image={current} alt={current.name || 'Cover'}
-              style={{ width: '100%', height: '100%', objectFit: 'contain', background: FR.white }} />
+              style={{ width: '100%', height: '100%', objectFit: portrait ? 'cover' : 'contain', background: FR.white }} />
             <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
               <button onClick={e => { e.stopPropagation(); handleAutoCropExisting(); }} disabled={cropping}
                 title="Auto-crop to subject"

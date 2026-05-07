@@ -14,6 +14,7 @@ import { parsePLMHash, replacePLMHash } from '../../utils/plmRouting';
 import { getFRColorCost } from '../../utils/colorLibrary';
 import { formatCost } from './TechPackPrimitives';
 import { uploadAsset, dataUrlToBlob, isLegacyDataUrl, useResolvedImageEntries, isGhostImage } from '../../utils/plmAssets';
+import { computePackDiff } from '../../utils/techPackDiff';
 
 function sanitizeFilename(s) {
   return (s || 'techpack').replace(/[^\w\-]+/g, '_').slice(0, 60);
@@ -28,31 +29,63 @@ function downloadBlob(blob, filename) {
 // ─── Revision Panel ──────────────────────────────────────────────────────────
 function RevisionPanel({ revisions, onCreateRevision }) {
   const [showAll, setShowAll] = useState(false);
-  const recent = showAll ? revisions : revisions.slice(0, 3);
+  const [expandedIdx, setExpandedIdx] = useState(null);
+  const allReversed = [...revisions].reverse();
+  const shown = showAll ? allReversed : allReversed.slice(0, 5);
+
   return (
     <div style={{ marginTop: 16, padding: 12, background: FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 6 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: FR.slate }}>
-          <History size={13} /> Revisions ({revisions.length})
+          <History size={13} /> Version History ({revisions.length})
         </div>
         <button onClick={onCreateRevision}
           style={{ padding: '4px 10px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 10, cursor: 'pointer' }}>
-          + Snapshot
+          + Manual Snapshot
         </button>
       </div>
-      {recent.length === 0 ? (
-        <p style={{ fontSize: 10, color: FR.stone, margin: 0 }}>No snapshots yet. Create one before sending to vendor.</p>
+      {shown.length === 0 ? (
+        <p style={{ fontSize: 10, color: FR.stone, margin: 0 }}>No snapshots yet. Snapshots are created automatically on download.</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {recent.map((r, i) => (
-            <div key={i} style={{ fontSize: 10, color: FR.stone, padding: '4px 8px', background: 'white', borderRadius: 4, display: 'flex', justifyContent: 'space-between' }}>
-              <span><strong style={{ color: FR.slate }}>v{r.version}</strong> — {r.status} — {r.note || 'Snapshot'}</span>
-              <span>{new Date(r.date).toLocaleDateString()}</span>
-            </div>
-          ))}
-          {revisions.length > 3 && (
-            <button onClick={() => setShowAll(!showAll)} style={{ fontSize: 10, color: FR.soil, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-              {showAll ? 'Show less' : `Show all ${revisions.length}`}
+          {shown.map((r, i) => {
+            const isExpanded = expandedIdx === i;
+            const changedCount = (r.changedFields || []).length;
+            return (
+              <div key={i} style={{ background: 'white', borderRadius: 4, border: `1px solid ${FR.sand}`, overflow: 'hidden' }}>
+                <div
+                  onClick={() => setExpandedIdx(isExpanded ? null : i)}
+                  style={{ fontSize: 10, color: FR.stone, padding: '5px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: changedCount > 0 ? 'pointer' : 'default' }}>
+                  <span>
+                    <strong style={{ color: FR.slate, fontFamily: 'ui-monospace,monospace', fontSize: 9 }}>v{r.version}</strong>
+                    <span style={{ marginLeft: 6, color: FR.soil }}>{r.status}</span>
+                    {r.triggeredBy === 'download' ? (
+                      <span style={{ marginLeft: 6, padding: '1px 5px', background: FR.sand, borderRadius: 2, fontSize: 9, color: FR.stone }}>download</span>
+                    ) : (
+                      <span style={{ marginLeft: 6, padding: '1px 5px', background: '#f0ede6', borderRadius: 2, fontSize: 9, color: FR.stone }}>manual</span>
+                    )}
+                    {r.note ? <span style={{ marginLeft: 6, color: FR.stone }}>{r.note}</span> : null}
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {changedCount > 0 && (
+                      <span style={{ fontSize: 9, color: FR.soil }}>{changedCount} change{changedCount !== 1 ? 's' : ''} {isExpanded ? '▲' : '▼'}</span>
+                    )}
+                    <span style={{ color: FR.stone }}>{new Date(r.date).toLocaleDateString()}</span>
+                  </span>
+                </div>
+                {isExpanded && changedCount > 0 && (
+                  <div style={{ padding: '4px 8px 6px', borderTop: `1px solid ${FR.sand}`, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {r.changedFields.map(f => (
+                      <span key={f} style={{ fontSize: 9, padding: '2px 6px', background: FR.sand, borderRadius: 2, color: FR.slate }}>{f}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {revisions.length > 5 && (
+            <button onClick={() => setShowAll(!showAll)} style={{ fontSize: 10, color: FR.soil, background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+              {showAll ? 'Show less' : `Show all ${revisions.length} versions`}
             </button>
           )}
         </div>
@@ -425,26 +458,33 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   }, []);
 
   // ── Revision snapshots ──
-  const createRevision = useCallback(() => {
-    const revisions = data.revisions || [];
+  const buildSnapshot = useCallback((currentData, triggeredBy = 'manual', noteOverride = undefined) => {
+    const revisions = currentData.revisions || [];
     const version = revisions.length + 1;
-    const note = prompt(`Revision v${version} note (optional):`) || '';
-    const today = new Date().toISOString().slice(0, 10);
-    const snapshot = {
+    const note = noteOverride !== undefined ? noteOverride
+      : (prompt(`Snapshot v${version} note (optional):`) || '');
+    const prevSnapshot = revisions.length > 0 ? revisions[revisions.length - 1].dataSnapshot : null;
+    const changedFields = prevSnapshot ? computePackDiff(prevSnapshot, currentData) : [];
+    return {
       rev: `V${version}.0`,
-      date: today,
+      date: new Date().toISOString().slice(0, 10),
       changedBy: '',
       section: '',
-      description: note || `Snapshot at ${data.status || 'Design'}`,
+      description: note || `${triggeredBy === 'download' ? 'Downloaded' : 'Snapshot'} at ${currentData.status || 'Design'}`,
       approvedBy: '',
-      // keep snapshot metadata for PLM audit trail
       version,
-      status: data.status,
+      status: currentData.status,
       note,
-      dataSnapshot: JSON.parse(JSON.stringify(data)),
+      triggeredBy,
+      changedFields,
+      dataSnapshot: JSON.parse(JSON.stringify(currentData)),
     };
+  }, []);
+
+  const createRevision = useCallback(() => {
+    const snapshot = buildSnapshot(data, 'manual');
     setData(p => ({ ...p, revisions: [...(p.revisions || []), snapshot] }));
-  }, [data]);
+  }, [data, buildSnapshot]);
 
   // ── Sample tracking ──
   const addSample = useCallback((sample) => {
@@ -462,18 +502,24 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     setSubmitting(true);
     setSubmitResult(null);
     try {
-      const filename = sanitizeFilename(data.styleName || data.styleNumber || 'techpack');
-      const fullPack = { ...pack, data, images, library };
+      // Auto-snapshot on every download — no prompt, triggered automatically
+      const snapshot = buildSnapshot(data, 'download', '');
+      const updatedData = { ...data, revisions: [...(data.revisions || []), snapshot] };
+      setData(updatedData);
+
+      const version = snapshot.version;
+      const filename = sanitizeFilename(data.styleNumber || data.styleName || 'techpack');
+      const fullPack = { ...pack, data: updatedData, images, library };
       const pdfBlob = await generateTechPackPDF(fullPack);
-      downloadBlob(pdfBlob, `${filename}_v${(data.revisions || []).length || 1}.pdf`);
+      downloadBlob(pdfBlob, `${filename}_v${version}.pdf`);
       const svgString = await generateTechPackSVGAsync(fullPack);
-      downloadBlob(svgToBlob(svgString), `${filename}_v${(data.revisions || []).length || 1}.svg`);
+      downloadBlob(svgToBlob(svgString), `${filename}_v${version}.svg`);
       const finalSave = await saveTechPack(packIdRef.current, {
-        data, images, library,
-        style_name: data.styleNumber || data.styleName || '',
-        product_category: data.productCategory || '',
-        status: data.status || 'Design',
-        completion_pct: computeCompletion(data),
+        data: updatedData, images, library,
+        style_name: updatedData.styleNumber || updatedData.styleName || '',
+        product_category: updatedData.productCategory || '',
+        status: updatedData.status || 'Design',
+        completion_pct: computeCompletion(updatedData),
       });
       if (finalSave && finalSave.idChanged) {
         packIdRef.current = finalSave.idChanged.to;
@@ -485,7 +531,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       setSubmitResult({ error: err.message || String(err) });
     }
     setSubmitting(false);
-  }, [pack, data, images, library]);
+  }, [pack, data, images, library, buildSnapshot]);
 
   const Comp = STEP_FNS[step];
   const skippedSteps = data.skippedSteps || [];

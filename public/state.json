@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-06T18:58:52.721Z",
+  "lastUpdated": "2026-05-06T13:11:45.238Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,54 +1044,54 @@
   ],
   "changelog": [
     {
-      "sha": "2cc6005",
-      "date": "2026-05-06T18:53:44+00:00",
-      "message": "feat: Creative Engine Phase 5 — evaluation + learning"
+      "sha": "f3d475b",
+      "date": "2026-05-04T18:38:58+00:00",
+      "message": "techpack: lighter card font, drop bleed-through shirt icon, default shipping offset to 0"
     },
     {
-      "sha": "44b4a58",
-      "date": "2026-05-06T18:47:01+00:00",
-      "message": "feat: Creative Engine Phases 3.5 + 4 — encoder + Meta publish"
+      "sha": "0f1f2ca",
+      "date": "2026-05-04T18:34:44+00:00",
+      "message": "assumptions: drop fulfillment % from 10% → 9%"
     },
     {
-      "sha": "42f29f3",
-      "date": "2026-05-06T18:34:34+00:00",
-      "message": "feat: Creative Engine Phase 3 — render dispatch"
+      "sha": "45f67a1",
+      "date": "2026-05-04T21:33:34+03:00",
+      "message": "techpack(cover): max FOB drops PP%, adds shipping charge, uses full fulfillment cost (#19)"
     },
     {
-      "sha": "96be3c9",
-      "date": "2026-05-06T18:16:38+00:00",
-      "message": "feat: knowledge files upload + AI auto-fill"
+      "sha": "467280d",
+      "date": "2026-05-04T21:29:15+03:00",
+      "message": "Card font + cover image render fix (#18)"
     },
     {
-      "sha": "429f691",
-      "date": "2026-05-06T17:52:26+00:00",
-      "message": "fix: make creative_knowledge migration self-contained"
+      "sha": "ab02bc2",
+      "date": "2026-05-04T21:24:15+03:00",
+      "message": "Max FOB formula uses Cash-tab assumptions + rate card (#17)"
     },
     {
-      "sha": "951b057",
-      "date": "2026-05-06T14:01:33+00:00",
-      "message": "feat: knowledge files moved to DB with structured editor"
+      "sha": "40d9061",
+      "date": "2026-05-04T21:08:25+03:00",
+      "message": "fix(techpack): listFRColors is sync — drop .then() that crashed cover page (#16)"
     },
     {
-      "sha": "58c2000",
-      "date": "2026-05-06T13:41:06+00:00",
-      "message": "chore: regenerate state.json after Phase 2 build"
+      "sha": "45552f1",
+      "date": "2026-05-04T21:05:52+03:00",
+      "message": "Tech Pack cover page buildout — Style Overview (#15)"
     },
     {
-      "sha": "9777fd8",
-      "date": "2026-05-06T13:40:37+00:00",
-      "message": "fix: drop supabase.auth.getUser() from creative proxies"
+      "sha": "03f0411",
+      "date": "2026-05-04T17:28:32+00:00",
+      "message": "fix(db): user_integrations org-scope migration was incomplete — Shopify save broken"
     },
     {
-      "sha": "f06ebf8",
-      "date": "2026-05-06T13:23:10+00:00",
-      "message": "feat: Creative Engine Phase 2 — brief generation"
+      "sha": "f24bac1",
+      "date": "2026-05-04T15:07:46+00:00",
+      "message": "feat(topbar): tabs are anchors so Cmd/Ctrl/Shift-click opens new browser tab"
     },
     {
-      "sha": "5a8c653",
-      "date": "2026-05-06T13:16:47+00:00",
-      "message": "feat: Creative Engine Phase 0 + Phase 1 foundation"
+      "sha": "d26677a",
+      "date": "2026-05-04T14:21:46+00:00",
+      "message": "feat(plm): vendor name is editable from the modal header (cascading rename)"
     }
   ]
 }
