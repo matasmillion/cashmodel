@@ -280,6 +280,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       if (!ids.length) { setFabricsById({}); return; }
       const { getFabric } = await import('../../utils/fabricStore');
       const { getAssetUrl, invalidateAssetUrl } = await import('../../utils/plmAssets');
+      const { getVendor } = await import('../../utils/vendorLibrary');
       const next = {};
       for (const id of ids) {
         // Always re-fetch — picks up library edits on every render.
@@ -287,13 +288,24 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
         if (cancelled) return;
         if (!row) continue;
         const v = row.updated_at;
-        let cover = row.cover_image;
+        // Cover prefers cover_image, falls back to front_image_url so the
+        // BOM live preview shows whatever swatch the designer uploaded.
+        let cover = row.cover_image || row.front_image_url || null;
         if (cover && !/^(https?:|data:|blob:)/.test(cover)) {
           try { invalidateAssetUrl?.(cover); } catch {}
           cover = await getAssetUrl(cover).catch(() => null) || row.cover_image;
         }
         const tagged = cover ? `${cover}${cover.includes('?') ? '&' : '?'}v=${encodeURIComponent(v || '')}` : null;
-        next[id] = { ...row, cover_image: tagged || cover || row.cover_image };
+        // Vendor contact lookup so the SVG card can show email / phone /
+        // primary contact alongside the mill name.
+        const vendor = row.mill_id ? getVendor(row.mill_id) : null;
+        next[id] = {
+          ...row,
+          cover_image:    tagged || cover || row.cover_image,
+          _vendorEmail:   vendor?.email || '',
+          _vendorPhone:   vendor?.phone || '',
+          _vendorContact: vendor?.primary_contact || '',
+        };
       }
       if (!cancelled) setFabricsById(next);
     })();

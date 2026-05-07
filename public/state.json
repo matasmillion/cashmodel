@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T19:04:59.288Z",
+  "lastUpdated": "2026-05-07T19:11:34.933Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,9 +1044,14 @@
   ],
   "changelog": [
     {
-      "sha": "680eefe",
-      "date": "2026-05-07T19:00:16+00:00",
-      "message": "techpack: read fabric mill_id as vendor + refetch on tab focus"
+      "sha": "aeea8f6",
+      "date": "2026-05-07T22:08:56+03:00",
+      "message": "techpack: fabric vendor + color picker + cost / m label (#57)"
+    },
+    {
+      "sha": "14fbfdf",
+      "date": "2026-05-07T22:03:01+03:00",
+      "message": "fabrics: dual-currency pricing (USD ↔ RMB) and price per kg (#56)"
     },
     {
       "sha": "79408ad",
@@ -1087,11 +1092,6 @@
       "sha": "1b14aa7",
       "date": "2026-05-07T20:37:02+03:00",
       "message": "techpack: trim slot — full image, measurement diagram, quantity, type as text (#48)"
-    },
-    {
-      "sha": "ceb07cb",
-      "date": "2026-05-07T20:29:42+03:00",
-      "message": "fabric AI: repair truncated JSON instead of failing the import (#47)"
     }
   ]
 }
