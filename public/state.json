@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T12:15:45.879Z",
+  "lastUpdated": "2026-05-07T12:18:14.752Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "ca2ef72",
+      "date": "2026-05-07T12:16:08+00:00",
+      "message": "chore: update state.json timestamp and changelog"
+    },
+    {
+      "sha": "a2ea966",
+      "date": "2026-05-07T12:15:56+00:00",
+      "message": "fix(techpack): flatten structured proxy errors to readable strings"
+    },
+    {
       "sha": "beb1c39",
       "date": "2026-05-07T15:12:44+03:00",
       "message": "fix(techpack): imageEntryToDataUrl resolves path via getAssetUrl (#30)"
@@ -1082,16 +1092,6 @@
       "sha": "5e2567e",
       "date": "2026-05-07T11:32:29+03:00",
       "message": "techpack: reorder by mfg stage + redesign cover preview (#23)"
-    },
-    {
-      "sha": "9db2927",
-      "date": "2026-05-07T10:50:51+03:00",
-      "message": "techpack: redesign Style Overview into 4 structured zones (#22)"
-    },
-    {
-      "sha": "51a6c83",
-      "date": "2026-05-07T10:17:49+03:00",
-      "message": "techpack: asset versioning + cover photo polish (#21)"
     }
   ]
 }
