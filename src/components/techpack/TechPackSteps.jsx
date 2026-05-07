@@ -13,6 +13,7 @@ import { addSupplier } from '../../utils/plmDirectory';
 import { getFRColor } from '../../utils/colorLibrary';
 import { listTreatments, getTreatmentRollups } from '../../utils/treatmentStore';
 import { TREATMENT_TYPE_LABEL } from '../../utils/treatmentLibrary';
+import { computePackDiff } from '../../utils/techPackDiff';
 import { useApp } from '../../context/AppContext';
 
 const COST_TIER_CAP = 5;
@@ -1583,19 +1584,93 @@ export function StepQuality({ data, set }) {
     </div>
   );
 }
-function ApprovalCard({ title, value, onChange, dateLabel = 'Date' }) {
+function isApprovalComplete(v) {
+  if (!v) return false;
+  const date = v.date || v.dateChop;
+  return Boolean(v.name && v.signature && date);
+}
+
+function ApprovalCard({ title, value, onChange, dateLabel = 'Date', stepNumber, locked = false }) {
   const v = value || { name: '', signature: '', date: '', dateChop: '' };
   const dateKey = dateLabel === 'Date / Chop' ? 'dateChop' : 'date';
   const update = (k, val) => onChange({ ...v, [k]: val });
+  const complete = isApprovalComplete(v);
+  // Sequential gating (Designer → Brand Owner → Vendor): the first card is
+  // always editable; downstream cards stay locked until the previous one
+  // has name + signature + date.
   return (
-    <div style={{ padding: 12, border: `1px solid ${FR.sand}`, borderRadius: 6, background: FR.white }}>
-      <div style={{ fontSize: 10, color: FR.soil, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 }}>{title}</div>
-      <Input label="Name" value={v.name} onChange={val => update('name', val)} />
-      <Input label="Signature" value={v.signature} onChange={val => update('signature', val)} placeholder="Typed signature" />
-      <div style={{ marginBottom: 4 }}>
-        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' }}>{dateLabel}</label>
-        <input type="date" value={v[dateKey] || ''} onChange={e => update(dateKey, e.target.value)}
-          style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.slate, background: FR.white, outline: 'none', boxSizing: 'border-box' }} />
+    <div style={{ padding: 12, border: `1px solid ${complete ? FR.sage : FR.sand}`, borderRadius: 6, background: locked ? FR.salt : FR.white, opacity: locked ? 0.55 : 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div style={{ fontSize: 10, color: FR.soil, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+          {stepNumber ? <span style={{ marginRight: 6, color: FR.stone }}>{stepNumber}.</span> : null}{title}
+        </div>
+        {complete && <span style={{ fontSize: 9, color: '#3B6D11', fontWeight: 700, letterSpacing: 0.5 }}>SIGNED</span>}
+        {!complete && locked && <span style={{ fontSize: 9, color: FR.stone, letterSpacing: 0.5 }}>LOCKED</span>}
+      </div>
+      <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, pointerEvents: locked ? 'none' : 'auto' }}>
+        <Input label="Name" value={v.name} onChange={val => update('name', val)} />
+        <Input label="Signature" value={v.signature} onChange={val => update('signature', val)} placeholder="Typed signature" />
+        <div style={{ marginBottom: 4 }}>
+          <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' }}>{dateLabel}</label>
+          <input type="date" value={v[dateKey] || ''} onChange={e => update(dateKey, e.target.value)}
+            style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.slate, background: FR.white, outline: 'none', boxSizing: 'border-box' }} />
+        </div>
+      </fieldset>
+    </div>
+  );
+}
+
+function RevisionDiff({ revisions }) {
+  const lastIdx = revisions.length - 1;
+  const [fromIdx, setFromIdx] = useState(Math.max(0, lastIdx - 1));
+  const [toIdx, setToIdx] = useState(lastIdx);
+
+  const from = revisions[fromIdx];
+  const to   = revisions[toIdx];
+  const fromSnap = from?.dataSnapshot;
+  const toSnap   = to?.dataSnapshot;
+  // Snapshots only landed in revisions[] from the asset-versioning commit
+  // onward, so older revisions can lack `dataSnapshot`. Fall back to the
+  // pre-computed `changedFields` written at snapshot time when one side
+  // is missing.
+  const changed = (fromSnap && toSnap)
+    ? computePackDiff(fromSnap, toSnap)
+    : (to?.changedFields || []);
+
+  const opt = (r, i) => `${r.rev || `v${r.version || i + 1}`} · ${r.date || ''}${r.note ? ` · ${r.note.slice(0, 24)}` : ''}`;
+
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+  const selectStyle = { width: '100%', padding: '6px 8px', fontSize: 12, border: `1px solid ${FR.sand}`, borderRadius: 3, background: FR.white, color: FR.slate, fontFamily: "'Helvetica Neue', sans-serif" };
+
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <label style={sectionLabel}>Revision Diff</label>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 9, color: FR.stone, letterSpacing: 0.5, marginBottom: 4 }}>FROM</div>
+          <select value={fromIdx} onChange={e => setFromIdx(Number(e.target.value))} style={selectStyle}>
+            {revisions.map((r, i) => <option key={i} value={i}>{opt(r, i)}</option>)}
+          </select>
+        </div>
+        <div>
+          <div style={{ fontSize: 9, color: FR.stone, letterSpacing: 0.5, marginBottom: 4 }}>TO</div>
+          <select value={toIdx} onChange={e => setToIdx(Number(e.target.value))} style={selectStyle}>
+            {revisions.map((r, i) => <option key={i} value={i}>{opt(r, i)}</option>)}
+          </select>
+        </div>
+      </div>
+      <div style={{ padding: 12, background: FR.white, border: `1px solid ${FR.sand}`, borderRadius: 6 }}>
+        {fromIdx === toIdx ? (
+          <div style={{ fontSize: 11, color: FR.stone, fontStyle: 'italic' }}>Pick two different revisions to see what changed.</div>
+        ) : changed.length === 0 ? (
+          <div style={{ fontSize: 11, color: FR.stone, fontStyle: 'italic' }}>No tracked fields changed between these revisions.</div>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {changed.map(label => (
+              <span key={label} style={{ padding: '4px 10px', background: FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 5, fontSize: 11, color: FR.slate, letterSpacing: 0.3 }}>{label}</span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1610,6 +1685,25 @@ export function StepRevision({ data, set, onSubmit, submitting, submitResult, on
 
   const fa = data.finalApproval || { designer: {}, brandOwner: {}, vendor: {} };
   const setFA = (key, val) => set('finalApproval', { ...fa, [key]: val });
+
+  const designerDone   = isApprovalComplete(fa.designer);
+  const brandOwnerDone = isApprovalComplete(fa.brandOwner);
+  const vendorDone     = isApprovalComplete(fa.vendor);
+  const allSigned      = designerDone && brandOwnerDone && vendorDone;
+
+  // Auto-bump the pack to Released once all three approval cards are
+  // complete. We only ever move forward — if the pack is already past
+  // Released (or somehow ahead of it in the future), leave the status
+  // alone. Status moves are append-only via `set('status', ...)`.
+  useEffect(() => {
+    if (!allSigned) return;
+    const idx = STATUSES.indexOf(data.status);
+    const releasedIdx = STATUSES.indexOf('Released');
+    if (idx < releasedIdx || idx === -1) {
+      set('status', 'Released');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allSigned, data.status]);
 
   const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
 
@@ -1639,12 +1733,17 @@ export function StepRevision({ data, set, onSubmit, submitting, submitResult, on
           rows={revisions} onUpdate={updR} onAdd={addR} onRemove={rmR} />
       </div>
 
+      {revisions.length >= 2 && <RevisionDiff revisions={revisions} />}
+
       <div style={{ marginBottom: 18 }}>
-        <label style={sectionLabel}>Final Approval</label>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <label style={sectionLabel}>Final Approval — sequential sign-off</label>
+          {allSigned && <span style={{ fontSize: 10, fontWeight: 700, color: '#3B6D11', letterSpacing: 0.5 }}>FULLY SIGNED · STATUS BUMPED TO RELEASED</span>}
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-          <ApprovalCard title="Designer"    value={fa.designer}   onChange={v => setFA('designer', v)} />
-          <ApprovalCard title="Brand Owner" value={fa.brandOwner} onChange={v => setFA('brandOwner', v)} />
-          <ApprovalCard title="Vendor"      value={fa.vendor}     onChange={v => setFA('vendor', v)} dateLabel="Date / Chop" />
+          <ApprovalCard stepNumber={1} title="Designer"    value={fa.designer}   onChange={v => setFA('designer', v)} />
+          <ApprovalCard stepNumber={2} title="Brand Owner" value={fa.brandOwner} onChange={v => setFA('brandOwner', v)} locked={!designerDone} />
+          <ApprovalCard stepNumber={3} title="Vendor"      value={fa.vendor}     onChange={v => setFA('vendor', v)} dateLabel="Date / Chop" locked={!brandOwnerDone} />
         </div>
       </div>
 

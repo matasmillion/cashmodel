@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T11:01:47.794Z",
+  "lastUpdated": "2026-05-07T11:07:40.516Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "22b45ae",
+      "date": "2026-05-07T14:05:15+03:00",
+      "message": "feat(techpack): Phase 6 — Treatments deepening (#26)"
+    },
+    {
       "sha": "8817002",
       "date": "2026-05-07T13:57:22+03:00",
       "message": "Tech Pack Phases 4+5: Color/Artwork split + Compliance/QC split (#25)"
@@ -1087,11 +1092,6 @@
       "sha": "42f29f3",
       "date": "2026-05-06T18:34:34+00:00",
       "message": "feat: Creative Engine Phase 3 — render dispatch"
-    },
-    {
-      "sha": "96be3c9",
-      "date": "2026-05-06T18:16:38+00:00",
-      "message": "feat: knowledge files upload + AI auto-fill"
     }
   ]
 }
