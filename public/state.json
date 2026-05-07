@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T12:18:14.752Z",
+  "lastUpdated": "2026-05-07T12:22:56.178Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "c7f38bb",
+      "date": "2026-05-07T12:18:33+00:00",
+      "message": "chore: update state.json timestamp and changelog"
+    },
+    {
+      "sha": "5fcf23b",
+      "date": "2026-05-07T12:18:24+00:00",
+      "message": "fix(techpack): surface per-slot fal.ai error messages in generate modal"
+    },
+    {
       "sha": "ca2ef72",
       "date": "2026-05-07T12:16:08+00:00",
       "message": "chore: update state.json timestamp and changelog"
@@ -1082,16 +1092,6 @@
       "sha": "8817002",
       "date": "2026-05-07T13:57:22+03:00",
       "message": "Tech Pack Phases 4+5: Color/Artwork split + Compliance/QC split (#25)"
-    },
-    {
-      "sha": "7596491",
-      "date": "2026-05-07T13:31:55+03:00",
-      "message": "Tech Pack Phase 1: split BOM into Fabrics/Trims + Labels/Files pages (#24)"
-    },
-    {
-      "sha": "5e2567e",
-      "date": "2026-05-07T11:32:29+03:00",
-      "message": "techpack: reorder by mfg stage + redesign cover preview (#23)"
     }
   ]
 }
