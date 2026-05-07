@@ -248,74 +248,27 @@ function PageDesignOverview({ d, images }) {
   const back  = imgs.find(i => i.slot === 'design-back');
   const side  = imgs.find(i => i.slot === 'design-side');
 
-  const notes = (d.keyDesignNotes || []).filter(n => n.detail || n.description || n.reference);
-
-  // Info row: Vendor / Contact / Fabric Type
-  const infoY = 155;
-  // Photo slots
-  const drawY = 210;
-  const drawH = 250;
-  const drawGap = 16;
-  const drawW = (PAGE_W - 80 - drawGap * 2) / 3;
-  // Table
-  const tableY = 520;
-  const tableW = PAGE_W - 80;
+  // Three 2:3 portrait slots, centered on the available canvas. Canvas
+  // height between the InfoStrip and the page footer is ~600px; we cap
+  // each slot's height so it fits while staying as large as possible.
+  const drawGap = 24;
+  const maxW = (PAGE_W - 80 - drawGap * 2) / 3;
+  const maxH = 560;
+  // Fit by whichever dimension binds first.
+  const wByH = (maxH * 2) / 3;
+  const drawW = Math.min(maxW, wByH);
+  const drawH = drawW * 1.5;
+  const totalW = drawW * 3 + drawGap * 2;
+  const startX = (PAGE_W - totalW) / 2;
+  const drawY = 170;
 
   return (
     <g>
       <InfoStrip d={d} />
 
-      {/* Vendor row */}
-      <MetaRow x={40}                          y={infoY} label="Vendor"          value={d.vendor}        w={(PAGE_W - 80 - 20) / 3} />
-      <MetaRow x={40 + (PAGE_W - 80) / 3}      y={infoY} label="Vendor Contact"  value={d.vendorContact} w={(PAGE_W - 80 - 20) / 3} />
-      <MetaRow x={40 + (PAGE_W - 80) * 2 / 3}  y={infoY} label="Fabric Type"     value={d.fabricType}     w={(PAGE_W - 80 - 20) / 3} />
-
-      {/* Three photo slots */}
-      <PhotoSlot x={40}                         y={drawY} w={drawW} h={drawH} label="Front View" image={front} />
-      <PhotoSlot x={40 + drawW + drawGap}       y={drawY} w={drawW} h={drawH} label="Back View"  image={back} />
-      <PhotoSlot x={40 + (drawW + drawGap) * 2} y={drawY} w={drawW} h={drawH} label="Side View"  image={side} />
-
-      {/* Key Design Notes table */}
-      <SectionHeading x={40} y={tableY}>Key Design Notes</SectionHeading>
-      {(() => {
-        const cols = [
-          { key: '#',           label: '#',            w: 40 },
-          { key: 'detail',      label: 'Detail',       w: 200 },
-          { key: 'description', label: 'Description',  w: 533 },
-          { key: 'reference',   label: 'Reference',    w: 270 },
-        ];
-        const headerY = tableY + 12;
-        const rowH = 22;
-        const tableW2 = cols.reduce((a, c) => a + c.w, 0);
-        let cx = 40;
-        const colX = cols.map(c => { const x = cx; cx += c.w; return x; });
-        return (
-          <g>
-            <rect x={40} y={headerY} width={tableW2} height={rowH} fill={FR.slate} />
-            {cols.map((c, i) => (
-              <text key={c.key} x={colX[i] + 8} y={headerY + 15} fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="0.5">{esc(c.label.toUpperCase())}</text>
-            ))}
-            {Array.from({ length: 5 }).map((_, ri) => {
-              const ry = headerY + rowH + ri * rowH;
-              const row = notes[ri];
-              return (
-                <g key={ri}>
-                  {ri % 2 === 0 && <rect x={40} y={ry} width={tableW2} height={rowH} fill={FR.salt} />}
-                  <line x1={40} y1={ry + rowH} x2={40 + tableW2} y2={ry + rowH} stroke={FR.sand} />
-                  <text x={colX[0] + 8} y={ry + 15} fontSize="10" fill={FR.stone}>{ri + 1}</text>
-                  {row && (
-                    <>
-                      <text x={colX[1] + 8} y={ry + 15} fontSize="10" fill={FR.slate}>{clampLine(esc(row.detail || ''),      cols[1].w - 16, 5.8)}</text>
-                      <text x={colX[2] + 8} y={ry + 15} fontSize="10" fill={FR.slate}>{clampLine(esc(row.description || ''), cols[2].w - 16, 5.8)}</text>
-                      <text x={colX[3] + 8} y={ry + 15} fontSize="10" fill={FR.slate}>{clampLine(esc(row.reference || ''),   cols[3].w - 16, 5.8)}</text>
-                    </>
-                  )}
-                </g>
-              );
-            })}
-          </g>
-        );
-      })()}
+      <PhotoSlot x={startX}                         y={drawY} w={drawW} h={drawH} label="Front View" image={front} />
+      <PhotoSlot x={startX + drawW + drawGap}       y={drawY} w={drawW} h={drawH} label="Back View"  image={back} />
+      <PhotoSlot x={startX + (drawW + drawGap) * 2} y={drawY} w={drawW} h={drawH} label="Side View"  image={side} />
     </g>
   );
 }
