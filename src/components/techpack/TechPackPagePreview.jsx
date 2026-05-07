@@ -7,7 +7,7 @@ import { FR, STEPS } from './techPackConstants';
 
 const PAGE_W = 1123;
 const PAGE_H = 794;
-const TOTAL_PAGES = 19;
+const TOTAL_PAGES = 20;
 
 function esc(s) { return String(s ?? ''); }
 function clampLine(s, maxW, charW = 6.5) {
@@ -16,7 +16,7 @@ function clampLine(s, maxW, charW = 6.5) {
   return s.slice(0, Math.max(1, max - 1)) + '…';
 }
 
-function PageFrame({ title, phase, pageNum, styleInfo, children }) {
+function PageFrame({ title, phase, pageNum, styleInfo, styleNumber, children }) {
   return (
     <g>
       <rect x="0" y="0" width={PAGE_W} height={PAGE_H} fill={FR.white} />
@@ -26,7 +26,10 @@ function PageFrame({ title, phase, pageNum, styleInfo, children }) {
         <text x="40" y="50" fontSize="8" fill={FR.sand} letterSpacing="2">{esc(phase.toUpperCase())}</text>
       )}
       <text x={PAGE_W / 2} y="44" textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="20" fill={FR.salt}>{title}</text>
-      <text x={PAGE_W - 40} y="28" textAnchor="end" fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="2">PAGE {pageNum} / {TOTAL_PAGES}</text>
+      {styleNumber && (
+        <text x={PAGE_W - 40} y="28" textAnchor="end" fontSize="10" fontWeight="bold" fill={FR.salt} letterSpacing="2" fontFamily="ui-monospace,Menlo,monospace">{esc(styleNumber)}</text>
+      )}
+      <text x={PAGE_W - 40} y="50" textAnchor="end" fontSize="8" fill={FR.sand} letterSpacing="2">PAGE {pageNum} / {TOTAL_PAGES}</text>
       <rect x="0" y="70" width={PAGE_W} height={2} fill={FR.soil} />
       <text x="40" y="775" fontSize="9" fill={FR.stone}>{styleInfo}</text>
       <text x={PAGE_W - 40} y="775" textAnchor="end" fontSize="9" fill={FR.stone}>PAGE {pageNum} / {TOTAL_PAGES}</text>
@@ -455,6 +458,120 @@ function GridTable({ x, y, cols, rows, bodyRows = 4, rowH = 22, headerH = 22, re
 }
 
 // ─── Page 4 — Bill of Materials ─────────────────────────────────────────────
+// ─── Page 03 — Fabrics (live preview reads pickedFabrics references) ────────
+function PageFabrics({ d }) {
+  const picked = (d?.pickedFabrics || []).slice(0, 3);
+  const cardW = 300;
+  const cardH = 380;
+  const totalW = cardW * 3 + 16 * 2;
+  const startX = (PAGE_W - totalW) / 2;
+  const startY = 130;
+
+  return (
+    <g>
+      <text x={PAGE_W / 2} y={108} textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="14" fill={FR.stone}>
+        Up to three fabrics, picked from the PLM Fabric library.
+      </text>
+      {[0, 1, 2].map(i => {
+        const entry = picked[i];
+        const x = startX + i * (cardW + 16);
+        return (
+          <g key={i}>
+            <rect x={x} y={startY} width={cardW} height={cardH}
+              fill={FR.white} stroke={FR.sand} strokeWidth={0.5} rx={6} />
+            {!entry && (
+              <text x={x + cardW / 2} y={startY + cardH / 2} textAnchor="middle"
+                fontSize={11} fill={FR.stone} fontStyle="italic">No fabric picked</text>
+            )}
+            {entry && (
+              <>
+                <text x={x + 16} y={startY + 28}
+                  fontSize={9} fontWeight={600} fill={FR.soil} letterSpacing={1}>
+                  {(entry.role || `Fabric ${i + 1}`).toUpperCase()}
+                </text>
+                <text x={x + 16} y={startY + 56} fontSize={14} fill={FR.slate}
+                  fontFamily="'Cormorant Garamond', Georgia, serif">
+                  {entry.fabricId ? `Fabric · ${entry.fabricId.slice(0, 8)}` : '—'}
+                </text>
+                <text x={x + 16} y={startY + cardH - 24} fontSize={10}
+                  fill={FR.stone} fontStyle="italic">
+                  Specs render from PLM library on PDF export
+                </text>
+              </>
+            )}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+// ─── Page 04 — Trims (image-first 6-card grid) ──────────────────────────────
+function PageTrims({ d }) {
+  return <ComponentGridPage entries={(d?.pickedTrims || []).slice(0, 6)} subtitle="Image-first detail of every trim and hardware component, picked from the Component Pack library." />;
+}
+
+// ─── Page 05 — Packaging ────────────────────────────────────────────────────
+function PagePackaging({ d }) {
+  return <ComponentGridPage entries={(d?.pickedPackaging || []).slice(0, 6)} subtitle="Polybags, hang tags, stickers, branded boxes — every packaging component." />;
+}
+
+function ComponentGridPage({ entries, subtitle }) {
+  const cols = 3, rows = 2;
+  const cardW = 320;
+  const cardH = 250;
+  const gap = 14;
+  const totalW = cardW * cols + gap * (cols - 1);
+  const totalH = cardH * rows + gap * (rows - 1);
+  const startX = (PAGE_W - totalW) / 2;
+  const startY = 130;
+
+  return (
+    <g>
+      <text x={PAGE_W / 2} y={108} textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="14" fill={FR.stone}>
+        {subtitle}
+      </text>
+      {Array.from({ length: cols * rows }).map((_, i) => {
+        const c = i % cols;
+        const r = Math.floor(i / cols);
+        const x = startX + c * (cardW + gap);
+        const y = startY + r * (cardH + gap);
+        const entry = entries[i];
+        return (
+          <g key={i}>
+            <rect x={x} y={y} width={cardW} height={cardH}
+              fill={FR.white} stroke={FR.sand} strokeWidth={0.5} rx={6} />
+            {!entry && (
+              <text x={x + cardW / 2} y={y + cardH / 2} textAnchor="middle"
+                fontSize={11} fill={FR.stone} fontStyle="italic">Empty slot</text>
+            )}
+            {entry && (
+              <>
+                <rect x={x} y={y} width={cardW} height={cardH * 0.55}
+                  fill={FR.salt} />
+                <text x={x + cardW / 2} y={y + cardH * 0.27} textAnchor="middle"
+                  fontSize={9} fill={FR.stone} fontStyle="italic">cover image</text>
+                <text x={x + 14} y={y + cardH * 0.62}
+                  fontSize={9} fontWeight={600} fill={FR.soil} letterSpacing={1}>
+                  {(entry.role || `Slot ${i + 1}`).toUpperCase()}
+                </text>
+                <text x={x + 14} y={y + cardH * 0.7 + 6}
+                  fontSize={13} fill={FR.slate} fontFamily="'Cormorant Garamond', Georgia, serif">
+                  Component · {entry.componentId?.slice(0, 8) || '—'}
+                </text>
+                <text x={x + 14} y={y + cardH - 16} fontSize={9}
+                  fill={FR.stone} fontStyle="italic">
+                  Vendor · Color · Length · Size from library on PDF export
+                </text>
+              </>
+            )}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 function PageBOM({ d }) {
   const fabrics = (d.fabrics || []).filter(r => r.component || r.fabricType || r.composition);
   const trims   = (d.trimsAccessories || []).filter(r => r.component || r.type || r.material);
@@ -1303,8 +1420,9 @@ const PAGE_FNS = [
   { title: 'Merchandising Preview',             phase: 'Merchandising',  body: ({ d }) => <PageMerchandisingPreview d={d} /> },
   { title: 'Style Overview',                    phase: 'Design',         body: ({ d, images }) => <PageCover d={d} images={images} /> },
   { title: 'Design Overview',                   phase: 'Design',         body: ({ d, images }) => <PageDesignOverview d={d} images={images} /> },
-  { title: 'BOM — Fabrics & Trims',             phase: 'Materials',      body: ({ d }) => <PageBOM d={d} /> },
-  { title: 'BOM — Labels & Source Files',       phase: 'Materials',      body: ({ d }) => <PageBOMTrims d={d} /> },
+  { title: 'Fabrics',                           phase: 'Bill of Materials', body: ({ d }) => <PageFabrics d={d} /> },
+  { title: 'Trims',                             phase: 'Bill of Materials', body: ({ d }) => <PageTrims d={d} /> },
+  { title: 'Packaging',                         phase: 'Bill of Materials', body: ({ d }) => <PagePackaging d={d} /> },
   { title: 'Technical Flat Lay Diagrams',       phase: 'Cut & Sew',      body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
   { title: 'Construction Details — Page 1',     phase: 'Cut & Sew',      body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page1" /> },
   { title: 'Construction Details — Page 2',     phase: 'Cut & Sew',      body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page2" /> },
@@ -1351,7 +1469,7 @@ export default function TechPackPagePreview({ data, images, step, skippedSteps, 
       viewBox={`0 0 ${PAGE_W} ${PAGE_H}`}
       preserveAspectRatio="xMidYMin meet"
       style={{ width: '100%', height: 'auto', background: FR.white, boxShadow: '0 2px 14px rgba(0,0,0,0.12)', borderRadius: 6, fontFamily: 'Helvetica, Arial, sans-serif' }}>
-      <PageFrame title={current.title} phase={current.phase} pageNum={pageNum} styleInfo={styleInfo}>
+      <PageFrame title={current.title} phase={current.phase} pageNum={pageNum} styleInfo={styleInfo} styleNumber={d.styleNumber}>
         <Body d={d} images={images} treatmentsById={treatmentsById} />
       </PageFrame>
       {isSkipped && <SkipOverlay />}

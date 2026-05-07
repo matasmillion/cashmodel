@@ -188,7 +188,7 @@ export function generateTechPackSVG(pack) {
     const t2 = table(40, 140, ['Operation', 'Seam Type', 'Stitch', 'SPI', 'Thread', 'Notes'], seamRows, [180, 140, 100, 60, 140, 423]);
     svg += t2.svg;
   }
-  svg += skipIf(9);
+  svg += skipIf(10);
   svg += `</g>`;
 
   // ─── Colorways ───
@@ -202,7 +202,7 @@ export function generateTechPackSVG(pack) {
     const tc = table(40, 140, ['Name', 'FR Color', 'Pantone TCX', 'Hex', 'Fabric Swatch', 'Approval'], cwRows, [180, 140, 150, 120, 270, 183]);
     svg += tc.svg;
   }
-  svg += skipIf(13);
+  svg += skipIf(14);
   svg += `</g>`;
 
   // ─── Order & Delivery ───
@@ -223,7 +223,7 @@ export function generateTechPackSVG(pack) {
   svg += field('Incoterm', d.incoterm, 40, orderY + 85);
   svg += field('Target Ship', d.targetShipDate, 400, orderY + 85);
   svg += field('Target Arrival', d.targetArrivalDate, 700, orderY + 85);
-  svg += skipIf(19);
+  svg += skipIf(20);
   svg += `</g>`;
 
   svg += `</svg>`;

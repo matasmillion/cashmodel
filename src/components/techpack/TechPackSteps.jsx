@@ -16,6 +16,7 @@ import { TREATMENT_TYPE_LABEL } from '../../utils/treatmentLibrary';
 import { computePackDiff } from '../../utils/techPackDiff';
 import { useApp } from '../../context/AppContext';
 import { analyzeGarmentImage, generateGarmentView, imageEntryToDataUrl } from '../../utils/techPackViews';
+import { StepFabrics, StepTrims, StepPackaging } from './TechPackBOMSteps';
 
 const COST_TIER_CAP = 5;
 const SIZE_OPTIONS = ['S', 'M', 'L', 'XL', 'NS', 'W30', 'W32', 'W34', 'W36'];
@@ -1947,7 +1948,7 @@ export function StepTreatments({ data, set, images, onUpload, onRemove }) {
   );
 }
 export function StepLabels({ data, set, images, onUpload, onRemove }) {
-  const locked = isStepLocked(18, data.status);
+  const locked = isStepLocked(19, data.status);
 
   const packaging = data.packagingItems && data.packagingItems.length ? data.packagingItems : [{ component: '', material: '', color: '', size: '', artworkPrint: '', qtyPerOrder: '', notes: '' }];
   const updP = (i, k, v) => set('packagingItems', packaging.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
@@ -2005,7 +2006,7 @@ function computeQtyRow(row) {
 }
 
 export function StepOrder({ data, set, library, saveToLibrary }) {
-  const locked = isStepLocked(19, data.status);
+  const locked = isStepLocked(20, data.status);
   const [unitWeightG, setUnitWeightG] = useState(data.unitWeightGrams || '500');
   const [aiKey, setAiKey] = useState(getStoredKey());
   const [aiNotes, setAiNotes] = useState('');
@@ -2145,7 +2146,7 @@ export function StepOrder({ data, set, library, saveToLibrary }) {
   );
 }
 export function StepCompliance({ data, set }) {
-  const locked = isStepLocked(16, data.status);
+  const locked = isStepLocked(17, data.status);
 
   const shipping = data.shippingReqs && data.shippingReqs.length ? data.shippingReqs : [{ requirement: '', specification: '', notes: '' }];
   const updS = (i, k, v) => set('shippingReqs', shipping.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
@@ -2238,7 +2239,7 @@ const INSPECTION_STAGES = ['Pre-Production', 'During Production', 'Final Random 
 const SEVERITY_OPTIONS = ['Critical', 'Major', 'Minor'];
 
 export function StepQuality({ data, set }) {
-  const locked = isStepLocked(17, data.status);
+  const locked = isStepLocked(18, data.status);
 
   const qi = data.qualityInspection || { aqlMajor: '2.5', aqlMinor: '4.0', inspectionStage: 'During Production', checklist: [], photoRequirements: '' };
   const setQI = (k, v) => set('qualityInspection', { ...qi, [k]: v });
@@ -2483,23 +2484,24 @@ export const STEP_FNS = [
   StepMerchandisingPreview,// 01 Merchandising — Merchandising Preview (00)
   StepCover,               // 02 Design — Style Overview
   StepDesignOverview,      // 03 Design — Design Overview
-  StepBOM,                 // 04 Materials — Fabrics & Trims
-  StepBOMTrims,            // 05 Materials — Labels & Files (skippable)
-  StepFlatlays,            // 06 Cut & Sew — Technical Flat Lay Diagrams
-  StepSketches,            // 07 Cut & Sew — Construction Details Page 1
-  StepSketches2,           // 08 Cut & Sew — Construction Details Page 2
-  StepConstruction,        // 09 Cut & Sew — Seam & Stitch Specifications
-  StepPattern,             // 10 Cut & Sew — Pattern & Cutting
-  StepPom,                 // 11 Cut & Sew — POM (sample size)
-  StepSizeMatrix,          // 12 Cut & Sew — Graded Size Matrix (skippable)
-  StepColor,               // 13 Embellishments — Colorways
-  StepArtwork,             // 14 Embellishments — Artwork & Placement
-  StepTreatments,          // 15 Treatments
-  StepCompliance,          // 16 QC — Compliance & Testing (locked)
-  StepQuality,             // 17 QC — Quality Inspection (locked)
-  StepLabels,              // 18 Packaging (locked)
-  StepOrder,               // 19 Logistics (locked)
-  StepRevision,            // 20 Sign-off
+  StepFabrics,             // 04 Bill of Materials — Fabrics
+  StepTrims,               // 05 Bill of Materials — Trims
+  StepPackaging,           // 06 Bill of Materials — Packaging (skippable)
+  StepFlatlays,            // 07 Cut & Sew — Technical Flat Lay Diagrams
+  StepSketches,            // 08 Cut & Sew — Construction Details Page 1
+  StepSketches2,           // 09 Cut & Sew — Construction Details Page 2
+  StepConstruction,        // 10 Cut & Sew — Seam & Stitch Specifications
+  StepPattern,             // 11 Cut & Sew — Pattern & Cutting
+  StepPom,                 // 12 Cut & Sew — POM (sample size)
+  StepSizeMatrix,          // 13 Cut & Sew — Graded Size Matrix (skippable)
+  StepColor,               // 14 Embellishments — Colorways
+  StepArtwork,             // 15 Embellishments — Artwork & Placement
+  StepTreatments,          // 16 Treatments
+  StepCompliance,          // 17 QC — Compliance & Testing (locked)
+  StepQuality,             // 18 QC — Quality Inspection (locked)
+  StepLabels,              // 19 Packaging — Labels & Packaging (locked)
+  StepOrder,               // 20 Logistics (locked)
+  StepRevision,            // 21 Sign-off
 ];
 
 // Backwards-compat aliases so older references keep resolving during the
