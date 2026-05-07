@@ -127,7 +127,17 @@ function specOf(componentRow) {
 function fabricSpec(row) {
   const d = row?.data || row?.fabric_data || row || {};
   const tier = (d?.costTiers || [])[0];
-  const unitCost = parseFloat(tier?.unitCost) || parseFloat(row?.cost_per_unit) || parseFloat(d?.cost_per_unit) || parseFloat(d?.costPerYard) || parseFloat(d?.costPerMeter) || 0;
+  // fabricStore canonical cost field is price_per_meter_usd; fall back
+  // through every other shape we've shipped in case older rows are still
+  // using costTiers / costPerYard / etc.
+  const unitCost =
+    parseFloat(row?.price_per_meter_usd) ||
+    parseFloat(d?.price_per_meter_usd) ||
+    parseFloat(tier?.unitCost) ||
+    parseFloat(row?.cost_per_unit) ||
+    parseFloat(d?.cost_per_unit) ||
+    parseFloat(d?.costPerYard) ||
+    parseFloat(d?.costPerMeter) || 0;
   return {
     name:        d.name || row?.name || 'Untitled fabric',
     composition: d.composition || '—',
@@ -234,7 +244,7 @@ export function StepFabrics({ data, set }) {
         Up to three fabrics per garment, each picked from the PLM Fabric library. Add a new fabric in the library first if it isn't here.
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
         {slots.map(i => {
           const entry = picked[i];
           if (!entry) {
@@ -577,7 +587,7 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
         {subtitle} Each card links straight to its component pack — the supplier can click <strong>View pack ↗</strong> to see the full spec.
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14, marginBottom: 22 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 22 }}>
         {Array.from({ length: maxSlots }).map((_, i) => {
           const entry = picked[i];
           if (!entry) {

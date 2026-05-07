@@ -511,10 +511,17 @@ function PageFabrics({ d, fabricsById = {} }) {
                 </text>
                 {(() => {
                   const tier = (row?.data?.costTiers || [])[0];
-                  const unitCost = parseFloat(tier?.unitCost) || parseFloat(row?.cost_per_unit) || parseFloat(row?.data?.cost_per_unit) || parseFloat(row?.data?.costPerYard) || parseFloat(row?.data?.costPerMeter) || 0;
+                  const unitCost =
+                    parseFloat(row?.price_per_meter_usd) ||
+                    parseFloat(row?.data?.price_per_meter_usd) ||
+                    parseFloat(tier?.unitCost) ||
+                    parseFloat(row?.cost_per_unit) ||
+                    parseFloat(row?.data?.cost_per_unit) ||
+                    parseFloat(row?.data?.costPerYard) ||
+                    parseFloat(row?.data?.costPerMeter) || 0;
                   return (
                     <text x={cardW + x - 16} y={startY + cardH - 18} textAnchor="end" fontSize={12} fontWeight={700} fill={FR.slate} fontFamily="ui-monospace, Menlo, monospace">
-                      {unitCost > 0 ? `$${unitCost.toFixed(2)}` : '$0.00'} / unit
+                      {unitCost > 0 ? `$${unitCost.toFixed(2)}` : '$0.00'} / m
                     </text>
                   );
                 })()}
