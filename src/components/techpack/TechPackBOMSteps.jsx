@@ -484,7 +484,7 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
         {subtitle} Each card links straight to its component pack — the supplier can click <strong>View pack ↗</strong> to see the full spec.
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 22 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14, marginBottom: 22 }}>
         {Array.from({ length: maxSlots }).map((_, i) => {
           const entry = picked[i];
           if (!entry) {
