@@ -5,7 +5,7 @@
 // that will be replaced in subsequent prompts.
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, isStepLocked, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
+import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, isStepLocked, isMerchLocked, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
 import { listFRColors } from '../../utils/colorLibrary';
 import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, EditableSelect, FRColorCell, FilesPanel } from './TechPackPrimitives';
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
@@ -82,6 +82,19 @@ function LockedBanner({ status }) {
   );
 }
 
+// Merchandising pages lock the moment status moves past Merchandising —
+// once design starts, competitor and storefront prep is "decided".
+function MerchLockedBanner({ status }) {
+  return (
+    <div style={{ padding: 14, background: FR.salt, border: `1px dashed ${FR.soil}`, borderRadius: 6, marginBottom: 16 }}>
+      <div style={{ fontSize: 12, color: FR.slate, fontWeight: 600, marginBottom: 4 }}>🔒 Locked — Merchandising phase only</div>
+      <div style={{ fontSize: 11, color: FR.stone, lineHeight: 1.5 }}>
+        Current status: <strong>{status}</strong>. This page is editable only while the pack status is <strong>Merchandising</strong>. Lower the status on Page 01 to re-open it.
+      </div>
+    </div>
+  );
+}
+
 function ComingSoon({ title }) {
   return (
     <div>
@@ -110,8 +123,10 @@ function SignatureBlock({ label, value, onNameChange, onDateChange }) {
 
 // Page 000 — Competitor Landscape. Pre-tech-pack strategy: pricing table,
 // feature comparison, plus a free-form positioning note. Each row is one
-// competitor product the brand is benchmarking against.
+// competitor product the brand is benchmarking against. Locks once the
+// pack moves past the Merchandising phase.
 export function StepCompetitorLandscape({ data, set }) {
+  const locked = isMerchLocked(0, data.status);
   const competitors = data.competitors && data.competitors.length
     ? data.competitors
     : [{ brand: '', product: '', url: '', price: '', currency: 'USD', features: '', notes: '' }];
@@ -124,66 +139,175 @@ export function StepCompetitorLandscape({ data, set }) {
   return (
     <div>
       <SectionTitle>Competitor Landscape</SectionTitle>
+      {locked && <MerchLockedBanner status={data.status} />}
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, lineHeight: 1.5 }}>
         Map the products you're benchmarking against — brand, product, retail price, key features. The Competitive Landscape note below is for FR's positioning relative to the field.
       </p>
 
-      <div style={{ marginBottom: 18 }}>
-        <label style={sectionLabel}>Pricing & Feature Analysis</label>
-        <ArrayTable
-          headers={[
-            { key: 'brand',    label: 'Brand',         placeholder: 'e.g. Carhartt WIP' },
-            { key: 'product',  label: 'Product',       placeholder: 'Product / SKU name' },
-            { key: 'url',      label: 'URL',           placeholder: 'https://…' },
-            { key: 'price',    label: 'Retail Price',  placeholder: '180' },
-            { key: 'currency', label: 'Currency',      placeholder: 'USD' },
-            { key: 'features', label: 'Key Features',  placeholder: '400gsm, drop shoulder, garment-dyed…' },
-            { key: 'notes',    label: 'Notes',         placeholder: 'positioning, distribution, hype…' },
-          ]}
-          rows={competitors} onUpdate={updC} onAdd={addC} onRemove={rmC}
-        />
-      </div>
+      <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
+        <div style={{ marginBottom: 18 }}>
+          <label style={sectionLabel}>Pricing & Feature Analysis</label>
+          <ArrayTable
+            headers={[
+              { key: 'brand',    label: 'Brand',         placeholder: 'e.g. Carhartt WIP' },
+              { key: 'product',  label: 'Product',       placeholder: 'Product / SKU name' },
+              { key: 'url',      label: 'URL',           placeholder: 'https://…' },
+              { key: 'price',    label: 'Retail Price',  placeholder: '180' },
+              { key: 'currency', label: 'Currency',      placeholder: 'USD' },
+              { key: 'features', label: 'Key Features',  placeholder: '400gsm, drop shoulder, garment-dyed…' },
+              { key: 'notes',    label: 'Notes',         placeholder: 'positioning, distribution, hype…' },
+            ]}
+            rows={competitors} onUpdate={updC} onAdd={addC} onRemove={rmC}
+          />
+        </div>
 
-      <div>
-        <label style={sectionLabel}>Competitive Landscape — FR Positioning</label>
-        <Input
-          multiline
-          value={data.competitivePositioning || ''}
-          onChange={v => set('competitivePositioning', v)}
-          placeholder="Where this product sits in the market — pricing tier vs competitors, distinctive construction, brand story angle, target customer, distribution strategy…"
-        />
+        <div>
+          <label style={sectionLabel}>Competitive Landscape — FR Positioning</label>
+          <Input
+            multiline
+            value={data.competitivePositioning || ''}
+            onChange={v => set('competitivePositioning', v)}
+            placeholder="Where this product sits in the market — pricing tier vs competitors, distinctive construction, brand story angle, target customer, distribution strategy…"
+          />
+        </div>
+      </fieldset>
+    </div>
+  );
+}
+
+// Stylised mac-style desktop browser frame. Empty inside until the
+// storefront preview engine is wired in.
+function DesktopFrame() {
+  return (
+    <div style={{ width: '100%' }}>
+      <div style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8, textAlign: 'center' }}>
+        Desktop · 16:10
+      </div>
+      <div style={{
+        background: FR.white,
+        border: `0.5px solid ${FR.sand}`,
+        borderRadius: 10,
+        overflow: 'hidden',
+        boxShadow: '0 4px 20px rgba(58,58,58,0.06)',
+        aspectRatio: '16 / 10',
+        display: 'flex',
+        flexDirection: 'column',
+      }}>
+        {/* Browser chrome */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '8px 12px',
+          background: FR.salt,
+          borderBottom: `0.5px solid ${FR.sand}`,
+        }}>
+          <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#FF5F57' }} />
+          <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#FEBC2E' }} />
+          <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#28C840' }} />
+          <div style={{ flex: 1, marginLeft: 14, fontSize: 10, color: FR.stone, fontFamily: 'ui-monospace,Menlo,monospace', background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 4, padding: '3px 8px' }}>
+            foreignresource.co/products/{'{style-slug}'}
+          </div>
+        </div>
+        {/* Empty viewport */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 6 }}>
+          <div style={{ fontSize: 9, color: FR.stone, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase' }}>Coming Soon</div>
+          <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 18, color: FR.slate }}>PDP Layout</div>
+        </div>
       </div>
     </div>
   );
 }
 
-// Page 00 — Merchandising Preview. Pre-tech-pack placeholder for the
-// future PDP / storefront prototype.
-export function StepMerchandisingPreview() {
+// Stylised iPhone frame with notch / Dynamic Island and bottom indicator.
+function PhoneFrame() {
+  return (
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8, textAlign: 'center' }}>
+        iPhone · 9:19.5
+      </div>
+      <div style={{
+        position: 'relative',
+        width: '100%',
+        maxWidth: 220,
+        aspectRatio: '9 / 19.5',
+        background: FR.slate,
+        borderRadius: 30,
+        padding: 6,
+        boxShadow: '0 6px 24px rgba(58,58,58,0.18)',
+      }}>
+        <div style={{
+          width: '100%',
+          height: '100%',
+          background: FR.white,
+          borderRadius: 24,
+          overflow: 'hidden',
+          position: 'relative',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'column',
+          gap: 4,
+        }}>
+          {/* Dynamic Island */}
+          <div style={{
+            position: 'absolute',
+            top: 8,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 60,
+            height: 18,
+            background: FR.slate,
+            borderRadius: 12,
+          }} />
+          {/* Bottom indicator */}
+          <div style={{
+            position: 'absolute',
+            bottom: 8,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 80,
+            height: 3,
+            background: FR.slate,
+            borderRadius: 2,
+            opacity: 0.4,
+          }} />
+          <div style={{ fontSize: 8, color: FR.stone, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase' }}>Coming Soon</div>
+          <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 14, color: FR.slate }}>Mobile PDP</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Page 00 — Merchandising Preview. Pre-tech-pack placeholder showing
+// desktop and mobile storefront frames side-by-side. Locks once the
+// pack moves past the Merchandising phase.
+export function StepMerchandisingPreview({ data }) {
+  const locked = isMerchLocked(1, data?.status);
   return (
     <div>
       <SectionTitle>Merchandising Preview</SectionTitle>
-      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 18, lineHeight: 1.5 }}>
-        This page will render a live preview of how the product looks on the storefront — hero imagery, PDP copy, related products. Wired in once the product preview engine ships.
+      {locked && <MerchLockedBanner status={data.status} />}
+      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 22, lineHeight: 1.5 }}>
+        This page will render live storefront previews — desktop and mobile — so the launch experience is locked at the design phase. Wired in once the product preview engine ships.
       </p>
 
-      <div style={{
-        padding: '48px 28px',
-        border: `2px dashed ${FR.sand}`,
-        borderRadius: 8,
-        background: FR.salt,
-        textAlign: 'center',
-      }}>
-        <div style={{ fontSize: 9, color: FR.stone, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 }}>
-          Coming Soon
+      <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
+        <div style={{
+          padding: '32px 28px',
+          border: `2px dashed ${FR.sand}`,
+          borderRadius: 8,
+          background: FR.salt,
+          display: 'grid',
+          gridTemplateColumns: '2.4fr 1fr',
+          gap: 32,
+          alignItems: 'center',
+        }}>
+          <DesktopFrame />
+          <PhoneFrame />
         </div>
-        <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 26, color: FR.slate, lineHeight: 1.2, marginBottom: 12 }}>
-          Storefront Visualization
-        </div>
-        <div style={{ fontSize: 12, color: FR.stone, lineHeight: 1.55, maxWidth: 540, margin: '0 auto' }}>
-          Visualize this product on the live storefront before sampling — prototype merchandising, hero imagery, and PDP copy at the design phase so the launch experience is locked before fabric is cut.
-        </div>
-      </div>
+      </fieldset>
     </div>
   );
 }

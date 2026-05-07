@@ -172,7 +172,11 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // Initial step comes from the URL so refresh keeps you on the same wizard step.
   const [step, setStep] = useState(() => {
     const { packId, step } = parsePLMHash();
-    return packId === pack.id ? Math.min(step, STEPS.length - 1) : 0;
+    if (packId === pack.id) return Math.min(step, STEPS.length - 1);
+    // Default to Style Overview (cover) on open — designers expect to land
+    // there, not on the pre-tech-pack Merchandising pages.
+    const coverIdx = STEPS.findIndex(s => s.id === 'cover');
+    return coverIdx >= 0 ? coverIdx : 0;
   });
   const [data, setData] = useState(pack.data || DEFAULT_DATA);
   const [images, setImages] = useState(pack.images || []);

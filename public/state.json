@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T14:41:40.716Z",
+  "lastUpdated": "2026-05-07T14:50:20.181Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "8718d42",
+      "date": "2026-05-07T17:42:35+03:00",
+      "message": "techpack: add Merchandising phase — Competitor Landscape + Merch Preview (#38)"
+    },
+    {
       "sha": "4fd0d8f",
       "date": "2026-05-07T16:35:19+03:00",
       "message": "techpack: restructure Cut & Sew — flatlays moved + dual construction details (#37)"
@@ -1087,11 +1092,6 @@
       "sha": "beb1c39",
       "date": "2026-05-07T15:12:44+03:00",
       "message": "fix(techpack): imageEntryToDataUrl resolves path via getAssetUrl (#30)"
-    },
-    {
-      "sha": "e2227b8",
-      "date": "2026-05-07T15:08:38+03:00",
-      "message": "techpack: AI view generation + size matrix fixes (#29)"
     }
   ]
 }
