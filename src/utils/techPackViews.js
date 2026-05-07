@@ -11,6 +11,7 @@
 
 import { getClerkToken } from '../lib/auth';
 import { IS_SUPABASE_ENABLED } from '../lib/supabase';
+import { getAssetUrl } from './plmAssets';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY     = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -144,19 +145,35 @@ export async function generateGarmentView(description, view, onStatus) {
 
 /**
  * Convert an image entry from the tech pack images array to a base64 data URL.
- * Handles all three storage states: blob URL (during upload), data URL (offline),
- * and cloud URL (after upload).
  *
- * @param {{ data?: string, _blobUrl?: string, url?: string }} entry
+ * Image entries have three possible shapes depending on storage state:
+ *   - Offline / Supabase disabled: { data: 'data:image/...;base64,...' }
+ *   - During cloud upload (in-flight): { _blobUrl: 'blob:...' }
+ *   - After cloud upload: { path: 'org/scope/owner/slot-uuid.webp' }
+ *
+ * @param {{ data?: string, _blobUrl?: string, path?: string }} entry
  * @returns {Promise<string|null>}
  */
 export async function imageEntryToDataUrl(entry) {
   if (!entry) return null;
+
+  // Offline / Supabase-disabled storage — already a data URL
   if (entry.data?.startsWith('data:')) return entry.data;
 
-  const src = entry._blobUrl || entry.url;
-  if (!src) return null;
+  // In-flight upload — blob URL is still alive at this point
+  if (entry._blobUrl) return fetchToDataUrl(entry._blobUrl);
 
+  // Cloud-stored — resolve path to a signed URL first
+  if (entry.path) {
+    const signedUrl = await getAssetUrl(entry.path);
+    if (!signedUrl) return null;
+    return fetchToDataUrl(signedUrl);
+  }
+
+  return null;
+}
+
+async function fetchToDataUrl(src) {
   const res = await fetch(src);
   const blob = await res.blob();
   return new Promise((resolve, reject) => {
