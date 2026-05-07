@@ -252,30 +252,205 @@ export async function generateTechPackPDF(pack) {
   field('Design Notes', d.designNotes, 10, y); y += 6;
   addImage('design-refs', 180, 28, 100, 80);
 
-  // ─── Materials → BOM: Fabrics & Trims (now stepIdx 2) ───
+  // ─── Resolve picked Component Packs + Fabrics for the BOM pages ─────
+  // Mirrors what TechPackBuilder does for the live preview — fetches
+  // each picked row from the library, then resolves its cover_image
+  // (Storage path → signed URL → inline data URL) so jsPDF.addImage()
+  // can embed it synchronously below.
+  const { getComponentPack } = await import('./componentPackStore');
+  const { getFabric } = await import('./fabricStore');
+  const { getAssetUrl } = await import('./plmAssets');
+
+  async function resolvePathToDataUrl(path) {
+    if (!path || typeof path !== 'string') return null;
+    if (path.startsWith('data:')) return path;
+    let url = path;
+    if (!/^https?:/.test(path)) {
+      try { url = await getAssetUrl(path); } catch { return null; }
+    }
+    if (!url) return null;
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      return await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload  = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsDataURL(blob);
+      });
+    } catch { return null; }
+  }
+
+  async function loadComponents(picks) {
+    const out = [];
+    for (const p of (picks || [])) {
+      if (!p?.componentId) continue;
+      const row = await getComponentPack(p.componentId);
+      if (!row) { out.push({ entry: p, row: null, coverData: null }); continue; }
+      const coverData = await resolvePathToDataUrl(row.cover_image || row?.data?.cover_image);
+      out.push({ entry: p, row, coverData });
+    }
+    return out;
+  }
+  async function loadFabrics(picks) {
+    const out = [];
+    for (const p of (picks || [])) {
+      if (!p?.fabricId) continue;
+      const row = await getFabric(p.fabricId);
+      if (!row) { out.push({ entry: p, row: null, coverData: null }); continue; }
+      const coverData = await resolvePathToDataUrl(row.cover_image || row.front_image_url);
+      out.push({ entry: p, row, coverData });
+    }
+    return out;
+  }
+
+  // Public-facing absolute base URL so View-pack links open the right
+  // place when the PDF is opened from email, Slack, or a factory's
+  // computer rather than this browser session.
+  const ORIGIN = (typeof window !== 'undefined' ? window.location.origin : '') || '';
+
+  function bomCard({ x, y: cy, w, h, title, type, name, packHref, qty, unitCost, lineCost, coverData }) {
+    // Card frame
+    doc.setDrawColor(...hex(FR.sand));
+    doc.setLineWidth(0.2);
+    doc.roundedRect(x, cy, w, h, 1.5, 1.5);
+    // Image area — top 55% of the card.
+    const imgH = h * 0.55;
+    doc.setFillColor(...hex(FR.salt));
+    doc.rect(x + 0.5, cy + 0.5, w - 1, imgH - 1, 'F');
+    if (coverData) {
+      try { doc.addImage(coverData, 'JPEG', x + 2, cy + 2, w - 4, imgH - 4, undefined, 'FAST'); }
+      catch (e) { console.error('[PDF] addImage failed:', e); }
+    }
+    // Type pill
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6);
+    doc.setTextColor(...hex(FR.soil));
+    doc.text(String(type || title).toUpperCase(), x + 3, cy + imgH + 5);
+    // Name
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(...hex(FR.slate));
+    doc.text(String(name || '—').slice(0, 28), x + 3, cy + imgH + 11);
+    // View pack link — right-aligned on the name row
+    if (packHref) {
+      doc.setFontSize(7);
+      doc.setTextColor(...hex(FR.soil));
+      const linkText = 'View pack ↗';
+      const tw = doc.getTextWidth(linkText);
+      const lx = x + w - tw - 3;
+      const ly = cy + imgH + 11;
+      doc.textWithLink(linkText, lx, ly, { url: packHref });
+    }
+    // Cost row
+    doc.setDrawColor(...hex(FR.sand));
+    doc.setLineWidth(0.15);
+    doc.line(x + 3, cy + h - 8, x + w - 3, cy + h - 8);
+    doc.setFontSize(6);
+    doc.setTextColor(...hex(FR.stone));
+    const costLeft = `Qty · ${qty || '—'}    Unit · ${unitCost > 0 ? '$' + unitCost.toFixed(2) : '$0.00'}`;
+    doc.text(costLeft, x + 3, cy + h - 4);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...hex(FR.slate));
+    const lineText = `$${(lineCost || 0).toFixed(2)}`;
+    const ltw = doc.getTextWidth(lineText);
+    doc.text(lineText, x + w - ltw - 3, cy + h - 4);
+    doc.setFont('helvetica', 'normal');
+  }
+
+  function laidOutGrid({ items, cols, cardW, cardH, gap, startX, startY, render }) {
+    items.forEach((item, idx) => {
+      const c = idx % cols;
+      const r = Math.floor(idx / cols);
+      const x = startX + c * (cardW + gap);
+      const cy = startY + r * (cardH + gap);
+      render(item, x, cy);
+    });
+  }
+
   // ─── Bill of Materials → Fabrics (stepIdx 4) ───
   newPage('Fabrics', null, 4);
-  y = 28;
-  sectionHeading('Picked from PLM Library', y); y += 8;
-  const fabRowsA = (d.pickedFabrics || []).map((f, i) =>
-    [String(i + 1), f.role || '', f.fabricId || '—', f.notes || '']);
-  table(['#', 'Role', 'Fabric ID', 'Notes'], fabRowsA, 10, y, [10, 50, 80, 167]);
+  const pickedFabricsResolved = await loadFabrics(d.pickedFabrics);
+  laidOutGrid({
+    items: pickedFabricsResolved,
+    cols: 3,
+    cardW: 85, cardH: 90, gap: 6,
+    startX: 12, startY: 26,
+    render: ({ entry, row, coverData }, x, cy) => {
+      if (!row) return;
+      const tier = (row.data?.costTiers || [])[0];
+      const unitCost =
+        parseFloat(row.price_per_meter_usd) ||
+        parseFloat(row.data?.price_per_meter_usd) ||
+        parseFloat(tier?.unitCost) || 0;
+      bomCard({
+        x, y: cy, w: 85, h: 90,
+        title: 'Fabric',
+        type:  entry.role || row.weave || '',
+        name:  row.code || row.name || row.data?.name || '—',
+        packHref: ORIGIN + '/#plm/library/fabrics/' + row.id,
+        qty: '—',
+        unitCost,
+        lineCost: unitCost,
+        coverData,
+      });
+    },
+  });
 
   // ─── Bill of Materials → Trims (stepIdx 5) ───
   newPage('Trims', null, 5);
-  y = 28;
-  sectionHeading('Component Pack References', y); y += 8;
-  const trimRowsA = (d.pickedTrims || []).map((t, i) =>
-    [String(i + 1), t.role || '', t.componentId || '—', t.notes || '']);
-  table(['#', 'Role', 'Component ID', 'Notes'], trimRowsA, 10, y, [10, 50, 80, 167]);
+  const pickedTrimsResolved = await loadComponents(d.pickedTrims);
+  laidOutGrid({
+    items: pickedTrimsResolved,
+    cols: 3,
+    cardW: 85, cardH: 90, gap: 6,
+    startX: 12, startY: 26,
+    render: ({ entry, row, coverData }, x, cy) => {
+      if (!row) return;
+      const tier = (row.data?.costTiers || [])[0];
+      const unitCost = parseFloat(tier?.unitCost) || parseFloat(row.cost_per_unit) || parseFloat(row.data?.targetUnitCost) || 0;
+      const qtyNum = parseFloat(String(entry.quantity || '').replace(/[^0-9.]/g, '')) || 1;
+      bomCard({
+        x, y: cy, w: 85, h: 90,
+        title: 'Trim',
+        type:  row.data?.componentType || entry.role || '',
+        name:  row.component_name || row.data?.componentName || '—',
+        packHref: ORIGIN + '/#plm/library/trims/' + row.id,
+        qty: entry.quantity || '—',
+        unitCost,
+        lineCost: unitCost * qtyNum,
+        coverData,
+      });
+    },
+  });
 
   // ─── Bill of Materials → Packaging (stepIdx 6) ───
   newPage('Packaging', null, 6);
-  y = 28;
-  sectionHeading('Component Pack References', y); y += 8;
-  const pkgRowsA = (d.pickedPackaging || []).map((p, i) =>
-    [String(i + 1), p.role || '', p.componentId || '—', p.notes || '']);
-  table(['#', 'Role', 'Component ID', 'Notes'], pkgRowsA, 10, y, [10, 50, 80, 167]);
+  const pickedPackagingResolved = await loadComponents(d.pickedPackaging);
+  laidOutGrid({
+    items: pickedPackagingResolved,
+    cols: 3,
+    cardW: 85, cardH: 90, gap: 6,
+    startX: 12, startY: 26,
+    render: ({ entry, row, coverData }, x, cy) => {
+      if (!row) return;
+      const tier = (row.data?.costTiers || [])[0];
+      const unitCost = parseFloat(tier?.unitCost) || parseFloat(row.cost_per_unit) || parseFloat(row.data?.targetUnitCost) || 0;
+      const qtyNum = parseFloat(String(entry.quantity || '').replace(/[^0-9.]/g, '')) || 1;
+      bomCard({
+        x, y: cy, w: 85, h: 90,
+        title: 'Packaging',
+        type:  row.data?.componentType || entry.role || '',
+        name:  row.component_name || row.data?.componentName || '—',
+        packHref: ORIGIN + '/#plm/library/trims/' + row.id,
+        qty: entry.quantity || '—',
+        unitCost,
+        lineCost: unitCost * qtyNum,
+        coverData,
+      });
+    },
+  });
 
   // ─── Cut & Sew → Flat Lay Diagrams (stepIdx 7) ───
   newPage('Flat Lay Diagrams', null, 7);
