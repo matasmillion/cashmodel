@@ -7,7 +7,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, isStepLocked, isMerchLocked, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
 import { listFRColors } from '../../utils/colorLibrary';
-import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, EditableSelect, FRColorCell, FilesPanel } from './TechPackPrimitives';
+import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, AspectPhoto, ASPECTS, ArrayTable, EditableSelect, FRColorCell, FilesPanel } from './TechPackPrimitives';
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
 import { addSupplier } from '../../utils/plmDirectory';
 import { getFRColor } from '../../utils/colorLibrary';
@@ -1576,13 +1576,12 @@ export function StepConstruction({ data, set, images, onUpload, onRemove }) {
                 >
                   ×
                 </button>
-                <PhotoUpload
-                  single
+                <AspectPhoto
                   slotKey={`seam-stitch-${b.num}`}
+                  aspect={ASPECTS.TWO_THIRDS}
                   images={images}
                   onUpload={onUpload}
                   onRemove={onRemove}
-                  aspect="2 / 3"
                   label={`Stitch ${b.num}`}
                 />
                 <input
