@@ -150,6 +150,19 @@ export function generateTechPackSVG(pack) {
     const tf = table(40, 130, ['Component', 'Fabric Type', 'Composition', 'Weight GSM', 'Color/Pantone', 'Vendor'], fabRows, [130, 160, 160, 110, 150, 333]);
     svg += tf.svg;
   }
+  // Fabric yield from library-picked fabrics (metersPerUnit stored on pack data)
+  const yieldFabs = (d.pickedFabrics || []).filter(p => p?.fabricId && p.metersPerUnit != null);
+  if (yieldFabs.length) {
+    svg += sectionHeading('Fabric Yield', 40, 250);
+    const yieldRows = yieldFabs.map(p => [
+      p.role || '—',
+      `${p.metersPerUnit}m/unit`,
+      p.yieldIsActual ? 'CLO3D actual' : 'Std. estimate',
+    ]);
+    const ty = table(40, 270, ['Fabric Area', 'Yield', 'Source'], yieldRows, [280, 180, 583]);
+    svg += ty.svg;
+  }
+
   svg += sectionHeading('Trims & Accessories', 40, 380);
   const trimsRows = (d.trimsAccessories || []).filter(t => t.component || t.type).map(t => [t.component, t.type, t.material, t.color, t.sizeSpec, t.supplier, t.qtyPerGarment]);
   if (trimsRows.length) {

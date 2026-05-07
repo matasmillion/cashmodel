@@ -1620,6 +1620,53 @@ export function StepPattern({ data, set, images, onUpload, onRemove }) {
           rows={pieces} onUpdate={updP} onAdd={addP} onRemove={rmP} />
       </div>
 
+      {/* Fabric Yield — CLO3D actual override */}
+      {(data.pickedFabrics || []).some(p => p?.fabricId) && (
+        <div style={{ marginBottom: 18 }}>
+          <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 4, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+            Fabric Yield — CLO3D Actual
+          </label>
+          <p style={{ fontSize: 10, color: FR.stone, marginBottom: 10, lineHeight: 1.5 }}>
+            After optimizing the marker in CLO3D, enter the actual yield per unit here. This overrides the standard estimate from the BOM step and updates the cost roll-up.
+          </p>
+          {(data.pickedFabrics || []).map((entry, i) => {
+            if (!entry?.fabricId) return null;
+            const role = entry.role || `Fabric ${i + 1}`;
+            return (
+              <div key={entry.fabricId} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, padding: '8px 10px', background: FR.salt, borderRadius: 4, border: `0.5px solid ${FR.sand}` }}>
+                <span style={{ fontSize: 11, color: FR.slate, fontWeight: 500, minWidth: 90 }}>{role}</span>
+                <span style={{ fontSize: 10, color: FR.stone, flex: 1 }}>
+                  {entry.metersPerUnit
+                    ? `${entry.metersPerUnit}m/unit — ${entry.yieldIsActual ? 'CLO3D actual' : 'std. estimate'}`
+                    : 'No yield set'}
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.1"
+                    max="10"
+                    value={entry.metersPerUnit || ''}
+                    placeholder="m/unit"
+                    onChange={e => {
+                      const v = parseFloat(e.target.value);
+                      const arr = [...(data.pickedFabrics || [])];
+                      arr[i] = { ...arr[i], metersPerUnit: Number.isFinite(v) ? v : null, yieldIsActual: Number.isFinite(v) };
+                      set('pickedFabrics', arr);
+                    }}
+                    style={{ width: 70, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '4px 6px', fontSize: 10, color: FR.slate, background: FR.white, outline: 'none' }}
+                  />
+                  <span style={{ fontSize: 10, color: FR.stone }}>m/unit</span>
+                  {entry.yieldIsActual && (
+                    <span style={{ fontSize: 9, color: '#3B6D11', fontWeight: 600, padding: '2px 5px', background: '#EEF6E8', borderRadius: 3 }}>CLO3D</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <Input label="Cutting Instructions" value={data.cuttingInstructions} onChange={v => set('cuttingInstructions', v)} multiline
         placeholder="Marker plan, nap direction, utilisation target, shrinkage allowance…" />
     </div>

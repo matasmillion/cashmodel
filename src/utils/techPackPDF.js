@@ -384,15 +384,16 @@ export async function generateTechPackPDF(pack) {
         parseFloat(row.price_per_meter_usd) ||
         parseFloat(row.data?.price_per_meter_usd) ||
         parseFloat(tier?.unitCost) || 0;
+      const mpu = entry.metersPerUnit;
       bomCard({
         x, y: cy, w: 85, h: 90,
         title: 'Fabric',
         type:  entry.role || row.weave || '',
         name:  row.code || row.name || row.data?.name || '—',
         packHref: ORIGIN + '/#plm/library/fabrics/' + row.id,
-        qty: '—',
+        qty: mpu ? `${mpu}m/unit${entry.yieldIsActual ? '' : ' est.'}` : 'yield TBD',
         unitCost,
-        lineCost: unitCost,
+        lineCost: mpu ? unitCost * mpu : 0,
         coverData,
       });
     },
@@ -495,11 +496,25 @@ export async function generateTechPackPDF(pack) {
   // ─── Cut & Sew → Pattern & Cutting ───
   newPage('Pattern Pieces & Cutting', null, 11);
   y = 28;
-  const ppRows = (d.patternPieces || []).filter(p => p.name).map(p =>
-    [p.name, p.qty, p.fabric, p.grain, p.fusing, p.notes]);
-  table(['Piece', 'Qty', 'Fabric', 'Grain', 'Fusing', 'Notes'], ppRows, 10, y, [50, 20, 40, 40, 30, 97]);
-  y += 30 + ppRows.length * 6;
-  field('Cutting Notes', d.cuttingNotes, 10, y);
+  const ppRows = (d.patternPieces || []).filter(p => p.name || p.pieceName).map(p =>
+    [p.pieceName || p.name, p.quantity || p.qty, p.fabric, p.grain, p.fusing, p.notes]);
+  y = table(['Piece', 'Qty', 'Fabric', 'Grain', 'Fusing', 'Notes'], ppRows, 10, y, [50, 20, 40, 40, 30, 97]);
+  y += 8;
+  // Fabric Yield sub-table
+  const yieldRows = (d.pickedFabrics || [])
+    .filter(p => p?.fabricId)
+    .map(p => [
+      p.role || '—',
+      p.metersPerUnit != null ? `${p.metersPerUnit}m/unit` : '— TBD',
+      p.metersPerUnit != null ? (p.yieldIsActual ? 'CLO3D actual' : 'Std. estimate') : 'Not set',
+    ]);
+  if (yieldRows.length) {
+    sectionHeading('Fabric Yield', y);
+    y += 8;
+    y = table(['Fabric Area', 'Yield', 'Source'], yieldRows, 10, y, [70, 50, 57]);
+    y += 8;
+  }
+  field('Cutting Notes', d.cuttingNotes || d.cuttingInstructions, 10, y);
 
   // ─── Cut & Sew → Points of Measure ───
   newPage('Points of Measure (cm)', null, 12);
