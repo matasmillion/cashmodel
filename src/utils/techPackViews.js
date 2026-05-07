@@ -124,7 +124,11 @@ export async function generateGarmentView(description, view, onStatus) {
 
   if (!submitted.request_id) throw new Error('No request_id from fal');
 
-  const statusUrl = submitted.status_url
+  // fal queue API: status_url returns COMPLETED but no result body.
+  // The actual images live at response_url and need a separate GET.
+  const statusUrl   = submitted.status_url
+    || `https://queue.fal.run/${NB2_ENDPOINT}/requests/${submitted.request_id}/status`;
+  const responseUrl = submitted.response_url
     || `https://queue.fal.run/${NB2_ENDPOINT}/requests/${submitted.request_id}`;
 
   for (let i = 0; i < MAX_POLLS; i++) {
@@ -134,10 +138,13 @@ export async function generateGarmentView(description, view, onStatus) {
     const s = await callProxy('fal-proxy', { endpoint: statusUrl, method: 'GET' });
 
     if (s.status === 'COMPLETED') {
-      const imgs = s.output?.images || s.images || [];
+      // Fetch the actual result body from response_url.
+      const result = await callProxy('fal-proxy', { endpoint: responseUrl, method: 'GET' });
+      const imgs = result.images || result.output?.images || [];
       const url = imgs[0]?.url ?? (typeof imgs[0] === 'string' ? imgs[0] : null);
       if (url) return url;
-      throw new Error('Job completed but no image URL in result');
+      console.error('[techpack-views] Empty fal result body:', result);
+      throw new Error('Job completed but no image URL in response body');
     }
     if (s.status === 'FAILED') {
       throw new Error(`Generation failed: ${s.error || 'unknown error'}`);
