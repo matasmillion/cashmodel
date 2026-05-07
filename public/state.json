@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T10:07:56.613Z",
+  "lastUpdated": "2026-05-07T10:26:48.825Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,44 +1044,44 @@
   ],
   "changelog": [
     {
-      "sha": "0801f5e",
+      "sha": "61bfb8a",
+      "date": "2026-05-07T10:23:14+00:00",
+      "message": "docs: add context handoff file for tech pack buildout"
+    },
+    {
+      "sha": "45f3803",
+      "date": "2026-05-07T10:08:25+00:00",
+      "message": "feat(techpack): Phase 3 — POM split + Graded Size Matrix"
+    },
+    {
+      "sha": "5865531",
       "date": "2026-05-07T10:04:22+00:00",
       "message": "docs: add tech pack phases plan (Phases 3–7)"
     },
     {
-      "sha": "b4b8096",
+      "sha": "2cad200",
       "date": "2026-05-07T09:35:44+00:00",
       "message": "feat(techpack): Phase 2 — split Construction into Seam Spec + Notes pages"
     },
     {
-      "sha": "a1b8f5e",
+      "sha": "5a6a303",
       "date": "2026-05-07T09:08:43+00:00",
       "message": "feat(techpack): Phase 1 — split BOM into Fabrics/Trims + Labels/Files pages"
     },
     {
-      "sha": "d5bafbe",
-      "date": "2026-05-07T08:02:39+00:00",
-      "message": "techpack: reorder steps by mfg stage + redesign cover preview"
+      "sha": "5e2567e",
+      "date": "2026-05-07T11:32:29+03:00",
+      "message": "techpack: reorder by mfg stage + redesign cover preview (#23)"
     },
     {
-      "sha": "e6adde9",
-      "date": "2026-05-07T07:42:18+00:00",
-      "message": "techpack: redesign Style Overview into 4 structured zones"
+      "sha": "9db2927",
+      "date": "2026-05-07T10:50:51+03:00",
+      "message": "techpack: redesign Style Overview into 4 structured zones (#22)"
     },
     {
-      "sha": "1da780b",
-      "date": "2026-05-07T07:02:35+00:00",
-      "message": "techpack: shrink editor cover photo to 220px and fill the 2:3 frame"
-    },
-    {
-      "sha": "c89eb00",
-      "date": "2026-05-06T13:12:46+00:00",
-      "message": "chore: regenerate public/state.json"
-    },
-    {
-      "sha": "7e36086",
-      "date": "2026-05-06T13:12:22+00:00",
-      "message": "Add asset versioning: auto-snapshot on download + change diff"
+      "sha": "51a6c83",
+      "date": "2026-05-07T10:17:49+03:00",
+      "message": "techpack: asset versioning + cover photo polish (#21)"
     },
     {
       "sha": "8b0aaa0",
