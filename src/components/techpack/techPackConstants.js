@@ -127,7 +127,23 @@ export const DEFAULT_DATA = {
   colorways: [{ name: '', frColor: '', pantone: '', hex: '', fabricSwatch: '', approvalStatus: 'Pending' }],
   artworkPlacements: [{ placement: '', artworkFile: '', method: '', sizeCm: '', positionFrom: '', color: '', notes: '' }],
   logoFront: '', logoBack: '', logoMethod: '',
-  seams: [{ operation: '', seamType: '', stitchType: '', spiSpcm: '', threadColor: '', threadType: '', notes: '' }],
+  seams: [{ operation: '', seamType: '', stitchType: '', machine: '', spiSpcm: '', threadColor: '', threadType: '', notes: '' }],
+  // Up to 6 stitch reference image blocks shown above the seam table on the
+  // Seam & Stitch page. Each block carries a freeform label (e.g. "401
+  // Coverstitch") and an image uploaded against slot `seam-stitch-{num}`.
+  seamStitchBlocks: [
+    { num: 1, label: '' },
+    { num: 2, label: '' },
+    { num: 3, label: '' },
+    { num: 4, label: '' },
+    { num: 5, label: '' },
+    { num: 6, label: '' },
+  ],
+  // AI-generated labor cost metadata. The cutSewLaborCost field above is
+  // the value that flows into the cost roll-up; this captures the model's
+  // reasoning, vendor context, and the moment of generation so the user
+  // can see why the estimate is what it is.
+  cutSewLaborCostMeta: null, // { value, low, high, reasoning, vendor, generatedAt }
   constructionNotes: '',
   constructionNotesTable: [{ detail: '', area: '', description: '', reference: '' }],
   // Labor / cut-and-sew cost per garment, in the same currency as the rest

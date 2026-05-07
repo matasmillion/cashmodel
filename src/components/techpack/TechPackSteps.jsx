@@ -17,6 +17,8 @@ import { computePackDiff } from '../../utils/techPackDiff';
 import { useApp } from '../../context/AppContext';
 import { analyzeGarmentImage, generateGarmentView, imageEntryToDataUrl } from '../../utils/techPackViews';
 import { StepFabrics, StepTrims, StepPackaging } from './TechPackBOMSteps';
+import { estimateLaborCost } from '../../utils/aiLaborCost';
+import { getVendor } from '../../utils/vendorLibrary';
 
 const COST_TIER_CAP = 5;
 const SIZE_OPTIONS = ['S', 'M', 'L', 'XL', 'NS', 'W30', 'W32', 'W34', 'W36'];
@@ -1053,11 +1055,12 @@ export function StepFlatlays({ data, set, images, onUpload, onRemove }) {
   return (
     <div>
       <SectionTitle>Technical Flat Lay Diagrams</SectionTitle>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-        <PhotoUpload label="Top Left"     slotKey="flatlay-tl" images={images} onUpload={onUpload} onRemove={onRemove} />
-        <PhotoUpload label="Top Right"    slotKey="flatlay-tr" images={images} onUpload={onUpload} onRemove={onRemove} />
-        <PhotoUpload label="Bottom Left"  slotKey="flatlay-bl" images={images} onUpload={onUpload} onRemove={onRemove} />
-        <PhotoUpload label="Bottom Right" slotKey="flatlay-br" images={images} onUpload={onUpload} onRemove={onRemove} />
+      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, fontStyle: 'italic' }}>
+        Front and back technical flats. Each maximised to A4 landscape so callouts stay legible on the printed page.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+        <PhotoUpload label="Front" slotKey="flatlay-front" images={images} onUpload={onUpload} onRemove={onRemove} aspect="1.414 / 1" />
+        <PhotoUpload label="Back"  slotKey="flatlay-back"  images={images} onUpload={onUpload} onRemove={onRemove} aspect="1.414 / 1" />
       </div>
       <Input label="Flat Lay Notes" value={data.flatLayNotes} onChange={v => set('flatLayNotes', v)} multiline placeholder="Callouts, annotations, measurement notes…" />
     </div>
@@ -1390,11 +1393,138 @@ export function StepArtwork({ data, set, images, onUpload, onRemove }) {
     </div>
   );
 }
-export function StepConstruction({ data, set }) {
-  const seams = data.seams && data.seams.length ? data.seams : [{ operation: '', seamType: '', stitchType: '', spiSpcm: '', threadColor: '', threadType: '', notes: '' }];
+// Cut & Sew labor cost block — manual entry plus an "Estimate with AI"
+// button that asks Claude to anchor the value against the chosen vendor's
+// region/tier and the garment's complexity. The model's reasoning,
+// vendor context, and timestamp are stored on data.cutSewLaborCostMeta
+// so the user can see why the estimate is what it is.
+function CutSewLaborCostBlock({ data, set, sectionLabel }) {
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState(null);
+  const meta = data.cutSewLaborCostMeta;
+
+  const run = async () => {
+    setRunning(true);
+    setError(null);
+    try {
+      const vendorName = data.vendor || '';
+      const v = vendorName ? getVendor(vendorName) : null;
+      const vendor = {
+        name: vendorName,
+        country: v?.country || '',
+        city: v?.city || '',
+      };
+      const garment = {
+        styleName: data.styleName,
+        styleNumber: data.styleNumber,
+        productType: data.productType,
+        productTier: data.productTier,
+        designNotes: data.designNotes,
+        keyFeatures: data.keyFeatures,
+        fit: data.fit,
+        fabricsCount: (data.pickedFabrics || []).length,
+        fabricsList: (data.pickedFabrics || []).map(f => f.role).filter(Boolean).join(', '),
+        trimsCount: (data.pickedTrims || []).length,
+        seamCount: (data.seams || []).filter(s => s.operation).length,
+        pieceCount: (data.patternPieces || []).filter(p => p.pieceName).length,
+        treatmentsCount: (data.treatments || []).filter(t => t.treatment).length,
+      };
+      const result = await estimateLaborCost({ vendor, garment });
+      set('cutSewLaborCost', String(result.value.toFixed(2)));
+      set('cutSewLaborCostMeta', { ...result, vendor: vendor.name, vendorCountry: vendor.country, vendorCity: vendor.city, generatedAt: new Date().toISOString() });
+    } catch (e) {
+      setError(e.message || String(e));
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const hasVendor = !!data.vendor;
+
+  return (
+    <div style={{ marginTop: 18, padding: '14px 16px', background: FR.salt, border: `0.5px solid ${FR.sand}`, borderRadius: 6 }}>
+      <label style={sectionLabel}>Cut &amp; Sew Labor Cost (per garment)</label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 13, color: FR.stone, fontFamily: "ui-monospace, Menlo, monospace" }}>$</span>
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={data.cutSewLaborCost || ''}
+          onChange={e => set('cutSewLaborCost', e.target.value)}
+          placeholder="0.00"
+          style={{ flex: 1, padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 4, fontSize: 13, color: FR.slate, background: FR.white, fontFamily: "ui-monospace, Menlo, monospace", outline: 'none' }}
+        />
+        <button
+          onClick={run}
+          disabled={running || !hasVendor}
+          style={{
+            padding: '8px 14px',
+            border: `1px solid ${FR.slate}`,
+            background: running ? FR.sand : FR.slate,
+            color: running ? FR.slate : FR.salt,
+            borderRadius: 4,
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: running ? 'wait' : (hasVendor ? 'pointer' : 'not-allowed'),
+            opacity: hasVendor ? 1 : 0.55,
+            whiteSpace: 'nowrap',
+          }}
+          title={hasVendor ? 'Ask Claude to estimate based on vendor + design' : 'Set a vendor on Style Overview first'}
+        >
+          {running ? 'Estimating…' : 'Estimate with AI'}
+        </button>
+      </div>
+      {!hasVendor && (
+        <div style={{ fontSize: 10, color: '#854F0B', marginBottom: 8 }}>
+          Pick a vendor on the Style Overview page first — the AI uses the vendor's location and tier to anchor the estimate.
+        </div>
+      )}
+      {error && (
+        <div style={{ fontSize: 11, color: '#A32D2D', background: '#FBEDED', border: `0.5px solid #E8C8C8`, padding: '6px 10px', borderRadius: 4, marginBottom: 8 }}>
+          {error}
+        </div>
+      )}
+      {meta && (
+        <div style={{ background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 4, padding: '10px 12px', marginBottom: 8 }}>
+          <div style={{ fontSize: 9, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>AI Estimate</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 6, fontFamily: "ui-monospace, Menlo, monospace" }}>
+            <span style={{ fontSize: 18, fontWeight: 700, color: FR.slate }}>${Number(meta.value || 0).toFixed(2)}</span>
+            <span style={{ fontSize: 10, color: FR.stone }}>
+              range ${Number(meta.low || meta.value).toFixed(2)}–${Number(meta.high || meta.value).toFixed(2)}
+            </span>
+          </div>
+          {meta.vendorContext && (
+            <div style={{ fontSize: 11, color: FR.stone, marginBottom: 6, fontStyle: 'italic' }}>{meta.vendorContext}</div>
+          )}
+          {meta.reasoning && (
+            <div style={{ fontSize: 11, color: FR.slate, lineHeight: 1.5 }}>{meta.reasoning}</div>
+          )}
+          <div style={{ fontSize: 9, color: FR.stone, marginTop: 8 }}>
+            Generated {meta.generatedAt ? new Date(meta.generatedAt).toLocaleString() : '—'} · {meta.vendor || data.vendor}
+            {meta.vendorCity && meta.vendorCountry && ` (${meta.vendorCity}, ${meta.vendorCountry})`}
+          </div>
+        </div>
+      )}
+      <div style={{ fontSize: 11, color: FR.stone, lineHeight: 1.4 }}>
+        Total stitching labor charged by the factory per garment. Click Estimate with AI to anchor the value against the vendor's region and the garment's complexity, then override manually if you have a real quote. Rolls into the Cut &amp; Sew phase pill in the sidebar and the unit-cost total in the header.
+      </div>
+    </div>
+  );
+}
+
+export function StepConstruction({ data, set, images, onUpload, onRemove }) {
+  const seams = data.seams && data.seams.length ? data.seams : [{ operation: '', seamType: '', stitchType: '', machine: '', spiSpcm: '', threadColor: '', threadType: '', notes: '' }];
   const updS = (i, k, v) => set('seams', seams.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
-  const addS = () => set('seams', [...seams, { operation: '', seamType: '', stitchType: '', spiSpcm: '', threadColor: '', threadType: '', notes: '' }]);
+  const addS = () => set('seams', [...seams, { operation: '', seamType: '', stitchType: '', machine: '', spiSpcm: '', threadColor: '', threadType: '', notes: '' }]);
   const rmS  = (i) => set('seams', seams.filter((_, idx) => idx !== i));
+
+  const stitchBlocks = (data.seamStitchBlocks && data.seamStitchBlocks.length)
+    ? data.seamStitchBlocks
+    : [1, 2, 3, 4, 5, 6].map(num => ({ num, label: '' }));
+  const updateBlockLabel = (num, label) => {
+    set('seamStitchBlocks', stitchBlocks.map(b => (b.num === num ? { ...b, label } : b)));
+  };
 
   const threadColorRender = (v, onChange) => <FRColorCell value={v} onChange={onChange} />;
   const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
@@ -1403,6 +1533,37 @@ export function StepConstruction({ data, set }) {
     <div>
       <SectionTitle>Seam &amp; Stitch Specifications</SectionTitle>
 
+      {/* Stitch reference image blocks — six modular cells, one per stitch the
+          factory will run. Labels (e.g. "401 Coverstitch") cross-reference the
+          Stitch Type column in the table below. */}
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel}>Stitch Reference Images</label>
+        <p style={{ fontSize: 11, color: FR.stone, marginBottom: 10, fontStyle: 'italic' }}>
+          Up to six modular stitch image blocks. Each shows the actual stitch the factory will run; labels cross-reference the Stitch Type column below.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
+          {stitchBlocks.map(b => (
+            <div key={b.num} style={{ background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 6, padding: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <PhotoUpload
+                single
+                slotKey={`seam-stitch-${b.num}`}
+                images={images}
+                onUpload={onUpload}
+                onRemove={onRemove}
+                aspect="1 / 1"
+                label={`Stitch ${b.num}`}
+              />
+              <input
+                value={b.label}
+                onChange={e => updateBlockLabel(b.num, e.target.value)}
+                placeholder={`e.g. 401 Coverstitch`}
+                style={{ width: '100%', border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '4px 6px', fontSize: 10, color: FR.slate, background: FR.salt, outline: 'none', boxSizing: 'border-box' }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div style={{ marginBottom: 10 }}>
         <label style={sectionLabel}>Seam &amp; Stitch Specification</label>
         <ArrayTable
@@ -1410,6 +1571,7 @@ export function StepConstruction({ data, set }) {
             { key: 'operation',   label: 'Operation',    placeholder: 'Side seam / Hem / Collar' },
             { key: 'seamType',    label: 'Seam Type',    placeholder: 'Flatlock / French seam' },
             { key: 'stitchType',  label: 'Stitch Type',  placeholder: '301 / 401 / 504' },
+            { key: 'machine',     label: 'Machine',      placeholder: 'e.g. Juki MO-6814 overlock' },
             { key: 'spiSpcm',     label: 'SPI / SPCM',   placeholder: '10 SPI' },
             { key: 'threadColor', label: 'Thread Color', render: threadColorRender },
             { key: 'threadType',  label: 'Thread Type',  placeholder: 'Tex 40 / Polyester' },
@@ -1418,24 +1580,7 @@ export function StepConstruction({ data, set }) {
           rows={seams} onUpdate={updS} onAdd={addS} onRemove={rmS} />
       </div>
 
-      <div style={{ marginTop: 18, padding: '14px 16px', background: FR.salt, border: `0.5px solid ${FR.sand}`, borderRadius: 6 }}>
-        <label style={sectionLabel}>Cut &amp; Sew Labor Cost (per garment)</label>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 13, color: FR.stone, fontFamily: "ui-monospace, Menlo, monospace" }}>$</span>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={data.cutSewLaborCost || ''}
-            onChange={e => set('cutSewLaborCost', e.target.value)}
-            placeholder="0.00"
-            style={{ flex: 1, padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 4, fontSize: 13, color: FR.slate, background: FR.white, fontFamily: "ui-monospace, Menlo, monospace", outline: 'none' }}
-          />
-        </div>
-        <div style={{ fontSize: 11, color: FR.stone, marginTop: 8, lineHeight: 1.4 }}>
-          Total stitching labor charged by the factory per garment. Rolls into the Cut &amp; Sew phase pill in the sidebar and the unit-cost total in the header.
-        </div>
-      </div>
+      <CutSewLaborCostBlock data={data} set={set} sectionLabel={sectionLabel} />
     </div>
   );
 }
@@ -1463,21 +1608,30 @@ function RedNumberCircle({ n, size = 22 }) {
   );
 }
 
-// Single detail card — red number at top, then translatable title + description.
-// Aspect ratio is locked to A4 landscape (1.414:1) so all four boxes are
-// uniform regardless of how much text the designer enters.
-function ConstructionDetailCard({ entry, onChange }) {
+// Single detail card — image (top) + red number + translatable title + description.
+// The card stretches vertically; the image area is a fixed 4:3 frame so each
+// detail can carry its own close-up shot of the construction in question.
+function ConstructionDetailCard({ entry, onChange, images, onUpload, onRemove }) {
+  const slotKey = `construction-detail-${entry.num}`;
   return (
     <div style={{
-      aspectRatio: '1.414 / 1',
       background: FR.white,
       border: `0.5px solid ${FR.sand}`,
       borderRadius: 6,
-      padding: '12px 14px',
+      padding: 10,
       display: 'flex',
       flexDirection: 'column',
       gap: 8,
     }}>
+      <PhotoUpload
+        single
+        slotKey={slotKey}
+        images={images}
+        onUpload={onUpload}
+        onRemove={onRemove}
+        aspect="4 / 3"
+        label={`Detail ${entry.num} image`}
+      />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <RedNumberCircle n={entry.num} />
         <input
@@ -1500,15 +1654,15 @@ function ConstructionDetailCard({ entry, onChange }) {
         value={entry.description}
         onChange={e => onChange({ ...entry, description: e.target.value })}
         placeholder="Detail description — this text is per-factory translatable."
+        rows={3}
         style={{
-          flex: 1,
           border: `0.5px dashed ${FR.sand}`,
           borderRadius: 4,
           padding: '8px 10px',
           background: FR.salt,
           fontSize: 11,
           color: FR.slate,
-          resize: 'none',
+          resize: 'vertical',
           outline: 'none',
           lineHeight: 1.5,
           fontFamily: "'Helvetica Neue', sans-serif",
@@ -1537,9 +1691,9 @@ function ConstructionDetailsPage({ pageKey, dataKey, fieldName, data, set, image
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 0.55fr) 1.45fr', gap: 18, alignItems: 'stretch' }}>
-        {/* 9:16 vertical reference image with red-dot callouts */}
+        {/* 2:3 vertical reference image with red-dot callouts */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>Reference Image (9 : 16)</label>
+          <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>Reference Image (2 : 3)</label>
           <PhotoUpload
             single
             label="Drop the callout reference (numbered red dots overlaid in Photoshop)"
@@ -1547,17 +1701,20 @@ function ConstructionDetailsPage({ pageKey, dataKey, fieldName, data, set, image
             images={images}
             onUpload={onUpload}
             onRemove={onRemove}
-            aspect="9 / 16"
+            aspect="2 / 3"
           />
         </div>
 
-        {/* 2x2 grid of detail cards — A4 horizontal each */}
+        {/* 2x2 grid of detail cards — each carries its own close-up image */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignContent: 'start' }}>
           {entries.map((entry, i) => (
             <ConstructionDetailCard
               key={entry.num}
               entry={entry}
               onChange={next => update(i, next)}
+              images={images}
+              onUpload={onUpload}
+              onRemove={onRemove}
             />
           ))}
         </div>

@@ -392,29 +392,27 @@ function PageDesignOverview({ d, images }) {
 // ─── Page 3 — Technical Flat Lay Diagrams ────────────────────────────────────
 function PageFlatlays({ d, images }) {
   const imgs = images || [];
-  const tl = imgs.find(i => i.slot === 'flatlay-tl');
-  const tr = imgs.find(i => i.slot === 'flatlay-tr');
-  const bl = imgs.find(i => i.slot === 'flatlay-bl');
-  const br = imgs.find(i => i.slot === 'flatlay-br');
+  const front = imgs.find(i => i.slot === 'flatlay-front');
+  const back  = imgs.find(i => i.slot === 'flatlay-back');
 
-  // Grid layout
-  const gridY = 170;
+  // Two side-by-side cells maximised to fill the content area below the
+  // info strip. Each cell is A4-landscape so the in-app preview matches
+  // what lands on the printed page.
+  const gridY   = 170;
   const gridGap = 18;
-  const cellW = (PAGE_W - 80 - gridGap) / 2;
-  const cellH = (PAGE_H - gridY - 90 - gridGap) / 2;
+  const cellW   = (PAGE_W - 80 - gridGap) / 2;
+  const cellH   = PAGE_H - gridY - 70;
 
   return (
     <g>
       <InfoStrip d={d} />
 
       <text x={PAGE_W / 2} y={152} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
-        Place annotated flat lay diagrams below. Front, back, and detail views.
+        Front and back annotated flat lay diagrams.
       </text>
 
-      <PhotoSlot x={40}                  y={gridY}                    w={cellW} h={cellH} label="Top Left"     image={tl} />
-      <PhotoSlot x={40 + cellW + gridGap} y={gridY}                    w={cellW} h={cellH} label="Top Right"    image={tr} />
-      <PhotoSlot x={40}                  y={gridY + cellH + gridGap}  w={cellW} h={cellH} label="Bottom Left"  image={bl} />
-      <PhotoSlot x={40 + cellW + gridGap} y={gridY + cellH + gridGap}  w={cellW} h={cellH} label="Bottom Right" image={br} />
+      <PhotoSlot x={40}                   y={gridY} w={cellW} h={cellH} label="Front" image={front} />
+      <PhotoSlot x={40 + cellW + gridGap} y={gridY} w={cellW} h={cellH} label="Back"  image={back} />
     </g>
   );
 }
@@ -851,25 +849,51 @@ function PageArtwork({ d, images }) {
 }
 
 // ─── Page 6 — Seam & Stitch Specifications ──────────────────────────────────
-function PageConstruction({ d }) {
-  const seams = (d.seams || []).filter(r => r.operation || r.seamType || r.stitchType || r.threadColor);
+function PageConstruction({ d, images }) {
+  const imgs = images || [];
+  const seams = (d.seams || []).filter(r => r.operation || r.seamType || r.stitchType || r.threadColor || r.machine);
+  const stitchBlocks = (d.seamStitchBlocks && d.seamStitchBlocks.length)
+    ? d.seamStitchBlocks
+    : [1, 2, 3, 4, 5, 6].map(num => ({ num, label: '' }));
 
   const seamCols = [
-    { key: 'operation',   label: 'Operation',     w: 180 },
-    { key: 'seamType',    label: 'Seam Type',     w: 150 },
-    { key: 'stitchType',  label: 'Stitch Type',   w: 120 },
-    { key: 'spiSpcm',     label: 'SPI / SPCM',    w: 110 },
-    { key: 'threadColor', label: 'Thread Color',  w: 130 },
-    { key: 'threadType',  label: 'Thread Type',   w: 160 },
-    { key: 'notes',       label: 'Notes',         w: 193 },
+    { key: 'operation',   label: 'Operation',     w: 150 },
+    { key: 'seamType',    label: 'Seam Type',     w: 130 },
+    { key: 'stitchType',  label: 'Stitch Type',   w: 100 },
+    { key: 'machine',     label: 'Machine',       w: 170 },
+    { key: 'spiSpcm',     label: 'SPI/SPCM',      w: 90  },
+    { key: 'threadColor', label: 'Thread Color',  w: 110 },
+    { key: 'threadType',  label: 'Thread Type',   w: 130 },
+    { key: 'notes',       label: 'Notes',         w: 163 },
   ];
+
+  // Strip layout: 6 image cells across the page with label underneath.
+  const stripY  = 170;
+  const stripH  = 110;
+  const stripGap = 8;
+  const cellW = (PAGE_W - 80 - stripGap * 5) / 6;
 
   return (
     <g>
       <InfoStrip d={d} />
 
-      <SectionHeading x={40} y={158}>Seam &amp; Stitch Specification</SectionHeading>
-      <GridTable x={40} y={170} cols={seamCols} rows={seams} bodyRows={12} />
+      <SectionHeading x={40} y={158}>Stitch Reference</SectionHeading>
+      {stitchBlocks.slice(0, 6).map((b, i) => {
+        const cx = 40 + i * (cellW + stripGap);
+        const img = imgs.find(im => im.slot === `seam-stitch-${b.num}`);
+        return (
+          <g key={b.num}>
+            <PhotoSlot x={cx} y={stripY} w={cellW} h={stripH - 18} label={`Stitch ${b.num}`} image={img} />
+            <text x={cx + cellW / 2} y={stripY + stripH - 4} textAnchor="middle"
+              fontSize={9} fill={FR.slate} fontFamily="ui-monospace, Menlo, monospace">
+              {(b.label || '—').slice(0, 18)}
+            </text>
+          </g>
+        );
+      })}
+
+      <SectionHeading x={40} y={stripY + stripH + 22}>Seam &amp; Stitch Specification</SectionHeading>
+      <GridTable x={40} y={stripY + stripH + 34} cols={seamCols} rows={seams} bodyRows={9} />
     </g>
   );
 }
@@ -890,7 +914,7 @@ function PageSketches({ d, images, pageKey = 'page1' }) {
   const padX    = 40;
   const colGap  = 18;
   const refW    = 240;
-  const refH    = refW * (16 / 9); // 9:16 aspect
+  const refH    = refW * (3 / 2); // 2:3 vertical (taller than wide)
   const refY    = 170;
 
   const rightX  = padX + refW + colGap;
@@ -900,18 +924,20 @@ function PageSketches({ d, images, pageKey = 'page1' }) {
   const cardCols = 2;
   const cardRows = 2;
   const cardW   = (rightW - colGap2 * (cardCols - 1)) / cardCols;
-  const cardH   = cardW / 1.414; // A4 landscape
-  const cardsTotalH = cardH * cardRows + rowGap * (cardRows - 1);
+  // Card height matches the reference image total height so the right
+  // column reads as a single block. Image fills ~55% of the card.
+  const cardH   = (refH - rowGap) / cardRows;
+  const imageH  = cardH * 0.55;
 
   return (
     <g>
       <InfoStrip d={d} />
 
       <text x={PAGE_W / 2} y={topY - 6} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
-        Number each callout on the reference image (red dots). Titles and descriptions are translatable per factory.
+        Number each callout on the reference image (red dots). Each detail card carries its own close-up image, title, and description.
       </text>
 
-      {/* 9:16 reference image on the left */}
+      {/* 2:3 reference image on the left */}
       <PhotoSlot
         x={padX} y={refY}
         w={refW} h={refH}
@@ -919,33 +945,42 @@ function PageSketches({ d, images, pageKey = 'page1' }) {
         image={callout}
       />
 
-      {/* 2x2 grid of A4 landscape detail cards on the right */}
+      {/* 2x2 grid of detail cards on the right; each card has its own image */}
       {entries.map((entry, i) => {
         const col = i % cardCols;
         const row = Math.floor(i / cardCols);
         const cx  = rightX + col * (cardW + colGap2);
         const cy  = refY   + row * (cardH + rowGap);
-        const numCx = cx + 18;
-        const numCy = cy + 18;
+        const detailImg = imgs.find(im => im.slot === `construction-detail-${entry.num}`);
+        const titleY = cy + imageH + 18;
+        const descY  = titleY + 8;
+        const numCx  = cx + 18;
         return (
           <g key={entry.num}>
             {/* card border */}
             <rect x={cx} y={cy} width={cardW} height={cardH}
               fill={FR.white} stroke={FR.sand} strokeWidth={0.5} rx={4} />
-            {/* red numbered circle at top-left */}
-            <circle cx={numCx} cy={numCy} r={11} fill="#A32D2D" />
-            <text x={numCx} y={numCy + 4} textAnchor="middle"
-              fontSize="11" fontWeight="600" fill="#FFFFFF">
+            {/* image area at the top */}
+            <PhotoSlot
+              x={cx} y={cy}
+              w={cardW} h={imageH}
+              label={`Detail ${entry.num}`}
+              image={detailImg}
+            />
+            {/* red numbered circle at the start of the title row */}
+            <circle cx={numCx} cy={titleY - 4} r={9} fill="#A32D2D" />
+            <text x={numCx} y={titleY} textAnchor="middle"
+              fontSize="10" fontWeight="600" fill="#FFFFFF">
               {entry.num}
             </text>
             {/* title */}
-            <text x={cx + 38} y={numCy + 5} fontSize="11" fontWeight="600" fill={FR.slate}>
+            <text x={cx + 34} y={titleY} fontSize="11" fontWeight="600" fill={FR.slate}>
               {entry.title || `Detail ${entry.num}`}
             </text>
             {/* description body */}
-            <foreignObject x={cx + 12} y={cy + 38} width={cardW - 24} height={cardH - 50}>
+            <foreignObject x={cx + 12} y={descY} width={cardW - 24} height={cy + cardH - descY - 8}>
               <div xmlns="http://www.w3.org/1999/xhtml"
-                style={{ fontSize: 9, color: FR.slate, lineHeight: 1.5, fontFamily: "'Helvetica Neue', sans-serif", whiteSpace: 'pre-wrap' }}>
+                style={{ fontSize: 9, color: FR.slate, lineHeight: 1.4, fontFamily: "'Helvetica Neue', sans-serif", whiteSpace: 'pre-wrap' }}>
                 {entry.description || ''}
               </div>
             </foreignObject>
@@ -1582,7 +1617,7 @@ const PAGE_FNS = [
   { title: 'Technical Flat Lay Diagrams',       phase: 'Cut & Sew',      body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
   { title: 'Construction Details — Page 1',     phase: 'Cut & Sew',      body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page1" /> },
   { title: 'Construction Details — Page 2',     phase: 'Cut & Sew',      body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page2" /> },
-  { title: 'Seam & Stitch Specifications',      phase: 'Cut & Sew',      body: ({ d }) => <PageConstruction d={d} /> },
+  { title: 'Seam & Stitch Specifications',      phase: 'Cut & Sew',      body: ({ d, images }) => <PageConstruction d={d} images={images} /> },
   { title: 'Pattern Pieces & Cutting',          phase: 'Cut & Sew',      body: ({ d, images }) => <PagePattern d={d} images={images} /> },
   { title: 'Points of Measure (Sample Size)',   phase: 'Cut & Sew',      body: ({ d, images }) => <PagePom d={d} images={images} /> },
   { title: 'Graded Size Matrix',                phase: 'Cut & Sew',      body: ({ d }) => <PageSizeMatrix d={d} /> },
