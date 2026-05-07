@@ -8,7 +8,7 @@
 // individually for tactile accuracy).
 
 import { useEffect, useRef, useState } from 'react';
-import { Sparkles, X, Upload, FileText, Image as ImageIcon, Check } from 'lucide-react';
+import { Sparkles, X, Upload, FileText, Image as ImageIcon, Check, Loader2 } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { extractFabricFromMedia, fileToMedia } from '../../utils/aiFabricExtract';
 import { categoryForWeave, FABRIC_WEAVES } from '../../utils/fabricLibrary';
@@ -300,8 +300,11 @@ export default function FabricAIExtract({ onClose, onApply }) {
               <Check size={13} /> Apply to fabric
             </button>
           ) : (
-            <button onClick={run} disabled={busy || files.length === 0} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: (busy || files.length === 0) ? 'not-allowed' : 'pointer', opacity: (busy || files.length === 0) ? 0.55 : 1 }}>
-              <Sparkles size={13} /> {busy ? 'Analyzing…' : 'Analyze'}
+            <button onClick={run} disabled={busy || files.length === 0} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: (busy || files.length === 0) ? 'not-allowed' : 'pointer', opacity: files.length === 0 ? 0.55 : 1 }}>
+              {busy
+                ? <><Loader2 size={13} className="spin" /> Analyzing…</>
+                : <><Sparkles size={13} /> Analyze</>
+              }
             </button>
           )}
         </div>

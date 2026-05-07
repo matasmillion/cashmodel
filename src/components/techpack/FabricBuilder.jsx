@@ -14,7 +14,7 @@
 //     embeds at production time.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Save, Trash2, Sparkles, FileDown, Plus } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, Sparkles, FileDown, Plus, Loader2 } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { saveFabric, archiveFabric, restoreFabric } from '../../utils/fabricStore';
 import {
@@ -72,8 +72,16 @@ export default function FabricBuilder({ fabric, onBack }) {
   const [aiOpen, setAiOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [fx, setFx] = useState(null); // { usdPerCny, fetchedAt, stale }
+  // The "saved snapshot" is the JSON we last successfully persisted. We
+  // compare draft against it to derive `dirty`, instead of comparing
+  // against the inbound `fabric` prop — that prop never updates after
+  // an in-place save, which would leave the form perpetually dirty.
+  const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(fabric));
 
-  useEffect(() => { setDraft(fabric); }, [fabric.id]);
+  useEffect(() => {
+    setDraft(fabric);
+    setSavedSnapshot(JSON.stringify(fabric));
+  }, [fabric.id]);
 
   // Fetch the daily USD/CNY rate once on mount. The helper caches in
   // localStorage for 24 h, so this is effectively free on subsequent
@@ -104,7 +112,7 @@ export default function FabricBuilder({ fabric, onBack }) {
     return () => { cancelled = true; };
   }, [draft?.id, draft?.cover_image]);
 
-  const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(fabric), [draft, fabric]);
+  const dirty = useMemo(() => JSON.stringify(draft) !== savedSnapshot, [draft, savedSnapshot]);
 
   const set = (patch) => setDraft(d => ({ ...d, ...patch }));
 
@@ -145,16 +153,69 @@ export default function FabricBuilder({ fabric, onBack }) {
     set({ weave: weaveId, category: categoryForWeave(weaveId) || draft.category });
   };
 
+  // Single save path used by both manual click and autosave. We capture
+  // the snapshot at the moment we start the write so a save that takes
+  // a second still clears `dirty` for the state at-issue, even if the
+  // user kept typing — the next debounce will catch the new edits.
   const save = async () => {
+    if (saving) return;
     setSaving(true);
+    const snapshotAtSave = JSON.stringify(draft);
     try {
       const { id, ...updates } = draft;
       await saveFabric(id, updates);
+      setSavedSnapshot(snapshotAtSave);
       setSavedAt(new Date());
+    } catch (err) {
+      console.error('FabricBuilder save:', err);
     } finally {
       setSaving(false);
     }
   };
+
+  // Autosave: persist 1.2 s after the last edit. Mirrors how Notion /
+  // Linear behave so the user never has to think about the Save button.
+  // Uses refs so the debounced callback always sees the freshest state.
+  const draftRef = useRef(draft);
+  const savingRef = useRef(saving);
+  const savedSnapshotRef = useRef(savedSnapshot);
+  useEffect(() => { draftRef.current = draft; }, [draft]);
+  useEffect(() => { savingRef.current = saving; }, [saving]);
+  useEffect(() => { savedSnapshotRef.current = savedSnapshot; }, [savedSnapshot]);
+
+  // On unmount (back button, route change) flush any pending edits.
+  // saveFabric writes localStorage synchronously before the async cloud
+  // hop, so even though we don't / can't await the promise here the
+  // user's data is durable before the component disappears.
+  useEffect(() => () => {
+    const current = JSON.stringify(draftRef.current);
+    if (current !== savedSnapshotRef.current && draftRef.current?.id) {
+      const { id, ...updates } = draftRef.current;
+      saveFabric(id, updates).catch(err => console.error('FabricBuilder flush:', err));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const timer = setTimeout(() => {
+      // If a save is already running, skip — the post-save effect will
+      // re-trigger this debounce with the latest draft.
+      if (savingRef.current) return;
+      save();
+    }, 1200);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, dirty]);
+
+  // Block tab close / refresh while there are unsaved changes. Modern
+  // browsers ignore the custom message and show their own — setting
+  // returnValue is what actually triggers the prompt.
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const handler = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
 
   const onBumpVersion = async () => {
     const next = bumpVersion(draft.version);
@@ -274,18 +335,20 @@ export default function FabricBuilder({ fabric, onBack }) {
             style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 9px', background: 'transparent', color: FR.stone, border: `1px solid ${FR.sand}`, borderRadius: 6, fontSize: 11, cursor: 'pointer' }}>
             <Trash2 size={11} /> {status === 'archived' ? 'Restore' : 'Archive'}
           </button>
-          <button onClick={save} disabled={!dirty || saving}
-            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: dirty ? FR.slate : FR.sand, color: dirty ? FR.salt : FR.stone, border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: dirty && !saving ? 'pointer' : 'not-allowed', opacity: saving ? 0.6 : 1 }}>
-            <Save size={12} /> {saving ? 'Saving…' : dirty ? 'Save' : 'Saved'}
+          <button onClick={save} disabled={!dirty || saving} title={dirty ? 'Save now (autosaves on its own)' : 'All changes saved'}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: dirty ? FR.slate : FR.sand, color: dirty ? FR.salt : FR.stone, border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: dirty && !saving ? 'pointer' : 'not-allowed', opacity: saving ? 0.85 : 1 }}>
+            {saving ? <Loader2 size={12} className="spin" /> : <Save size={12} />}
+            {saving ? 'Saving…' : dirty ? 'Unsaved' : 'Saved'}
           </button>
         </div>
       </div>
 
-      {savedAt && !dirty && (
-        <div style={{ fontSize: 10, color: FR.stone, marginBottom: 8 }}>
-          Saved {savedAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-        </div>
-      )}
+      <div style={{ fontSize: 10, color: FR.stone, marginBottom: 8, height: 14 }}>
+        {saving ? 'Saving…'
+          : dirty ? 'Unsaved changes — autosaving in a moment'
+          : savedAt ? `Auto-saved ${savedAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
+          : ''}
+      </div>
 
       {/* ─── Layout: data block, then full-width landscape BOM preview ─ */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
