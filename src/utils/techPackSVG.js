@@ -114,7 +114,7 @@ export function generateTechPackSVG(pack) {
   svg += `<text x="561" y="415" text-anchor="middle" font-size="12" fill="${FR.stone}">${esc([d.productCategory, d.productTier, d.season].filter(Boolean).join('  ·  '))}</text>`;
   svg += `<rect x="481" y="440" width="160" height="36" rx="6" fill="${FR.soil}"/>`;
   svg += `<text x="561" y="464" text-anchor="middle" font-size="11" font-weight="bold" fill="${FR.salt}" letter-spacing="1">${esc((d.status || 'DEVELOPMENT').toUpperCase())}</text>`;
-  svg += skipIf(0);
+  svg += skipIf(2);
   svg += `</g>`;
 
   // ─── Identity ───
@@ -137,7 +137,7 @@ export function generateTechPackSVG(pack) {
   svg += field('Vendor', d.vendor, 40, 445);
   svg += field('Contact', d.vendorContact, 500, 445);
   svg += field('Fabric Type', d.fabricType, 40, 495);
-  svg += skipIf(0);
+  svg += skipIf(2);
   svg += `</g>`;
 
   // ─── Materials & BOM: Fabrics & Trims ───
@@ -156,7 +156,7 @@ export function generateTechPackSVG(pack) {
     const tt = table(40, 400, ['Component', 'Type', 'Material', 'Color', 'Size/Spec', 'Vendor', 'Qty'], trimsRows, [130, 150, 130, 110, 120, 180, 223]);
     svg += tt.svg;
   }
-  svg += skipIf(2);
+  svg += skipIf(4);
   svg += `</g>`;
 
   // ─── Materials & BOM: Labels & Files (now stepIdx 3) ───
@@ -175,7 +175,7 @@ export function generateTechPackSVG(pack) {
     const ta = table(40, 420, ['File Name', 'Type', 'Size', 'Uploaded'], attRows.map(a => [a.name, (a.type || '').split('/').pop()?.toUpperCase() || '', a.size ? `${Math.round(a.size / 1024)} KB` : '', a.uploaded_at ? a.uploaded_at.slice(0, 10) : '']), [500, 120, 120, 303]);
     svg += ta.svg;
   }
-  svg += skipIf(3);
+  svg += skipIf(5);
   svg += `</g>`;
 
   // ─── Construction (Seam & Stitch — now stepIdx 7) ───
@@ -188,7 +188,7 @@ export function generateTechPackSVG(pack) {
     const t2 = table(40, 140, ['Operation', 'Seam Type', 'Stitch', 'SPI', 'Thread', 'Notes'], seamRows, [180, 140, 100, 60, 140, 423]);
     svg += t2.svg;
   }
-  svg += skipIf(7);
+  svg += skipIf(9);
   svg += `</g>`;
 
   // ─── Colorways ───
@@ -202,7 +202,7 @@ export function generateTechPackSVG(pack) {
     const tc = table(40, 140, ['Name', 'FR Color', 'Pantone TCX', 'Hex', 'Fabric Swatch', 'Approval'], cwRows, [180, 140, 150, 120, 270, 183]);
     svg += tc.svg;
   }
-  svg += skipIf(11);
+  svg += skipIf(13);
   svg += `</g>`;
 
   // ─── Order & Delivery ───
@@ -223,7 +223,7 @@ export function generateTechPackSVG(pack) {
   svg += field('Incoterm', d.incoterm, 40, orderY + 85);
   svg += field('Target Ship', d.targetShipDate, 400, orderY + 85);
   svg += field('Target Arrival', d.targetArrivalDate, 700, orderY + 85);
-  svg += skipIf(17);
+  svg += skipIf(19);
   svg += `</g>`;
 
   svg += `</svg>`;

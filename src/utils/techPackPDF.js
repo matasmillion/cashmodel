@@ -173,8 +173,37 @@ export async function generateTechPackPDF(pack) {
     }
   }
 
-  // ─── Page 1: Cover ───
-  newPage('Tech Pack', `Rev. ${new Date().toISOString().slice(0, 10)}`, 0);
+  // ─── Page 000: Competitor Landscape (Merchandising) ───
+  newPage('Competitor Landscape', null, 0);
+  let y = 28;
+  sectionHeading('Pricing & Features', y); y += 8;
+  const compRows = (d.competitors || []).filter(c => c.brand || c.product || c.price).map(c =>
+    [c.brand, c.product, c.price, c.currency, c.features, c.notes]);
+  table(['Brand', 'Product', 'Price', 'Currency', 'Key Features', 'Notes'], compRows, 10, y, [40, 60, 28, 22, 80, 47]);
+  y += 18 + compRows.length * 6;
+  sectionHeading('Competitive Landscape — FR Positioning', y); y += 8;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...hex(FR.slate));
+  (d.competitivePositioning || '').split('\n').forEach((line, i) => doc.text(line, 10, y + i * 5, { maxWidth: W - 20 }));
+
+  // ─── Page 00: Merchandising Preview placeholder ───
+  newPage('Merchandising Preview', null, 1);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(...hex(FR.stone));
+  doc.text('COMING SOON', W / 2, 80, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(20);
+  doc.setTextColor(...hex(FR.slate));
+  doc.text('Storefront Visualization', W / 2, 100, { align: 'center' });
+  doc.setFontSize(9);
+  doc.setTextColor(...hex(FR.stone));
+  doc.text('Visualize this product on the live storefront before sampling — prototype', W / 2, 115, { align: 'center' });
+  doc.text('merchandising, hero imagery, and PDP copy at the design phase.', W / 2, 122, { align: 'center' });
+
+  // ─── Page 01: Cover ───
+  newPage('Tech Pack', `Rev. ${new Date().toISOString().slice(0, 10)}`, 2);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(38);
   doc.setTextColor(...hex(FR.slate));
@@ -193,8 +222,8 @@ export async function generateTechPackPDF(pack) {
   doc.text((d.status || 'DEVELOPMENT').toUpperCase(), W / 2, 131, { align: 'center' });
 
   // ─── Page 2: Identity & Classification ───
-  newPage('Identity & Classification', null, 0);
-  let y = 28;
+  newPage('Identity & Classification', null, 2);
+  y = 28;
   sectionHeading('Product', y); y += 8;
   field('Style Name', d.styleName, 10, y);
   field('Category', d.productCategory, 100, y);
@@ -215,7 +244,7 @@ export async function generateTechPackPDF(pack) {
   field('Fabric Type', d.fabricType, 10, y);
 
   // ─── Page 3: Design ───
-  newPage('Design & Construction', null, 1);
+  newPage('Design & Construction', null, 3);
   y = 28;
   sectionHeading('Fit & Features', y); y += 8;
   field('Fit', d.fit, 10, y); y += 12;
@@ -224,7 +253,7 @@ export async function generateTechPackPDF(pack) {
   addImage('design-refs', 180, 28, 100, 80);
 
   // ─── Materials → BOM: Fabrics & Trims (now stepIdx 2) ───
-  newPage('BOM — Fabrics & Trims', null, 2);
+  newPage('BOM — Fabrics & Trims', null, 4);
   y = 28;
   sectionHeading('Fabrics', y); y += 8;
   const fabRowsA = (d.fabrics || []).filter(f => f.component || f.fabricType).map(f =>
@@ -237,7 +266,7 @@ export async function generateTechPackPDF(pack) {
   table(['Component', 'Type', 'Material', 'Color', 'Size / Spec', 'Vendor', 'Qty/Garment'], trimsRowsA, 10, y, [30, 40, 35, 25, 35, 40, 72]);
 
   // ─── Materials → BOM: Labels & Files (now stepIdx 3) ───
-  newPage('BOM — Labels & Source Files', null, 3);
+  newPage('BOM — Labels & Source Files', null, 5);
   y = 28;
   sectionHeading('Labels & Branding', y); y += 8;
   const lblRowsA = (d.labelsBranding || []).filter(l => l.labelType || l.placement).map(l =>
@@ -257,7 +286,7 @@ export async function generateTechPackPDF(pack) {
   }
 
   // ─── Cut & Sew → Flat Lay Diagrams (moved from Design, now stepIdx 4) ───
-  newPage('Flat Lay Diagrams', null, 4);
+  newPage('Flat Lay Diagrams', null, 6);
   addImage('flatlay-front', 10, 28, 85, 90);
   addImage('flatlay-back', 105, 28, 85, 90);
   addImage('flatlay-detail', 200, 28, 85, 90);
@@ -273,7 +302,7 @@ export async function generateTechPackPDF(pack) {
   doc.text(d.flatLayNotes || '', 10, 140, { maxWidth: W - 20 });
 
   // ─── Cut & Sew → Construction Details Page 1 (stepIdx 5) ───
-  newPage('Construction Details — Page 1', null, 5);
+  newPage('Construction Details — Page 1', null, 7);
   y = 28;
   sectionHeading('Detail Callouts', y); y += 8;
   const cdRows1 = (d.constructionDetailsPage1 || []).map(c =>
@@ -281,7 +310,7 @@ export async function generateTechPackPDF(pack) {
   table(['#', 'Title', 'Description'], cdRows1, 10, y, [15, 60, 202]);
 
   // ─── Cut & Sew → Construction Details Page 2 (stepIdx 6) ───
-  newPage('Construction Details — Page 2', null, 6);
+  newPage('Construction Details — Page 2', null, 8);
   y = 28;
   sectionHeading('Detail Callouts', y); y += 8;
   const cdRows2 = (d.constructionDetailsPage2 || []).map(c =>
@@ -289,7 +318,7 @@ export async function generateTechPackPDF(pack) {
   table(['#', 'Title', 'Description'], cdRows2, 10, y, [15, 60, 202]);
 
   // ─── Cut & Sew → Seam & Stitch (now stepIdx 7) ───
-  newPage('Seam & Stitch Specifications', null, 7);
+  newPage('Seam & Stitch Specifications', null, 9);
   y = 28;
   sectionHeading('Seam Specifications', y); y += 8;
   const seamRows = (d.seams || []).filter(s => s.operation).map(s =>
@@ -297,7 +326,7 @@ export async function generateTechPackPDF(pack) {
   table(['Operation', 'Seam Type', 'Stitch', 'SPI', 'Thread', 'Notes'], seamRows, 10, y, [50, 40, 30, 20, 40, 97]);
 
   // ─── Cut & Sew → Pattern & Cutting ───
-  newPage('Pattern Pieces & Cutting', null, 8);
+  newPage('Pattern Pieces & Cutting', null, 10);
   y = 28;
   const ppRows = (d.patternPieces || []).filter(p => p.name).map(p =>
     [p.name, p.qty, p.fabric, p.grain, p.fusing, p.notes]);
@@ -306,7 +335,7 @@ export async function generateTechPackPDF(pack) {
   field('Cutting Notes', d.cuttingNotes, 10, y);
 
   // ─── Cut & Sew → Points of Measure ───
-  newPage('Points of Measure (cm)', null, 9);
+  newPage('Points of Measure (cm)', null, 11);
   y = 28;
   field('Size Type', d.sizeType, 10, y); y += 14;
   const sz = d.sizeType === 'waist' ? ['W30', 'W32', 'W34', 'W36'] : ['S', 'M', 'L', 'XL'];
@@ -315,7 +344,7 @@ export async function generateTechPackPDF(pack) {
   table(['Measurement', 'Tol ±', ...sz], pomRows, 10, y, [70, 25, 30, 30, 30, 30]);
 
   // ─── Cut & Sew → Graded Size Matrix ───
-  newPage('Graded Size Matrix (cm)', null, 10);
+  newPage('Graded Size Matrix (cm)', null, 12);
   y = 28;
   const matrix = d.gradedSizeMatrix || { baseSize: 'M', grading: [] };
   const rawMSizes = Array.isArray(d.sizeRange)
@@ -337,7 +366,7 @@ export async function generateTechPackPDF(pack) {
   table(['Measurement', ...matrixSizes], matrixRows, 10, y, [70, ...matrixSizes.map(() => sizeColW)]);
 
   // ─── Embellishments → Colorways ───
-  newPage('Colorways', null, 11);
+  newPage('Colorways', null, 13);
   y = 28;
   sectionHeading('Colorway Specification', y); y += 8;
   const cwRows = (d.colorways || []).filter(c => c.name).map(c =>
@@ -345,7 +374,7 @@ export async function generateTechPackPDF(pack) {
   table(['Name', 'FR Color', 'Pantone', 'Hex', 'Fabric Swatch', 'Approval'], cwRows, 10, y, [55, 45, 50, 40, 60, 27]);
 
   // ─── Embellishments → Artwork & Placement ───
-  newPage('Artwork & Placement', null, 12);
+  newPage('Artwork & Placement', null, 14);
   y = 28;
   sectionHeading('Logo & Method', y); y += 8;
   field('Front Logo', d.logoFront, 10, y);
@@ -357,7 +386,7 @@ export async function generateTechPackPDF(pack) {
   table(['Placement', 'Artwork File', 'Method', 'Size (cm)', 'Position From', 'Color', 'Notes'], apRows, 10, y, [40, 45, 40, 25, 40, 30, 57]);
 
   // ─── Treatments → Garment Treatments ───
-  newPage('Garment Treatments', null, 13);
+  newPage('Garment Treatments', null, 15);
   y = 28;
   sectionHeading('Wash & Dye', y); y += 8;
   const trtRows = (d.treatments || []).filter(t => t.treatment).map(t =>
@@ -370,7 +399,7 @@ export async function generateTechPackPDF(pack) {
   table(['Area', 'Technique', 'Intensity', 'Notes'], distRows, 10, y, [50, 50, 30, 147]);
 
   // ─── QC → Compliance & Testing ───
-  newPage('Compliance & Testing', null, 14);
+  newPage('Compliance & Testing', null, 16);
   y = 28;
   sectionHeading('Shipping Requirements', y); y += 8;
   const shipRows = (d.shippingReqs || []).filter(r => r.requirement || r.specification).map(r =>
@@ -383,7 +412,7 @@ export async function generateTechPackPDF(pack) {
   table(['Test', 'Standard', 'Requirement', 'Test Method', 'Pass-Fail'], testRows, 10, y, [55, 55, 55, 60, 52]);
 
   // ─── QC → Quality Inspection (AQL) ───
-  newPage('Quality Inspection (AQL)', null, 15);
+  newPage('Quality Inspection (AQL)', null, 17);
   y = 28;
   const qi = d.qualityInspection || { aqlMajor: '2.5', aqlMinor: '4.0', inspectionStage: 'During Production', checklist: [], photoRequirements: '' };
   sectionHeading('AQL Standard', y); y += 8;
@@ -402,7 +431,7 @@ export async function generateTechPackPDF(pack) {
   (qi.photoRequirements || '—').split('\n').forEach((line, i) => doc.text(line, 10, y + i * 5, { maxWidth: W - 20 }));
 
   // ─── Packaging → Labels & Packaging ───
-  newPage('Labels & Packaging', null, 16);
+  newPage('Labels & Packaging', null, 18);
   y = 28;
   field('Packaging', d.packaging, 10, y); y += 14;
   field('Packaging Notes', d.packagingNotes, 10, y); y += 14;
@@ -414,7 +443,7 @@ export async function generateTechPackPDF(pack) {
   careLines.forEach((line, i) => doc.text(line, 10, y + i * 5));
 
   // ─── Logistics → Order & Delivery ───
-  newPage('Order & Delivery', null, 17);
+  newPage('Order & Delivery', null, 19);
   y = 28;
   sectionHeading('Quantity Per Size', y); y += 8;
   const qRows = (d.quantities || []).filter(q => q.colorway).map(q =>
@@ -430,14 +459,14 @@ export async function generateTechPackPDF(pack) {
   field('Target Arrival', d.targetArrivalDate, 200, y);
 
   // ─── Logistics → Packing List ───
-  newPage('Packing List', null, 17);
+  newPage('Packing List', null, 19);
   y = 28;
   const pkRows = (d.cartons || []).filter(c => c.cartonNum).map(c =>
     [c.cartonNum, c.colorway, c.sizeBreakdown, c.qtyPerCarton, c.dims, c.grossWeight, c.netWeight]);
   table(['#', 'Colorway', 'Size Breakdown', 'Qty', 'Dims (cm)', 'Gross kg', 'Net kg'], pkRows, 10, y, [15, 40, 60, 25, 40, 30, 67]);
 
   // ─── Sign-off → Review & Revision ───
-  newPage('Review & Revision', null, 18);
+  newPage('Review & Revision', null, 20);
   y = 40;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);

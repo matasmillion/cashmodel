@@ -24,8 +24,8 @@ export const DEFAULT_LIBRARY = { bom: [], fabrics: [], trims: [], labels: [], lo
 
 export const STATUSES = ['Design', 'Sampling', 'Testing', 'Pre-Production', 'Production', 'Released'];
 
-// Steps locked until Pre-Production: Compliance (14), Quality (15), Labels (16), Order (17)
-export const LOCKED_STEPS = new Set([14, 15, 16, 17]);
+// Steps locked until Pre-Production: Compliance (16), Quality (17), Labels (18), Order (19)
+export const LOCKED_STEPS = new Set([16, 17, 18, 19]);
 export function isStepLocked(stepIndex, status) {
   if (!LOCKED_STEPS.has(stepIndex)) return false;
   const unlockAt = STATUSES.indexOf('Pre-Production');
@@ -33,12 +33,17 @@ export function isStepLocked(stepIndex, status) {
   return current < unlockAt || current === -1;
 }
 
-// 19-step wizard, ordered by manufacturing stage:
-//   Design → Materials → Cut & Sew → Embellishments → Treatments
-//   → QC → Packaging → Logistics → Sign-off
+// 21-step wizard, ordered by manufacturing stage. Two pre-tech-pack pages
+// kick off the flow:
+//   Merchandising (000, 00) → Design → Materials → Cut & Sew →
+//   Embellishments → Treatments → QC → Packaging → Logistics → Sign-off
 // `phase` drives the section dividers in the sidebar and the live preview.
 // `skippable` steps show "PAGE NOT USED" overlay when added to skippedSteps[].
+// `icon` is the page-number label shown in the live preview header (string,
+// not always numeric — merchandising pages use 000 and 00).
 export const STEPS = [
+  { id: 'competitors',   title: 'Competitor Landscape',             icon: '000', phase: 'Merchandising' },
+  { id: 'merch-preview', title: 'Merchandising Preview',            icon: '00',  phase: 'Merchandising' },
   { id: 'cover',         title: 'Style Overview',                   icon: '01', phase: 'Design' },
   { id: 'design',        title: 'Design Overview',                  icon: '02', phase: 'Design' },
   { id: 'bom',           title: 'Bill of Materials — Fabrics & Trims', icon: '03', phase: 'Materials' },
@@ -84,6 +89,11 @@ export const DEFAULT_DATA = {
 
   // Page 2+
   vendor: '', vendorContact: '', fabricType: '',
+  // Merchandising — pre-tech-pack strategy pages
+  competitors: [
+    { brand: '', product: '', url: '', price: '', currency: 'USD', features: '', notes: '' },
+  ],
+  competitivePositioning: '',
   designContextPrompt: '',
   designStyle: 'ghost-mannequin',  // 'ghost-mannequin' | 'flat-lay'
   designBgColor: 'salt',           // FR color name (lowercased)

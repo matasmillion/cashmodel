@@ -108,6 +108,86 @@ function SignatureBlock({ label, value, onNameChange, onDateChange }) {
   );
 }
 
+// Page 000 — Competitor Landscape. Pre-tech-pack strategy: pricing table,
+// feature comparison, plus a free-form positioning note. Each row is one
+// competitor product the brand is benchmarking against.
+export function StepCompetitorLandscape({ data, set }) {
+  const competitors = data.competitors && data.competitors.length
+    ? data.competitors
+    : [{ brand: '', product: '', url: '', price: '', currency: 'USD', features: '', notes: '' }];
+  const updC = (i, k, v) => set('competitors', competitors.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addC = () => set('competitors', [...competitors, { brand: '', product: '', url: '', price: '', currency: 'USD', features: '', notes: '' }]);
+  const rmC  = (i) => set('competitors', competitors.filter((_, idx) => idx !== i));
+
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+
+  return (
+    <div>
+      <SectionTitle>Competitor Landscape</SectionTitle>
+      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, lineHeight: 1.5 }}>
+        Map the products you're benchmarking against — brand, product, retail price, key features. The Competitive Landscape note below is for FR's positioning relative to the field.
+      </p>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel}>Pricing & Feature Analysis</label>
+        <ArrayTable
+          headers={[
+            { key: 'brand',    label: 'Brand',         placeholder: 'e.g. Carhartt WIP' },
+            { key: 'product',  label: 'Product',       placeholder: 'Product / SKU name' },
+            { key: 'url',      label: 'URL',           placeholder: 'https://…' },
+            { key: 'price',    label: 'Retail Price',  placeholder: '180' },
+            { key: 'currency', label: 'Currency',      placeholder: 'USD' },
+            { key: 'features', label: 'Key Features',  placeholder: '400gsm, drop shoulder, garment-dyed…' },
+            { key: 'notes',    label: 'Notes',         placeholder: 'positioning, distribution, hype…' },
+          ]}
+          rows={competitors} onUpdate={updC} onAdd={addC} onRemove={rmC}
+        />
+      </div>
+
+      <div>
+        <label style={sectionLabel}>Competitive Landscape — FR Positioning</label>
+        <Input
+          multiline
+          value={data.competitivePositioning || ''}
+          onChange={v => set('competitivePositioning', v)}
+          placeholder="Where this product sits in the market — pricing tier vs competitors, distinctive construction, brand story angle, target customer, distribution strategy…"
+        />
+      </div>
+    </div>
+  );
+}
+
+// Page 00 — Merchandising Preview. Pre-tech-pack placeholder for the
+// future PDP / storefront prototype.
+export function StepMerchandisingPreview() {
+  return (
+    <div>
+      <SectionTitle>Merchandising Preview</SectionTitle>
+      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 18, lineHeight: 1.5 }}>
+        This page will render a live preview of how the product looks on the storefront — hero imagery, PDP copy, related products. Wired in once the product preview engine ships.
+      </p>
+
+      <div style={{
+        padding: '48px 28px',
+        border: `2px dashed ${FR.sand}`,
+        borderRadius: 8,
+        background: FR.salt,
+        textAlign: 'center',
+      }}>
+        <div style={{ fontSize: 9, color: FR.stone, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 }}>
+          Coming Soon
+        </div>
+        <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 26, color: FR.slate, lineHeight: 1.2, marginBottom: 12 }}>
+          Storefront Visualization
+        </div>
+        <div style={{ fontSize: 12, color: FR.stone, lineHeight: 1.55, maxWidth: 540, margin: '0 auto' }}>
+          Visualize this product on the live storefront before sampling — prototype merchandising, hero imagery, and PDP copy at the design phase so the launch experience is locked before fabric is cut.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function StepCover({ data, set, images, onUpload, onRemove, existingSuppliers = [] }) {
   const { state } = useApp();
   const rateCard = state.rateCard;
@@ -811,45 +891,6 @@ export function StepDesignOverview({ data, set, images, onUpload, onRemove }) {
           <PhotoUpload single label="Side View"  slotKey="design-side"  images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
         </Row>
       </GenSection>
-
-      {/* Forward-looking placeholder — visualize the PDP at the design phase */}
-      <div style={{
-        marginTop: 28,
-        padding: '28px 22px',
-        border: `2px dashed ${FR.sand}`,
-        borderRadius: 8,
-        background: FR.salt,
-        textAlign: 'center',
-      }}>
-        <div style={{
-          fontSize: 9,
-          color: FR.stone,
-          fontWeight: 600,
-          letterSpacing: 1.5,
-          textTransform: 'uppercase',
-          marginBottom: 8,
-        }}>
-          Coming Soon
-        </div>
-        <div style={{
-          fontFamily: "'Cormorant Garamond', Georgia, serif",
-          fontSize: 22,
-          color: FR.slate,
-          lineHeight: 1.2,
-          marginBottom: 8,
-        }}>
-          Website Preview
-        </div>
-        <div style={{
-          fontSize: 12,
-          color: FR.stone,
-          lineHeight: 1.55,
-          maxWidth: 480,
-          margin: '0 auto',
-        }}>
-          Visualize this product on the live storefront before sampling — prototype merchandising, hero imagery, and PDP copy at the design phase.
-        </div>
-      </div>
 
       {showModal && (
         <GenerateViewsModal
@@ -1782,7 +1823,7 @@ export function StepTreatments({ data, set, images, onUpload, onRemove }) {
   );
 }
 export function StepLabels({ data, set, images, onUpload, onRemove }) {
-  const locked = isStepLocked(16, data.status);
+  const locked = isStepLocked(18, data.status);
 
   const packaging = data.packagingItems && data.packagingItems.length ? data.packagingItems : [{ component: '', material: '', color: '', size: '', artworkPrint: '', qtyPerOrder: '', notes: '' }];
   const updP = (i, k, v) => set('packagingItems', packaging.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
@@ -1840,7 +1881,7 @@ function computeQtyRow(row) {
 }
 
 export function StepOrder({ data, set, library, saveToLibrary }) {
-  const locked = isStepLocked(17, data.status);
+  const locked = isStepLocked(19, data.status);
   const [unitWeightG, setUnitWeightG] = useState(data.unitWeightGrams || '500');
   const [aiKey, setAiKey] = useState(getStoredKey());
   const [aiNotes, setAiNotes] = useState('');
@@ -1980,7 +2021,7 @@ export function StepOrder({ data, set, library, saveToLibrary }) {
   );
 }
 export function StepCompliance({ data, set }) {
-  const locked = isStepLocked(14, data.status);
+  const locked = isStepLocked(16, data.status);
 
   const shipping = data.shippingReqs && data.shippingReqs.length ? data.shippingReqs : [{ requirement: '', specification: '', notes: '' }];
   const updS = (i, k, v) => set('shippingReqs', shipping.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
@@ -2073,7 +2114,7 @@ const INSPECTION_STAGES = ['Pre-Production', 'During Production', 'Final Random 
 const SEVERITY_OPTIONS = ['Critical', 'Major', 'Minor'];
 
 export function StepQuality({ data, set }) {
-  const locked = isStepLocked(15, data.status);
+  const locked = isStepLocked(17, data.status);
 
   const qi = data.qualityInspection || { aqlMajor: '2.5', aqlMinor: '4.0', inspectionStage: 'During Production', checklist: [], photoRequirements: '' };
   const setQI = (k, v) => set('qualityInspection', { ...qi, [k]: v });
@@ -2314,25 +2355,27 @@ export function StepRevision({ data, set, onSubmit, submitting, submitResult, on
 
 // Order mirrors STEPS in techPackConstants.js — by manufacturing stage.
 export const STEP_FNS = [
-  StepCover,             // 00 Design — Style Overview
-  StepDesignOverview,    // 01 Design — Design Overview
-  StepBOM,               // 02 Materials — Fabrics & Trims
-  StepBOMTrims,          // 03 Materials — Labels & Files (skippable)
-  StepFlatlays,          // 04 Cut & Sew — Technical Flat Lay Diagrams
-  StepSketches,          // 05 Cut & Sew — Construction Details Page 1
-  StepSketches2,         // 06 Cut & Sew — Construction Details Page 2
-  StepConstruction,      // 07 Cut & Sew — Seam & Stitch Specifications
-  StepPattern,           // 08 Cut & Sew — Pattern & Cutting
-  StepPom,               // 09 Cut & Sew — POM (sample size)
-  StepSizeMatrix,        // 10 Cut & Sew — Graded Size Matrix (skippable)
-  StepColor,             // 11 Embellishments — Colorways
-  StepArtwork,           // 12 Embellishments — Artwork & Placement
-  StepTreatments,        // 13 Treatments
-  StepCompliance,        // 14 QC — Compliance & Testing
-  StepQuality,           // 15 QC — Quality Inspection (AQL)
-  StepLabels,            // 16 Packaging
-  StepOrder,             // 17 Logistics
-  StepRevision,          // 18 Sign-off
+  StepCompetitorLandscape, // 00 Merchandising — Competitor Landscape (000)
+  StepMerchandisingPreview,// 01 Merchandising — Merchandising Preview (00)
+  StepCover,               // 02 Design — Style Overview
+  StepDesignOverview,      // 03 Design — Design Overview
+  StepBOM,                 // 04 Materials — Fabrics & Trims
+  StepBOMTrims,            // 05 Materials — Labels & Files (skippable)
+  StepFlatlays,            // 06 Cut & Sew — Technical Flat Lay Diagrams
+  StepSketches,            // 07 Cut & Sew — Construction Details Page 1
+  StepSketches2,           // 08 Cut & Sew — Construction Details Page 2
+  StepConstruction,        // 09 Cut & Sew — Seam & Stitch Specifications
+  StepPattern,             // 10 Cut & Sew — Pattern & Cutting
+  StepPom,                 // 11 Cut & Sew — POM (sample size)
+  StepSizeMatrix,          // 12 Cut & Sew — Graded Size Matrix (skippable)
+  StepColor,               // 13 Embellishments — Colorways
+  StepArtwork,             // 14 Embellishments — Artwork & Placement
+  StepTreatments,          // 15 Treatments
+  StepCompliance,          // 16 QC — Compliance & Testing (locked)
+  StepQuality,             // 17 QC — Quality Inspection (locked)
+  StepLabels,              // 18 Packaging (locked)
+  StepOrder,               // 19 Logistics (locked)
+  StepRevision,            // 20 Sign-off
 ];
 
 // Backwards-compat aliases so older references keep resolving during the
