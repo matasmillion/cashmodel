@@ -1112,23 +1112,21 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
     </div>
   );
 }
-// StepSizeMatrix — graded size table. The user defines the size list,
-// picks which one is the "base" (whose values come straight from the
-// POM page), and enters per-size deltas. Final per-size values are
-// derived as base + delta when rendering.
+// StepSizeMatrix — graded size table. Sizes are derived from the Style Overview
+// sizeRange field; the user picks the sample size (whose values come straight
+// from the POM page) and enters per-size deltas. Final values: sample + delta.
 export function StepSizeMatrix({ data, set }) {
-  const matrix = data.gradedSizeMatrix || { baseSize: 'M', sizes: ['S', 'M', 'L', 'XL'], grading: [] };
-  const sizes = Array.isArray(matrix.sizes) && matrix.sizes.length ? matrix.sizes : ['S', 'M', 'L', 'XL'];
+  const matrix = data.gradedSizeMatrix || { baseSize: 'M', sizes: [], grading: [] };
+
+  // Sizes always come from Style Overview → sizeRange
+  const rawSizes = Array.isArray(data.sizeRange)
+    ? data.sizeRange
+    : (data.sizeRange ? String(data.sizeRange).split(/[/,]+/).map(s => s.trim()).filter(Boolean) : []);
+  const sizes = rawSizes.length ? rawSizes : ['S', 'M', 'L', 'XL'];
   const baseSize = sizes.includes(matrix.baseSize) ? matrix.baseSize : sizes[0];
   const poms = (data.poms || []).filter(p => p.name);
 
-  const update = (patch) => set('gradedSizeMatrix', { ...matrix, sizes, baseSize, ...patch });
-
-  const setSizes = (csv) => {
-    const next = csv.split(',').map(s => s.trim()).filter(Boolean);
-    if (!next.length) return;
-    update({ sizes: next, baseSize: next.includes(baseSize) ? baseSize : next[0] });
-  };
+  const update = (patch) => set('gradedSizeMatrix', { ...matrix, ...patch });
 
   const setDelta = (pomName, size, value) => {
     const grading = Array.isArray(matrix.grading) ? matrix.grading : [];
@@ -1169,17 +1167,18 @@ export function StepSizeMatrix({ data, set }) {
     <div>
       <SectionTitle>Graded Size Matrix</SectionTitle>
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, lineHeight: 1.5 }}>
-        Define the size list and per-measurement deltas relative to the base size. Final values are computed as <code style={{ fontFamily: 'ui-monospace,Menlo,monospace', background: FR.salt, padding: '1px 5px', borderRadius: 3 }}>base + delta</code> at render time. The base size's column comes straight from the Points of Measure page.
+        Sizes are pulled from the Style Overview page. Select the sample size — its values come straight from the Points of Measure page. Enter per-size deltas for all other sizes; final values are computed as <code style={{ fontFamily: 'ui-monospace,Menlo,monospace', background: FR.salt, padding: '1px 5px', borderRadius: 3 }}>sample + delta</code>.
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 18 }}>
         <div>
-          <label style={sectionLabel}>Sizes (comma-separated)</label>
-          <input value={sizes.join(', ')} onChange={e => setSizes(e.target.value)}
-            style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.white, boxSizing: 'border-box' }} />
+          <label style={sectionLabel}>Sizes (from Style Overview)</label>
+          <div style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.stone, background: FR.salt, boxSizing: 'border-box', fontFamily: 'ui-monospace,Menlo,monospace' }}>
+            {sizes.join(', ')}
+          </div>
         </div>
         <div>
-          <label style={sectionLabel}>Base Size</label>
+          <label style={sectionLabel}>Sample Size</label>
           <select value={baseSize} onChange={e => update({ baseSize: e.target.value })}
             style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.white }}>
             {sizes.map(s => <option key={s} value={s}>{s}</option>)}
@@ -1199,7 +1198,7 @@ export function StepSizeMatrix({ data, set }) {
                 <th style={{ textAlign: 'left', padding: '5px 8px', background: FR.slate, color: FR.salt, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>Measurement</th>
                 {sizes.map(s => (
                   <th key={s} colSpan={2} style={{ textAlign: 'center', padding: '5px 8px', background: s === baseSize ? FR.soil : FR.slate, color: FR.salt, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                    {s}{s === baseSize ? ' · base' : ''}
+                    {s}{s === baseSize ? ' · sample' : ''}
                   </th>
                 ))}
               </tr>

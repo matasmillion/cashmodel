@@ -674,8 +674,11 @@ function PagePom({ d, images }) {
 
 // ─── Page 11 — Graded Size Matrix ───────────────────────────────────────────
 function PageSizeMatrix({ d }) {
-  const matrix = d.gradedSizeMatrix || { baseSize: 'M', sizes: ['S', 'M', 'L', 'XL'], grading: [] };
-  const sizes = (Array.isArray(matrix.sizes) && matrix.sizes.length) ? matrix.sizes : ['S', 'M', 'L', 'XL'];
+  const matrix = d.gradedSizeMatrix || { baseSize: 'M', grading: [] };
+  const rawSizes = Array.isArray(d.sizeRange)
+    ? d.sizeRange
+    : (d.sizeRange ? String(d.sizeRange).split(/[/,]+/).map(s => s.trim()).filter(Boolean) : []);
+  const sizes = rawSizes.length ? rawSizes : ['S', 'M', 'L', 'XL'];
   const baseSize = sizes.includes(matrix.baseSize) ? matrix.baseSize : sizes[0];
   const poms = (d.poms || []).filter(p => p && p.name);
 
@@ -714,7 +717,7 @@ function PageSizeMatrix({ d }) {
             <rect x={labelW + i * sizeColW} y={0} width={sizeColW} height={headerH} fill={s === baseSize ? FR.soil : FR.slate} />
             <line x1={labelW + i * sizeColW} y1={0} x2={labelW + i * sizeColW} y2={headerH} stroke={FR.salt} strokeOpacity={0.2} />
             <text x={labelW + i * sizeColW + sizeColW / 2} y={18} fontSize={10} fontWeight={600} fill={FR.salt} textAnchor="middle" letterSpacing={1}>
-              {s}{s === baseSize ? ' · BASE' : ''}
+              {s}{s === baseSize ? ' · SAMPLE' : ''}
             </text>
           </g>
         ))}
