@@ -21,6 +21,7 @@ import {
   FABRIC_CATEGORIES, FABRIC_WEAVES, FABRIC_WEAVE_LABEL, FABRIC_STATUSES,
   weavesForCategory, categoryForWeave, bumpVersion,
 } from '../../utils/fabricLibrary';
+import { getUsdCnyRate, cnyToUsd, usdToCny } from '../../utils/fxRates';
 import { generateFabricBOMPDF } from '../../utils/fabricBOMPDF';
 import VendorPicker from './VendorPicker';
 import FileSlot from './FileSlot';
@@ -70,8 +71,21 @@ export default function FabricBuilder({ fabric, onBack }) {
   const [saving, setSaving] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [fx, setFx] = useState(null); // { usdPerCny, fetchedAt, stale }
 
   useEffect(() => { setDraft(fabric); }, [fabric.id]);
+
+  // Fetch the daily USD/CNY rate once on mount. The helper caches in
+  // localStorage for 24 h, so this is effectively free on subsequent
+  // visits within a day. The pricing inputs render even before the rate
+  // resolves — they just don't auto-convert until it lands.
+  useEffect(() => {
+    let cancelled = false;
+    getUsdCnyRate().then(r => { if (!cancelled) setFx(r); })
+      .catch(err => console.error('FabricBuilder FX:', err));
+    return () => { cancelled = true; };
+  }, []);
+
 
   const migratedRef = useRef(false);
   useEffect(() => {
@@ -93,6 +107,26 @@ export default function FabricBuilder({ fabric, onBack }) {
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(fabric), [draft, fabric]);
 
   const set = (patch) => setDraft(d => ({ ...d, ...patch }));
+
+  // Mirror a price across the USD/CNY pair as the user types. `kind` is
+  // 'meter' or 'kg'; `currency` is 'usd' or 'cny'. We only auto-fill the
+  // other side when we have a valid FX rate — without one, the user's
+  // typed value still saves, just without a paired conversion.
+  const setPrice = (kind, currency, raw) => {
+    const value = parseFloat(raw);
+    const safe = Number.isFinite(value) ? value : 0;
+    const usdKey = kind === 'meter' ? 'price_per_meter_usd' : 'price_per_kg_usd';
+    const cnyKey = kind === 'meter' ? 'price_per_meter_cny' : 'price_per_kg_cny';
+    const patch = {};
+    if (currency === 'usd') {
+      patch[usdKey] = safe;
+      if (fx?.usdPerCny) patch[cnyKey] = usdToCny(safe, fx.usdPerCny) ?? 0;
+    } else {
+      patch[cnyKey] = safe;
+      if (fx?.usdPerCny) patch[usdKey] = cnyToUsd(safe, fx.usdPerCny) ?? 0;
+    }
+    set(patch);
+  };
 
   // Changing knit↔woven retargets the weave to the first weave in that
   // category if the current weave doesn't belong there. Prevents an
@@ -309,8 +343,15 @@ export default function FabricBuilder({ fabric, onBack }) {
 
           {/* Sourcing */}
           <div style={CARD_STYLE}>
-            <h4 style={SECTION_TITLE}>Sourcing</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr', gap: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+              <h4 style={{ ...SECTION_TITLE, marginBottom: 0 }}>Sourcing</h4>
+              <span style={{ fontSize: 9, color: FR.stone, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                {fx?.usdPerCny
+                  ? `USD/CNY ${fx.usdPerCny.toFixed(4)}${fx.stale ? ' · cached' : ''}`
+                  : 'Loading FX…'}
+              </span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
               <Field label="Vendor">
                 <VendorPicker value={draft.mill_id} onChange={v => set({ mill_id: v })} placeholder="Select vendor…" />
               </Field>
@@ -320,8 +361,19 @@ export default function FabricBuilder({ fabric, onBack }) {
               <Field label="MOQ (meters)">
                 <input type="number" value={draft.moq_meters ?? 0} onChange={e => set({ moq_meters: parseInt(e.target.value, 10) || 0 })} style={INPUT_STYLE} />
               </Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
               <Field label="Price / m (USD)">
-                <input type="number" step="0.01" value={draft.price_per_meter_usd ?? 0} onChange={e => set({ price_per_meter_usd: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
+                <input type="number" step="0.01" value={draft.price_per_meter_usd ?? 0} onChange={e => setPrice('meter', 'usd', e.target.value)} style={INPUT_STYLE} />
+              </Field>
+              <Field label="Price / m (RMB)">
+                <input type="number" step="0.01" value={draft.price_per_meter_cny ?? 0} onChange={e => setPrice('meter', 'cny', e.target.value)} style={INPUT_STYLE} />
+              </Field>
+              <Field label="Price / kg (USD)">
+                <input type="number" step="0.01" value={draft.price_per_kg_usd ?? 0} onChange={e => setPrice('kg', 'usd', e.target.value)} style={INPUT_STYLE} />
+              </Field>
+              <Field label="Price / kg (RMB)">
+                <input type="number" step="0.01" value={draft.price_per_kg_cny ?? 0} onChange={e => setPrice('kg', 'cny', e.target.value)} style={INPUT_STYLE} />
               </Field>
             </div>
           </div>
