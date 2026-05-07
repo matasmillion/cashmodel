@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T17:29:50.288Z",
+  "lastUpdated": "2026-05-07T17:43:23.629Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,21 @@
   ],
   "changelog": [
     {
+      "sha": "1b14aa7",
+      "date": "2026-05-07T20:37:02+03:00",
+      "message": "techpack: trim slot — full image, measurement diagram, quantity, type as text (#48)"
+    },
+    {
+      "sha": "ceb07cb",
+      "date": "2026-05-07T20:29:42+03:00",
+      "message": "fabric AI: repair truncated JSON instead of failing the import (#47)"
+    },
+    {
+      "sha": "ca5470c",
+      "date": "2026-05-07T20:19:49+03:00",
+      "message": "fabric AI: raise max_tokens to 16k, detect mid-string truncation (#46)"
+    },
+    {
       "sha": "3bc6c61",
       "date": "2026-05-07T20:19:09+03:00",
       "message": "techpack: rename Role→Trim Type, color from colorways, self-heal old picks (#45)"
@@ -1077,21 +1092,6 @@
       "sha": "6516f36",
       "date": "2026-05-07T17:54:05+03:00",
       "message": "techpack: device-frame Merch Preview, lockable, skippable, auto-open cover (#39)"
-    },
-    {
-      "sha": "8718d42",
-      "date": "2026-05-07T17:42:35+03:00",
-      "message": "techpack: add Merchandising phase — Competitor Landscape + Merch Preview (#38)"
-    },
-    {
-      "sha": "4fd0d8f",
-      "date": "2026-05-07T16:35:19+03:00",
-      "message": "techpack: restructure Cut & Sew — flatlays moved + dual construction details (#37)"
-    },
-    {
-      "sha": "c7298e4",
-      "date": "2026-05-07T16:27:18+03:00",
-      "message": "techpack: Website Preview placeholder on Design Overview (#36)"
     }
   ]
 }
