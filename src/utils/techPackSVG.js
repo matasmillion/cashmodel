@@ -209,7 +209,7 @@ export function generateTechPackSVG(pack) {
   svg += field('Incoterm', d.incoterm, 40, orderY + 85);
   svg += field('Target Ship', d.targetShipDate, 400, orderY + 85);
   svg += field('Target Arrival', d.targetArrivalDate, 700, orderY + 85);
-  svg += skipIf(14);
+  svg += skipIf(15);
   svg += `</g>`;
 
   svg += `</svg>`;

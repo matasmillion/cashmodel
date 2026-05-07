@@ -23,7 +23,7 @@ overlay stays a per-pack toggle, never a permanent removal.
 | --- | --- | --- | --- | --- |
 | 1 | Materials split | ✅ shipped (PR #24) | +1 | +1 (BOM-Trims) |
 | 2 | Construction split | ✅ shipped (PR #24) | +1 | +1 (Construction-Notes) |
-| 3 | POM + Size Matrix | ⏳ planned | +1 | +1 (Size Matrix) |
+| 3 | POM + Size Matrix | ✅ shipped (PR #24) | +1 | +1 (Size Matrix) |
 | 4 | Color & Artwork split | ⏳ planned | +1 | 0 |
 | 5 | Compliance & QC split | ⏳ planned | +1 | 0 |
 | 6 | Treatments deepening | ⏳ planned | 0 | 0 |
@@ -73,7 +73,7 @@ with S/M/L/XL columns hard-coded. Real grading needs:
 | 10 | `size-matrix` | Graded Size Matrix | Cut & Sew | **yes** |
 
 All steps from old index 10 onward shift by +1. `LOCKED_STEPS` →
-`[13, 14, 15]`. Step count: 16 → 17.
+`[14, 15, 16]`. Step count: 16 → 17.
 
 **Data additions** (in `DEFAULT_DATA`):
 

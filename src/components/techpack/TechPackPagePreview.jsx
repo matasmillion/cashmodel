@@ -7,7 +7,7 @@ import { FR } from './techPackConstants';
 
 const PAGE_W = 1123;
 const PAGE_H = 794;
-const TOTAL_PAGES = 16;
+const TOTAL_PAGES = 17;
 
 function esc(s) { return String(s ?? ''); }
 function clampLine(s, maxW, charW = 6.5) {
@@ -702,7 +702,76 @@ function PagePom({ d, images }) {
   );
 }
 
-// ─── Page 10 — Garment Treatments ───────────────────────────────────────────
+// ─── Page 11 — Graded Size Matrix ───────────────────────────────────────────
+function PageSizeMatrix({ d }) {
+  const matrix = d.gradedSizeMatrix || { baseSize: 'M', sizes: ['S', 'M', 'L', 'XL'], grading: [] };
+  const sizes = (Array.isArray(matrix.sizes) && matrix.sizes.length) ? matrix.sizes : ['S', 'M', 'L', 'XL'];
+  const baseSize = sizes.includes(matrix.baseSize) ? matrix.baseSize : sizes[0];
+  const poms = (d.poms || []).filter(p => p && p.name);
+
+  const baseValue = (pom) => {
+    const v = pom[baseSize.toLowerCase()];
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const cellFor = (pom, size) => {
+    const base = baseValue(pom);
+    if (size === baseSize) return base !== null ? base.toFixed(1) : '—';
+    const g = (matrix.grading || []).find(x => x.pomName === pom.name);
+    const d2 = g?.perSizeDelta?.[size];
+    if (d2 === undefined || d2 === null || base === null) return '—';
+    return (base + Number(d2)).toFixed(1);
+  };
+
+  const tableX = 40;
+  const tableW = PAGE_W - 80;
+  const labelW = 240;
+  const sizeColW = (tableW - labelW) / sizes.length;
+  const rowH = 22;
+  const headerH = 28;
+  const startY = 180;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+      <SectionHeading x={40} y={158}>Graded Size Matrix (cm)</SectionHeading>
+
+      <g transform={`translate(${tableX} ${startY})`}>
+        <rect x={0} y={0} width={tableW} height={headerH} fill={FR.slate} />
+        <text x={10} y={18} fontSize={9} fontWeight={600} fill={FR.salt} letterSpacing={0.5}>MEASUREMENT</text>
+        {sizes.map((s, i) => (
+          <g key={s}>
+            <rect x={labelW + i * sizeColW} y={0} width={sizeColW} height={headerH} fill={s === baseSize ? FR.soil : FR.slate} />
+            <line x1={labelW + i * sizeColW} y1={0} x2={labelW + i * sizeColW} y2={headerH} stroke={FR.salt} strokeOpacity={0.2} />
+            <text x={labelW + i * sizeColW + sizeColW / 2} y={18} fontSize={10} fontWeight={600} fill={FR.salt} textAnchor="middle" letterSpacing={1}>
+              {s}{s === baseSize ? ' · BASE' : ''}
+            </text>
+          </g>
+        ))}
+        {poms.slice(0, 14).map((pom, ri) => (
+          <g key={ri} transform={`translate(0 ${headerH + ri * rowH})`}>
+            <rect x={0} y={0} width={tableW} height={rowH} fill={ri % 2 === 0 ? FR.salt : '#FFFFFF'} />
+            <text x={10} y={15} fontSize={11} fill={FR.slate}>{pom.name}</text>
+            {sizes.map((s, i) => (
+              <g key={s}>
+                <line x1={labelW + i * sizeColW} y1={0} x2={labelW + i * sizeColW} y2={rowH} stroke={FR.sand} />
+                <text x={labelW + i * sizeColW + sizeColW / 2} y={15} fontSize={11} fill={s === baseSize ? FR.soil : FR.slate} fontWeight={s === baseSize ? 600 : 400} textAnchor="middle" fontFamily="ui-monospace,Menlo,monospace">
+                  {cellFor(pom, s)}
+                </text>
+              </g>
+            ))}
+          </g>
+        ))}
+      </g>
+
+      <text x={40} y={680} fontSize={10} fill={FR.stone} fontStyle="italic">
+        Per-size values derived as <tspan fontFamily="ui-monospace,Menlo,monospace">base + delta</tspan>. Base column comes from Points of Measure.
+      </text>
+    </g>
+  );
+}
+
+// ─── Page 12 — Garment Treatments ───────────────────────────────────────────
 function PageTreatments({ d, images }) {
   const imgs = images || [];
   const before = imgs.find(i => i.slot === 'treatment-before');
@@ -1047,7 +1116,8 @@ const PAGE_FNS = [
   { title: 'Construction Notes',                phase: 'Cut & Sew',      body: ({ d }) => <PageConstructionNotes d={d} /> },
   { title: 'Construction Detail Sketches',      phase: 'Cut & Sew',      body: ({ d, images }) => <PageSketches d={d} images={images} /> },
   { title: 'Pattern Pieces & Cutting',          phase: 'Cut & Sew',      body: ({ d, images }) => <PagePattern d={d} images={images} /> },
-  { title: 'Points of Measure',                 phase: 'Cut & Sew',      body: ({ d, images }) => <PagePom d={d} images={images} /> },
+  { title: 'Points of Measure (Base Size)',     phase: 'Cut & Sew',      body: ({ d, images }) => <PagePom d={d} images={images} /> },
+  { title: 'Graded Size Matrix',                phase: 'Cut & Sew',      body: ({ d }) => <PageSizeMatrix d={d} /> },
   { title: 'Color & Artwork',                   phase: 'Embellishments', body: ({ d, images }) => <PageColor d={d} images={images} /> },
   { title: 'Garment Treatments',                phase: 'Treatments',     body: ({ d, images }) => <PageTreatments d={d} images={images} /> },
   { title: 'Compliance & Quality',              phase: 'QC',             body: ({ d }) => <PageCompliance d={d} /> },
