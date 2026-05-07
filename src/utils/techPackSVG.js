@@ -156,10 +156,10 @@ export function generateTechPackSVG(pack) {
     const tt = table(40, 400, ['Component', 'Type', 'Material', 'Color', 'Size/Spec', 'Vendor', 'Qty'], trimsRows, [130, 150, 130, 110, 120, 180, 223]);
     svg += tt.svg;
   }
-  svg += skipIf(3);
+  svg += skipIf(2);
   svg += `</g>`;
 
-  // ─── Materials & BOM: Labels & Files ───
+  // ─── Materials & BOM: Labels & Files (now stepIdx 3) ───
   yOff += pageH;
   svg += `<g id="page-4-bom-trims" transform="translate(0 ${yOff})">`;
   svg += pageFrame('BOM — Labels & Source Files', null, 4, numPages, styleInfo);
@@ -175,10 +175,10 @@ export function generateTechPackSVG(pack) {
     const ta = table(40, 420, ['File Name', 'Type', 'Size', 'Uploaded'], attRows.map(a => [a.name, (a.type || '').split('/').pop()?.toUpperCase() || '', a.size ? `${Math.round(a.size / 1024)} KB` : '', a.uploaded_at ? a.uploaded_at.slice(0, 10) : '']), [500, 120, 120, 303]);
     svg += ta.svg;
   }
-  svg += skipIf(4);
+  svg += skipIf(3);
   svg += `</g>`;
 
-  // ─── Construction ───
+  // ─── Construction (Seam & Stitch — now stepIdx 7) ───
   yOff += pageH;
   svg += `<g id="page-5-construction" transform="translate(0 ${yOff})">`;
   svg += pageFrame('Construction Details', null, 5, numPages, styleInfo);
@@ -188,7 +188,7 @@ export function generateTechPackSVG(pack) {
     const t2 = table(40, 140, ['Operation', 'Seam Type', 'Stitch', 'SPI', 'Thread', 'Notes'], seamRows, [180, 140, 100, 60, 140, 423]);
     svg += t2.svg;
   }
-  svg += skipIf(5);
+  svg += skipIf(7);
   svg += `</g>`;
 
   // ─── Colorways ───

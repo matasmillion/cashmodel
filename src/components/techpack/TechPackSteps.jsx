@@ -1243,67 +1243,157 @@ export function StepConstruction({ data, set }) {
   );
 }
 
-export function StepConstructionNotes({ data, set }) {
-  const notes = data.constructionNotesTable && data.constructionNotesTable.length ? data.constructionNotesTable : [{ detail: '', area: '', description: '', reference: '' }];
-  const updN = (i, k, v) => set('constructionNotesTable', notes.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
-  const addN = () => set('constructionNotesTable', [...notes, { detail: '', area: '', description: '', reference: '' }]);
-  const rmN  = (i) => set('constructionNotesTable', notes.filter((_, idx) => idx !== i));
+// Red-numbered circle used on every detail card. Diameter scales to font size.
+function RedNumberCircle({ n, size = 22 }) {
+  return (
+    <span style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: size,
+      height: size,
+      borderRadius: '50%',
+      background: '#A32D2D',
+      color: '#FFFFFF',
+      fontSize: size * 0.5,
+      fontWeight: 600,
+      letterSpacing: 0.3,
+      flexShrink: 0,
+      fontFamily: "'Helvetica Neue', sans-serif",
+    }}>
+      {n}
+    </span>
+  );
+}
 
-  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+// Single detail card — red number at top, then translatable title + description.
+// Aspect ratio is locked to A4 landscape (1.414:1) so all four boxes are
+// uniform regardless of how much text the designer enters.
+function ConstructionDetailCard({ entry, onChange }) {
+  return (
+    <div style={{
+      aspectRatio: '1.414 / 1',
+      background: FR.white,
+      border: `0.5px solid ${FR.sand}`,
+      borderRadius: 6,
+      padding: '12px 14px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <RedNumberCircle n={entry.num} />
+        <input
+          value={entry.title}
+          onChange={e => onChange({ ...entry, title: e.target.value })}
+          placeholder="Title (e.g. Hood Construction)"
+          style={{
+            flex: 1,
+            border: 'none',
+            background: 'transparent',
+            outline: 'none',
+            fontSize: 13,
+            fontWeight: 600,
+            color: FR.slate,
+            fontFamily: "'Helvetica Neue', sans-serif",
+          }}
+        />
+      </div>
+      <textarea
+        value={entry.description}
+        onChange={e => onChange({ ...entry, description: e.target.value })}
+        placeholder="Detail description — this text is per-factory translatable."
+        style={{
+          flex: 1,
+          border: `0.5px dashed ${FR.sand}`,
+          borderRadius: 4,
+          padding: '8px 10px',
+          background: FR.salt,
+          fontSize: 11,
+          color: FR.slate,
+          resize: 'none',
+          outline: 'none',
+          lineHeight: 1.5,
+          fontFamily: "'Helvetica Neue', sans-serif",
+          boxSizing: 'border-box',
+        }}
+      />
+    </div>
+  );
+}
 
+// Shared layout: 9:16 vertical reference (left) + 2x2 grid of detail boxes
+// on the right. The reference image carries red-dot callouts the designer
+// adds in Photoshop pre-upload.
+function ConstructionDetailsPage({ pageKey, dataKey, fieldName, data, set, images, onUpload, onRemove }) {
+  const entries = (data?.[fieldName] || DEFAULT_DATA[fieldName]).slice(0, 4);
+  const update = (idx, next) => {
+    const copy = [...(data?.[fieldName] || DEFAULT_DATA[fieldName])];
+    copy[idx] = next;
+    set(fieldName, copy);
+  };
   return (
     <div>
-      <SectionTitle>Construction Notes</SectionTitle>
-      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 12, lineHeight: 1.5 }}>
-        Free-form construction details that don't fit the seam/stitch grid: how the collar is built, pocket bag attachment, special bartacks, etc. Each row maps to a numbered detail callout that can be referenced from sketches.
+      <SectionTitle>Construction Details — {pageKey === 'page1' ? 'Page 1' : 'Page 2'}</SectionTitle>
+      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, fontStyle: 'italic' }}>
+        Number each callout on the left reference image (red dots) and describe the matching detail in the box. All text is dedicated per-field so it can be translated per factory.
       </p>
-      <div style={{ marginBottom: 10 }}>
-        <label style={sectionLabel}>Detail Callouts</label>
-        <ArrayTable
-          headers={[
-            { key: '__idx',       label: 'Detail #',    render: (_v, _onChange, row) => (
-              <span style={{ fontSize: 11, color: FR.stone, padding: '3px 4px' }}>{notes.indexOf(row) + 1}</span>
-            ) },
-            { key: 'area',        label: 'Area',         placeholder: 'Collar / Cuff / Pocket' },
-            { key: 'description', label: 'Description',  placeholder: 'How it is constructed' },
-            { key: 'reference',   label: 'Reference',    placeholder: 'Filename or sketch #' },
-          ]}
-          rows={notes} onUpdate={updN} onAdd={addN} onRemove={rmN} />
-      </div>
-      <div>
-        <label style={sectionLabel}>Free-Form Notes</label>
-        <Input
-          multiline
-          value={data.constructionNotes || ''}
-          onChange={v => set('constructionNotes', v)}
-          placeholder="Anything that doesn't fit a row — overall garment construction philosophy, special instructions, vendor-specific guidance…"
-        />
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 0.55fr) 1.45fr', gap: 18, alignItems: 'stretch' }}>
+        {/* 9:16 vertical reference image with red-dot callouts */}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>Reference Image (9 : 16)</label>
+          <PhotoUpload
+            single
+            label="Drop the callout reference (numbered red dots overlaid in Photoshop)"
+            slotKey={`sketch-callout-${pageKey}`}
+            images={images}
+            onUpload={onUpload}
+            onRemove={onRemove}
+            aspect="9 / 16"
+          />
+        </div>
+
+        {/* 2x2 grid of detail cards — A4 horizontal each */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignContent: 'start' }}>
+          {entries.map((entry, i) => (
+            <ConstructionDetailCard
+              key={entry.num}
+              entry={entry}
+              onChange={next => update(i, next)}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-export function StepSketches({ images, onUpload, onRemove }) {
-  const slots = [
-    { key: 'sketch-1', label: 'Detail 1' },
-    { key: 'sketch-2', label: 'Detail 2' },
-    { key: 'sketch-3', label: 'Detail 3' },
-    { key: 'sketch-4', label: 'Detail 4' },
-    { key: 'sketch-5', label: 'Detail 5' },
-    { key: 'sketch-6', label: 'Detail 6' },
-  ];
+export function StepSketches({ data, set, images, onUpload, onRemove }) {
   return (
-    <div>
-      <SectionTitle>Construction Detail Sketches</SectionTitle>
-      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 12, fontStyle: 'italic' }}>
-        Detailed construction sketches: seam closeups, pocket assembly, cuff detail, collar build, etc.
-      </p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-        {slots.map(s => (
-          <PhotoUpload key={s.key} label={s.label} slotKey={s.key} images={images} onUpload={onUpload} onRemove={onRemove} />
-        ))}
-      </div>
-    </div>
+    <ConstructionDetailsPage
+      pageKey="page1"
+      fieldName="constructionDetailsPage1"
+      data={data}
+      set={set}
+      images={images}
+      onUpload={onUpload}
+      onRemove={onRemove}
+    />
+  );
+}
+
+export function StepSketches2({ data, set, images, onUpload, onRemove }) {
+  return (
+    <ConstructionDetailsPage
+      pageKey="page2"
+      fieldName="constructionDetailsPage2"
+      data={data}
+      set={set}
+      images={images}
+      onUpload={onUpload}
+      onRemove={onRemove}
+    />
   );
 }
 export function StepPattern({ data, set, images, onUpload, onRemove }) {
@@ -2224,16 +2314,16 @@ export function StepRevision({ data, set, onSubmit, submitting, submitResult, on
 
 // Order mirrors STEPS in techPackConstants.js — by manufacturing stage.
 export const STEP_FNS = [
-  StepCover,             // 00 Design
-  StepDesignOverview,    // 01 Design
-  StepFlatlays,          // 02 Design
-  StepBOM,               // 03 Materials — Fabrics & Trims
-  StepBOMTrims,          // 04 Materials — Labels & Files (skippable)
-  StepConstruction,      // 05 Cut & Sew — Seam & Stitch
-  StepConstructionNotes, // 06 Cut & Sew — Construction Notes (skippable)
-  StepSketches,          // 07 Cut & Sew — Detail Sketches
+  StepCover,             // 00 Design — Style Overview
+  StepDesignOverview,    // 01 Design — Design Overview
+  StepBOM,               // 02 Materials — Fabrics & Trims
+  StepBOMTrims,          // 03 Materials — Labels & Files (skippable)
+  StepFlatlays,          // 04 Cut & Sew — Technical Flat Lay Diagrams
+  StepSketches,          // 05 Cut & Sew — Construction Details Page 1
+  StepSketches2,         // 06 Cut & Sew — Construction Details Page 2
+  StepConstruction,      // 07 Cut & Sew — Seam & Stitch Specifications
   StepPattern,           // 08 Cut & Sew — Pattern & Cutting
-  StepPom,               // 09 Cut & Sew — POM (base size)
+  StepPom,               // 09 Cut & Sew — POM (sample size)
   StepSizeMatrix,        // 10 Cut & Sew — Graded Size Matrix (skippable)
   StepColor,             // 11 Embellishments — Colorways
   StepArtwork,           // 12 Embellishments — Artwork & Placement
