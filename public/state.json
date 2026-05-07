@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T10:49:18.048Z",
+  "lastUpdated": "2026-05-07T11:01:47.794Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,9 +1044,9 @@
   ],
   "changelog": [
     {
-      "sha": "c57069d",
-      "date": "2026-05-07T10:41:19+00:00",
-      "message": "feat(techpack): Phase 4 — Color & Artwork split"
+      "sha": "8817002",
+      "date": "2026-05-07T13:57:22+03:00",
+      "message": "Tech Pack Phases 4+5: Color/Artwork split + Compliance/QC split (#25)"
     },
     {
       "sha": "7596491",

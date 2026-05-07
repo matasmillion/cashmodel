@@ -11,7 +11,8 @@ import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, 
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
 import { addSupplier } from '../../utils/plmDirectory';
 import { getFRColor } from '../../utils/colorLibrary';
-import { listTreatments } from '../../utils/treatmentStore';
+import { listTreatments, getTreatmentRollups } from '../../utils/treatmentStore';
+import { TREATMENT_TYPE_LABEL } from '../../utils/treatmentLibrary';
 import { useApp } from '../../context/AppContext';
 
 const COST_TIER_CAP = 5;
@@ -1063,7 +1064,95 @@ export function StepSizeMatrix({ data, set }) {
   );
 }
 
+function LinkedTreatmentCard({ treatment, components, rollups }) {
+  const procBits = [];
+  if (treatment.chemistry) procBits.push(treatment.chemistry);
+  if (treatment.temperature_c) procBits.push(`${treatment.temperature_c}°C`);
+  if (treatment.duration_minutes) procBits.push(`${treatment.duration_minutes} min`);
+  const process = procBits.join(' · ') || '—';
+  // Defect rate vs spec is the closest proxy we surface as a "drift" signal
+  // on the tech pack: if the treatment has shipped enough POs to register a
+  // weighted average, show it tinted by severity. <2% green, 2-5% amber,
+  // >5% red. No history → no chip (rather than a misleading 0).
+  const defect = rollups?.pos_count > 0 ? rollups.defect_rate_pct : null;
+  const defectColor = defect == null ? FR.stone
+    : defect > 5 ? '#A32D2D'
+    : defect > 2 ? '#854F0B'
+    : '#3B6D11';
+  const open = (e) => {
+    e.preventDefault();
+    window.location.hash = `#plm/library/treatments/${treatment.id}`;
+  };
+  return (
+    <div style={{ flex: '0 0 280px', padding: 12, background: FR.white, border: `1px solid ${FR.sand}`, borderRadius: 6, fontFamily: "'Helvetica Neue',sans-serif" }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
+        <strong style={{ fontSize: 12, color: FR.slate }}>{treatment.name || 'Untitled'}</strong>
+        <span style={{ fontFamily: 'ui-monospace, SF Mono, Menlo, monospace', fontSize: 10, color: FR.stone }}>{treatment.code || '—'}</span>
+      </div>
+      <div style={{ fontSize: 10, color: FR.soil, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+        {TREATMENT_TYPE_LABEL[treatment.type] || treatment.type || 'Treatment'}
+      </div>
+      <div style={{ fontSize: 11, color: FR.slate, marginBottom: 8, minHeight: 16 }}>{process}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+        {components.map(c => (
+          <span key={c} style={{ padding: '2px 8px', background: FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 5, fontSize: 10, color: FR.slate, letterSpacing: 0.3 }}>
+            {c}
+          </span>
+        ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        {defect != null ? (
+          <span style={{ fontSize: 10, fontWeight: 600, color: defectColor }}>Defect {defect.toFixed(1)}%</span>
+        ) : <span style={{ fontSize: 10, color: FR.stone }}>No production yet</span>}
+        <a href={`#plm/library/treatments/${treatment.id}`} onClick={open}
+          style={{ fontSize: 10, color: FR.soil, textDecoration: 'none', fontWeight: 600 }}>
+          Open in PLM →
+        </a>
+      </div>
+    </div>
+  );
+}
+
 export function StepTreatments({ data, set, images, onUpload, onRemove }) {
+  // Resolve `treatment_id` selections from BOM fabric rows into rich cards
+  // (name, code, process summary, drift) so the designer sees what the
+  // BOM picker pinned without leaving this page. This is a read-only
+  // surface; clearing the link happens on the BOM page.
+  const [tlib, setTlib] = useState([]);
+  const [rollupsById, setRollupsById] = useState({});
+
+  const linked = (() => {
+    const byId = new Map();
+    (data.fabrics || []).forEach(f => {
+      if (!f.treatment_id) return;
+      const arr = byId.get(f.treatment_id) || [];
+      const tag = (f.component || '').trim();
+      if (tag && !arr.includes(tag)) arr.push(tag);
+      byId.set(f.treatment_id, arr);
+    });
+    return Array.from(byId.entries()).map(([id, components]) => ({ id, components }));
+  })();
+
+  useEffect(() => {
+    let cancelled = false;
+    listTreatments({ includeArchived: true }).then(rows => {
+      if (!cancelled) setTlib(rows || []);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(linked.map(async ({ id }) => [id, await getTreatmentRollups(id)])).then(pairs => {
+      if (cancelled) return;
+      setRollupsById(Object.fromEntries(pairs));
+    });
+    return () => { cancelled = true; };
+    // linked is rebuilt every render, but its identity-defining input is the
+    // treatment_id list — re-run only when that list changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linked.map(l => l.id).join('|')]);
+
   const treatments = data.treatments && data.treatments.length ? data.treatments : [{ step: '', treatment: '', process: '', temperature: '', duration: '', chemicals: '', notes: '' }];
   const updT = (i, k, v) => set('treatments', treatments.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
   const addT = () => set('treatments', [...treatments, { step: '', treatment: '', process: '', temperature: '', duration: '', chemicals: '', notes: '' }]);
@@ -1083,9 +1172,29 @@ export function StepTreatments({ data, set, images, onUpload, onRemove }) {
   );
   const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
 
+  const tById = new Map((tlib || []).map(t => [t.id, t]));
+  const resolvedLinks = linked
+    .map(({ id, components }) => ({ treatment: tById.get(id), components, rollups: rollupsById[id] }))
+    .filter(l => l.treatment);
+
   return (
     <div>
       <SectionTitle>Garment Treatments</SectionTitle>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel}>Linked Treatments (from BOM)</label>
+        {resolvedLinks.length === 0 ? (
+          <div style={{ padding: '10px 14px', background: FR.salt, border: `1px dashed ${FR.sand}`, borderRadius: 4, fontSize: 11, color: FR.stone, fontStyle: 'italic' }}>
+            No treatments selected on BOM fabric rows yet. Pick a treatment in the Fabrics table on the BOM step to see it resolved here.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
+            {resolvedLinks.map(({ treatment, components, rollups }) => (
+              <LinkedTreatmentCard key={treatment.id} treatment={treatment} components={components} rollups={rollups} />
+            ))}
+          </div>
+        )}
+      </div>
 
       <div style={{ marginBottom: 18 }}>
         <label style={sectionLabel}>Wash &amp; Dye Treatments</label>
