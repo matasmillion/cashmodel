@@ -91,7 +91,7 @@ export function generateTechPackSVG(pack) {
   // The PDF is the printable deliverable; the SVG is for editing in Illustrator.
 
   const pageH = 794;
-  const numPages = 5; // compact layout — cover + identity + materials + construction + order
+  const numPages = 6; // compact layout — cover + identity + materials + bom-trims + construction + order
   const totalH = pageH * numPages;
 
   let svg = `<?xml version="1.0" encoding="UTF-8"?>
@@ -140,37 +140,61 @@ export function generateTechPackSVG(pack) {
   svg += skipIf(0);
   svg += `</g>`;
 
-  // ─── Materials & BOM ───
+  // ─── Materials & BOM: Fabrics & Trims ───
   yOff += pageH;
-  svg += `<g id="page-3-materials" transform="translate(0 ${yOff})">`;
-  svg += pageFrame('Bill of Materials', null, 3, numPages, styleInfo);
-  svg += sectionHeading('Components', 40, 110);
-  const bomItems = d.bom || d.trims || [];
-  const bomRows = bomItems.filter(b => b.component || b.type).map(b => [b.component, b.type, b.material, b.color, b.weight || '', b.supplier || '', b.costPerUnit || '']);
-  if (bomRows.length) {
-    const t1 = table(40, 140, ['Component', 'Type / Spec', 'Material', 'Color', 'Weight', 'Supplier', 'Cost/Unit'], bomRows, [120, 180, 150, 110, 80, 180, 223]);
-    svg += t1.svg;
+  svg += `<g id="page-3-bom" transform="translate(0 ${yOff})">`;
+  svg += pageFrame('BOM — Fabrics & Trims', null, 3, numPages, styleInfo);
+  svg += sectionHeading('Fabrics', 40, 110);
+  const fabRows = (d.fabrics || []).filter(f => f.component || f.fabricType).map(f => [f.component, f.fabricType, f.composition, f.weightGsm, f.colorPantone, f.supplier]);
+  if (fabRows.length) {
+    const tf = table(40, 130, ['Component', 'Fabric Type', 'Composition', 'Weight GSM', 'Color/Pantone', 'Vendor'], fabRows, [130, 160, 160, 110, 150, 333]);
+    svg += tf.svg;
+  }
+  svg += sectionHeading('Trims & Accessories', 40, 380);
+  const trimsRows = (d.trimsAccessories || []).filter(t => t.component || t.type).map(t => [t.component, t.type, t.material, t.color, t.sizeSpec, t.supplier, t.qtyPerGarment]);
+  if (trimsRows.length) {
+    const tt = table(40, 400, ['Component', 'Type', 'Material', 'Color', 'Size/Spec', 'Vendor', 'Qty'], trimsRows, [130, 150, 130, 110, 120, 180, 223]);
+    svg += tt.svg;
   }
   svg += skipIf(3);
   svg += `</g>`;
 
+  // ─── Materials & BOM: Labels & Files ───
+  yOff += pageH;
+  svg += `<g id="page-4-bom-trims" transform="translate(0 ${yOff})">`;
+  svg += pageFrame('BOM — Labels & Source Files', null, 4, numPages, styleInfo);
+  svg += sectionHeading('Labels & Branding', 40, 110);
+  const lblRows = (d.labelsBranding || []).filter(l => l.labelType || l.placement).map(l => [l.labelType, l.material, l.size, l.placement, l.artworkRef, l.notes]);
+  if (lblRows.length) {
+    const tl = table(40, 130, ['Label Type', 'Material', 'Size', 'Placement', 'Artwork Ref', 'Notes'], lblRows, [150, 130, 110, 180, 200, 273]);
+    svg += tl.svg;
+  }
+  svg += sectionHeading('Source Documents', 40, 400);
+  const attRows = (d.attachments || []).filter(a => a.name);
+  if (attRows.length) {
+    const ta = table(40, 420, ['File Name', 'Type', 'Size', 'Uploaded'], attRows.map(a => [a.name, (a.type || '').split('/').pop()?.toUpperCase() || '', a.size ? `${Math.round(a.size / 1024)} KB` : '', a.uploaded_at ? a.uploaded_at.slice(0, 10) : '']), [500, 120, 120, 303]);
+    svg += ta.svg;
+  }
+  svg += skipIf(4);
+  svg += `</g>`;
+
   // ─── Construction ───
   yOff += pageH;
-  svg += `<g id="page-4-construction" transform="translate(0 ${yOff})">`;
-  svg += pageFrame('Construction Details', null, 4, numPages, styleInfo);
+  svg += `<g id="page-5-construction" transform="translate(0 ${yOff})">`;
+  svg += pageFrame('Construction Details', null, 5, numPages, styleInfo);
   svg += sectionHeading('Seam Specifications', 40, 110);
   const seamRows = (d.seams || []).filter(s => s.operation).map(s => [s.operation, s.seamType, s.stitchType, s.spiSpcm, s.threadColor, s.notes]);
   if (seamRows.length) {
     const t2 = table(40, 140, ['Operation', 'Seam Type', 'Stitch', 'SPI', 'Thread', 'Notes'], seamRows, [180, 140, 100, 60, 140, 423]);
     svg += t2.svg;
   }
-  svg += skipIf(4);
+  svg += skipIf(5);
   svg += `</g>`;
 
   // ─── Order & Delivery ───
   yOff += pageH;
-  svg += `<g id="page-5-order" transform="translate(0 ${yOff})">`;
-  svg += pageFrame('Order & Delivery', null, 5, numPages, styleInfo);
+  svg += `<g id="page-6-order" transform="translate(0 ${yOff})">`;
+  svg += pageFrame('Order & Delivery', null, 6, numPages, styleInfo);
   svg += sectionHeading('Quantity Per Size', 40, 110);
   const qRows = (d.quantities || []).filter(q => q.colorway).map(q => [q.colorway, q.s, q.m, q.l, q.xl, q.unitCost]);
   if (qRows.length) {
@@ -185,7 +209,7 @@ export function generateTechPackSVG(pack) {
   svg += field('Incoterm', d.incoterm, 40, orderY + 85);
   svg += field('Target Ship', d.targetShipDate, 400, orderY + 85);
   svg += field('Target Arrival', d.targetArrivalDate, 700, orderY + 85);
-  svg += skipIf(12);
+  svg += skipIf(15);
   svg += `</g>`;
 
   svg += `</svg>`;

@@ -186,6 +186,52 @@ export async function uploadAsset({ scope, ownerId, slot, blob, skipCompress = f
   };
 }
 
+/**
+ * Upload a non-image file (PDF, AI, PSD, ZIP, etc.) without compression.
+ * Returns a lightweight attachment reference stored in data.attachments[].
+ *
+ *   packId:  tech pack row id
+ *   file:    File object from an <input type="file"> or drop event
+ */
+export async function uploadFile({ packId, file } = {}) {
+  if (!packId) throw new Error('uploadFile: packId is required');
+  if (!(file instanceof File)) throw new Error('uploadFile: file must be a File');
+
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) throw new Error('uploadFile: no organization context');
+
+  const supabase = await getAuthedSupabase();
+  if (!supabase) throw new Error('uploadFile: Supabase client not configured');
+
+  const uuid = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
+  const path = `${orgId}/tech-packs/${packId}/attachments/${uuid}.${ext}`;
+
+  const { error } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, file, {
+      contentType: file.type || 'application/octet-stream',
+      cacheControl: '31536000',
+      upsert: false,
+    });
+  if (error) {
+    const wrapped = new Error(`uploadFile failed: ${error.message || error}`);
+    wrapped.cause = error;
+    throw wrapped;
+  }
+
+  return {
+    id: uuid,
+    name: file.name,
+    size: file.size,
+    type: file.type || 'application/octet-stream',
+    path,
+    uploaded_at: new Date().toISOString(),
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // URL resolution (signed, cached)
 // ─────────────────────────────────────────────────────────────────────

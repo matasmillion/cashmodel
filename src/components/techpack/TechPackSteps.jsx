@@ -4,10 +4,10 @@
 // Page 1 (Cover & Identity) is fully built. All other pages are placeholders
 // that will be replaced in subsequent prompts.
 
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { FR, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, isStepLocked, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
 import { listFRColors } from '../../utils/colorLibrary';
-import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, EditableSelect, FRColorCell } from './TechPackPrimitives';
+import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, EditableSelect, FRColorCell, FilesPanel } from './TechPackPrimitives';
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
 import { addSupplier } from '../../utils/plmDirectory';
 import { getFRColor } from '../../utils/colorLibrary';
@@ -579,7 +579,27 @@ export function StepBOM({ data, set, existingSuppliers = [] }) {
           rows={trims} onUpdate={updT} onAdd={addT} onRemove={rmT} />
       </div>
 
-      <div style={{ marginBottom: 10 }}>
+    </div>
+  );
+}
+
+export function StepBOMTrims({ data, set, packId, existingSuppliers = [] }) {
+  const labels = data.labelsBranding && data.labelsBranding.length
+    ? data.labelsBranding
+    : [{ labelType: '', material: '', size: '', placement: '', artworkRef: '', notes: '' }];
+  const attachments = Array.isArray(data.attachments) ? data.attachments : [];
+
+  const updL = (i, k, v) => set('labelsBranding', labels.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addL = () => set('labelsBranding', [...labels, { labelType: '', material: '', size: '', placement: '', artworkRef: '', notes: '' }]);
+  const rmL  = (i) => set('labelsBranding', labels.filter((_, idx) => idx !== i));
+
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+
+  return (
+    <div>
+      <SectionTitle>Labels, Branding &amp; Source Files</SectionTitle>
+
+      <div style={{ marginBottom: 18 }}>
         <label style={sectionLabel}>Labels & Branding</label>
         <ArrayTable
           headers={[
@@ -592,9 +612,23 @@ export function StepBOM({ data, set, existingSuppliers = [] }) {
           ]}
           rows={labels} onUpdate={updL} onAdd={addL} onRemove={rmL} />
       </div>
+
+      <div style={{ marginBottom: 10 }}>
+        <label style={sectionLabel}>Source Documents</label>
+        <div style={{ fontSize: 11, color: FR.stone, marginBottom: 8, lineHeight: 1.5 }}>
+          Attach spec sheets, artwork files, or reference documents. Files are stored securely and can be downloaded by any team member with access.
+        </div>
+        <FilesPanel
+          attachments={attachments}
+          packId={packId}
+          onAdd={(ref) => set('attachments', [...attachments, ref])}
+          onRemove={(i) => set('attachments', attachments.filter((_, idx) => idx !== i))}
+        />
+      </div>
     </div>
   );
 }
+
 export function StepColor({ data, set, images, onUpload, onRemove }) {
   const colorways = data.colorways && data.colorways.length ? data.colorways : [{ name: '', frColor: '', pantone: '', hex: '', fabricSwatch: '', approvalStatus: 'Pending' }];
   // When frColor changes, cache the library's Pantone TCX + hex onto the
@@ -704,19 +738,14 @@ export function StepConstruction({ data, set }) {
   const addS = () => set('seams', [...seams, { operation: '', seamType: '', stitchType: '', spiSpcm: '', threadColor: '', threadType: '', notes: '' }]);
   const rmS  = (i) => set('seams', seams.filter((_, idx) => idx !== i));
 
-  const notes = data.constructionNotesTable && data.constructionNotesTable.length ? data.constructionNotesTable : [{ detail: '', area: '', description: '', reference: '' }];
-  const updN = (i, k, v) => set('constructionNotesTable', notes.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
-  const addN = () => set('constructionNotesTable', [...notes, { detail: '', area: '', description: '', reference: '' }]);
-  const rmN  = (i) => set('constructionNotesTable', notes.filter((_, idx) => idx !== i));
-
   const threadColorRender = (v, onChange) => <FRColorCell value={v} onChange={onChange} />;
   const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
 
   return (
     <div>
-      <SectionTitle>Construction Details</SectionTitle>
+      <SectionTitle>Seam &amp; Stitch Specifications</SectionTitle>
 
-      <div style={{ marginBottom: 18 }}>
+      <div style={{ marginBottom: 10 }}>
         <label style={sectionLabel}>Seam &amp; Stitch Specification</label>
         <ArrayTable
           headers={[
@@ -730,9 +759,26 @@ export function StepConstruction({ data, set }) {
           ]}
           rows={seams} onUpdate={updS} onAdd={addS} onRemove={rmS} />
       </div>
+    </div>
+  );
+}
 
+export function StepConstructionNotes({ data, set }) {
+  const notes = data.constructionNotesTable && data.constructionNotesTable.length ? data.constructionNotesTable : [{ detail: '', area: '', description: '', reference: '' }];
+  const updN = (i, k, v) => set('constructionNotesTable', notes.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addN = () => set('constructionNotesTable', [...notes, { detail: '', area: '', description: '', reference: '' }]);
+  const rmN  = (i) => set('constructionNotesTable', notes.filter((_, idx) => idx !== i));
+
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+
+  return (
+    <div>
+      <SectionTitle>Construction Notes</SectionTitle>
+      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 12, lineHeight: 1.5 }}>
+        Free-form construction details that don't fit the seam/stitch grid: how the collar is built, pocket bag attachment, special bartacks, etc. Each row maps to a numbered detail callout that can be referenced from sketches.
+      </p>
       <div style={{ marginBottom: 10 }}>
-        <label style={sectionLabel}>Construction Notes</label>
+        <label style={sectionLabel}>Detail Callouts</label>
         <ArrayTable
           headers={[
             { key: '__idx',       label: 'Detail #',    render: (_v, _onChange, row) => (
@@ -743,6 +789,15 @@ export function StepConstruction({ data, set }) {
             { key: 'reference',   label: 'Reference',    placeholder: 'Filename or sketch #' },
           ]}
           rows={notes} onUpdate={updN} onAdd={addN} onRemove={rmN} />
+      </div>
+      <div>
+        <label style={sectionLabel}>Free-Form Notes</label>
+        <Input
+          multiline
+          value={data.constructionNotes || ''}
+          onChange={v => set('constructionNotes', v)}
+          placeholder="Anything that doesn't fit a row — overall garment construction philosophy, special instructions, vendor-specific guidance…"
+        />
       </div>
     </div>
   );
@@ -847,6 +902,146 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
     </div>
   );
 }
+// StepSizeMatrix — graded size table. The user defines the size list,
+// picks which one is the "base" (whose values come straight from the
+// POM page), and enters per-size deltas. Final per-size values are
+// derived as base + delta when rendering.
+export function StepSizeMatrix({ data, set }) {
+  const matrix = data.gradedSizeMatrix || { baseSize: 'M', sizes: ['S', 'M', 'L', 'XL'], grading: [] };
+  const sizes = Array.isArray(matrix.sizes) && matrix.sizes.length ? matrix.sizes : ['S', 'M', 'L', 'XL'];
+  const baseSize = sizes.includes(matrix.baseSize) ? matrix.baseSize : sizes[0];
+  const poms = (data.poms || []).filter(p => p.name);
+
+  const update = (patch) => set('gradedSizeMatrix', { ...matrix, sizes, baseSize, ...patch });
+
+  const setSizes = (csv) => {
+    const next = csv.split(',').map(s => s.trim()).filter(Boolean);
+    if (!next.length) return;
+    update({ sizes: next, baseSize: next.includes(baseSize) ? baseSize : next[0] });
+  };
+
+  const setDelta = (pomName, size, value) => {
+    const grading = Array.isArray(matrix.grading) ? matrix.grading : [];
+    const idx = grading.findIndex(g => g.pomName === pomName);
+    const num = value === '' ? null : Number(value);
+    if (idx === -1) {
+      update({ grading: [...grading, { pomName, perSizeDelta: { [size]: num } }] });
+    } else {
+      const next = [...grading];
+      next[idx] = { ...next[idx], perSizeDelta: { ...(next[idx].perSizeDelta || {}), [size]: num } };
+      update({ grading: next });
+    }
+  };
+
+  const baseValueFor = (pom) => {
+    const key = baseSize.toLowerCase();
+    const v = pom[key];
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const deltaFor = (pomName, size) => {
+    const g = (matrix.grading || []).find(x => x.pomName === pomName);
+    const v = g?.perSizeDelta?.[size];
+    return (v === undefined || v === null || Number.isNaN(v)) ? null : Number(v);
+  };
+  const cellFor = (pom, size) => {
+    const base = baseValueFor(pom);
+    if (size === baseSize) return base !== null ? base.toFixed(1) : '—';
+    const d = deltaFor(pom.name, size);
+    if (d === null || base === null) return '—';
+    return (base + d).toFixed(1);
+  };
+
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+  const cellStyle = { width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 4px', textAlign: 'center', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue', sans-serif" };
+
+  return (
+    <div>
+      <SectionTitle>Graded Size Matrix</SectionTitle>
+      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, lineHeight: 1.5 }}>
+        Define the size list and per-measurement deltas relative to the base size. Final values are computed as <code style={{ fontFamily: 'ui-monospace,Menlo,monospace', background: FR.salt, padding: '1px 5px', borderRadius: 3 }}>base + delta</code> at render time. The base size's column comes straight from the Points of Measure page.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 18 }}>
+        <div>
+          <label style={sectionLabel}>Sizes (comma-separated)</label>
+          <input value={sizes.join(', ')} onChange={e => setSizes(e.target.value)}
+            style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.white, boxSizing: 'border-box' }} />
+        </div>
+        <div>
+          <label style={sectionLabel}>Base Size</label>
+          <select value={baseSize} onChange={e => update({ baseSize: e.target.value })}
+            style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.white }}>
+            {sizes.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {poms.length === 0 ? (
+        <div style={{ padding: 16, background: FR.salt, border: `1px dashed ${FR.sand}`, borderRadius: 6, fontSize: 12, color: FR.stone, fontStyle: 'italic' }}>
+          Add at least one row on the Points of Measure page to grade.
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left', padding: '5px 8px', background: FR.slate, color: FR.salt, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>Measurement</th>
+                {sizes.map(s => (
+                  <th key={s} colSpan={2} style={{ textAlign: 'center', padding: '5px 8px', background: s === baseSize ? FR.soil : FR.slate, color: FR.salt, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                    {s}{s === baseSize ? ' · base' : ''}
+                  </th>
+                ))}
+              </tr>
+              <tr>
+                <th style={{ background: FR.salt }} />
+                {sizes.map(s => (
+                  <React.Fragment key={s}>
+                    <th style={{ padding: '3px 4px', fontSize: 8, color: FR.stone, fontWeight: 500, background: FR.salt, borderBottom: `1px solid ${FR.sand}` }}>Δ</th>
+                    <th style={{ padding: '3px 4px', fontSize: 8, color: FR.stone, fontWeight: 500, background: FR.salt, borderBottom: `1px solid ${FR.sand}` }}>cm</th>
+                  </React.Fragment>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {poms.map((pom, ri) => (
+                <tr key={ri} style={{ background: ri % 2 === 0 ? FR.white : FR.salt }}>
+                  <td style={{ padding: '4px 8px', borderBottom: `1px solid ${FR.sand}`, color: FR.slate, fontWeight: 500 }}>{pom.name}</td>
+                  {sizes.map(s => {
+                    const isBase = s === baseSize;
+                    const delta = deltaFor(pom.name, s);
+                    const computed = cellFor(pom, s);
+                    return (
+                      <React.Fragment key={s}>
+                        <td style={{ padding: '2px', borderBottom: `1px solid ${FR.sand}`, borderLeft: `1px solid ${FR.sand}`, width: 50 }}>
+                          {isBase ? (
+                            <span style={{ ...cellStyle, color: FR.stone, display: 'block' }}>—</span>
+                          ) : (
+                            <input
+                              type="number" step="0.1"
+                              value={delta === null ? '' : delta}
+                              onChange={e => setDelta(pom.name, s, e.target.value)}
+                              placeholder="0"
+                              style={cellStyle}
+                            />
+                          )}
+                        </td>
+                        <td style={{ padding: '4px', borderBottom: `1px solid ${FR.sand}`, width: 60, textAlign: 'center', color: isBase ? FR.soil : FR.slate, fontWeight: isBase ? 600 : 400, fontVariantNumeric: 'tabular-nums' }}>
+                          {computed}
+                        </td>
+                      </React.Fragment>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function StepTreatments({ data, set, images, onUpload, onRemove }) {
   const treatments = data.treatments && data.treatments.length ? data.treatments : [{ step: '', treatment: '', process: '', temperature: '', duration: '', chemicals: '', notes: '' }];
   const updT = (i, k, v) => set('treatments', treatments.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
@@ -1282,20 +1477,23 @@ export function StepRevision({ data, set, onSubmit, submitting, submitResult, on
 
 // Order mirrors STEPS in techPackConstants.js — by manufacturing stage.
 export const STEP_FNS = [
-  StepCover,            // 01 Design
-  StepDesignOverview,   // 02 Design
-  StepFlatlays,         // 03 Design
-  StepBOM,              // 04 Materials
-  StepConstruction,     // 05 Cut & Sew
-  StepSketches,         // 06 Cut & Sew
-  StepPattern,          // 07 Cut & Sew
-  StepPom,              // 08 Cut & Sew
-  StepColor,            // 09 Embellishments
-  StepTreatments,       // 10 Treatments
-  StepCompliance,       // 11 QC
-  StepLabels,           // 12 Packaging
-  StepOrder,            // 13 Logistics
-  StepRevision,         // 14 Sign-off
+  StepCover,             // 00 Design
+  StepDesignOverview,    // 01 Design
+  StepFlatlays,          // 02 Design
+  StepBOM,               // 03 Materials — Fabrics & Trims
+  StepBOMTrims,          // 04 Materials — Labels & Files (skippable)
+  StepConstruction,      // 05 Cut & Sew — Seam & Stitch
+  StepConstructionNotes, // 06 Cut & Sew — Construction Notes (skippable)
+  StepSketches,          // 07 Cut & Sew — Detail Sketches
+  StepPattern,           // 08 Cut & Sew — Pattern & Cutting
+  StepPom,               // 09 Cut & Sew — POM (base size)
+  StepSizeMatrix,        // 10 Cut & Sew — Graded Size Matrix (skippable)
+  StepColor,             // 11 Embellishments
+  StepTreatments,        // 12 Treatments
+  StepCompliance,        // 13 QC
+  StepLabels,            // 14 Packaging
+  StepOrder,             // 15 Logistics
+  StepRevision,          // 16 Sign-off
 ];
 
 // Backwards-compat aliases so older references keep resolving during the
