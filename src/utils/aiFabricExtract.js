@@ -124,18 +124,91 @@ export async function extractFabricFromMedia({ media }) {
     messages: [{ role: 'user', content: buildContent(media) }],
   });
 
-  const text = json?.content?.[0]?.text || '';
+  const blocks = Array.isArray(json?.content) ? json.content : [];
+  const text = blocks.find(b => b?.type === 'text')?.text || blocks[0]?.text || '';
   const stop = json?.stop_reason;
   const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
 
   try {
     return JSON.parse(cleaned);
-  } catch (err) {
-    if (stop === 'max_tokens') {
-      throw new Error('AI response was cut off — too many color swatches to fit in one pass. Try uploading fewer cards at a time, or split very large color cards.');
+  } catch (firstErr) {
+    // Truncation is the common failure mode: 20+ colorways across 5 cards
+    // can blow past max_tokens, or the upstream connection drops mid-stream.
+    // Try to repair (close dangling strings / arrays / objects) so the user
+    // still gets the fields the model managed to emit.
+    const repaired = repairTruncatedJson(cleaned);
+    if (repaired !== null) {
+      try { return JSON.parse(repaired); } catch { /* fall through */ }
     }
-    throw new Error(`Could not parse AI response as JSON: ${err.message}\n\nRaw:\n${cleaned.slice(0, 500)}`);
+
+    const truncated = stop && stop !== 'end_turn' && stop !== 'stop_sequence';
+    if (truncated) {
+      throw new Error(`AI response was cut off (stop_reason: ${stop}) — too many color swatches to fit in one pass. Try uploading fewer cards at a time, or split very large color cards.`);
+    }
+    throw new Error(`Could not parse AI response as JSON: ${firstErr.message}\n\nRaw:\n${cleaned.slice(0, 500)}`);
   }
+}
+
+/**
+ * Best-effort repair of a JSON string truncated mid-output. Closes a
+ * dangling string, drops the trailing partial element back to the last
+ * comma or container opener, and closes any still-open arrays/objects.
+ * Returns null if the input doesn't look recoverable.
+ */
+function repairTruncatedJson(src) {
+  if (!src || src[0] !== '{' && src[0] !== '[') return null;
+
+  const stack = [];
+  let inString = false;
+  let escape = false;
+  let lastSafe = -1;
+
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i];
+    if (inString) {
+      if (escape) { escape = false; continue; }
+      if (c === '\\') { escape = true; continue; }
+      if (c === '"') { inString = false; }
+      continue;
+    }
+    if (c === '"') { inString = true; continue; }
+    if (c === '{' || c === '[') { stack.push(c); lastSafe = i; }
+    else if (c === '}' || c === ']') { stack.pop(); lastSafe = i; }
+    else if (c === ',') { lastSafe = i; }
+  }
+
+  if (stack.length === 0 && !inString) return null;
+
+  let head = inString ? src.slice(0, lastSafe + 1) : src;
+  head = head.replace(/[,\s]+$/, '');
+  // If truncation lands right on an unfilled opener (e.g. `..., {`),
+  // drop the empty placeholder and any preceding comma so we don't
+  // leave a stray `{}` or `[]` entry in the parent container.
+  if (/[{[]$/.test(head)) {
+    head = head.replace(/[,\s]*[{[]$/, '');
+    head = head.replace(/[,\s]+$/, '');
+  }
+
+  const openers = [];
+  let s = false, e = false;
+  for (let i = 0; i < head.length; i++) {
+    const c = head[i];
+    if (s) {
+      if (e) { e = false; continue; }
+      if (c === '\\') { e = true; continue; }
+      if (c === '"') s = false;
+      continue;
+    }
+    if (c === '"') { s = true; continue; }
+    if (c === '{' || c === '[') openers.push(c);
+    else if (c === '}' || c === ']') openers.pop();
+  }
+
+  let tail = '';
+  for (let i = openers.length - 1; i >= 0; i--) {
+    tail += openers[i] === '{' ? '}' : ']';
+  }
+  return head + tail;
 }
 
 /**
