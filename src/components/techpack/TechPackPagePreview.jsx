@@ -852,9 +852,10 @@ function PageArtwork({ d, images }) {
 function PageConstruction({ d, images }) {
   const imgs = images || [];
   const seams = (d.seams || []).filter(r => r.operation || r.seamType || r.stitchType || r.threadColor || r.machine);
-  const stitchBlocks = (d.seamStitchBlocks && d.seamStitchBlocks.length)
+  const allBlocks = (d.seamStitchBlocks && d.seamStitchBlocks.length)
     ? d.seamStitchBlocks
-    : [1, 2, 3, 4, 5, 6].map(num => ({ num, label: '' }));
+    : [1, 2, 3, 4, 5, 6].map(num => ({ num, label: '', hidden: false }));
+  const stitchBlocks = allBlocks.filter(b => !b.hidden).slice(0, 6);
 
   const seamCols = [
     { key: 'operation',   label: 'Operation',     w: 150 },
@@ -867,33 +868,53 @@ function PageConstruction({ d, images }) {
     { key: 'notes',       label: 'Notes',         w: 163 },
   ];
 
-  // Strip layout: 6 image cells across the page with label underneath.
-  const stripY  = 170;
-  const stripH  = 110;
-  const stripGap = 8;
-  const cellW = (PAGE_W - 80 - stripGap * 5) / 6;
+  // Strip layout: visible cells span the full content width (1043px).
+  // Each cell is 2:3 vertical; the height grows with cell width but is
+  // capped so a single cell doesn't blow up the page. Table sits
+  // immediately below the strip + label row.
+  const stripY    = 170;
+  const stripGap  = 12;
+  const labelH    = 24;
+  const N         = stitchBlocks.length;
+  const contentW  = PAGE_W - 80;
+  const cellW     = N > 0 ? (contentW - stripGap * Math.max(N - 1, 0)) / N : 0;
+  const imgHCap   = 380; // ~half the page height
+  const imgH      = N > 0 ? Math.min(cellW * 1.5, imgHCap) : 0;
+  const stripBottom = N > 0 ? (stripY + imgH + labelH) : stripY;
+
+  // Body rows derived from remaining vertical space below the table header.
+  const tableY        = stripBottom + 30;
+  const footerReserve = 60;
+  const headerH       = 22;
+  const rowH          = 22;
+  const bodyRows      = Math.max(4, Math.floor((PAGE_H - footerReserve - tableY - headerH) / rowH));
 
   return (
     <g>
       <InfoStrip d={d} />
 
       <SectionHeading x={40} y={158}>Stitch Reference</SectionHeading>
-      {stitchBlocks.slice(0, 6).map((b, i) => {
+      {N === 0 && (
+        <text x={PAGE_W / 2} y={stripY + 30} textAnchor="middle" fontSize={11} fill={FR.stone} fontStyle="italic">
+          All stitch reference blocks hidden — restore one in the editor to populate this strip.
+        </text>
+      )}
+      {stitchBlocks.map((b, i) => {
         const cx = 40 + i * (cellW + stripGap);
         const img = imgs.find(im => im.slot === `seam-stitch-${b.num}`);
         return (
           <g key={b.num}>
-            <PhotoSlot x={cx} y={stripY} w={cellW} h={stripH - 18} label={`Stitch ${b.num}`} image={img} />
-            <text x={cx + cellW / 2} y={stripY + stripH - 4} textAnchor="middle"
-              fontSize={9} fill={FR.slate} fontFamily="ui-monospace, Menlo, monospace">
-              {(b.label || '—').slice(0, 18)}
+            <PhotoSlot x={cx} y={stripY} w={cellW} h={imgH} label={`Stitch ${b.num}`} image={img} />
+            <text x={cx + cellW / 2} y={stripY + imgH + 16} textAnchor="middle"
+              fontSize={11} fontWeight={600} fill={FR.slate} fontFamily="ui-monospace, Menlo, monospace">
+              {(b.label || '—').slice(0, 24)}
             </text>
           </g>
         );
       })}
 
-      <SectionHeading x={40} y={stripY + stripH + 22}>Seam &amp; Stitch Specification</SectionHeading>
-      <GridTable x={40} y={stripY + stripH + 34} cols={seamCols} rows={seams} bodyRows={9} />
+      <SectionHeading x={40} y={stripBottom + 18}>Seam &amp; Stitch Specification</SectionHeading>
+      <GridTable x={40} y={tableY} cols={seamCols} rows={seams} bodyRows={bodyRows} />
     </g>
   );
 }
