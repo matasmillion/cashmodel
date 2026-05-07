@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T15:13:34.779Z",
+  "lastUpdated": "2026-05-07T15:21:28.880Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "b2553ee",
+      "date": "2026-05-07T18:14:25+03:00",
+      "message": "techpack: BOM phase split (Fabrics/Trims/Packaging) + style # in header (#40)"
+    },
+    {
       "sha": "6516f36",
       "date": "2026-05-07T17:54:05+03:00",
       "message": "techpack: device-frame Merch Preview, lockable, skippable, auto-open cover (#39)"
@@ -1087,11 +1092,6 @@
       "sha": "baf3125",
       "date": "2026-05-07T15:27:28+03:00",
       "message": "Add files via upload"
-    },
-    {
-      "sha": "e609d2f",
-      "date": "2026-05-07T15:24:02+03:00",
-      "message": "techpack: progress bars + NB2 payload fix + better error surfacing (#31)"
     }
   ]
 }
