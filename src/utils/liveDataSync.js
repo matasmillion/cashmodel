@@ -1243,13 +1243,25 @@ async function callProxyEndpoint(name, body, opts = {}) {
 
   // 401/404 from the proxy itself = real failure. Anything past the
   // proxy (e.g. 4xx/5xx returned by fal/higgsfield because /health
-  // isn't a real path) means the proxy + key combo is wired up.
+  // isn't a real path) means the proxy + key combo is wired up. Both
+  // upstream and proxy share status codes, so we sniff the error
+  // message to distinguish — proxy errors include phrases like
+  // "not connected", "Sign in", or "Credential lookup".
   if (res.status === 401 || res.status === 404) {
     const text = await res.text();
     let data;
     try { data = JSON.parse(text); } catch { data = { raw: text }; }
-    const msg = data?.error || `${res.status} ${res.statusText}`;
-    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    const errorStr = typeof data?.error === 'string'
+      ? data.error
+      : (data?.error?.message || '');
+    const isProxyFailure = res.status === 401
+      || /not connected|sign in|credential lookup/i.test(errorStr);
+    if (isProxyFailure) {
+      const msg = errorStr || `${res.status} ${res.statusText}`;
+      throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    }
+    // Otherwise: upstream returned 404 (e.g. /health) — proxy + key works.
+    if (opts.allowAnyStatus) return { ok: true, status: res.status };
   }
 
   if (!opts.allowAnyStatus && !res.ok) {
