@@ -352,7 +352,16 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     if (!row) return 0;
     const d = row.data || row;
     const tier = (d?.costTiers || [])[0];
-    return parseFloat(tier?.unitCost) || parseFloat(row.cost_per_unit) || parseFloat(d?.cost_per_unit) || parseFloat(d?.costPerYard) || parseFloat(d?.costPerMeter) || 0;
+    // fabricStore canonical: price_per_meter_usd. Older shapes covered too.
+    return (
+      parseFloat(row.price_per_meter_usd) ||
+      parseFloat(d?.price_per_meter_usd) ||
+      parseFloat(tier?.unitCost) ||
+      parseFloat(row.cost_per_unit) ||
+      parseFloat(d?.cost_per_unit) ||
+      parseFloat(d?.costPerYard) ||
+      parseFloat(d?.costPerMeter) || 0
+    );
   };
   const parseQty = (q) => {
     if (q === null || q === undefined || q === '') return 1;

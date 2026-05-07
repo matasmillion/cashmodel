@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T18:27:18.399Z",
+  "lastUpdated": "2026-05-07T18:38:33.645Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "2593460",
+      "date": "2026-05-07T21:33:56+03:00",
+      "message": "techpack: comprehensive cost roll-up — phase pills, slot cards, labor (#52)"
+    },
+    {
+      "sha": "356e77c",
+      "date": "2026-05-07T21:24:00+03:00",
+      "message": "fabrics: switch yards → meters, fuzzy vendor match, name from mill # (#49)"
+    },
+    {
       "sha": "057a314",
       "date": "2026-05-07T21:15:54+03:00",
       "message": "techpack: BOM 2x3 grid + stale-image fix + Design Sketch fallback (#51)"
@@ -1082,16 +1092,6 @@
       "sha": "a0bfa39",
       "date": "2026-05-07T20:08:22+03:00",
       "message": "techpack: BOM picker — auto-fill specs, compact grid, length/size, live preview (#43)"
-    },
-    {
-      "sha": "99cd43f",
-      "date": "2026-05-07T20:01:06+03:00",
-      "message": "fabrics: knit/woven category, mill fabric #, AI auto-fill, BOM PDF (#42)"
-    },
-    {
-      "sha": "96b5d7a",
-      "date": "2026-05-07T19:47:35+03:00",
-      "message": "techpack: BOM picker fixes — populate library, resolve cover paths, fix typo (#41)"
     }
   ]
 }
