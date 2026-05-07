@@ -9,6 +9,18 @@ import { FR } from './techPackConstants';
 import { SectionTitle, AssetImage } from './TechPackPrimitives';
 import { listFabrics } from '../../utils/fabricStore';
 import { listComponentPacks, getComponentPack } from '../../utils/componentPackStore';
+import { getAssetUrl } from '../../utils/plmAssets';
+
+// Cover images in fabric / component pack rows are stored as Supabase
+// Storage paths, not URLs. The browser can't render them directly — we
+// need to swap them for short-lived signed URLs first. Already-resolved
+// HTTP URLs and data URIs pass through unchanged.
+async function resolveCoverPath(value) {
+  if (!value) return null;
+  if (typeof value !== 'string') return null;
+  if (value.startsWith('http') || value.startsWith('data:') || value.startsWith('blob:')) return value;
+  try { return await getAssetUrl(value); } catch { return null; }
+}
 
 const labelStyle = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' };
 
@@ -22,7 +34,16 @@ function LibraryPickerModal({ title, subtitle, fetchItems, renderItem, getId, on
 
   useEffect(() => {
     let cancelled = false;
-    fetchItems().then(rows => { if (!cancelled) setItems(rows || []); });
+    (async () => {
+      const rows = (await fetchItems()) || [];
+      // Resolve any path-based cover_image to a signed URL up front so
+      // the grid doesn't render broken-image icons.
+      const resolved = await Promise.all(rows.map(async r => {
+        const url = await resolveCoverPath(r?.cover_image);
+        return url && url !== r.cover_image ? { ...r, cover_image: url } : r;
+      }));
+      if (!cancelled) setItems(resolved);
+    })();
     return () => { cancelled = true; };
   }, []);
 
@@ -154,7 +175,11 @@ export function StepFabrics({ data, set }) {
       const next = { ...resolved };
       for (const id of ids) {
         const row = await getFabric(id);
-        if (!cancelled && row) next[id] = fabricSpec(row);
+        if (!cancelled && row) {
+          const spec = fabricSpec(row);
+          spec.cover = await resolveCoverPath(spec.cover);
+          next[id] = spec;
+        }
       }
       if (!cancelled) setResolved(next);
     })();
@@ -293,20 +318,19 @@ function ComponentSlotCard({ entry, fullData, onClear, onChangeRole, roleOptions
   );
 }
 
-const TRIM_CATEGORIES = new Set(['Trim', 'Zipper', 'Button', 'Snap', 'Rivet', 'Aglet', 'Drawstring / Cord', 'Elastic', 'Tape / Binding', 'Patch', 'Embroidery', 'Hardware', 'Label (Main)', 'Label (Care)', 'Label (Size)', 'Hang Tag']);
 const TRIM_ROLES = ['Zipper', 'Drawcord', 'Aglet', 'Button', 'Snap', 'Rivet', 'Bartack', 'Eyelet', 'Patch', 'Hardware', 'Tape', 'Other'];
 
 export function StepTrims({ data, set, packId }) {
   return (
     <ComponentBOMPage
       title="Trims"
+      singularNoun="Trim"
       subtitle="Image-first detail of every trim and hardware component on this garment. Pick from the Component Pack library — must be created there first."
       fieldName="pickedTrims"
       data={data}
       set={set}
       packId={packId}
-      filterCategory={cat => TRIM_CATEGORIES.has(cat)}
-      pickerSubtitle="Trims, hardware, labels, hang tags, and other small components."
+      pickerSubtitle="Pulled from the Component Pack library."
       roleOptions={TRIM_ROLES}
       maxSlots={MAX_TRIMS}
     />
@@ -315,20 +339,19 @@ export function StepTrims({ data, set, packId }) {
 
 // ─── Page 05 — Packaging ────────────────────────────────────────────────────
 
-const PACKAGING_CATEGORIES = new Set(['Packaging', 'Sticker / Card', 'Hang Tag']);
 const PACKAGING_ROLES = ['Polybag', 'Carton', 'Sticker', 'Hang Tag', 'Care Card', 'Tissue', 'Branded Box', 'Other'];
 
 export function StepPackaging({ data, set, packId }) {
   return (
     <ComponentBOMPage
       title="Packaging"
+      singularNoun="Packaging Component"
       subtitle="Polybags, hang tags, stickers, branded boxes — every packaging component, picked from the Component Pack library."
       fieldName="pickedPackaging"
       data={data}
       set={set}
       packId={packId}
-      filterCategory={cat => PACKAGING_CATEGORIES.has(cat)}
-      pickerSubtitle="Polybags, hang tags, stickers, cartons, and other packaging components."
+      pickerSubtitle="Pulled from the Component Pack library."
       roleOptions={PACKAGING_ROLES}
       maxSlots={MAX_TRIMS}
     />
@@ -337,7 +360,8 @@ export function StepPackaging({ data, set, packId }) {
 
 // ─── Shared component-pack BOM page (used by Trims + Packaging) ────────────
 
-function ComponentBOMPage({ title, subtitle, fieldName, data, set, filterCategory, pickerSubtitle, roleOptions, maxSlots }) {
+function ComponentBOMPage({ title, singularNoun, subtitle, fieldName, data, set, pickerSubtitle, roleOptions, maxSlots }) {
+  const noun = singularNoun || title.replace(/s$/, '');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [fullById, setFullById] = useState({});
 
@@ -351,7 +375,16 @@ function ComponentBOMPage({ title, subtitle, fieldName, data, set, filterCategor
       const next = { ...fullById };
       for (const id of ids) {
         const row = await getComponentPack(id);
-        if (!cancelled && row) next[id] = row;
+        if (!cancelled && row) {
+          // Storage paths → signed URLs so the slot cover can render.
+          const resolvedTop = await resolveCoverPath(row.cover_image);
+          const resolvedNested = await resolveCoverPath(row?.data?.cover_image);
+          next[id] = {
+            ...row,
+            cover_image: resolvedTop || row.cover_image,
+            data: { ...(row.data || {}), cover_image: resolvedNested || row?.data?.cover_image },
+          };
+        }
       }
       if (!cancelled) setFullById(next);
     })();
@@ -388,7 +421,7 @@ function ComponentBOMPage({ title, subtitle, fieldName, data, set, filterCategor
         {Array.from({ length: maxSlots }).map((_, i) => {
           const entry = picked[i];
           if (!entry) {
-            return <EmptyPickerSlot key={i} onPick={() => setPickerOpen(true)} label={`Pick ${title.slice(0, -1).toLowerCase()}`} />;
+            return <EmptyPickerSlot key={i} onPick={() => setPickerOpen(true)} label={`Pick ${noun.toLowerCase()}`} />;
           }
           return (
             <ComponentSlotCard
@@ -424,12 +457,9 @@ function ComponentBOMPage({ title, subtitle, fieldName, data, set, filterCategor
 
       {pickerOpen && (
         <LibraryPickerModal
-          title={`Pick a ${title.slice(0, -1)}`}
+          title={`Pick a ${noun}`}
           subtitle={pickerSubtitle}
-          fetchItems={async () => {
-            const all = await listComponentPacks();
-            return all.filter(c => filterCategory(c.component_category));
-          }}
+          fetchItems={listComponentPacks}
           getId={item => item.id}
           renderItem={item => {
             const s = specOf(item);
