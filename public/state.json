@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T12:11:41.457Z",
+  "lastUpdated": "2026-05-07T12:15:45.879Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "beb1c39",
+      "date": "2026-05-07T15:12:44+03:00",
+      "message": "fix(techpack): imageEntryToDataUrl resolves path via getAssetUrl (#30)"
+    },
+    {
       "sha": "e2227b8",
       "date": "2026-05-07T15:08:38+03:00",
       "message": "techpack: AI view generation + size matrix fixes (#29)"
@@ -1087,11 +1092,6 @@
       "sha": "51a6c83",
       "date": "2026-05-07T10:17:49+03:00",
       "message": "techpack: asset versioning + cover photo polish (#21)"
-    },
-    {
-      "sha": "8b0aaa0",
-      "date": "2026-05-06T18:59:16+00:00",
-      "message": "feat: Creative Engine Phases 6 + 7 — library, scraping, docs"
     }
   ]
 }
