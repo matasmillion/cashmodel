@@ -7,7 +7,7 @@ import { FR } from './techPackConstants';
 
 const PAGE_W = 1123;
 const PAGE_H = 794;
-const TOTAL_PAGES = 14;
+const TOTAL_PAGES = 15;
 
 function esc(s) { return String(s ?? ''); }
 function clampLine(s, maxW, charW = 6.5) {
@@ -392,7 +392,6 @@ function GridTable({ x, y, cols, rows, bodyRows = 4, rowH = 22, headerH = 22, re
 function PageBOM({ d }) {
   const fabrics = (d.fabrics || []).filter(r => r.component || r.fabricType || r.composition);
   const trims   = (d.trimsAccessories || []).filter(r => r.component || r.type || r.material);
-  const labels  = (d.labelsBranding || []).filter(r => r.labelType || r.material || r.placement);
 
   const fabCols = [
     { key: 'component',    label: 'Component',    w: 120 },
@@ -414,6 +413,24 @@ function PageBOM({ d }) {
     { key: 'qtyPerGarment', label: 'Qty/Garment', w: 163 },
   ];
 
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <SectionHeading x={40} y={158}>Fabrics</SectionHeading>
+      <GridTable x={40} y={170} cols={fabCols} rows={fabrics} bodyRows={5} />
+
+      <SectionHeading x={40} y={320}>Trims &amp; Accessories</SectionHeading>
+      <GridTable x={40} y={332} cols={trimCols} rows={trims} bodyRows={6} />
+    </g>
+  );
+}
+
+// ─── Page 5 — BOM Labels & Files ────────────────────────────────────────────
+function PageBOMTrims({ d }) {
+  const labels = (d.labelsBranding || []).filter(r => r.labelType || r.material || r.placement);
+  const attachments = (d.attachments || []).filter(a => a.name);
+
   const labelCols = [
     { key: 'labelType',  label: 'Label Type',  w: 160 },
     { key: 'material',   label: 'Material',    w: 140 },
@@ -427,19 +444,26 @@ function PageBOM({ d }) {
     <g>
       <InfoStrip d={d} />
 
-      <SectionHeading x={40} y={158}>Fabrics</SectionHeading>
-      <GridTable x={40} y={170} cols={fabCols} rows={fabrics} bodyRows={3} />
+      <SectionHeading x={40} y={158}>Labels &amp; Branding</SectionHeading>
+      <GridTable x={40} y={170} cols={labelCols} rows={labels} bodyRows={5} />
 
-      <SectionHeading x={40} y={280}>Trims &amp; Accessories</SectionHeading>
-      <GridTable x={40} y={292} cols={trimCols} rows={trims} bodyRows={4} />
-
-      <SectionHeading x={40} y={424}>Labels &amp; Branding</SectionHeading>
-      <GridTable x={40} y={436} cols={labelCols} rows={labels} bodyRows={4} />
+      <SectionHeading x={40} y={320}>Source Documents &amp; Attachments</SectionHeading>
+      {attachments.length === 0 ? (
+        <text x={40} y={345} fontSize={11} fill={FR.stone} fontFamily="Helvetica, Arial, sans-serif" fontStyle="italic">No source documents attached.</text>
+      ) : attachments.slice(0, 8).map((att, i) => (
+        <g key={att.id || i} transform={`translate(40 ${338 + i * 22})`}>
+          <rect x={0} y={0} width={1043} height={20} fill={i % 2 === 0 ? FR.salt : '#FFFFFF'} />
+          <text x={6} y={14} fontSize={10} fill={FR.slate} fontFamily="ui-monospace,Menlo,monospace">{att.name || '—'}</text>
+          <text x={320} y={14} fontSize={10} fill={FR.stone} fontFamily="Helvetica, Arial, sans-serif">{(att.type || '').split('/').pop()?.toUpperCase() || '—'}</text>
+          <text x={440} y={14} fontSize={10} fill={FR.stone} fontFamily="Helvetica, Arial, sans-serif">{att.size ? `${Math.round(att.size / 1024)} KB` : '—'}</text>
+          <text x={560} y={14} fontSize={10} fill={FR.stone} fontFamily="Helvetica, Arial, sans-serif">{att.uploaded_at ? att.uploaded_at.slice(0, 10) : '—'}</text>
+        </g>
+      ))}
     </g>
   );
 }
 
-// ─── Page 5 — Color & Artwork ────────────────────────────────────────────────
+// ─── Page 6 — Color & Artwork ────────────────────────────────────────────────
 function PageColor({ d, images }) {
   const imgs = images || [];
   const front = imgs.find(i => i.slot === 'artwork-front');
@@ -996,20 +1020,21 @@ function ComingSoon({ pageNum, title }) {
 
 // Page order mirrors STEPS in techPackConstants.js (manufacturing stage).
 const PAGE_FNS = [
-  { title: 'Style Overview',               phase: 'Design',         body: ({ d, images }) => <PageCover d={d} images={images} /> },
-  { title: 'Design Overview',              phase: 'Design',         body: ({ d, images }) => <PageDesignOverview d={d} images={images} /> },
-  { title: 'Technical Flat Lay Diagrams',  phase: 'Design',         body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
-  { title: 'Bill of Materials',            phase: 'Materials',      body: ({ d }) => <PageBOM d={d} /> },
-  { title: 'Construction Details',         phase: 'Cut & Sew',      body: ({ d }) => <PageConstruction d={d} /> },
-  { title: 'Construction Detail Sketches', phase: 'Cut & Sew',      body: ({ d, images }) => <PageSketches d={d} images={images} /> },
-  { title: 'Pattern Pieces & Cutting',     phase: 'Cut & Sew',      body: ({ d, images }) => <PagePattern d={d} images={images} /> },
-  { title: 'Points of Measure',            phase: 'Cut & Sew',      body: ({ d, images }) => <PagePom d={d} images={images} /> },
-  { title: 'Color & Artwork',              phase: 'Embellishments', body: ({ d, images }) => <PageColor d={d} images={images} /> },
-  { title: 'Garment Treatments',           phase: 'Treatments',     body: ({ d, images }) => <PageTreatments d={d} images={images} /> },
-  { title: 'Compliance & Quality',         phase: 'QC',             body: ({ d }) => <PageCompliance d={d} /> },
-  { title: 'Labels & Packaging',           phase: 'Packaging',      body: ({ d, images }) => <PageLabels d={d} images={images} /> },
-  { title: 'Order & Delivery',             phase: 'Logistics',      body: ({ d }) => <PageOrder d={d} /> },
-  { title: 'Revision History & Approval',  phase: 'Sign-off',       body: ({ d }) => <PageRevision d={d} /> },
+  { title: 'Style Overview',                    phase: 'Design',         body: ({ d, images }) => <PageCover d={d} images={images} /> },
+  { title: 'Design Overview',                   phase: 'Design',         body: ({ d, images }) => <PageDesignOverview d={d} images={images} /> },
+  { title: 'Technical Flat Lay Diagrams',       phase: 'Design',         body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
+  { title: 'BOM — Fabrics & Trims',             phase: 'Materials',      body: ({ d }) => <PageBOM d={d} /> },
+  { title: 'BOM — Labels & Source Files',       phase: 'Materials',      body: ({ d }) => <PageBOMTrims d={d} /> },
+  { title: 'Construction Details',              phase: 'Cut & Sew',      body: ({ d }) => <PageConstruction d={d} /> },
+  { title: 'Construction Detail Sketches',      phase: 'Cut & Sew',      body: ({ d, images }) => <PageSketches d={d} images={images} /> },
+  { title: 'Pattern Pieces & Cutting',          phase: 'Cut & Sew',      body: ({ d, images }) => <PagePattern d={d} images={images} /> },
+  { title: 'Points of Measure',                 phase: 'Cut & Sew',      body: ({ d, images }) => <PagePom d={d} images={images} /> },
+  { title: 'Color & Artwork',                   phase: 'Embellishments', body: ({ d, images }) => <PageColor d={d} images={images} /> },
+  { title: 'Garment Treatments',                phase: 'Treatments',     body: ({ d, images }) => <PageTreatments d={d} images={images} /> },
+  { title: 'Compliance & Quality',              phase: 'QC',             body: ({ d }) => <PageCompliance d={d} /> },
+  { title: 'Labels & Packaging',                phase: 'Packaging',      body: ({ d, images }) => <PageLabels d={d} images={images} /> },
+  { title: 'Order & Delivery',                  phase: 'Logistics',      body: ({ d }) => <PageOrder d={d} /> },
+  { title: 'Revision History & Approval',       phase: 'Sign-off',       body: ({ d }) => <PageRevision d={d} /> },
 ];
 
 function SkipOverlay() {

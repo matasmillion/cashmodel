@@ -547,6 +547,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     bomCost, costVariance,
     existingSuppliers,
     onCreateRevision: createRevision,
+    packId: pack.id,
   };
 
   return (

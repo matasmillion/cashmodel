@@ -24,8 +24,8 @@ export const DEFAULT_LIBRARY = { bom: [], fabrics: [], trims: [], labels: [], lo
 
 export const STATUSES = ['Design', 'Sampling', 'Testing', 'Pre-Production', 'Production', 'Released'];
 
-// Steps locked until Pre-Production: Compliance (10), Labels (11), Order (12)
-export const LOCKED_STEPS = new Set([10, 11, 12]);
+// Steps locked until Pre-Production: Compliance (11), Labels (12), Order (13)
+export const LOCKED_STEPS = new Set([11, 12, 13]);
 export function isStepLocked(stepIndex, status) {
   if (!LOCKED_STEPS.has(stepIndex)) return false;
   const unlockAt = STATUSES.indexOf('Pre-Production');
@@ -33,25 +33,27 @@ export function isStepLocked(stepIndex, status) {
   return current < unlockAt || current === -1;
 }
 
-// 14-step wizard, ordered by manufacturing stage:
+// 15-step wizard, ordered by manufacturing stage:
 //   Design → Materials → Cut & Sew → Embellishments → Treatments
 //   → QC → Packaging → Logistics → Sign-off
 // `phase` drives the section dividers in the sidebar and the live preview.
+// `skippable` steps show "PAGE NOT USED" overlay when added to skippedSteps[].
 export const STEPS = [
   { id: 'cover',         title: 'Style Overview',                   icon: '01', phase: 'Design' },
   { id: 'design',        title: 'Design Overview',                  icon: '02', phase: 'Design' },
   { id: 'flatlays',      title: 'Technical Flat Lay Diagrams',      icon: '03', phase: 'Design' },
-  { id: 'bom',           title: 'Bill of Materials',                icon: '04', phase: 'Materials' },
-  { id: 'construction',  title: 'Construction Details',             icon: '05', phase: 'Cut & Sew' },
-  { id: 'sketches',      title: 'Construction Detail Sketches',     icon: '06', phase: 'Cut & Sew' },
-  { id: 'pattern',       title: 'Pattern Pieces & Cutting',         icon: '07', phase: 'Cut & Sew' },
-  { id: 'pom',           title: 'Points of Measure',                icon: '08', phase: 'Cut & Sew' },
-  { id: 'color',         title: 'Color & Artwork',                  icon: '09', phase: 'Embellishments' },
-  { id: 'treatments',    title: 'Garment Treatments',               icon: '10', phase: 'Treatments' },
-  { id: 'compliance',    title: 'Compliance & Quality',             icon: '11', phase: 'QC' },
-  { id: 'labels',        title: 'Labels & Packaging',               icon: '12', phase: 'Packaging' },
-  { id: 'order',         title: 'Order & Delivery',                 icon: '13', phase: 'Logistics' },
-  { id: 'revision',      title: 'Revision History & Approval',      icon: '14', phase: 'Sign-off' },
+  { id: 'bom',           title: 'Bill of Materials — Fabrics & Trims', icon: '04', phase: 'Materials' },
+  { id: 'bom-trims',     title: 'Bill of Materials — Labels & Files',  icon: '05', phase: 'Materials', skippable: true },
+  { id: 'construction',  title: 'Construction Details',             icon: '06', phase: 'Cut & Sew' },
+  { id: 'sketches',      title: 'Construction Detail Sketches',     icon: '07', phase: 'Cut & Sew' },
+  { id: 'pattern',       title: 'Pattern Pieces & Cutting',         icon: '08', phase: 'Cut & Sew' },
+  { id: 'pom',           title: 'Points of Measure',                icon: '09', phase: 'Cut & Sew' },
+  { id: 'color',         title: 'Color & Artwork',                  icon: '10', phase: 'Embellishments' },
+  { id: 'treatments',    title: 'Garment Treatments',               icon: '11', phase: 'Treatments' },
+  { id: 'compliance',    title: 'Compliance & Quality',             icon: '12', phase: 'QC' },
+  { id: 'labels',        title: 'Labels & Packaging',               icon: '13', phase: 'Packaging' },
+  { id: 'order',         title: 'Order & Delivery',                 icon: '14', phase: 'Logistics' },
+  { id: 'revision',      title: 'Revision History & Approval',      icon: '15', phase: 'Sign-off' },
 ];
 
 const todayISO = () => {
@@ -84,6 +86,7 @@ export const DEFAULT_DATA = {
   trimsAccessories: [{ component: '', type: '', material: '', color: '', sizeSpec: '', supplier: '', qtyPerGarment: '' }],
   labelsBranding: [{ labelType: '', material: '', size: '', placement: '', artworkRef: '', notes: '' }],
   bom: [{ component: '', type: '', material: '', color: '', weight: '', supplier: '', supplierContact: '', costPerUnit: '', notes: '' }],
+  attachments: [],
   colorways: [{ name: '', frColor: '', pantone: '', hex: '', fabricSwatch: '', approvalStatus: 'Pending' }],
   artworkPlacements: [{ placement: '', artworkFile: '', method: '', sizeCm: '', positionFrom: '', color: '', notes: '' }],
   logoFront: '', logoBack: '', logoMethod: '',
@@ -129,7 +132,7 @@ export const DEFAULT_DATA = {
   },
 };
 
-export const IMG_STEPS = new Set([3, 4, 5, 6, 7, 8, 9, 10, 11]);
+export const IMG_STEPS = new Set([3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
 
 // Initial-load compression. Loads a File at high quality + caps to a
 // generous max dimension (2400px) so the crop modal has detail to work

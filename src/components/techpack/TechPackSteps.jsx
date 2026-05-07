@@ -7,7 +7,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { FR, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, isStepLocked, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
 import { listFRColors } from '../../utils/colorLibrary';
-import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, EditableSelect, FRColorCell } from './TechPackPrimitives';
+import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, EditableSelect, FRColorCell, FilesPanel } from './TechPackPrimitives';
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
 import { addSupplier } from '../../utils/plmDirectory';
 import { getFRColor } from '../../utils/colorLibrary';
@@ -579,7 +579,27 @@ export function StepBOM({ data, set, existingSuppliers = [] }) {
           rows={trims} onUpdate={updT} onAdd={addT} onRemove={rmT} />
       </div>
 
-      <div style={{ marginBottom: 10 }}>
+    </div>
+  );
+}
+
+export function StepBOMTrims({ data, set, packId, existingSuppliers = [] }) {
+  const labels = data.labelsBranding && data.labelsBranding.length
+    ? data.labelsBranding
+    : [{ labelType: '', material: '', size: '', placement: '', artworkRef: '', notes: '' }];
+  const attachments = Array.isArray(data.attachments) ? data.attachments : [];
+
+  const updL = (i, k, v) => set('labelsBranding', labels.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addL = () => set('labelsBranding', [...labels, { labelType: '', material: '', size: '', placement: '', artworkRef: '', notes: '' }]);
+  const rmL  = (i) => set('labelsBranding', labels.filter((_, idx) => idx !== i));
+
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+
+  return (
+    <div>
+      <SectionTitle>Labels, Branding &amp; Source Files</SectionTitle>
+
+      <div style={{ marginBottom: 18 }}>
         <label style={sectionLabel}>Labels & Branding</label>
         <ArrayTable
           headers={[
@@ -592,9 +612,23 @@ export function StepBOM({ data, set, existingSuppliers = [] }) {
           ]}
           rows={labels} onUpdate={updL} onAdd={addL} onRemove={rmL} />
       </div>
+
+      <div style={{ marginBottom: 10 }}>
+        <label style={sectionLabel}>Source Documents</label>
+        <div style={{ fontSize: 11, color: FR.stone, marginBottom: 8, lineHeight: 1.5 }}>
+          Attach spec sheets, artwork files, or reference documents. Files are stored securely and can be downloaded by any team member with access.
+        </div>
+        <FilesPanel
+          attachments={attachments}
+          packId={packId}
+          onAdd={(ref) => set('attachments', [...attachments, ref])}
+          onRemove={(i) => set('attachments', attachments.filter((_, idx) => idx !== i))}
+        />
+      </div>
     </div>
   );
 }
+
 export function StepColor({ data, set, images, onUpload, onRemove }) {
   const colorways = data.colorways && data.colorways.length ? data.colorways : [{ name: '', frColor: '', pantone: '', hex: '', fabricSwatch: '', approvalStatus: 'Pending' }];
   // When frColor changes, cache the library's Pantone TCX + hex onto the
@@ -1282,10 +1316,11 @@ export function StepRevision({ data, set, onSubmit, submitting, submitResult, on
 
 // Order mirrors STEPS in techPackConstants.js — by manufacturing stage.
 export const STEP_FNS = [
-  StepCover,            // 01 Design
-  StepDesignOverview,   // 02 Design
-  StepFlatlays,         // 03 Design
-  StepBOM,              // 04 Materials
+  StepCover,            // 00 Design
+  StepDesignOverview,   // 01 Design
+  StepFlatlays,         // 02 Design
+  StepBOM,              // 03 Materials — Fabrics & Trims
+  StepBOMTrims,         // 04 Materials — Labels & Files (skippable)
   StepConstruction,     // 05 Cut & Sew
   StepSketches,         // 06 Cut & Sew
   StepPattern,          // 07 Cut & Sew

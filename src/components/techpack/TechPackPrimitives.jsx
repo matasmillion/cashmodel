@@ -554,6 +554,110 @@ export function EditableSelect({ label, value, onChange, options = [], onAddOpti
   );
 }
 
+// FilesPanel — upload + list non-image source documents (PDF, AI, PSD, ZIP).
+// Stores entries in data.attachments[]. Requires packId for storage path.
+// Falls back to a download link that resolves the stored path to a signed URL.
+export function FilesPanel({ attachments, onAdd, onRemove, packId }) {
+  const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const safe = Array.isArray(attachments) ? attachments : [];
+
+  const ACCEPTED = '.pdf,.ai,.psd,.eps,.zip,.svg,.png,.jpg,.jpeg,.xlsx,.docx';
+
+  const handleFiles = async (files) => {
+    if (!packId) { setError('Save the pack first to enable file uploads.'); return; }
+    setError('');
+    setUploading(true);
+    try {
+      const { uploadFile } = await import('../../utils/plmAssets');
+      for (const file of files) {
+        const ref = await uploadFile({ packId, file });
+        onAdd(ref);
+      }
+    } catch (e) {
+      setError(e.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const fmt = (bytes) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          style={{ padding: '6px 14px', background: FR.slate, border: 'none', borderRadius: 3, fontSize: 11, color: FR.salt, cursor: uploading ? 'wait' : 'pointer', opacity: uploading ? 0.6 : 1 }}>
+          {uploading ? 'Uploading…' : '+ Attach File'}
+        </button>
+        <span style={{ fontSize: 10, color: FR.stone }}>PDF · AI · PSD · EPS · ZIP · SVG · XLSX</span>
+        <input ref={fileRef} type="file" accept={ACCEPTED} multiple
+          onChange={e => { if (e.target.files.length) handleFiles(Array.from(e.target.files)); e.target.value = ''; }}
+          style={{ display: 'none' }} />
+      </div>
+      {error && <div style={{ fontSize: 11, color: '#A32D2D', marginBottom: 6 }}>{error}</div>}
+      {safe.length === 0 ? (
+        <div style={{ fontSize: 11, color: FR.stone, padding: '10px 0', fontStyle: 'italic' }}>No source documents attached.</div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+          <thead>
+            <tr>
+              {['File Name', 'Type', 'Size', 'Uploaded', ''].map(h => (
+                <th key={h} style={{ textAlign: 'left', padding: '4px 8px', background: FR.slate, color: FR.salt, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {safe.map((att, i) => (
+              <tr key={att.id || i} style={{ background: i % 2 === 0 ? FR.salt : FR.white }}>
+                <td style={{ padding: '5px 8px', borderBottom: `1px solid ${FR.sand}`, fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 10 }}>{att.name || '—'}</td>
+                <td style={{ padding: '5px 8px', borderBottom: `1px solid ${FR.sand}`, color: FR.stone }}>{(att.type || '').split('/').pop()?.toUpperCase() || '—'}</td>
+                <td style={{ padding: '5px 8px', borderBottom: `1px solid ${FR.sand}`, color: FR.stone }}>{fmt(att.size)}</td>
+                <td style={{ padding: '5px 8px', borderBottom: `1px solid ${FR.sand}`, color: FR.stone }}>{att.uploaded_at ? att.uploaded_at.slice(0, 10) : '—'}</td>
+                <td style={{ padding: '5px 8px', borderBottom: `1px solid ${FR.sand}`, textAlign: 'right' }}>
+                  {att.path && (
+                    <DownloadLink path={att.path} name={att.name} />
+                  )}
+                  <button onClick={() => onRemove(i)}
+                    style={{ marginLeft: 8, background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 13 }}>×</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function DownloadLink({ path, name }) {
+  const [url, setUrl] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    import('../../utils/plmAssets').then(({ getAssetUrl }) => {
+      getAssetUrl(path).then(u => { if (!cancelled) setUrl(u || ''); });
+    });
+    return () => { cancelled = true; };
+  }, [path]);
+  if (!url) return <span style={{ fontSize: 10, color: FR.stone }}>resolving…</span>;
+  return (
+    <a href={url} download={name || 'download'} target="_blank" rel="noreferrer"
+      onClick={e => e.stopPropagation()}
+      style={{ fontSize: 10, color: FR.soil, textDecoration: 'none', fontWeight: 600 }}>
+      ↓ Download
+    </a>
+  );
+}
+
 export function FRColorCell({ value, onChange }) {
   // Live-read the library so custom colors added on the PLM → Colors tab
   // show up in every picker across the app without needing a page refresh.
