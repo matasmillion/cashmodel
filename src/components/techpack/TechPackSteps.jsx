@@ -629,7 +629,7 @@ export function StepBOMTrims({ data, set, packId, existingSuppliers = [] }) {
   );
 }
 
-export function StepColor({ data, set, images, onUpload, onRemove }) {
+export function StepColor({ data, set }) {
   const colorways = data.colorways && data.colorways.length ? data.colorways : [{ name: '', frColor: '', pantone: '', hex: '', fabricSwatch: '', approvalStatus: 'Pending' }];
   // When frColor changes, cache the library's Pantone TCX + hex onto the
   // colorway row so preview rendering keeps working without extra lookups.
@@ -650,11 +650,6 @@ export function StepColor({ data, set, images, onUpload, onRemove }) {
   };
   const addCW = () => set('colorways', [...colorways, { name: '', frColor: '', pantone: '', hex: '', fabricSwatch: '', approvalStatus: 'Pending' }]);
   const rmCW = (i) => set('colorways', colorways.filter((_, idx) => idx !== i));
-
-  const placements = data.artworkPlacements && data.artworkPlacements.length ? data.artworkPlacements : [{ placement: '', artworkFile: '', method: '', sizeCm: '', positionFrom: '', color: '', notes: '' }];
-  const updateAP = (i, k, v) => set('artworkPlacements', placements.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
-  const addAP = () => set('artworkPlacements', [...placements, { placement: '', artworkFile: '', method: '', sizeCm: '', positionFrom: '', color: '', notes: '' }]);
-  const rmAP = (i) => set('artworkPlacements', placements.filter((_, idx) => idx !== i));
 
   const frColorRender = (v, onChange) => <FRColorCell value={v} onChange={onChange} />;
   // Read-only text cells that pull their value from the color library using
@@ -679,7 +674,7 @@ export function StepColor({ data, set, images, onUpload, onRemove }) {
 
   return (
     <div>
-      <SectionTitle>Color & Artwork</SectionTitle>
+      <SectionTitle>Colorways</SectionTitle>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         {listFRColors().map(c => (
@@ -706,9 +701,35 @@ export function StepColor({ data, set, images, onUpload, onRemove }) {
           ]}
           rows={colorways} onUpdate={updateCW} onAdd={addCW} onRemove={rmCW} />
       </div>
+    </div>
+  );
+}
+
+export function StepArtwork({ data, set, images, onUpload, onRemove }) {
+  const placements = data.artworkPlacements && data.artworkPlacements.length ? data.artworkPlacements : [{ placement: '', artworkFile: '', method: '', sizeCm: '', positionFrom: '', color: '', notes: '' }];
+  const updateAP = (i, k, v) => set('artworkPlacements', placements.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addAP = () => set('artworkPlacements', [...placements, { placement: '', artworkFile: '', method: '', sizeCm: '', positionFrom: '', color: '', notes: '' }]);
+  const rmAP = (i) => set('artworkPlacements', placements.filter((_, idx) => idx !== i));
+
+  const frColorRender = (v, onChange) => <FRColorCell value={v} onChange={onChange} />;
+
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+
+  return (
+    <div>
+      <SectionTitle>Artwork & Placement</SectionTitle>
 
       <div style={{ marginBottom: 18 }}>
-        <label style={sectionLabel}>Artwork & Logo Placement</label>
+        <label style={sectionLabel}>Logo & Method</label>
+        <Row>
+          <Input label="Front Logo"  value={data.logoFront}  onChange={v => set('logoFront', v)}  placeholder="Foreign Resource wordmark" />
+          <Input label="Back Logo"   value={data.logoBack}   onChange={v => set('logoBack', v)}   placeholder="—" />
+          <Input label="Method"      value={data.logoMethod} onChange={v => set('logoMethod', v)} placeholder="Embroidery / Screen Print" />
+        </Row>
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel}>Artwork References</label>
         <Row>
           <PhotoUpload label="Front Artwork — Position, Size, Method" slotKey="artwork-front" images={images} onUpload={onUpload} onRemove={onRemove} />
           <PhotoUpload label="Back Artwork — Position, Size, Method"  slotKey="artwork-back"  images={images} onUpload={onUpload} onRemove={onRemove} />
@@ -716,7 +737,7 @@ export function StepColor({ data, set, images, onUpload, onRemove }) {
       </div>
 
       <div style={{ marginBottom: 10 }}>
-        <label style={sectionLabel}>Placement</label>
+        <label style={sectionLabel}>Placement Detail</label>
         <ArrayTable
           headers={[
             { key: 'placement',    label: 'Placement',    placeholder: 'Center chest / Back yoke' },
@@ -1488,12 +1509,13 @@ export const STEP_FNS = [
   StepPattern,           // 08 Cut & Sew — Pattern & Cutting
   StepPom,               // 09 Cut & Sew — POM (base size)
   StepSizeMatrix,        // 10 Cut & Sew — Graded Size Matrix (skippable)
-  StepColor,             // 11 Embellishments
-  StepTreatments,        // 12 Treatments
-  StepCompliance,        // 13 QC
-  StepLabels,            // 14 Packaging
-  StepOrder,             // 15 Logistics
-  StepRevision,          // 16 Sign-off
+  StepColor,             // 11 Embellishments — Colorways
+  StepArtwork,           // 12 Embellishments — Artwork & Placement
+  StepTreatments,        // 13 Treatments
+  StepCompliance,        // 14 QC
+  StepLabels,            // 15 Packaging
+  StepOrder,             // 16 Logistics
+  StepRevision,          // 17 Sign-off
 ];
 
 // Backwards-compat aliases so older references keep resolving during the

@@ -7,7 +7,7 @@ import { FR } from './techPackConstants';
 
 const PAGE_W = 1123;
 const PAGE_H = 794;
-const TOTAL_PAGES = 17;
+const TOTAL_PAGES = 18;
 
 function esc(s) { return String(s ?? ''); }
 function clampLine(s, maxW, charW = 6.5) {
@@ -463,14 +463,9 @@ function PageBOMTrims({ d }) {
   );
 }
 
-// ─── Page 6 — Color & Artwork ────────────────────────────────────────────────
-function PageColor({ d, images }) {
-  const imgs = images || [];
-  const front = imgs.find(i => i.slot === 'artwork-front');
-  const back  = imgs.find(i => i.slot === 'artwork-back');
-
+// ─── Embellishments — Colorways ──────────────────────────────────────────────
+function PageColorways({ d }) {
   const colorways = (d.colorways || []).filter(c => c && (c.name || c.frColor || c.pantone || c.hex));
-  const placements = (d.artworkPlacements || []).filter(r => r.placement || r.artworkFile || r.method || r.sizeCm || r.positionFrom || r.color);
 
   const cwCols = [
     { key: 'name',           label: 'Colorway Name',   w: 180 },
@@ -479,16 +474,6 @@ function PageColor({ d, images }) {
     { key: 'hex',            label: 'Hex',             w: 120 },
     { key: 'fabricSwatch',   label: 'Fabric Swatch',   w: 293 },
     { key: 'approvalStatus', label: 'Approval',        w: 160 },
-  ];
-
-  const plCols = [
-    { key: 'placement',    label: 'Placement',     w: 150 },
-    { key: 'artworkFile',  label: 'Artwork File',  w: 160 },
-    { key: 'method',       label: 'Method',        w: 150 },
-    { key: 'sizeCm',       label: 'Size (cm)',     w: 110 },
-    { key: 'positionFrom', label: 'Position From', w: 170 },
-    { key: 'color',        label: 'Color',         w: 130 },
-    { key: 'notes',        label: 'Notes',         w: 173 },
   ];
 
   const renderCWCell = (key, row, x, y, w) => {
@@ -504,25 +489,57 @@ function PageColor({ d, images }) {
     return null;
   };
 
-  // Layout
-  const cwY = 158;
-  const artY = 315;
-  const artH = 170;
-  const plY = 540;
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <SectionHeading x={40} y={158}>Colorway Specification</SectionHeading>
+      <GridTable x={40} y={170} cols={cwCols} rows={colorways} bodyRows={12} renderCell={renderCWCell} />
+    </g>
+  );
+}
+
+// ─── Embellishments — Artwork & Placement ────────────────────────────────────
+function PageArtwork({ d, images }) {
+  const imgs = images || [];
+  const front = imgs.find(i => i.slot === 'artwork-front');
+  const back  = imgs.find(i => i.slot === 'artwork-back');
+
+  const placements = (d.artworkPlacements || []).filter(r => r.placement || r.artworkFile || r.method || r.sizeCm || r.positionFrom || r.color);
+
+  const plCols = [
+    { key: 'placement',    label: 'Placement',     w: 150 },
+    { key: 'artworkFile',  label: 'Artwork File',  w: 160 },
+    { key: 'method',       label: 'Method',        w: 150 },
+    { key: 'sizeCm',       label: 'Size (cm)',     w: 110 },
+    { key: 'positionFrom', label: 'Position From', w: 170 },
+    { key: 'color',        label: 'Color',         w: 130 },
+    { key: 'notes',        label: 'Notes',         w: 173 },
+  ];
+
+  const logoY = 158;
+  const artY = 230;
+  const artH = 200;
+  const plY = 470;
 
   return (
     <g>
       <InfoStrip d={d} />
 
-      <SectionHeading x={40} y={cwY}>Colorway Specification</SectionHeading>
-      <GridTable x={40} y={cwY + 12} cols={cwCols} rows={colorways} bodyRows={4} renderCell={renderCWCell} />
+      <SectionHeading x={40} y={logoY}>Logo &amp; Method</SectionHeading>
+      <text x={40}  y={logoY + 30} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">FRONT LOGO</text>
+      <text x={40}  y={logoY + 46} fontSize="11" fill={FR.slate}>{esc(d.logoFront || '—')}</text>
+      <text x={400} y={logoY + 30} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">BACK LOGO</text>
+      <text x={400} y={logoY + 46} fontSize="11" fill={FR.slate}>{esc(d.logoBack || '—')}</text>
+      <text x={760} y={logoY + 30} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">METHOD</text>
+      <text x={760} y={logoY + 46} fontSize="11" fill={FR.slate}>{esc(d.logoMethod || '—')}</text>
 
-      <SectionHeading x={40} y={artY}>Artwork &amp; Logo Placement</SectionHeading>
-      <PhotoSlot x={40}                                 y={artY + 20} w={(PAGE_W - 80 - 16) / 2} h={artH} label="Front Artwork" image={front} />
-      <PhotoSlot x={40 + (PAGE_W - 80 - 16) / 2 + 16}  y={artY + 20} w={(PAGE_W - 80 - 16) / 2} h={artH} label="Back Artwork"  image={back} />
+      <SectionHeading x={40} y={artY}>Artwork References</SectionHeading>
+      <PhotoSlot x={40}                                y={artY + 20} w={(PAGE_W - 80 - 16) / 2} h={artH} label="Front Artwork" image={front} />
+      <PhotoSlot x={40 + (PAGE_W - 80 - 16) / 2 + 16} y={artY + 20} w={(PAGE_W - 80 - 16) / 2} h={artH} label="Back Artwork"  image={back} />
 
-      <SectionHeading x={40} y={plY}>Placement</SectionHeading>
-      <GridTable x={40} y={plY + 12} cols={plCols} rows={placements} bodyRows={5} />
+      <SectionHeading x={40} y={plY}>Placement Detail</SectionHeading>
+      <GridTable x={40} y={plY + 12} cols={plCols} rows={placements} bodyRows={8} />
     </g>
   );
 }
@@ -1118,7 +1135,8 @@ const PAGE_FNS = [
   { title: 'Pattern Pieces & Cutting',          phase: 'Cut & Sew',      body: ({ d, images }) => <PagePattern d={d} images={images} /> },
   { title: 'Points of Measure (Base Size)',     phase: 'Cut & Sew',      body: ({ d, images }) => <PagePom d={d} images={images} /> },
   { title: 'Graded Size Matrix',                phase: 'Cut & Sew',      body: ({ d }) => <PageSizeMatrix d={d} /> },
-  { title: 'Color & Artwork',                   phase: 'Embellishments', body: ({ d, images }) => <PageColor d={d} images={images} /> },
+  { title: 'Colorways',                         phase: 'Embellishments', body: ({ d }) => <PageColorways d={d} /> },
+  { title: 'Artwork & Placement',               phase: 'Embellishments', body: ({ d, images }) => <PageArtwork d={d} images={images} /> },
   { title: 'Garment Treatments',                phase: 'Treatments',     body: ({ d, images }) => <PageTreatments d={d} images={images} /> },
   { title: 'Compliance & Quality',              phase: 'QC',             body: ({ d }) => <PageCompliance d={d} /> },
   { title: 'Labels & Packaging',                phase: 'Packaging',      body: ({ d, images }) => <PageLabels d={d} images={images} /> },
