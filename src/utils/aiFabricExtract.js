@@ -115,19 +115,25 @@ async function callAnthropicProxy(body) {
 export async function extractFabricFromMedia({ media }) {
   if (!media || media.length === 0) throw new Error('Upload at least one fabric image or PDF.');
 
+  // Big swatch cards (20+ colorways) can produce 4–8KB of JSON. Cap well
+  // above worst-case observed output so we don't get a mid-string cutoff.
   const json = await callAnthropicProxy({
     model: MODEL,
-    max_tokens: 2048,
+    max_tokens: 16384,
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: buildContent(media) }],
   });
 
   const text = json?.content?.[0]?.text || '';
+  const stop = json?.stop_reason;
   const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
 
   try {
     return JSON.parse(cleaned);
   } catch (err) {
+    if (stop === 'max_tokens') {
+      throw new Error('AI response was cut off — too many color swatches to fit in one pass. Try uploading fewer cards at a time, or split very large color cards.');
+    }
     throw new Error(`Could not parse AI response as JSON: ${err.message}\n\nRaw:\n${cleaned.slice(0, 500)}`);
   }
 }
