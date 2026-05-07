@@ -15,6 +15,7 @@ import { listTreatments, getTreatmentRollups } from '../../utils/treatmentStore'
 import { TREATMENT_TYPE_LABEL } from '../../utils/treatmentLibrary';
 import { computePackDiff } from '../../utils/techPackDiff';
 import { useApp } from '../../context/AppContext';
+import { analyzeGarmentImage, generateGarmentView, imageEntryToDataUrl } from '../../utils/techPackViews';
 
 const COST_TIER_CAP = 5;
 const SIZE_OPTIONS = ['S', 'M', 'L', 'XL', 'NS', 'W30', 'W32', 'W34', 'W36'];
@@ -372,11 +373,214 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
   );
 }
 
+const VIEW_LABELS = { front: 'Front View', back: 'Back View', side: 'Side View' };
+const VIEWS = ['front', 'back', 'side'];
+
+function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
+  const [phase, setPhase]       = useState('analyzing'); // analyzing | generating | done | error
+  const [description, setDesc]  = useState('');
+  const [views, setViews]       = useState({ front: null, back: null, side: null });
+  const [vstatus, setVstatus]   = useState({ front: 'pending', back: 'pending', side: 'pending' });
+  const [errMsg, setErrMsg]     = useState('');
+
+  useEffect(() => { startAll(); }, []);
+
+  async function startAll(viewsToRun = VIEWS, existingDesc = null) {
+    try {
+      let desc = existingDesc;
+      if (!desc) {
+        setPhase('analyzing');
+        const dataUrl = await imageEntryToDataUrl(srcEntry);
+        if (!dataUrl) throw new Error('Could not read source image');
+        const mime = dataUrl.match(/^data:([^;]+);/)?.[1] || 'image/jpeg';
+        const b64  = dataUrl.replace(/^data:[^;]+;base64,/, '');
+        desc = await analyzeGarmentImage(b64, mime);
+        setDesc(desc);
+      }
+
+      setPhase('generating');
+      setVstatus(vs => {
+        const next = { ...vs };
+        viewsToRun.forEach(v => { next[v] = 'loading'; });
+        return next;
+      });
+
+      await Promise.all(viewsToRun.map(async view => {
+        try {
+          const url = await generateGarmentView(desc, view);
+          setViews(vs => ({ ...vs, [view]: url }));
+          setVstatus(vs => ({ ...vs, [view]: 'done' }));
+        } catch {
+          setVstatus(vs => ({ ...vs, [view]: 'error' }));
+        }
+      }));
+
+      setPhase('done');
+    } catch (e) {
+      setErrMsg(e.message || 'Generation failed');
+      setPhase('error');
+    }
+  }
+
+  async function regenView(view) {
+    if (!description) return;
+    setViews(vs => ({ ...vs, [view]: null }));
+    setVstatus(vs => ({ ...vs, [view]: 'loading' }));
+    try {
+      const url = await generateGarmentView(description, view);
+      setViews(vs => ({ ...vs, [view]: url }));
+      setVstatus(vs => ({ ...vs, [view]: 'done' }));
+    } catch {
+      setVstatus(vs => ({ ...vs, [view]: 'error' }));
+    }
+  }
+
+  async function handleAccept() {
+    await Promise.all(VIEWS.map(async view => {
+      const url = views[view];
+      if (!url) return;
+      try {
+        const res    = await fetch(url);
+        const blob   = await res.blob();
+        const dataUrl = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload  = e => resolve(e.target.result);
+          r.onerror = reject;
+          r.readAsDataURL(blob);
+        });
+        onAccept(`design-${view}`, dataUrl);
+      } catch { /* skip failed view */ }
+    }));
+    onClose();
+  }
+
+  const allDone = VIEWS.every(v => views[v]);
+  const anyLoading = Object.values(vstatus).some(s => s === 'loading');
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(58,58,58,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+      <div style={{ background: FR.salt, borderRadius: 8, padding: 28, width: 800, maxWidth: '96vw', maxHeight: '90vh', overflowY: 'auto', position: 'relative', border: `0.5px solid rgba(58,58,58,0.15)` }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
+          <div>
+            <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 22, color: FR.slate, lineHeight: 1 }}>Generate Garment Views</div>
+            <div style={{ fontSize: 10, color: FR.stone, marginTop: 4, letterSpacing: 0.5, textTransform: 'uppercase' }}>Nano Banana 2 · fal.ai · Claude Vision</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: FR.stone, lineHeight: 1, padding: 0 }}>×</button>
+        </div>
+
+        {/* Status bar */}
+        {(phase === 'analyzing' || (phase === 'generating' && anyLoading)) && (
+          <div style={{ fontSize: 12, color: FR.stone, marginBottom: 18, fontStyle: 'italic' }}>
+            {phase === 'analyzing' ? 'Analyzing garment with Claude Vision…' : 'Generating views with Nano Banana 2…'}
+          </div>
+        )}
+
+        {/* View grid */}
+        {(phase === 'generating' || phase === 'done') && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 24 }}>
+            {VIEWS.map(view => (
+              <div key={view}>
+                <div style={{ fontSize: 10, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 }}>{VIEW_LABELS[view]}</div>
+                <div style={{
+                  aspectRatio: '2 / 3',
+                  border: `1px dashed ${vstatus[view] === 'error' ? '#A32D2D' : FR.sand}`,
+                  borderRadius: 6,
+                  overflow: 'hidden',
+                  background: FR.white,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  {vstatus[view] === 'loading' && (
+                    <div style={{ fontSize: 11, color: FR.stone }}>Generating…</div>
+                  )}
+                  {vstatus[view] === 'error' && (
+                    <div style={{ fontSize: 11, color: '#A32D2D' }}>Failed</div>
+                  )}
+                  {views[view] && (
+                    <img src={views[view]} alt={VIEW_LABELS[view]} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  )}
+                </div>
+                {(vstatus[view] === 'done' || vstatus[view] === 'error') && (
+                  <button
+                    onClick={() => regenView(view)}
+                    style={{ marginTop: 6, width: '100%', fontSize: 10, background: 'none', border: `0.5px solid ${FR.sand}`, borderRadius: 4, padding: '4px 0', cursor: 'pointer', color: FR.stone, letterSpacing: 0.3 }}>
+                    Regenerate
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {phase === 'error' && (
+          <div style={{ fontSize: 12, color: '#A32D2D', marginBottom: 18 }}>{errMsg}</div>
+        )}
+
+        {/* Footer */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button onClick={onClose} style={{ padding: '8px 18px', background: 'none', border: `0.5px solid ${FR.sand}`, borderRadius: 6, cursor: 'pointer', fontSize: 12, color: FR.slate }}>
+            Cancel
+          </button>
+          {allDone && (
+            <button onClick={handleAccept} style={{ padding: '8px 22px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, letterSpacing: 0.3 }}>
+              Use These Views
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function StepDesignOverview({ images, onUpload, onRemove }) {
+  const [showModal, setShowModal] = useState(false);
+
+  const srcEntry = (images || []).find(i => i.slot === 'design-source');
+
   return (
     <div>
       <SectionTitle>Design Overview</SectionTitle>
 
+      {/* Reference image for AI view generation */}
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>Reference Image</label>
+        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-end' }}>
+          <div style={{ flex: 1 }}>
+            <PhotoUpload
+              label="Upload any source — CLO3D render, flat lay, sketch, photo"
+              slotKey="design-source"
+              images={images}
+              onUpload={onUpload}
+              onRemove={onRemove}
+            />
+          </div>
+          {srcEntry && (
+            <button
+              onClick={() => setShowModal(true)}
+              style={{
+                marginBottom: 14,
+                padding: '9px 18px',
+                background: FR.slate,
+                color: FR.salt,
+                border: 'none',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontSize: 11,
+                letterSpacing: 0.5,
+                textTransform: 'uppercase',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}>
+              Generate Views with AI
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Manual / generated garment views */}
       <div style={{ marginBottom: 16 }}>
         <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>Garment Views</label>
         <Row cols="1fr 1fr 1fr">
@@ -385,6 +589,14 @@ export function StepDesignOverview({ images, onUpload, onRemove }) {
           <PhotoUpload label="Side View"  slotKey="design-side"  images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
         </Row>
       </div>
+
+      {showModal && srcEntry && (
+        <GenerateViewsModal
+          srcEntry={srcEntry}
+          onAccept={(slot, dataUrl) => onUpload(slot, dataUrl, `${slot}-generated.jpg`)}
+          onClose={() => setShowModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -900,23 +1112,21 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
     </div>
   );
 }
-// StepSizeMatrix — graded size table. The user defines the size list,
-// picks which one is the "base" (whose values come straight from the
-// POM page), and enters per-size deltas. Final per-size values are
-// derived as base + delta when rendering.
+// StepSizeMatrix — graded size table. Sizes are derived from the Style Overview
+// sizeRange field; the user picks the sample size (whose values come straight
+// from the POM page) and enters per-size deltas. Final values: sample + delta.
 export function StepSizeMatrix({ data, set }) {
-  const matrix = data.gradedSizeMatrix || { baseSize: 'M', sizes: ['S', 'M', 'L', 'XL'], grading: [] };
-  const sizes = Array.isArray(matrix.sizes) && matrix.sizes.length ? matrix.sizes : ['S', 'M', 'L', 'XL'];
+  const matrix = data.gradedSizeMatrix || { baseSize: 'M', sizes: [], grading: [] };
+
+  // Sizes always come from Style Overview → sizeRange
+  const rawSizes = Array.isArray(data.sizeRange)
+    ? data.sizeRange
+    : (data.sizeRange ? String(data.sizeRange).split(/[/,]+/).map(s => s.trim()).filter(Boolean) : []);
+  const sizes = rawSizes.length ? rawSizes : ['S', 'M', 'L', 'XL'];
   const baseSize = sizes.includes(matrix.baseSize) ? matrix.baseSize : sizes[0];
   const poms = (data.poms || []).filter(p => p.name);
 
-  const update = (patch) => set('gradedSizeMatrix', { ...matrix, sizes, baseSize, ...patch });
-
-  const setSizes = (csv) => {
-    const next = csv.split(',').map(s => s.trim()).filter(Boolean);
-    if (!next.length) return;
-    update({ sizes: next, baseSize: next.includes(baseSize) ? baseSize : next[0] });
-  };
+  const update = (patch) => set('gradedSizeMatrix', { ...matrix, ...patch });
 
   const setDelta = (pomName, size, value) => {
     const grading = Array.isArray(matrix.grading) ? matrix.grading : [];
@@ -957,17 +1167,18 @@ export function StepSizeMatrix({ data, set }) {
     <div>
       <SectionTitle>Graded Size Matrix</SectionTitle>
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, lineHeight: 1.5 }}>
-        Define the size list and per-measurement deltas relative to the base size. Final values are computed as <code style={{ fontFamily: 'ui-monospace,Menlo,monospace', background: FR.salt, padding: '1px 5px', borderRadius: 3 }}>base + delta</code> at render time. The base size's column comes straight from the Points of Measure page.
+        Sizes are pulled from the Style Overview page. Select the sample size — its values come straight from the Points of Measure page. Enter per-size deltas for all other sizes; final values are computed as <code style={{ fontFamily: 'ui-monospace,Menlo,monospace', background: FR.salt, padding: '1px 5px', borderRadius: 3 }}>sample + delta</code>.
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 18 }}>
         <div>
-          <label style={sectionLabel}>Sizes (comma-separated)</label>
-          <input value={sizes.join(', ')} onChange={e => setSizes(e.target.value)}
-            style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.white, boxSizing: 'border-box' }} />
+          <label style={sectionLabel}>Sizes (from Style Overview)</label>
+          <div style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.stone, background: FR.salt, boxSizing: 'border-box', fontFamily: 'ui-monospace,Menlo,monospace' }}>
+            {sizes.join(', ')}
+          </div>
         </div>
         <div>
-          <label style={sectionLabel}>Base Size</label>
+          <label style={sectionLabel}>Sample Size</label>
           <select value={baseSize} onChange={e => update({ baseSize: e.target.value })}
             style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.white }}>
             {sizes.map(s => <option key={s} value={s}>{s}</option>)}
@@ -987,7 +1198,7 @@ export function StepSizeMatrix({ data, set }) {
                 <th style={{ textAlign: 'left', padding: '5px 8px', background: FR.slate, color: FR.salt, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>Measurement</th>
                 {sizes.map(s => (
                   <th key={s} colSpan={2} style={{ textAlign: 'center', padding: '5px 8px', background: s === baseSize ? FR.soil : FR.slate, color: FR.salt, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                    {s}{s === baseSize ? ' · base' : ''}
+                    {s}{s === baseSize ? ' · sample' : ''}
                   </th>
                 ))}
               </tr>

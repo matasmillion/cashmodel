@@ -316,8 +316,11 @@ export async function generateTechPackPDF(pack) {
   // ─── Cut & Sew → Graded Size Matrix ───
   newPage('Graded Size Matrix (cm)', null, 10);
   y = 28;
-  const matrix = d.gradedSizeMatrix || { baseSize: 'M', sizes: ['S', 'M', 'L', 'XL'], grading: [] };
-  const matrixSizes = (Array.isArray(matrix.sizes) && matrix.sizes.length) ? matrix.sizes : ['S', 'M', 'L', 'XL'];
+  const matrix = d.gradedSizeMatrix || { baseSize: 'M', grading: [] };
+  const rawMSizes = Array.isArray(d.sizeRange)
+    ? d.sizeRange
+    : (d.sizeRange ? String(d.sizeRange).split(/[/,]+/).map(s => s.trim()).filter(Boolean) : []);
+  const matrixSizes = rawMSizes.length ? rawMSizes : ['S', 'M', 'L', 'XL'];
   const baseSize = matrixSizes.includes(matrix.baseSize) ? matrix.baseSize : matrixSizes[0];
   const computeCell = (pom, s) => {
     const base = parseFloat(pom[baseSize.toLowerCase()]);
