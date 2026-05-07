@@ -200,6 +200,20 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // covers, vendor, color, length, size all come from the library, not from
   // the pack's own data. Keyed by component pack id.
   const [componentsById, setComponentsById] = useState({});
+  // Bumps every time the window regains focus or this tab becomes visible.
+  // Library edits typically happen in another tab; when the user comes back
+  // we want every BOM-side resolver to re-fetch so they see the new data.
+  const [refreshTick, setRefreshTick] = useState(0);
+  useEffect(() => {
+    const onFocus = () => setRefreshTick(t => t + 1);
+    const onVis   = () => { if (!document.hidden) setRefreshTick(t => t + 1); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, []);
   const componentIdKey = [
     ...(data.pickedTrims || []).map(p => p?.componentId || ''),
     ...(data.pickedPackaging || []).map(p => p?.componentId || ''),
@@ -254,7 +268,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       if (!cancelled) setComponentsById(next);
     })();
     return () => { cancelled = true; };
-  }, [componentIdKey]);
+  }, [componentIdKey, refreshTick]);
 
   // Same idea for picked fabrics — fabric library row + resolved cover.
   const [fabricsById, setFabricsById] = useState({});
@@ -284,7 +298,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       if (!cancelled) setFabricsById(next);
     })();
     return () => { cancelled = true; };
-  }, [fabricIdKey]);
+  }, [fabricIdKey, refreshTick]);
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);

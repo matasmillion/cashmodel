@@ -20,6 +20,25 @@ import { getAssetUrl } from '../../utils/plmAssets';
 // `?v=…` so the browser's HTTP cache busts whenever the underlying row
 // changes — this is what stops stale cover images sticking around after
 // the user updates a fabric / component in the library.
+// Returns a counter that bumps every time the window regains focus or
+// this tab becomes visible. Use it as a useEffect dep to force a
+// re-fetch when the user comes back from editing the library in another
+// tab — without it, the picker keeps showing yesterday's data.
+function useFocusRefresh() {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const onFocus = () => setTick(t => t + 1);
+    const onVis   = () => { if (!document.hidden) setTick(t => t + 1); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, []);
+  return tick;
+}
+
 async function resolveCoverPath(value, version) {
   if (!value) return null;
   if (typeof value !== 'string') return null;
@@ -138,13 +157,16 @@ function fabricSpec(row) {
     parseFloat(d?.cost_per_unit) ||
     parseFloat(d?.costPerYard) ||
     parseFloat(d?.costPerMeter) || 0;
+  // fabricStore canonical vendor column is `mill_id` (top-level row),
+  // not `supplier`. Fall through every shape we've shipped.
+  const weightGsm = row?.weight_gsm || d?.weight_gsm;
   return {
-    name:        d.name || row?.name || 'Untitled fabric',
-    composition: d.composition || '—',
-    weight:      d.weight_gsm ? `${d.weight_gsm} GSM` : '—',
-    weave:       d.weave || row?.weave || '—',
-    vendor:      d.supplier || row?.supplier || '—',
-    cover:       d.cover_image || row?.cover_image || null,
+    name:        row?.code || d.name || row?.name || 'Untitled fabric',
+    composition: row?.composition || d?.composition || '—',
+    weight:      weightGsm ? `${weightGsm} GSM` : '—',
+    weave:       row?.weave || d?.weave || '—',
+    vendor:      row?.mill_id || d?.mill_id || d?.supplier || row?.supplier || row?.mill || '—',
+    cover:       row?.cover_image || d?.cover_image || null,
     unitCost,
     currency:    d.currency || tier?.currency || 'USD',
   };
@@ -189,6 +211,7 @@ const FABRIC_ROLES = ['Body', 'Lining', 'Rib / Trim', 'Other'];
 export function StepFabrics({ data, set }) {
   const [pickerSlot, setPickerSlot] = useState(null); // 0..2 | null
   const [resolved, setResolved] = useState({}); // fabricId -> spec
+  const refreshTick = useFocusRefresh();
 
   const picked = data.pickedFabrics || [];
   const slots = [0, 1, 2]; // up to 3 fabrics
@@ -216,7 +239,7 @@ export function StepFabrics({ data, set }) {
       if (!cancelled) setResolved(next);
     })();
     return () => { cancelled = true; };
-  }, [picked.map(p => p?.fabricId).join('|')]);
+  }, [picked.map(p => p?.fabricId).join('|'), refreshTick]);
 
   function setSlot(i, next) {
     const arr = [...(picked || [])];
@@ -469,6 +492,7 @@ export function StepPackaging({ data, set, packId }) {
 function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, fieldName, data, set, pickerSubtitle, maxSlots }) {
   const noun = singularNoun || title.replace(/s$/, '');
   const [pickerOpen, setPickerOpen] = useState(false);
+  const refreshTick = useFocusRefresh();
   const [fullById, setFullById] = useState({});
 
   const picked = data?.[fieldName] || [];
@@ -513,7 +537,7 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
       if (!cancelled) setFullById(next);
     })();
     return () => { cancelled = true; };
-  }, [picked.map(p => p?.componentId).join('|')]);
+  }, [picked.map(p => p?.componentId).join('|'), refreshTick]);
 
   async function addComponent(item) {
     if (picked.length >= maxSlots) return;

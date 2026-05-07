@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T18:48:14.248Z",
+  "lastUpdated": "2026-05-07T18:59:56.426Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "79408ad",
+      "date": "2026-05-07T21:53:37+03:00",
+      "message": "techpack: disable Use These Views during accept to prevent dup images (#55)"
+    },
+    {
+      "sha": "9f44596",
+      "date": "2026-05-07T21:49:06+03:00",
+      "message": "fabric AI: optional instructions box, additive color merge (#53)"
+    },
+    {
       "sha": "11d30da",
       "date": "2026-05-07T21:43:22+03:00",
       "message": "techpack: read fabric cost from price_per_meter_usd, fix grid clipping (#54)"
@@ -1082,16 +1092,6 @@
       "sha": "ca5470c",
       "date": "2026-05-07T20:19:49+03:00",
       "message": "fabric AI: raise max_tokens to 16k, detect mid-string truncation (#46)"
-    },
-    {
-      "sha": "3bc6c61",
-      "date": "2026-05-07T20:19:09+03:00",
-      "message": "techpack: rename Role→Trim Type, color from colorways, self-heal old picks (#45)"
-    },
-    {
-      "sha": "82ce4ea",
-      "date": "2026-05-07T20:14:31+03:00",
-      "message": "fabrics: use org Anthropic credential, landscape BOM matching tech pack chrome (#44)"
     }
   ]
 }
