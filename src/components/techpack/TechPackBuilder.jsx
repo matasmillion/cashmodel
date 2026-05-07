@@ -397,7 +397,9 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
 
   const fabricsCost = (data.pickedFabrics || []).reduce((sum, p) => {
     const row = fabricsById[p?.fabricId];
-    return sum + fabricUnitCost(row);
+    const costPerMeter = fabricUnitCost(row);
+    const mpu = p?.metersPerUnit;
+    return sum + (mpu ? costPerMeter * mpu : costPerMeter);
   }, 0);
   const trimsCost = (data.pickedTrims || []).reduce((sum, p) => {
     const full = componentsById[p?.componentId];
