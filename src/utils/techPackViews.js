@@ -38,7 +38,13 @@ async function callProxy(name, body) {
   const text = await res.text();
   let data;
   try { data = JSON.parse(text); } catch { data = { raw: text }; }
-  if (!res.ok) throw new Error(data.error || `${name} returned ${res.status}`);
+  if (!res.ok) {
+    // Anthropic / fal errors return { error: { type, message } } — flatten to a string
+    const e = data.error;
+    const msg = typeof e === 'string' ? e
+      : (e?.message || e?.type || JSON.stringify(e) || `${name} returned ${res.status}`);
+    throw new Error(msg);
+  }
   return data;
 }
 

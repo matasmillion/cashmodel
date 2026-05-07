@@ -417,7 +417,8 @@ function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
 
       setPhase('done');
     } catch (e) {
-      setErrMsg(e.message || 'Generation failed');
+      const msg = typeof e?.message === 'string' ? e.message : String(e);
+      setErrMsg(msg || 'Generation failed — check that your Anthropic and fal.ai keys are connected in Integrations.');
       setPhase('error');
     }
   }
