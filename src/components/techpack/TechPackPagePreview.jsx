@@ -1,9 +1,9 @@
 // Live A4-landscape page preview for the Tech Pack builder.
-// 14 pages matching FR_TechPack_Template_Blank.pdf. Page 1 is fully rendered;
-// pages 2–14 render a "coming soon" placeholder with the correct title until
-// later prompts fill them in.
+// 21 pages total: two Merchandising pages (000, 00) up front, then the 19
+// numbered tech pack pages. The denominator stays 19 — merchandising pages
+// are pre-pack strategy and aren't counted toward the numbered total.
 
-import { FR } from './techPackConstants';
+import { FR, STEPS } from './techPackConstants';
 
 const PAGE_W = 1123;
 const PAGE_H = 794;
@@ -55,6 +55,67 @@ function StatBlock({ x, y, label, value, valueSize = 13, mono = false }) {
       <text x={x} y={y + 18} fontSize={valueSize} fill={FR.slate}
         fontFamily={mono ? "ui-monospace, 'SF Mono', Menlo, monospace" : "Helvetica, Arial, sans-serif"}>
         {esc(value || '—')}
+      </text>
+    </g>
+  );
+}
+
+// ─── Page 000 — Competitor Landscape ───────────────────────────────────────
+function PageCompetitorLandscape({ d }) {
+  const competitors = (d?.competitors || []).filter(c => c.brand || c.product || c.price);
+  const cols = [
+    { key: 'brand',    label: 'Brand',          w: 130 },
+    { key: 'product',  label: 'Product',        w: 220 },
+    { key: 'price',    label: 'Price',          w: 100 },
+    { key: 'currency', label: 'Currency',       w: 70  },
+    { key: 'features', label: 'Key Features',   w: 320 },
+    { key: 'notes',    label: 'Notes',          w: 203 },
+  ];
+  const positioning = (d?.competitivePositioning || '').trim();
+
+  return (
+    <g>
+      <text x={PAGE_W / 2} y={108} textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="16" fill={FR.slate}>
+        Competitive Pricing & Feature Analysis
+      </text>
+
+      <SectionHeading x={40} y={148}>Pricing & Features</SectionHeading>
+      <GridTable x={40} y={160} cols={cols} rows={competitors} bodyRows={10} />
+
+      <SectionHeading x={40} y={460}>Competitive Landscape — FR Positioning</SectionHeading>
+      {positioning ? positioning.split('\n').slice(0, 14).map((line, i) => (
+        <text key={i} x={40} y={482 + i * 14} fontSize={11} fill={FR.slate} fontFamily="Helvetica, Arial, sans-serif">{line}</text>
+      )) : (
+        <text x={40} y={482} fontSize={11} fill={FR.stone} fontStyle="italic" fontFamily="Helvetica, Arial, sans-serif">No positioning notes yet.</text>
+      )}
+    </g>
+  );
+}
+
+// ─── Page 00 — Merchandising Preview (placeholder) ─────────────────────────
+function PageMerchandisingPreview({ d }) {
+  void d;
+  return (
+    <g>
+      <text x={PAGE_W / 2} y={108} textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="16" fill={FR.slate}>
+        Storefront Visualization — Coming Soon
+      </text>
+
+      {/* Dashed-border placeholder card */}
+      <rect x={140} y={170} width={PAGE_W - 280} height={460}
+        fill={FR.salt} stroke={FR.sand} strokeWidth={2} strokeDasharray="6 6" rx={10} />
+
+      <text x={PAGE_W / 2} y={350} textAnchor="middle" fontSize="9" fontWeight="bold"
+        fill={FR.stone} letterSpacing="2">COMING SOON</text>
+      <text x={PAGE_W / 2} y={388} textAnchor="middle"
+        fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="32" fill={FR.slate}>
+        Merchandising Preview
+      </text>
+      <text x={PAGE_W / 2} y={428} textAnchor="middle" fontSize={12} fill={FR.stone}>
+        Visualize this product on the live storefront before sampling —
+      </text>
+      <text x={PAGE_W / 2} y={448} textAnchor="middle" fontSize={12} fill={FR.stone}>
+        prototype merchandising, hero imagery, and PDP copy at the design phase.
       </text>
     </g>
   );
@@ -1186,6 +1247,8 @@ function ComingSoon({ pageNum, title }) {
 
 // Page order mirrors STEPS in techPackConstants.js (manufacturing stage).
 const PAGE_FNS = [
+  { title: 'Competitor Landscape',              phase: 'Merchandising',  body: ({ d }) => <PageCompetitorLandscape d={d} /> },
+  { title: 'Merchandising Preview',             phase: 'Merchandising',  body: ({ d }) => <PageMerchandisingPreview d={d} /> },
   { title: 'Style Overview',                    phase: 'Design',         body: ({ d, images }) => <PageCover d={d} images={images} /> },
   { title: 'Design Overview',                   phase: 'Design',         body: ({ d, images }) => <PageDesignOverview d={d} images={images} /> },
   { title: 'BOM — Fabrics & Trims',             phase: 'Materials',      body: ({ d }) => <PageBOM d={d} /> },
@@ -1224,7 +1287,9 @@ function SkipOverlay() {
 export default function TechPackPagePreview({ data, images, step, skippedSteps, treatmentsById }) {
   const d = data || {};
   const styleInfo = `© 2026 Foreign Resource Co. — Confidential Tech Pack`;
-  const pageNum = Math.min(Math.max((step ?? 0) + 1, 1), TOTAL_PAGES);
+  // Page number uses STEPS[step].icon — '000', '00', '01' … '19'.
+  const stepEntry = STEPS[step] || STEPS[0];
+  const pageNum = stepEntry.icon || String((step ?? 0) + 1);
   const current = PAGE_FNS[step] || PAGE_FNS[0];
   const Body = current.body;
   const isSkipped = Array.isArray(skippedSteps) && skippedSteps.includes(step);
