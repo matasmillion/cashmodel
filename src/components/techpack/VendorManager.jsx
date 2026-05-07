@@ -395,6 +395,17 @@ function VendorEditor({ name, onClose, onDeleted, onRenamed }) {
               <Input label="Lead Time (days)" value={entry.leadTimeDays || ''} onChange={v => patch('leadTimeDays', v)} placeholder="e.g. 45-60" />
               <Input label="Specialties" value={entry.specialties || ''} onChange={v => patch('specialties', v)} placeholder="Knit, Woven, Trims" />
               <Input label="Payment Terms" value={entry.payment_terms || ''} onChange={v => patch('payment_terms', v)} placeholder="e.g. 30/70 T/T, Net-60" />
+              <div style={{ marginBottom: 12 }}>
+                <Input
+                  label="SAM Rate (USD / min)"
+                  value={entry.samRateUsdPerMin || ''}
+                  onChange={v => patch('samRateUsdPerMin', v)}
+                  placeholder="e.g. 0.35"
+                />
+                <p style={{ fontSize: 10, color: FR.stone, marginTop: -4, lineHeight: 1.4, fontStyle: 'italic' }}>
+                  Cut &amp; sew manufacturers only. Fully-loaded billing rate per Standard Allowed Minute (includes labor + overhead + factory margin) — typical coastal China $0.30–0.45, Vietnam $0.25–0.40, Bangladesh $0.12–0.20. Leave blank for mills, trim suppliers, etc. The AI Cut &amp; Sew estimator uses this rate × estimated SAM minutes when set; otherwise it falls back to regional CMT benchmarks.
+                </p>
+              </div>
               <Input label="Notes" value={entry.notes || ''} onChange={v => patch('notes', v)} placeholder="Anything worth remembering" multiline />
             </div>
 

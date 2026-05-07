@@ -1413,6 +1413,7 @@ function CutSewLaborCostBlock({ data, set, sectionLabel }) {
         name: vendorName,
         country: v?.country || '',
         city: v?.city || '',
+        samRateUsdPerMin: v?.samRateUsdPerMin || '',
       };
       const garment = {
         styleName: data.styleName,
@@ -1431,7 +1432,14 @@ function CutSewLaborCostBlock({ data, set, sectionLabel }) {
       };
       const result = await estimateLaborCost({ vendor, garment });
       set('cutSewLaborCost', String(result.value.toFixed(2)));
-      set('cutSewLaborCostMeta', { ...result, vendor: vendor.name, vendorCountry: vendor.country, vendorCity: vendor.city, generatedAt: new Date().toISOString() });
+      set('cutSewLaborCostMeta', {
+        ...result,
+        vendor: vendor.name,
+        vendorCountry: vendor.country,
+        vendorCity: vendor.city,
+        vendorSamRate: vendor.samRateUsdPerMin || null,
+        generatedAt: new Date().toISOString(),
+      });
     } catch (e) {
       setError(e.message || String(e));
     } finally {
@@ -1487,7 +1495,12 @@ function CutSewLaborCostBlock({ data, set, sectionLabel }) {
       )}
       {meta && (
         <div style={{ background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 4, padding: '10px 12px', marginBottom: 8 }}>
-          <div style={{ fontSize: 9, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>AI Estimate</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <div style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>AI Estimate</div>
+            <div style={{ fontSize: 9, color: meta.mode === 'sam_rate' ? '#3B6D11' : '#854F0B', fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', fontFamily: 'ui-monospace, Menlo, monospace' }}>
+              {meta.mode === 'sam_rate' ? `via SAM × $${Number(meta.samRate || meta.vendorSamRate || 0).toFixed(2)}/min` : 'via regional CMT benchmark'}
+            </div>
+          </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 6, fontFamily: "ui-monospace, Menlo, monospace" }}>
             <span style={{ fontSize: 18, fontWeight: 700, color: FR.slate }}>${Number(meta.value || 0).toFixed(2)}</span>
             <span style={{ fontSize: 10, color: FR.stone }}>

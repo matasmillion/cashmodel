@@ -12,7 +12,53 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY     = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const MODEL        = 'claude-opus-4-7';
 
-function buildSystemPrompt() {
+function buildSystemPromptSamRate() {
+  return `You are a garment manufacturing cost analyst. The user has provided an EXACT SAM (Standard Allowed Minute) billing rate from their chosen vendor's contract — your job is to estimate the SAM minutes for this specific garment and multiply.
+
+Return ONLY a single JSON object (no markdown fences, no prose) with this exact shape:
+
+{
+  "value": number,
+  "low": number,
+  "high": number,
+  "reasoning": string,
+  "vendorContext": string
+}
+
+SAM-MINUTE BENCHMARKS (best case → typical for an established factory):
+- Tee / tank:               6–10 min
+- Polo:                     10–14 min
+- Crew sweatshirt:          14–20 min
+- Pullover hoodie:          18–26 min
+- Zip-up hoodie:            22–30 min
+- Joggers / sweatpants:     14–22 min
+- Shorts:                   8–14 min
+- Chinos / dress pants:     22–32 min
+- Denim pants:              26–36 min
+- Track / bomber jacket:    30–50 min
+- Denim jacket:             32–45 min
+- Blazer (unstructured):    50–80 min
+- Coat (hip-length):        75–120 min
+- Trench coat:              100–150 min
+
+COMPLEXITY ADJUSTMENTS to SAM minutes (best case = LOW end with no adjustments unless warranted):
+- More than 3 fabrics in the BOM:          +5–10%
+- More than 6 trims:                       +5–10%
+- More than 10 seam operations:            +10–15%
+- Unusual treatments / dyes / artwork:     +5–15%
+- Premium tier requirements:               +10–20%
+
+Math: cost USD = SAM minutes × user-provided rate. Compute value at the LOW end of SAM minutes; low/high bracket the SAM range × rate.
+
+Rules:
+- value: best-case CMT in USD, rounded to 2 decimals
+- low / high: low = (low SAM min) × rate; high = (high SAM min) × rate
+- reasoning: 2-4 short sentences. Explicitly call out the SAM-minute estimate, the rate received from the vendor record, and the multiplication. e.g. "Pullover hoodie SAM ~22 min (low end of 18-26 range, no upward adjustment because the BOM is simple). Vendor SAM rate from your record is $0.32/min. 22 × 0.32 = $7.04."
+- vendorContext: 1 sentence noting this estimate uses the vendor's contracted SAM rate (not a regional benchmark)
+- Output ONLY the JSON. No prose. No code fence.`;
+}
+
+function buildSystemPromptCmt() {
   return `You are a garment manufacturing cost analyst. You estimate the BEST-CASE per-garment Cut-Make-Trim (CMT) price an established factory would charge a brand, in USD.
 
 CMT is the all-in price the factory invoices for cutting, sewing, and finishing one garment. It already INCLUDES: direct sewing labor, indirect labor, factory overhead, machinery cost, and the factory's profit margin. CMT is NOT a raw worker wage. A coastal China factory billing roughly \$0.30–0.45/SAM-minute corresponds to ~\$3–5/hr in actual operator wages — most of the rate is overhead + margin.
@@ -73,12 +119,15 @@ Return ONLY a single JSON object (no markdown fences, no prose) with this exact 
 - Output ONLY the JSON. No prose. No code fence.`;
 }
 
-function buildUserMessage({ vendor, garment }) {
+function buildUserMessage({ vendor, garment, samRate }) {
+  const rateBlock = samRate
+    ? `\nVENDOR SAM RATE (from contract): $${samRate}/min — multiply this by your SAM-minute estimate. Do NOT use regional CMT benchmarks; use the rate above.\n`
+    : '';
   return `VENDOR
 Name: ${vendor.name || '—'}
 Country: ${vendor.country || '—'}
 City: ${vendor.city || '—'}
-
+${rateBlock}
 GARMENT
 Style name: ${garment.styleName || '—'}
 Style number: ${garment.styleNumber || '—'}
@@ -131,20 +180,33 @@ async function callAnthropicProxy(body) {
 
 /**
  * Ask Claude to estimate a per-garment Cut & Sew labor cost.
+ *
+ * Two modes:
+ *   - When `vendor.samRateUsdPerMin` is a positive number, the model is
+ *     told to estimate SAM minutes from garment complexity and multiply
+ *     by that contracted rate. Most accurate path.
+ *   - Otherwise the model falls back to observed regional CMT benchmarks
+ *     by garment + region. Used when the vendor record has no SAM rate
+ *     (typical for new vendors or non-Cut & Sew suppliers).
+ *
  * @param {Object} args
- * @param {{name?: string, country?: string, city?: string}} args.vendor
+ * @param {{name?: string, country?: string, city?: string, samRateUsdPerMin?: string|number}} args.vendor
  * @param {Object} args.garment style/BOM/seam summary
- * @returns {Promise<{value:number, low:number, high:number, reasoning:string, vendorContext:string}>}
+ * @returns {Promise<{value:number, low:number, high:number, reasoning:string, vendorContext:string, mode:string, samRate:number|null}>}
  */
 export async function estimateLaborCost({ vendor, garment }) {
   if (!vendor?.name) {
     throw new Error('Set a vendor on the Style Overview page first — the AI uses the vendor name and location to anchor the estimate.');
   }
+  const samRate = parseFloat(vendor.samRateUsdPerMin);
+  const useSamMode = Number.isFinite(samRate) && samRate > 0;
+  const system  = useSamMode ? buildSystemPromptSamRate() : buildSystemPromptCmt();
+  const userMsg = buildUserMessage({ vendor, garment, samRate: useSamMode ? samRate : null });
   const json = await callAnthropicProxy({
     model: MODEL,
     max_tokens: 1024,
-    system: buildSystemPrompt(),
-    messages: [{ role: 'user', content: buildUserMessage({ vendor, garment }) }],
+    system,
+    messages: [{ role: 'user', content: userMsg }],
   });
   const blocks = Array.isArray(json?.content) ? json.content : [];
   const text = blocks.find(b => b?.type === 'text')?.text || blocks[0]?.text || '';
@@ -168,5 +230,7 @@ export async function estimateLaborCost({ vendor, garment }) {
     high,
     reasoning: String(parsed.reasoning || ''),
     vendorContext: String(parsed.vendorContext || ''),
+    mode: useSamMode ? 'sam_rate' : 'cmt_benchmark',
+    samRate: useSamMode ? samRate : null,
   };
 }
