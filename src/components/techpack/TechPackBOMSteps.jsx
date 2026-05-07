@@ -440,12 +440,20 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
         const v = row.updated_at;
         const resolvedTop    = await resolveCoverPath(row.cover_image, v);
         const resolvedNested = await resolveCoverPath(row?.data?.cover_image, v);
-        const diagramEntry = (row.images || []).find(img => img.slot === 'construction-diagram');
-        let diagramUrl = null;
-        if (diagramEntry) {
-          if (diagramEntry.data?.startsWith?.('data:')) diagramUrl = diagramEntry.data;
-          else if (diagramEntry.path) diagramUrl = await resolveCoverPath(diagramEntry.path, v);
-        }
+        // Cover image priority for the BOM card / live preview:
+        //   1. Construction → Measurement Diagram   (slot: construction-diagram)
+        //   2. Design → Sketch                       (slot: design-sketch)
+        //   3. Pack cover_image                      (fallback)
+        // The first two come from the pack's images[] array. We try them
+        // in order and the first non-null wins.
+        const findImage = async (slot) => {
+          const entry = (row.images || []).find(img => img.slot === slot);
+          if (!entry) return null;
+          if (entry.data?.startsWith?.('data:')) return entry.data;
+          if (entry.path) return await resolveCoverPath(entry.path, v);
+          return null;
+        };
+        const diagramUrl = await findImage('construction-diagram') || await findImage('design-sketch');
         next[id] = {
           ...row,
           cover_image: resolvedTop || row.cover_image,
@@ -470,12 +478,16 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
         const v = full.updated_at;
         const resolvedTop    = await resolveCoverPath(full.cover_image, v);
         const resolvedNested = await resolveCoverPath(full?.data?.cover_image, v);
-        const diagramEntry = (full.images || []).find(img => img.slot === 'construction-diagram');
-        let diagramUrl = null;
-        if (diagramEntry) {
-          if (diagramEntry.data?.startsWith?.('data:')) diagramUrl = diagramEntry.data;
-          else if (diagramEntry.path) diagramUrl = await resolveCoverPath(diagramEntry.path, v);
-        }
+        const findImage = async (slot) => {
+          const entry = (full.images || []).find(img => img.slot === slot);
+          if (!entry) return null;
+          if (entry.data?.startsWith?.('data:')) return entry.data;
+          if (entry.path) return await resolveCoverPath(entry.path, v);
+          return null;
+        };
+        // Construction diagram is the canonical hero; fall back to the
+        // Design Sketch if no diagram has been uploaded yet.
+        const diagramUrl = await findImage('construction-diagram') || await findImage('design-sketch');
         setFullById(prev => ({
           ...prev,
           [item.id]: {

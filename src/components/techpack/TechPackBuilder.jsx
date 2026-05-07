@@ -235,12 +235,15 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
         };
         const top    = await resolveCover(row.cover_image);
         const nested = await resolveCover(row?.data?.cover_image);
-        const diagramEntry = (row.images || []).find(img => img.slot === 'construction-diagram');
-        let diagramUrl = null;
-        if (diagramEntry) {
-          if (diagramEntry.data?.startsWith?.('data:')) diagramUrl = diagramEntry.data;
-          else if (diagramEntry.path) diagramUrl = await resolveCover(diagramEntry.path);
-        }
+        // Cover priority: construction-diagram → design-sketch → cover_image
+        const findImage = async (slot) => {
+          const entry = (row.images || []).find(img => img.slot === slot);
+          if (!entry) return null;
+          if (entry.data?.startsWith?.('data:')) return entry.data;
+          if (entry.path) return await resolveCover(entry.path);
+          return null;
+        };
+        const diagramUrl = await findImage('construction-diagram') || await findImage('design-sketch');
         next[id] = {
           ...row,
           cover_image: top || row.cover_image,
