@@ -12,7 +12,6 @@ import * as _atomTypes from '../../types/atoms';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Search, MoreVertical, Copy, Archive, RotateCcw, Layers, LayoutGrid, Columns3 } from 'lucide-react';
 import { FR } from './techPackConstants';
-import { getFRColor } from '../../utils/colorLibrary';
 import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
 import {
   listFabrics, createFabric, getFabric,
@@ -65,22 +64,22 @@ function formatSince(iso) {
 }
 
 function Hero({ fabric }) {
-  const swatchHex = (fabric.color_id ? getFRColor(fabric.color_id)?.hex : null) || FR.salt;
-  if (fabric.cover_image) {
+  const heroSrc = fabric.front_image_url || fabric.cover_image;
+  if (heroSrc) {
     return (
-      <div style={{ width: '100%', aspectRatio: '2 / 3', overflow: 'hidden' }}>
-        <CoverThumb src={fabric.cover_image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      <div style={{ width: '100%', aspectRatio: '4 / 3', overflow: 'hidden', borderBottom: `0.5px solid ${FR.sand}` }}>
+        <CoverThumb src={heroSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
       </div>
     );
   }
   return (
     <div style={{
-      width: '100%', aspectRatio: '2 / 3',
-      background: swatchHex,
+      width: '100%', aspectRatio: '4 / 3',
+      background: FR.salt,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       borderBottom: `0.5px solid ${FR.sand}`,
     }}>
-      <Layers size={36} style={{ color: 'rgba(58,58,58,0.25)' }} />
+      <Layers size={28} style={{ color: 'rgba(58,58,58,0.25)' }} />
     </div>
   );
 }
@@ -120,10 +119,12 @@ function GridCard({ fabric, onOpen, onMenu, menuOpen, onMenuClose, onArchive, on
           </div>
           <StatusPill status={status} />
         </div>
-        <div style={{ fontSize: 10, color: FR.stone, marginTop: 4, marginBottom: 10, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-          {fabric.code} · {FABRIC_WEAVE_LABEL[fabric.weave] || fabric.weave}
+        <div style={{ fontSize: 10, color: FR.stone, marginTop: 4, marginBottom: 8, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <span>{fabric.code}</span>
+          {fabric.mill_fabric_no && <span>· #{fabric.mill_fabric_no}</span>}
+          <span>· {FABRIC_WEAVE_LABEL[fabric.weave] || fabric.weave}</span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr', columnGap: 8, rowGap: 4, fontSize: 11, lineHeight: 1.3 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr', columnGap: 8, rowGap: 3, fontSize: 11, lineHeight: 1.3 }}>
           <StatRow label="Comp"   value={composition} />
           <StatRow label="Weight" value={weight} />
           <StatRow label="Mill"   value={mill} />
@@ -157,7 +158,7 @@ function GridCard({ fabric, onOpen, onMenu, menuOpen, onMenuClose, onArchive, on
 }
 
 function KanbanCard({ fabric, onOpen, onDragStart, onDragEnd }) {
-  const swatchHex = (fabric.color_id ? getFRColor(fabric.color_id)?.hex : null) || FR.salt;
+  const heroSrc = fabric.front_image_url || fabric.cover_image;
   return (
     <div
       draggable
@@ -179,15 +180,15 @@ function KanbanCard({ fabric, onOpen, onDragStart, onDragEnd }) {
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
     >
       <div style={{ display: 'flex', gap: 10 }}>
-        <div style={{ width: 44, height: 66, flexShrink: 0, background: swatchHex, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `0.5px solid ${FR.sand}` }}>
-          {fabric.cover_image && <CoverThumb src={fabric.cover_image} alt="" />}
+        <div style={{ width: 44, height: 44, flexShrink: 0, background: FR.salt, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `0.5px solid ${FR.sand}` }}>
+          {heroSrc && <CoverThumb src={heroSrc} alt="" />}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: FR.slate, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {fabric.name || 'Untitled fabric'}
           </div>
           <div style={{ fontSize: 10, color: FR.stone, marginTop: 2, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {fabric.code} · {FABRIC_WEAVE_LABEL[fabric.weave] || fabric.weave}
+            {fabric.code}{fabric.mill_fabric_no ? ` · #${fabric.mill_fabric_no}` : ''} · {FABRIC_WEAVE_LABEL[fabric.weave] || fabric.weave}
           </div>
           <div style={{ fontSize: 10, color: FR.stone, marginTop: 2 }}>
             {fabric.weight_gsm ? `${fabric.weight_gsm} gsm` : '—'} · {fabric.mill_id || '—'}
@@ -347,6 +348,7 @@ export default function FabricList() {
         const q = query.toLowerCase();
         const hit = (r.name || '').toLowerCase().includes(q)
           || (r.code || '').toLowerCase().includes(q)
+          || (r.mill_fabric_no || '').toLowerCase().includes(q)
           || (r.composition || '').toLowerCase().includes(q)
           || (r.mill_id || '').toLowerCase().includes(q);
         if (!hit) return false;

@@ -1,15 +1,33 @@
-// Fabric detail / editor — single-page form mirroring PatternBuilder.
-// Loaded via the `#product/library/fabrics/:id` deep link or by clicking
-// a card in FabricList. All edits write back through fabricStore.saveFabric.
+// Fabric detail / editor — compact single-screen layout. Above-the-fold
+// on a 1280-wide viewport: identity + sourcing + photos + BOM preview.
+//
+// Notable behaviors:
+//   • The fabric is either KNIT or WOVEN — picked at the top, drives which
+//     weaves are selectable.
+//   • The version field is read-only. To bump (v1.0 → v1.1) the user
+//     clicks the "Bump version" button — there's no free-text editing.
+//   • AI auto-fill: drop a mill's color card (image or PDF, Chinese OK)
+//     into the FabricAIExtract modal; Claude returns structured fields
+//     and the user reviews before applying.
+//   • Photos: front, back, plus an unbounded color-card gallery. These
+//     three image groups feed the one-page BOM PDF that the tech pack
+//     embeds at production time.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Save, Trash2 } from 'lucide-react';
-import { FR, FR_COLOR_OPTIONS } from './techPackConstants';
+import { ArrowLeft, Save, Trash2, Sparkles, FileDown, Plus } from 'lucide-react';
+import { FR } from './techPackConstants';
 import { saveFabric, archiveFabric, restoreFabric } from '../../utils/fabricStore';
-import { FABRIC_WEAVES, FABRIC_WEAVE_LABEL, FABRIC_STATUSES } from '../../utils/fabricLibrary';
-import CoverImagePicker from './CoverImagePicker';
+import {
+  FABRIC_CATEGORIES, FABRIC_WEAVES, FABRIC_WEAVE_LABEL, FABRIC_STATUSES,
+  weavesForCategory, categoryForWeave, bumpVersion,
+} from '../../utils/fabricLibrary';
+import { generateFabricBOMPDF } from '../../utils/fabricBOMPDF';
 import VendorPicker from './VendorPicker';
 import FileSlot from './FileSlot';
+import SimpleImageSlot from './SimpleImageSlot';
+import MultiImageSlot from './MultiImageSlot';
+import FabricAIExtract from './FabricAIExtract';
+import FabricBOMPreview from './FabricBOMPreview';
 import { migrateLegacyCoverIfNeeded, isLegacyDataUrl } from '../../utils/plmAssets';
 
 const STATUS_PILL = {
@@ -20,12 +38,22 @@ const STATUS_PILL = {
 };
 
 const INPUT_STYLE = {
-  width: '100%', padding: '6px 8px', border: `1px solid ${FR.sand}`,
+  width: '100%', padding: '5px 7px', border: `1px solid ${FR.sand}`,
   borderRadius: 4, fontSize: 12, color: FR.slate, background: '#fff',
   fontFamily: "'Inter', sans-serif", outline: 'none', boxSizing: 'border-box',
 };
 
-const LABEL_STYLE = { fontSize: 11, color: FR.stone, marginBottom: 4, display: 'block', letterSpacing: 0.2 };
+const LABEL_STYLE = { fontSize: 10, color: FR.stone, marginBottom: 2, display: 'block', letterSpacing: 0.2, textTransform: 'uppercase', fontWeight: 600 };
+
+const CARD_STYLE = {
+  background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)',
+  borderRadius: 8, padding: 14,
+};
+
+const SECTION_TITLE = {
+  fontFamily: "'Cormorant Garamond', serif", fontSize: 15, color: FR.slate,
+  margin: 0, marginBottom: 10, letterSpacing: 0.2,
+};
 
 function Field({ label, children }) {
   return (
@@ -40,12 +68,11 @@ export default function FabricBuilder({ fabric, onBack }) {
   const [draft, setDraft] = useState(fabric);
   const [savedAt, setSavedAt] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => { setDraft(fabric); }, [fabric.id]);
 
-  // Lazy-migrate a pre-Phase-3 cover image (still a base64 data: URL)
-  // into Storage on mount. Saves silently — user keeps editing while
-  // this runs in the background. Once per fabric per session.
   const migratedRef = useRef(false);
   useEffect(() => {
     if (migratedRef.current) return undefined;
@@ -67,15 +94,39 @@ export default function FabricBuilder({ fabric, onBack }) {
 
   const set = (patch) => setDraft(d => ({ ...d, ...patch }));
 
+  // Changing knit↔woven retargets the weave to the first weave in that
+  // category if the current weave doesn't belong there. Prevents an
+  // invalid (category, weave) pair from being saved.
+  const setCategory = (category) => {
+    const current = FABRIC_WEAVES.find(w => w.id === draft.weave);
+    if (current && current.category !== category && current.id !== 'other') {
+      const fallback = weavesForCategory(category)[0]?.id || 'other';
+      set({ category, weave: fallback });
+    } else {
+      set({ category });
+    }
+  };
+
+  const setWeave = (weaveId) => {
+    set({ weave: weaveId, category: categoryForWeave(weaveId) || draft.category });
+  };
+
   const save = async () => {
     setSaving(true);
     try {
-      const { id, code, created_at, ...updates } = draft;
+      const { id, ...updates } = draft;
       await saveFabric(id, updates);
       setSavedAt(new Date());
     } finally {
       setSaving(false);
     }
+  };
+
+  const onBumpVersion = async () => {
+    const next = bumpVersion(draft.version);
+    set({ version: next });
+    try { await saveFabric(draft.id, { version: next }); }
+    catch (err) { console.error('bump version:', err); }
   };
 
   const toggleArchive = async () => {
@@ -90,197 +141,268 @@ export default function FabricBuilder({ fabric, onBack }) {
     }
   };
 
+  const onExportPDF = async () => {
+    setExporting(true);
+    try { await generateFabricBOMPDF(draft); }
+    catch (err) { console.error('Export BOM PDF:', err); alert(err?.message || 'PDF export failed'); }
+    finally { setExporting(false); }
+  };
+
+  const onApplyAI = (patch) => {
+    setAiOpen(false);
+    setDraft(d => {
+      const next = { ...d, ...patch };
+      // Color card from AI: only adopt suggestions when the user hasn't
+      // already curated swatches manually — protects in-progress work.
+      if (patch.color_card_images) {
+        const existing = Array.isArray(d.color_card_images) ? d.color_card_images : [];
+        next.color_card_images = existing.length ? existing : patch.color_card_images;
+      }
+      return next;
+    });
+  };
+
   const status = draft.status || 'draft';
   const pill = STATUS_PILL[status] || STATUS_PILL.draft;
+  const category = draft.category || categoryForWeave(draft.weave);
+  const availableWeaves = weavesForCategory(category);
 
   return (
     <div>
+      {/* ─── Top bar ────────────────────────────────────────────────── */}
       <button onClick={onBack}
-        style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', color: FR.stone, fontSize: 12, cursor: 'pointer', padding: 0, marginBottom: 12 }}>
+        style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', color: FR.stone, fontSize: 12, cursor: 'pointer', padding: 0, marginBottom: 10 }}>
         <ArrowLeft size={13} /> Fabrics
       </button>
 
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 240 }}>
           <input
             value={draft.name || ''}
             onChange={e => set({ name: e.target.value })}
             placeholder="Untitled fabric"
-            style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 28, color: FR.slate, border: 'none', outline: 'none', background: 'transparent', width: '100%' }}
+            style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, color: FR.slate, border: 'none', outline: 'none', background: 'transparent', width: '100%' }}
           />
-          <div style={{ fontSize: 11, color: FR.stone, marginTop: 2, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-            {draft.code} · {FABRIC_WEAVE_LABEL[draft.weave] || draft.weave} · {draft.version}
+          <div style={{ fontSize: 10, color: FR.stone, marginTop: 2, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span>{draft.code}</span>
+            {draft.mill_fabric_no && <span>·  Mill # {draft.mill_fabric_no}</span>}
+            <span>·  {FABRIC_WEAVE_LABEL[draft.weave] || draft.weave}</span>
+            <span>·  {(category || 'knit').toUpperCase()}</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', background: FR.salt, borderRadius: 3, color: FR.slate }}>
+              {draft.version}
+              <button onClick={onBumpVersion} title="Bump version"
+                style={{ background: 'transparent', border: 'none', color: FR.soil, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
+                <Plus size={11} />
+              </button>
+            </span>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button onClick={() => setAiOpen(true)} title="Auto-fill from mill fabric card"
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', background: FR.salt, color: FR.soil, border: `1px solid ${FR.sand}`, borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+            <Sparkles size={12} /> AI auto-fill
+          </button>
+          <button onClick={onExportPDF} disabled={exporting}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', background: 'transparent', color: FR.slate, border: `1px solid ${FR.sand}`, borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: exporting ? 'wait' : 'pointer' }}>
+            <FileDown size={12} /> {exporting ? 'Exporting…' : 'Export BOM PDF'}
+          </button>
           <select
             value={status}
             onChange={e => set({ status: e.target.value })}
-            style={{ background: pill.bg, color: pill.fg, padding: '6px 10px', borderRadius: 5, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, border: 'none', cursor: 'pointer' }}
+            style={{ background: pill.bg, color: pill.fg, padding: '5px 9px', borderRadius: 5, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, border: 'none', cursor: 'pointer' }}
           >
             {FABRIC_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <button
-            onClick={toggleArchive}
-            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 10px', background: 'transparent', color: FR.stone, border: `1px solid ${FR.sand}`, borderRadius: 6, fontSize: 11, cursor: 'pointer' }}
-          >
-            <Trash2 size={12} /> {status === 'archived' ? 'Restore' : 'Archive'}
+          <button onClick={toggleArchive}
+            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 9px', background: 'transparent', color: FR.stone, border: `1px solid ${FR.sand}`, borderRadius: 6, fontSize: 11, cursor: 'pointer' }}>
+            <Trash2 size={11} /> {status === 'archived' ? 'Restore' : 'Archive'}
           </button>
-          <button
-            onClick={save}
-            disabled={!dirty || saving}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: dirty ? FR.slate : FR.sand, color: dirty ? FR.salt : FR.stone, border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: dirty && !saving ? 'pointer' : 'not-allowed', opacity: saving ? 0.6 : 1 }}
-          >
-            <Save size={13} /> {saving ? 'Saving…' : dirty ? 'Save' : 'Saved'}
+          <button onClick={save} disabled={!dirty || saving}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: dirty ? FR.slate : FR.sand, color: dirty ? FR.salt : FR.stone, border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: dirty && !saving ? 'pointer' : 'not-allowed', opacity: saving ? 0.6 : 1 }}>
+            <Save size={12} /> {saving ? 'Saving…' : dirty ? 'Save' : 'Saved'}
           </button>
         </div>
       </div>
 
       {savedAt && !dirty && (
-        <div style={{ fontSize: 10, color: FR.stone, marginBottom: 12 }}>
+        <div style={{ fontSize: 10, color: FR.stone, marginBottom: 8 }}>
           Saved {savedAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
         </div>
       )}
 
-      <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-        <CoverImagePicker
-          value={draft.cover_image}
-          onChange={pathOrDataUrl => set({ cover_image: pathOrDataUrl })}
-          label="Cover image"
-          hint="Drop a swatch photo"
-          assetScope="fabrics"
-          assetOwnerId={draft.id}
-        />
-        <div style={{ flex: 1, minWidth: 280 }}>
-          <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Identity</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-            <Field label="Weave">
-              <select value={draft.weave} onChange={e => set({ weave: e.target.value })} style={INPUT_STYLE}>
-                {FABRIC_WEAVES.map(w => <option key={w.id} value={w.id}>{w.label}</option>)}
-              </select>
-            </Field>
-            <Field label="Version">
-              <input value={draft.version || ''} onChange={e => set({ version: e.target.value })} placeholder="v1.0" style={INPUT_STYLE} />
-            </Field>
-            <Field label="Composition">
-              <input value={draft.composition || ''} onChange={e => set({ composition: e.target.value })} placeholder="100% Cotton" style={INPUT_STYLE} />
-            </Field>
-            <Field label="Hand / feel">
-              <input value={draft.hand || ''} onChange={e => set({ hand: e.target.value })} placeholder="Soft, dry, slight loop back" style={INPUT_STYLE} />
-            </Field>
+      {/* ─── Main 2-column grid ─────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)', gap: 12, alignItems: 'start' }}>
+
+        {/* LEFT — data */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+          {/* Category + Identity */}
+          <div style={CARD_STYLE}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <h4 style={SECTION_TITLE}>Identity</h4>
+              <div style={{ display: 'flex', background: FR.salt, borderRadius: 6, padding: 2, gap: 2 }}>
+                {FABRIC_CATEGORIES.map(c => (
+                  <button key={c.id} onClick={() => setCategory(c.id)}
+                    style={{
+                      padding: '4px 14px',
+                      background: category === c.id ? FR.slate : 'transparent',
+                      color: category === c.id ? FR.salt : FR.stone,
+                      border: 'none', borderRadius: 4,
+                      fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                      letterSpacing: 0.3,
+                    }}>
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+              <Field label="Mill fabric #">
+                <input value={draft.mill_fabric_no || ''} onChange={e => set({ mill_fabric_no: e.target.value })} placeholder="FT-340-OE" style={{ ...INPUT_STYLE, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }} />
+              </Field>
+              <Field label="Weave">
+                <select value={draft.weave} onChange={e => setWeave(e.target.value)} style={INPUT_STYLE}>
+                  {availableWeaves.map(w => <option key={w.id} value={w.id}>{w.label}</option>)}
+                </select>
+              </Field>
+              <Field label="Composition">
+                <input value={draft.composition || ''} onChange={e => set({ composition: e.target.value })} placeholder="100% Cotton" style={INPUT_STYLE} />
+              </Field>
+              <Field label="Hand / feel">
+                <input value={draft.hand || ''} onChange={e => set({ hand: e.target.value })} placeholder="Soft, dry" style={INPUT_STYLE} />
+              </Field>
+            </div>
+          </div>
+
+          {/* Spec */}
+          <div style={CARD_STYLE}>
+            <h4 style={SECTION_TITLE}>Spec</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+              <Field label="Weight (gsm)">
+                <input type="number" value={draft.weight_gsm ?? 0} onChange={e => set({ weight_gsm: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
+              </Field>
+              <Field label="Width (cm)">
+                <input type="number" value={draft.width_cm ?? 0} onChange={e => set({ width_cm: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
+              </Field>
+              <Field label="Shrinkage (%)">
+                <input type="number" step="0.1" value={draft.shrinkage_pct ?? 0} onChange={e => set({ shrinkage_pct: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
+              </Field>
+              <Field label="Stretch (%)">
+                <input type="number" step="0.1" value={draft.stretch_pct ?? 0} onChange={e => set({ stretch_pct: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
+              </Field>
+            </div>
+          </div>
+
+          {/* Sourcing */}
+          <div style={CARD_STYLE}>
+            <h4 style={SECTION_TITLE}>Sourcing</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr', gap: 10 }}>
+              <Field label="Mill / supplier">
+                <VendorPicker value={draft.mill_id} onChange={v => set({ mill_id: v })} placeholder="Select mill or supplier…" />
+              </Field>
+              <Field label="Lead time (days)">
+                <input type="number" value={draft.lead_time_days ?? 0} onChange={e => set({ lead_time_days: parseInt(e.target.value, 10) || 0 })} style={INPUT_STYLE} />
+              </Field>
+              <Field label="MOQ (yards)">
+                <input type="number" value={draft.moq_yards ?? 0} onChange={e => set({ moq_yards: parseInt(e.target.value, 10) || 0 })} style={INPUT_STYLE} />
+              </Field>
+              <Field label="Price / yd (USD)">
+                <input type="number" step="0.01" value={draft.price_per_yard_usd ?? 0} onChange={e => set({ price_per_yard_usd: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
+              </Field>
+            </div>
+          </div>
+
+          {/* Photos: front + back */}
+          <div style={CARD_STYLE}>
+            <h4 style={SECTION_TITLE}>Fabric photos</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <SimpleImageSlot
+                value={draft.front_image_url}
+                onChange={v => set({ front_image_url: v })}
+                label="Front"
+                hint="Drop the face of the fabric"
+                height={150}
+                assetScope="fabrics"
+                assetOwnerId={draft.id}
+                assetSlot="front"
+              />
+              <SimpleImageSlot
+                value={draft.back_image_url}
+                onChange={v => set({ back_image_url: v })}
+                label="Back"
+                hint="Drop the back of the fabric"
+                height={150}
+                assetScope="fabrics"
+                assetOwnerId={draft.id}
+                assetSlot="back"
+              />
+            </div>
+          </div>
+
+          {/* Color card gallery */}
+          <div style={CARD_STYLE}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+              <h4 style={SECTION_TITLE}>Color card</h4>
+              <span style={{ fontSize: 10, color: FR.stone }}>
+                {(draft.color_card_images || []).length} colors · upload one image per swatch
+              </span>
+            </div>
+            <MultiImageSlot
+              value={draft.color_card_images || []}
+              onChange={v => set({ color_card_images: v })}
+              assetScope="fabrics"
+              assetOwnerId={draft.id}
+              assetSlot="swatch"
+              hint="Drop swatch photos"
+            />
+          </div>
+
+          {/* CLO3D + notes */}
+          <div style={CARD_STYLE}>
+            <h4 style={SECTION_TITLE}>CLO3D & notes</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <Field label=".ZFAB file (CLO3D)">
+                <FileSlot
+                  value={draft.zfab_file_url}
+                  onChange={v => set({ zfab_file_url: v })}
+                  accept=".zfab,.zprj"
+                  hint="Drop a .zfab fabric asset"
+                />
+              </Field>
+              <Field label="Notes">
+                <textarea
+                  value={draft.notes || ''}
+                  onChange={e => set({ notes: e.target.value })}
+                  rows={4}
+                  placeholder="Compatibility, care, certifications…"
+                  style={{ ...INPUT_STYLE, resize: 'vertical' }}
+                />
+              </Field>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT — BOM page preview */}
+        <div style={{ position: 'sticky', top: 8 }}>
+          <div style={{ ...CARD_STYLE, padding: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, padding: '0 4px' }}>
+              <h4 style={{ ...SECTION_TITLE, marginBottom: 0 }}>BOM page</h4>
+              <span style={{ fontSize: 10, color: FR.stone }}>A4 · 1 page</span>
+            </div>
+            <FabricBOMPreview fabric={draft} />
+            <div style={{ fontSize: 10, color: FR.stone, marginTop: 8, padding: '0 4px', lineHeight: 1.5 }}>
+              This is exactly what lands in the tech pack BOM page when this fabric is selected.
+            </div>
           </div>
         </div>
       </div>
 
-      <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
-        <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Spec</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-          <Field label="Weight (gsm)">
-            <input type="number" value={draft.weight_gsm ?? 0} onChange={e => set({ weight_gsm: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
-          </Field>
-          <Field label="Width (cm)">
-            <input type="number" value={draft.width_cm ?? 0} onChange={e => set({ width_cm: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
-          </Field>
-          <Field label="Shrinkage (%)">
-            <input type="number" step="0.1" value={draft.shrinkage_pct ?? 0} onChange={e => set({ shrinkage_pct: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
-          </Field>
-          <Field label="Stretch (%)">
-            <input type="number" step="0.1" value={draft.stretch_pct ?? 0} onChange={e => set({ stretch_pct: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
-          </Field>
-          <Field label="Base color">
-            <select value={draft.color_id || ''} onChange={e => set({ color_id: e.target.value })} style={INPUT_STYLE}>
-              <option value="">— None —</option>
-              {FR_COLOR_OPTIONS.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-            </select>
-          </Field>
-        </div>
-      </div>
-
-      <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
-        <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Sourcing</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-          <Field label="Mill / supplier">
-            <VendorPicker
-              value={draft.mill_id}
-              onChange={v => set({ mill_id: v })}
-              placeholder="Select mill or supplier…"
-            />
-          </Field>
-          <Field label="Lead time (days)">
-            <input type="number" value={draft.lead_time_days ?? 0} onChange={e => set({ lead_time_days: parseInt(e.target.value, 10) || 0 })} style={INPUT_STYLE} />
-          </Field>
-          <Field label="MOQ (yards)">
-            <input type="number" value={draft.moq_yards ?? 0} onChange={e => set({ moq_yards: parseInt(e.target.value, 10) || 0 })} style={INPUT_STYLE} />
-          </Field>
-          <Field label="Price / yard (USD)">
-            <input type="number" step="0.01" value={draft.price_per_yard_usd ?? 0} onChange={e => set({ price_per_yard_usd: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
-          </Field>
-        </div>
-      </div>
-
-      <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
-        <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 4 }}>CLO3D & digital twin</h4>
-        <p style={{ fontSize: 11, color: FR.stone, margin: '0 0 14px' }}>
-          The bits half of the atom. CLO references a .ZFAB; non-CLO renderers use the PBR maps.
-        </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
-          <Field label=".ZFAB file (CLO3D)">
-            <FileSlot
-              value={draft.zfab_file_url}
-              onChange={v => set({ zfab_file_url: v })}
-              accept=".zfab,.zprj"
-              hint="Drop a .zfab fabric asset"
-            />
-          </Field>
-          <Field label="PBR basecolor map">
-            <FileSlot
-              value={draft.pbr_basecolor_url}
-              onChange={v => set({ pbr_basecolor_url: v })}
-              accept="image/*"
-              hint="Drop a basecolor texture (PNG/JPG)"
-            />
-          </Field>
-          <Field label="PBR normal map">
-            <FileSlot
-              value={draft.pbr_normal_url}
-              onChange={v => set({ pbr_normal_url: v })}
-              accept="image/*"
-              hint="Drop a normal map (PNG/JPG)"
-            />
-          </Field>
-          <Field label="PBR roughness map">
-            <FileSlot
-              value={draft.pbr_roughness_url}
-              onChange={v => set({ pbr_roughness_url: v })}
-              accept="image/*"
-              hint="Drop a roughness map (PNG/JPG)"
-            />
-          </Field>
-        </div>
-      </div>
-
-      <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
-        <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Reference & notes</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
-          <Field label="Swatch image">
-            <FileSlot
-              value={draft.swatch_image_url}
-              onChange={v => set({ swatch_image_url: v })}
-              accept="image/*"
-              hint="Drop a swatch reference photo"
-            />
-          </Field>
-          <Field label="Notes">
-            <textarea
-              value={draft.notes || ''}
-              onChange={e => set({ notes: e.target.value })}
-              rows={4}
-              placeholder="Compatibility, care, history…"
-              style={{ ...INPUT_STYLE, resize: 'vertical' }}
-            />
-          </Field>
-        </div>
-      </div>
+      {aiOpen && (
+        <FabricAIExtract
+          onClose={() => setAiOpen(false)}
+          onApply={onApplyAI}
+        />
+      )}
     </div>
   );
 }
