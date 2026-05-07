@@ -164,7 +164,7 @@ export function generateTechPackSVG(pack) {
     const t2 = table(40, 140, ['Operation', 'Seam Type', 'Stitch', 'SPI', 'Thread', 'Notes'], seamRows, [180, 140, 100, 60, 140, 423]);
     svg += t2.svg;
   }
-  svg += skipIf(5);
+  svg += skipIf(4);
   svg += `</g>`;
 
   // ─── Order & Delivery ───
@@ -185,7 +185,7 @@ export function generateTechPackSVG(pack) {
   svg += field('Incoterm', d.incoterm, 40, orderY + 85);
   svg += field('Target Ship', d.targetShipDate, 400, orderY + 85);
   svg += field('Target Arrival', d.targetArrivalDate, 700, orderY + 85);
-  svg += skipIf(11);
+  svg += skipIf(12);
   svg += `</g>`;
 
   svg += `</svg>`;

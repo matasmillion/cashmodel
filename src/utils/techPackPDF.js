@@ -239,7 +239,7 @@ export async function generateTechPackPDF(pack) {
   doc.setTextColor(...hex(FR.slate));
   doc.text(d.flatLayNotes || '', 10, 140, { maxWidth: W - 20 });
 
-  // ─── Page 5: Bill of Materials ───
+  // ─── Materials → Bill of Materials ───
   newPage('Bill of Materials', null, 3);
   y = 28;
   sectionHeading('Components', y); y += 8;
@@ -248,8 +248,34 @@ export async function generateTechPackPDF(pack) {
     [b.component, b.type, b.material, b.color, b.weight || '', b.supplier || '', b.costPerUnit || '', b.notes]);
   table(['Component', 'Type / Spec', 'Material', 'Color', 'Weight', 'Supplier', 'Cost/Unit', 'Notes'], bomRows, 10, y, [30, 40, 35, 25, 20, 35, 25, 67]);
 
-  // ─── Page 6: Color & Artwork ───
-  newPage('Color & Artwork', null, 4);
+  // ─── Cut & Sew → Construction ───
+  newPage('Construction Details', null, 4);
+  y = 28;
+  sectionHeading('Seam Specifications', y); y += 8;
+  const seamRows = (d.seams || []).filter(s => s.operation).map(s =>
+    [s.operation, s.seamType, s.stitchType, s.spiSpcm, s.threadColor, s.notes]);
+  table(['Operation', 'Seam Type', 'Stitch', 'SPI', 'Thread', 'Notes'], seamRows, 10, y, [50, 40, 30, 20, 40, 97]);
+
+  // ─── Cut & Sew → Pattern & Cutting ───
+  newPage('Pattern Pieces & Cutting', null, 6);
+  y = 28;
+  const ppRows = (d.patternPieces || []).filter(p => p.name).map(p =>
+    [p.name, p.qty, p.fabric, p.grain, p.fusing, p.notes]);
+  table(['Piece', 'Qty', 'Fabric', 'Grain', 'Fusing', 'Notes'], ppRows, 10, y, [50, 20, 40, 40, 30, 97]);
+  y += 30 + ppRows.length * 6;
+  field('Cutting Notes', d.cuttingNotes, 10, y);
+
+  // ─── Cut & Sew → Points of Measure ───
+  newPage('Points of Measure (cm)', null, 7);
+  y = 28;
+  field('Size Type', d.sizeType, 10, y); y += 14;
+  const sz = d.sizeType === 'waist' ? ['W30', 'W32', 'W34', 'W36'] : ['S', 'M', 'L', 'XL'];
+  const pomRows = (d.poms || []).filter(p => p.name).map(p =>
+    [p.name, p.tol, p.s, p.m, p.l, p.xl]);
+  table(['Measurement', 'Tol ±', ...sz], pomRows, 10, y, [70, 25, 30, 30, 30, 30]);
+
+  // ─── Embellishments → Color & Artwork ───
+  newPage('Color & Artwork', null, 8);
   y = 28;
   sectionHeading('Colorways', y); y += 8;
   const cwRows = (d.colorways || []).filter(c => c.name).map(c => [c.name, c.frColor, c.pantone, c.hex]);
@@ -260,33 +286,7 @@ export async function generateTechPackPDF(pack) {
   field('Back Logo', d.logoBack, 100, y);
   field('Method', d.logoMethod, 200, y);
 
-  // ─── Page 7: Construction ───
-  newPage('Construction Details', null, 5);
-  y = 28;
-  sectionHeading('Seam Specifications', y); y += 8;
-  const seamRows = (d.seams || []).filter(s => s.operation).map(s =>
-    [s.operation, s.seamType, s.stitchType, s.spiSpcm, s.threadColor, s.notes]);
-  table(['Operation', 'Seam Type', 'Stitch', 'SPI', 'Thread', 'Notes'], seamRows, 10, y, [50, 40, 30, 20, 40, 97]);
-
-  // ─── Page 8: Pattern & Cutting ───
-  newPage('Pattern Pieces & Cutting', null, 7);
-  y = 28;
-  const ppRows = (d.patternPieces || []).filter(p => p.name).map(p =>
-    [p.name, p.qty, p.fabric, p.grain, p.fusing, p.notes]);
-  table(['Piece', 'Qty', 'Fabric', 'Grain', 'Fusing', 'Notes'], ppRows, 10, y, [50, 20, 40, 40, 30, 97]);
-  y += 30 + ppRows.length * 6;
-  field('Cutting Notes', d.cuttingNotes, 10, y);
-
-  // ─── Page 9: POM ───
-  newPage('Points of Measure (cm)', null, 8);
-  y = 28;
-  field('Size Type', d.sizeType, 10, y); y += 14;
-  const sz = d.sizeType === 'waist' ? ['W30', 'W32', 'W34', 'W36'] : ['S', 'M', 'L', 'XL'];
-  const pomRows = (d.poms || []).filter(p => p.name).map(p =>
-    [p.name, p.tol, p.s, p.m, p.l, p.xl]);
-  table(['Measurement', 'Tol ±', ...sz], pomRows, 10, y, [70, 25, 30, 30, 30, 30]);
-
-  // ─── Page 10: Treatments ───
+  // ─── Treatments → Garment Treatments ───
   newPage('Garment Treatments', null, 9);
   y = 28;
   sectionHeading('Wash & Dye', y); y += 8;
@@ -299,8 +299,8 @@ export async function generateTechPackPDF(pack) {
     [dd.area, dd.technique, dd.intensity, dd.notes]);
   table(['Area', 'Technique', 'Intensity', 'Notes'], distRows, 10, y, [50, 50, 30, 147]);
 
-  // ─── Page 11: Labels & Packaging ───
-  newPage('Labels & Packaging', null, 10);
+  // ─── Packaging → Labels & Packaging ───
+  newPage('Labels & Packaging', null, 11);
   y = 28;
   field('Packaging', d.packaging, 10, y); y += 14;
   field('Packaging Notes', d.packagingNotes, 10, y); y += 14;
@@ -311,8 +311,8 @@ export async function generateTechPackPDF(pack) {
   const careLines = (d.careInstructions || '').split('\n');
   careLines.forEach((line, i) => doc.text(line, 10, y + i * 5));
 
-  // ─── Page 12: Order & Delivery ───
-  newPage('Order & Delivery', null, 11);
+  // ─── Logistics → Order & Delivery ───
+  newPage('Order & Delivery', null, 12);
   y = 28;
   sectionHeading('Quantity Per Size', y); y += 8;
   const qRows = (d.quantities || []).filter(q => q.colorway).map(q =>
@@ -327,8 +327,8 @@ export async function generateTechPackPDF(pack) {
   field('Target Ship', d.targetShipDate, 100, y);
   field('Target Arrival', d.targetArrivalDate, 200, y);
 
-  // ─── Page 13: Packing List ───
-  newPage('Packing List', null, 11);
+  // ─── Logistics → Packing List ───
+  newPage('Packing List', null, 12);
   y = 28;
   const pkRows = (d.cartons || []).filter(c => c.cartonNum).map(c =>
     [c.cartonNum, c.colorway, c.sizeBreakdown, c.qtyPerCarton, c.dims, c.grossWeight, c.netWeight]);

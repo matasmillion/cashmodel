@@ -16,12 +16,15 @@ function clampLine(s, maxW, charW = 6.5) {
   return s.slice(0, Math.max(1, max - 1)) + '…';
 }
 
-function PageFrame({ title, pageNum, styleInfo, children }) {
+function PageFrame({ title, phase, pageNum, styleInfo, children }) {
   return (
     <g>
       <rect x="0" y="0" width={PAGE_W} height={PAGE_H} fill={FR.white} />
       <rect x="0" y="0" width={PAGE_W} height={70} fill={FR.slate} />
       <text x="40" y="28" fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="3">FOREIGN RESOURCE CO.</text>
+      {phase && (
+        <text x="40" y="50" fontSize="8" fill={FR.sand} letterSpacing="2">{esc(phase.toUpperCase())}</text>
+      )}
       <text x={PAGE_W / 2} y="44" textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="20" fill={FR.salt}>{title}</text>
       <text x={PAGE_W - 40} y="28" textAnchor="end" fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="2">PAGE {pageNum} / {TOTAL_PAGES}</text>
       <rect x="0" y="70" width={PAGE_W} height={2} fill={FR.soil} />
@@ -43,28 +46,41 @@ function MetaRow({ x, y, label, value, w = 400 }) {
   );
 }
 
+// Compact stat block: small uppercase label above a larger value. Used to
+// build the grouped info bands on the cover page.
+function StatBlock({ x, y, label, value, valueSize = 13, mono = false }) {
+  return (
+    <g>
+      <text x={x} y={y} fontSize="7.5" fontWeight="bold" fill={FR.soil} letterSpacing="1.2">{esc((label || '').toUpperCase())}</text>
+      <text x={x} y={y + 18} fontSize={valueSize} fill={FR.slate}
+        fontFamily={mono ? "ui-monospace, 'SF Mono', Menlo, monospace" : "Helvetica, Arial, sans-serif"}>
+        {esc(value || '—')}
+      </text>
+    </g>
+  );
+}
+
 function PageCover({ d, images }) {
   const cover = (images || []).find(img => img.slot === 'cover');
-  const colorways = (d.colorways || []).filter(c => c && c.name).map(c => c.name).join(', ') || '—';
-  const sizeRange = Array.isArray(d.sizeRange) ? d.sizeRange.join(' / ') : (d.sizeRange || '—');
-  const maxFOB = d.maxFOB != null && d.maxFOB !== '' ? parseFloat(d.maxFOB).toFixed(2) : '—';
+  const colorways = (d.colorways || []).filter(c => c && c.name).map(c => c.name);
+  const colorwaysText = colorways.length ? colorways.join(' · ') : '—';
+  const sizeRange = Array.isArray(d.sizeRange) ? d.sizeRange.join(' · ') : (d.sizeRange || '—');
+  const maxFOB = d.maxFOB != null && d.maxFOB !== '' ? `$${parseFloat(d.maxFOB).toFixed(2)}` : '—';
+  const targetRetail = d.targetRetail ? `$${parseFloat(d.targetRetail).toFixed(2)}` : '—';
 
   // Cover image: 2:3 portrait, right column
   const imgW = 280;
   const imgH = imgW * 3 / 2; // 420
   const imgX = PAGE_W - imgW - 40;
-  const imgY = 85;
-  const leftW = imgX - 60; // width of left content column
-
-  // Quote tier stat strip dimensions
-  const tierStripY = 640;
-  const tierStripH = 36;
+  const imgY = 100;
+  const leftX = 40;
+  const leftW = imgX - 60; // ≈ 743 px
 
   return (
     <g>
-      {/* Large 2:3 cover image — right column */}
+      {/* ── Right column: 2:3 cover image ─────────────────────────────────── */}
       {cover
-        ? <image href={cover.data} x={imgX} y={imgY} width={imgW} height={imgH} preserveAspectRatio="xMidYMid meet" />
+        ? <image href={cover.data} x={imgX} y={imgY} width={imgW} height={imgH} preserveAspectRatio="xMidYMid slice" />
         : (
           <g>
             <rect x={imgX} y={imgY} width={imgW} height={imgH} fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" />
@@ -72,68 +88,90 @@ function PageCover({ d, images }) {
           </g>
         )}
 
-      {/* Tech Pack wordmark — left column */}
-      <text x={40} y={120} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="44" fill={FR.slate}>Tech Pack</text>
-      <rect x={40} y={132} width="100" height="2" fill={FR.soil} />
-      <text x={40} y={160} fontSize="15" fill={FR.stone}>
-        {clampLine(d.styleNumber || d.styleName || 'Untitled Style', 600, 8.5)}
+      {/* ── Hero: Tech Pack wordmark + style number ──────────────────────── */}
+      <text x={leftX} y={140} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="46" fill={FR.slate}>Tech Pack</text>
+      <rect x={leftX} y={150} width="60" height="2" fill={FR.soil} />
+      <text x={leftX} y={188} fontFamily="ui-monospace, 'SF Mono', Menlo, monospace" fontSize="20" fill={FR.slate} letterSpacing="2">
+        {clampLine(d.styleNumber || 'Untitled Style', leftW, 11)}
+      </text>
+      <text x={leftX} y={208} fontSize="11" fill={FR.stone} letterSpacing="0.5">
+        {[d.collection, d.productType, d.season].filter(Boolean).join('  ·  ') || '—'}
       </text>
 
-      {/* Section divider */}
-      <rect x="40" y="188" width={leftW} height="1" fill={FR.sand} />
-      <text x={40} y={206} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="2">STYLE SUMMARY</text>
-
-      {/* Two-column metadata — left of the image */}
+      {/* ── Band 1: IDENTITY (vendor, version, status) ──────────────────── */}
       {(() => {
-        const lx = 40;
-        const rx = 40 + leftW / 2 + 10;
-        const cw = leftW / 2 - 10;
-        const startY = 228;
-        const gap = 44;
-        const left = [
-          { label: 'Style #',      value: d.styleNumber },
-          { label: 'Collection',   value: d.collection },
-          { label: 'Product Type', value: d.productType },
-          { label: 'Season',       value: d.season },
-          { label: 'Version',      value: d.revision },
-        ];
-        const right = [
-          { label: 'Vendor',            value: d.vendor },
-          { label: 'Colorways',         value: colorways },
-          { label: 'Size Range',        value: sizeRange },
-          { label: 'Target Retail ($)', value: d.targetRetail },
-          { label: 'Maximum FOB ($)',   value: maxFOB },
-          { label: 'Status',            value: d.status },
-        ];
+        const bandY = 250;
+        const bandH = 70;
         return (
-          <>
-            {left.map((f, i)  => <MetaRow key={`L${i}`} x={lx} y={startY + i * gap} label={f.label} value={f.value} w={cw} />)}
-            {right.map((f, i) => <MetaRow key={`R${i}`} x={rx} y={startY + i * gap} label={f.label} value={f.value} w={cw} />)}
-          </>
+          <g>
+            <rect x={leftX} y={bandY} width={leftW} height={bandH} fill={FR.salt} />
+            <rect x={leftX} y={bandY} width="3" height={bandH} fill={FR.soil} />
+            <text x={leftX + 16} y={bandY + 18} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="2">IDENTITY</text>
+            <StatBlock x={leftX + 16}              y={bandY + 38} label="Vendor"  value={d.vendor} />
+            <StatBlock x={leftX + leftW * 0.55}    y={bandY + 38} label="Version" value={d.revision} mono />
+            <StatBlock x={leftX + leftW * 0.78}    y={bandY + 38} label="Status"  value={d.status} />
+          </g>
         );
       })()}
 
-      {/* Quote stat strip */}
+      {/* ── Band 2: PRODUCTION (colorways + size range) ─────────────────── */}
+      {(() => {
+        const bandY = 340;
+        const bandH = 70;
+        return (
+          <g>
+            <rect x={leftX} y={bandY} width={leftW} height={bandH} fill={FR.salt} />
+            <rect x={leftX} y={bandY} width="3" height={bandH} fill={FR.soil} />
+            <text x={leftX + 16} y={bandY + 18} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="2">PRODUCTION</text>
+            <StatBlock x={leftX + 16}              y={bandY + 38} label="Colorways"  value={clampLine(colorwaysText, leftW * 0.5, 6.5)} />
+            <StatBlock x={leftX + leftW * 0.55}    y={bandY + 38} label="Size Range" value={sizeRange} />
+          </g>
+        );
+      })()}
+
+      {/* ── Band 3: PRICING (target retail + maximum FOB) ───────────────── */}
+      {(() => {
+        const bandY = 430;
+        const bandH = 80;
+        return (
+          <g>
+            <rect x={leftX} y={bandY} width={leftW} height={bandH} fill={FR.salt} />
+            <rect x={leftX} y={bandY} width="3" height={bandH} fill={FR.soil} />
+            <text x={leftX + 16} y={bandY + 18} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="2">PRICING</text>
+            <text x={leftX + 16}              y={bandY + 42} fontSize="8" fontWeight="bold" fill={FR.stone} letterSpacing="1.2">TARGET RETAIL</text>
+            <text x={leftX + 16}              y={bandY + 66} fontFamily="ui-monospace, 'SF Mono', Menlo, monospace" fontSize="22" fill={FR.slate}>{targetRetail}</text>
+            <text x={leftX + leftW * 0.55}    y={bandY + 42} fontSize="8" fontWeight="bold" fill={FR.stone} letterSpacing="1.2">MAXIMUM FOB</text>
+            <text x={leftX + leftW * 0.55}    y={bandY + 66} fontFamily="ui-monospace, 'SF Mono', Menlo, monospace" fontSize="22" fill={FR.soil}>{maxFOB}</text>
+          </g>
+        );
+      })()}
+
+      {/* ── Quote strip — large, prominent, full-width below the image ───── */}
       {(() => {
         const tiers = d.costTiers || [];
         const moq = tiers[0];
-        const statCells = [
-          { label: 'MOQ',              value: moq ? `${moq.quantity || '—'} units` : '—' },
-          { label: 'MOQ Unit Cost',    value: moq && moq.unitCost ? `$${moq.unitCost}` : '—' },
-          { label: 'Lead Time',        value: d.leadTimeDays ? `${d.leadTimeDays} days` : '—' },
-          { label: 'Sample Lead',      value: d.sampleLeadTimeDays ? `${d.sampleLeadTimeDays} days` : '—' },
-          { label: 'Sample Cost',      value: d.sampleCost ? `$${d.sampleCost}` : '—' },
+        const stripY = 555;
+        const stripH = 110;
+        const stripW = PAGE_W - 80;
+        const cells = [
+          { label: 'MOQ',           value: moq && moq.quantity ? `${moq.quantity}` : '—', sub: 'units' },
+          { label: 'Unit Cost',     value: moq && moq.unitCost ? `$${moq.unitCost}` : '—', sub: 'at MOQ' },
+          { label: 'Lead Time',     value: d.leadTimeDays ? `${d.leadTimeDays}` : '—',  sub: 'days' },
+          { label: 'Sample Lead',   value: d.sampleLeadTimeDays ? `${d.sampleLeadTimeDays}` : '—', sub: 'days' },
+          { label: 'Sample Cost',   value: d.sampleCost ? `$${d.sampleCost}` : '—', sub: 'per unit' },
         ];
-        const cw = leftW / statCells.length;
+        const cw = stripW / cells.length;
         return (
           <g>
-            <rect x={40} y={tierStripY - 16} width={leftW} height={1} fill={FR.sand} />
-            <text x={40} y={tierStripY - 4} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="2">QUOTE</text>
-            <rect x={40} y={tierStripY + 4} width={leftW} height={tierStripH} fill={FR.salt} stroke={FR.sand} />
-            {statCells.map((c, i) => (
+            <rect x={40} y={stripY} width={stripW} height={stripH} fill={FR.slate} />
+            <text x={40 + 16} y={stripY + 22} fontSize="8" fontWeight="bold" fill={FR.sand} letterSpacing="2">QUOTE  ·  {esc((d.quoteProviderLink || 'Quote provider TBD').toUpperCase())}</text>
+            <rect x={40 + 16} y={stripY + 30} width="40" height="1.5" fill={FR.soil} />
+            {cells.map((c, i) => (
               <g key={i}>
-                <text x={40 + i * cw + 8} y={tierStripY + 4 + 14} fontSize="7" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">{esc(c.label.toUpperCase())}</text>
-                <text x={40 + i * cw + 8} y={tierStripY + 4 + 28} fontSize="10" fill={FR.slate}>{esc(c.value)}</text>
+                {i > 0 && <line x1={40 + i * cw} y1={stripY + 50} x2={40 + i * cw} y2={stripY + stripH - 14} stroke="rgba(245,240,232,0.18)" />}
+                <text x={40 + i * cw + 16} y={stripY + 60} fontSize="8" fontWeight="bold" fill={FR.sand} letterSpacing="1.5">{esc(c.label.toUpperCase())}</text>
+                <text x={40 + i * cw + 16} y={stripY + 88} fontFamily="ui-monospace, 'SF Mono', Menlo, monospace" fontSize="22" fill={FR.salt}>{esc(c.value)}</text>
+                <text x={40 + i * cw + 16} y={stripY + 102} fontSize="9" fill={FR.sand} fontStyle="italic">{esc(c.sub)}</text>
               </g>
             ))}
           </g>
@@ -956,21 +994,22 @@ function ComingSoon({ pageNum, title }) {
   );
 }
 
+// Page order mirrors STEPS in techPackConstants.js (manufacturing stage).
 const PAGE_FNS = [
-  { title: 'Style Overview',                body: ({ d, images }) => <PageCover d={d} images={images} /> },
-  { title: 'Design Overview',              body: ({ d, images }) => <PageDesignOverview d={d} images={images} /> },
-  { title: 'Technical Flat Lay Diagrams',  body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
-  { title: 'Bill of Materials',            body: ({ d }) => <PageBOM d={d} /> },
-  { title: 'Color & Artwork',              body: ({ d, images }) => <PageColor d={d} images={images} /> },
-  { title: 'Construction Details',         body: ({ d }) => <PageConstruction d={d} /> },
-  { title: 'Construction Detail Sketches', body: ({ d, images }) => <PageSketches d={d} images={images} /> },
-  { title: 'Pattern Pieces & Cutting',     body: ({ d, images }) => <PagePattern d={d} images={images} /> },
-  { title: 'Points of Measure',            body: ({ d, images }) => <PagePom d={d} images={images} /> },
-  { title: 'Garment Treatments',           body: ({ d, images }) => <PageTreatments d={d} images={images} /> },
-  { title: 'Labels & Packaging',           body: ({ d, images }) => <PageLabels d={d} images={images} /> },
-  { title: 'Order & Delivery',             body: ({ d }) => <PageOrder d={d} /> },
-  { title: 'Compliance & Quality',         body: ({ d }) => <PageCompliance d={d} /> },
-  { title: 'Revision History & Approval',  body: ({ d }) => <PageRevision d={d} /> },
+  { title: 'Style Overview',               phase: 'Design',         body: ({ d, images }) => <PageCover d={d} images={images} /> },
+  { title: 'Design Overview',              phase: 'Design',         body: ({ d, images }) => <PageDesignOverview d={d} images={images} /> },
+  { title: 'Technical Flat Lay Diagrams',  phase: 'Design',         body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
+  { title: 'Bill of Materials',            phase: 'Materials',      body: ({ d }) => <PageBOM d={d} /> },
+  { title: 'Construction Details',         phase: 'Cut & Sew',      body: ({ d }) => <PageConstruction d={d} /> },
+  { title: 'Construction Detail Sketches', phase: 'Cut & Sew',      body: ({ d, images }) => <PageSketches d={d} images={images} /> },
+  { title: 'Pattern Pieces & Cutting',     phase: 'Cut & Sew',      body: ({ d, images }) => <PagePattern d={d} images={images} /> },
+  { title: 'Points of Measure',            phase: 'Cut & Sew',      body: ({ d, images }) => <PagePom d={d} images={images} /> },
+  { title: 'Color & Artwork',              phase: 'Embellishments', body: ({ d, images }) => <PageColor d={d} images={images} /> },
+  { title: 'Garment Treatments',           phase: 'Treatments',     body: ({ d, images }) => <PageTreatments d={d} images={images} /> },
+  { title: 'Compliance & Quality',         phase: 'QC',             body: ({ d }) => <PageCompliance d={d} /> },
+  { title: 'Labels & Packaging',           phase: 'Packaging',      body: ({ d, images }) => <PageLabels d={d} images={images} /> },
+  { title: 'Order & Delivery',             phase: 'Logistics',      body: ({ d }) => <PageOrder d={d} /> },
+  { title: 'Revision History & Approval',  phase: 'Sign-off',       body: ({ d }) => <PageRevision d={d} /> },
 ];
 
 function SkipOverlay() {
@@ -1000,7 +1039,7 @@ export default function TechPackPagePreview({ data, images, step, skippedSteps }
       viewBox={`0 0 ${PAGE_W} ${PAGE_H}`}
       preserveAspectRatio="xMidYMin meet"
       style={{ width: '100%', height: 'auto', background: FR.white, boxShadow: '0 2px 14px rgba(0,0,0,0.12)', borderRadius: 6, fontFamily: 'Helvetica, Arial, sans-serif' }}>
-      <PageFrame title={current.title} pageNum={pageNum} styleInfo={styleInfo}>
+      <PageFrame title={current.title} phase={current.phase} pageNum={pageNum} styleInfo={styleInfo}>
         <Body d={d} images={images} />
       </PageFrame>
       {isSkipped && <SkipOverlay />}

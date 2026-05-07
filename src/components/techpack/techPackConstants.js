@@ -24,7 +24,7 @@ export const DEFAULT_LIBRARY = { bom: [], fabrics: [], trims: [], labels: [], lo
 
 export const STATUSES = ['Design', 'Sampling', 'Testing', 'Pre-Production', 'Production', 'Released'];
 
-// Steps locked until Pre-Production: Labels (10), Order (11), Compliance (12)
+// Steps locked until Pre-Production: Compliance (10), Labels (11), Order (12)
 export const LOCKED_STEPS = new Set([10, 11, 12]);
 export function isStepLocked(stepIndex, status) {
   if (!LOCKED_STEPS.has(stepIndex)) return false;
@@ -33,22 +33,25 @@ export function isStepLocked(stepIndex, status) {
   return current < unlockAt || current === -1;
 }
 
-// 14-step wizard mapping 1:1 to the FR_TechPack_Template_Blank.pdf pages.
+// 14-step wizard, ordered by manufacturing stage:
+//   Design → Materials → Cut & Sew → Embellishments → Treatments
+//   → QC → Packaging → Logistics → Sign-off
+// `phase` drives the section dividers in the sidebar and the live preview.
 export const STEPS = [
-  { id: 'cover',         title: 'Style Overview',                   icon: '01' },
-  { id: 'design',        title: 'Design Overview',                  icon: '02' },
-  { id: 'flatlays',      title: 'Technical Flat Lay Diagrams',      icon: '03' },
-  { id: 'bom',           title: 'Bill of Materials',                icon: '04' },
-  { id: 'color',         title: 'Color & Artwork',                  icon: '05' },
-  { id: 'construction',  title: 'Construction Details',             icon: '06' },
-  { id: 'sketches',      title: 'Construction Detail Sketches',     icon: '07' },
-  { id: 'pattern',       title: 'Pattern Pieces & Cutting',         icon: '08' },
-  { id: 'pom',           title: 'Points of Measure',                icon: '09' },
-  { id: 'treatments',    title: 'Garment Treatments',               icon: '10' },
-  { id: 'labels',        title: 'Labels & Packaging',               icon: '11' },
-  { id: 'order',         title: 'Order & Delivery',                 icon: '12' },
-  { id: 'compliance',    title: 'Compliance & Quality',             icon: '13' },
-  { id: 'revision',      title: 'Revision History & Approval',      icon: '14' },
+  { id: 'cover',         title: 'Style Overview',                   icon: '01', phase: 'Design' },
+  { id: 'design',        title: 'Design Overview',                  icon: '02', phase: 'Design' },
+  { id: 'flatlays',      title: 'Technical Flat Lay Diagrams',      icon: '03', phase: 'Design' },
+  { id: 'bom',           title: 'Bill of Materials',                icon: '04', phase: 'Materials' },
+  { id: 'construction',  title: 'Construction Details',             icon: '05', phase: 'Cut & Sew' },
+  { id: 'sketches',      title: 'Construction Detail Sketches',     icon: '06', phase: 'Cut & Sew' },
+  { id: 'pattern',       title: 'Pattern Pieces & Cutting',         icon: '07', phase: 'Cut & Sew' },
+  { id: 'pom',           title: 'Points of Measure',                icon: '08', phase: 'Cut & Sew' },
+  { id: 'color',         title: 'Color & Artwork',                  icon: '09', phase: 'Embellishments' },
+  { id: 'treatments',    title: 'Garment Treatments',               icon: '10', phase: 'Treatments' },
+  { id: 'compliance',    title: 'Compliance & Quality',             icon: '11', phase: 'QC' },
+  { id: 'labels',        title: 'Labels & Packaging',               icon: '12', phase: 'Packaging' },
+  { id: 'order',         title: 'Order & Delivery',                 icon: '13', phase: 'Logistics' },
+  { id: 'revision',      title: 'Revision History & Approval',      icon: '14', phase: 'Sign-off' },
 ];
 
 const todayISO = () => {
