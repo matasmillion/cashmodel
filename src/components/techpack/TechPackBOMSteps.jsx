@@ -360,7 +360,8 @@ export function StepPackaging({ data, set, packId }) {
 
 // ─── Shared component-pack BOM page (used by Trims + Packaging) ────────────
 
-function ComponentBOMPage({ title, subtitle, fieldName, data, set, filterCategory, pickerSubtitle, roleOptions, maxSlots }) {
+function ComponentBOMPage({ title, singularNoun, subtitle, fieldName, data, set, pickerSubtitle, roleOptions, maxSlots }) {
+  const noun = singularNoun || title.replace(/s$/, '');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [fullById, setFullById] = useState({});
 
@@ -420,7 +421,7 @@ function ComponentBOMPage({ title, subtitle, fieldName, data, set, filterCategor
         {Array.from({ length: maxSlots }).map((_, i) => {
           const entry = picked[i];
           if (!entry) {
-            return <EmptyPickerSlot key={i} onPick={() => setPickerOpen(true)} label={`Pick ${title.slice(0, -1).toLowerCase()}`} />;
+            return <EmptyPickerSlot key={i} onPick={() => setPickerOpen(true)} label={`Pick ${noun.toLowerCase()}`} />;
           }
           return (
             <ComponentSlotCard
@@ -456,12 +457,9 @@ function ComponentBOMPage({ title, subtitle, fieldName, data, set, filterCategor
 
       {pickerOpen && (
         <LibraryPickerModal
-          title={`Pick a ${title.slice(0, -1)}`}
+          title={`Pick a ${noun}`}
           subtitle={pickerSubtitle}
-          fetchItems={async () => {
-            const all = await listComponentPacks();
-            return all.filter(c => filterCategory(c.component_category));
-          }}
+          fetchItems={listComponentPacks}
           getId={item => item.id}
           renderItem={item => {
             const s = specOf(item);
