@@ -462,21 +462,43 @@ function GridTable({ x, y, cols, rows, bodyRows = 4, rowH = 22, headerH = 22, re
 function PageFabrics({ d, fabricsById = {} }) {
   const picked = (d?.pickedFabrics || []).slice(0, 3);
   const cardW = 300;
-  const cardH = 380;
+  const cardH = 460; // taller to fit vendor block + colorway badge
   const totalW = cardW * 3 + 16 * 2;
   const startX = (PAGE_W - totalW) / 2;
-  const startY = 130;
-  const imgH = cardH * 0.55;
+  const startY = 110;
+  const imgH = cardH * 0.45;
 
   return (
     <g>
-      <text x={PAGE_W / 2} y={108} textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="14" fill={FR.stone}>
+      <text x={PAGE_W / 2} y={94} textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="14" fill={FR.stone}>
         Up to three fabrics, picked from the PLM Fabric library.
       </text>
       {[0, 1, 2].map(i => {
         const entry = picked[i];
         const row = entry ? fabricsById[entry.fabricId] : null;
+        const d2 = row?.data || {};
         const x = startX + i * (cardW + 16);
+
+        const cover = row?.cover_image || row?.front_image_url || d2?.cover_image || d2?.front_image_url;
+        const name = row?.code || d2?.name || row?.name || (entry?.fabricId ? 'Loading…' : '—');
+        const composition = row?.composition || d2?.composition || '—';
+        const weightGsm = row?.weight_gsm || d2?.weight_gsm;
+        const weave = row?.weave || d2?.weave || '—';
+
+        const millName = row?.mill_id || d2?.mill_id || '—';
+        const vendorEmail = row?._vendorEmail || '';
+        const vendorPhone = row?._vendorPhone || '';
+        const vendorContact = row?._vendorContact || '';
+
+        const tier = (d2?.costTiers || [])[0];
+        const unitCost =
+          parseFloat(row?.price_per_meter_usd) ||
+          parseFloat(d2?.price_per_meter_usd) ||
+          parseFloat(tier?.unitCost) ||
+          parseFloat(row?.cost_per_unit) ||
+          parseFloat(d2?.cost_per_unit) || 0;
+
+        let cy = startY + imgH + 22;
         return (
           <g key={i}>
             <rect x={x} y={startY} width={cardW} height={cardH}
@@ -488,43 +510,71 @@ function PageFabrics({ d, fabricsById = {} }) {
             {entry && (
               <>
                 <rect x={x} y={startY} width={cardW} height={imgH} fill={FR.salt} rx={6} />
-                {row?.cover_image && (
-                  <image href={row.cover_image} x={x} y={startY} width={cardW} height={imgH}
+                {cover && (
+                  <image href={cover} x={x} y={startY} width={cardW} height={imgH}
                     preserveAspectRatio="xMidYMid slice" />
                 )}
-                <text x={x + 16} y={startY + imgH + 22}
+                <text x={x + 16} y={cy}
                   fontSize={9} fontWeight={600} fill={FR.soil} letterSpacing={1}>
                   {(entry.role || `Fabric ${i + 1}`).toUpperCase()}
                 </text>
-                <text x={x + 16} y={startY + imgH + 44}
+                <text x={x + 16} y={cy + 22}
                   fontSize={16} fill={FR.slate} fontFamily="'Cormorant Garamond', Georgia, serif">
-                  {row?.name || row?.data?.name || (entry.fabricId ? 'Loading…' : '—')}
+                  {name}
                 </text>
-                <text x={x + 16} y={startY + imgH + 64} fontSize={10} fill={FR.stone}>
-                  {row?.data?.composition || row?.composition || '—'}
-                </text>
-                <text x={x + 16} y={startY + imgH + 80} fontSize={10} fill={FR.stone}>
-                  {(row?.data?.weight_gsm || row?.weight_gsm) ? `${row?.data?.weight_gsm || row?.weight_gsm} GSM` : '—'} · {row?.data?.weave || row?.weave || '—'}
-                </text>
-                <text x={x + 16} y={startY + imgH + 96} fontSize={10} fill={FR.stone}>
-                  Vendor: {row?.data?.supplier || row?.supplier || '—'}
-                </text>
-                {(() => {
-                  const tier = (row?.data?.costTiers || [])[0];
-                  const unitCost =
-                    parseFloat(row?.price_per_meter_usd) ||
-                    parseFloat(row?.data?.price_per_meter_usd) ||
-                    parseFloat(tier?.unitCost) ||
-                    parseFloat(row?.cost_per_unit) ||
-                    parseFloat(row?.data?.cost_per_unit) ||
-                    parseFloat(row?.data?.costPerYard) ||
-                    parseFloat(row?.data?.costPerMeter) || 0;
-                  return (
-                    <text x={cardW + x - 16} y={startY + cardH - 18} textAnchor="end" fontSize={12} fontWeight={700} fill={FR.slate} fontFamily="ui-monospace, Menlo, monospace">
-                      {unitCost > 0 ? `$${unitCost.toFixed(2)}` : '$0.00'} / m
+
+                {/* Colorway badge */}
+                {entry.colorLabel && (
+                  <g>
+                    <rect x={x + 16} y={cy + 36} width={20} height={20} rx={3}
+                      fill={entry.colorHex || FR.salt} stroke={FR.sand} strokeWidth={0.5} />
+                    {entry.colorUrl && (
+                      <image href={entry.colorUrl} x={x + 16} y={cy + 36} width={20} height={20}
+                        preserveAspectRatio="xMidYMid slice" />
+                    )}
+                    <text x={x + 42} y={cy + 50} fontSize={10} fill={FR.slate}>
+                      {entry.colorLabel}
                     </text>
-                  );
-                })()}
+                  </g>
+                )}
+                {!entry.colorLabel && (
+                  <text x={x + 16} y={cy + 50} fontSize={10} fill={FR.stone} fontStyle="italic">
+                    Colorway: not picked
+                  </text>
+                )}
+
+                <text x={x + 16} y={cy + 76} fontSize={10} fill={FR.stone}>{composition}</text>
+                <text x={x + 16} y={cy + 92} fontSize={10} fill={FR.stone}>
+                  {weightGsm ? `${weightGsm} GSM` : '—'} · {weave}
+                </text>
+
+                {/* Vendor block */}
+                <line x1={x + 16} y1={cy + 104} x2={x + cardW - 16} y2={cy + 104}
+                  stroke={FR.sand} strokeWidth={0.5} />
+                <text x={x + 16} y={cy + 122} fontSize={11} fontWeight={600} fill={FR.slate}>
+                  {millName}
+                </text>
+                {vendorContact && (
+                  <text x={x + 16} y={cy + 138} fontSize={9} fill={FR.stone}>{vendorContact}</text>
+                )}
+                {vendorEmail && (
+                  <text x={x + 16} y={cy + (vendorContact ? 152 : 138)} fontSize={9}
+                    fill={FR.stone} fontFamily="ui-monospace, Menlo, monospace">{vendorEmail}</text>
+                )}
+                {vendorPhone && (
+                  <text x={x + 16} y={cy + (vendorContact ? 166 : (vendorEmail ? 152 : 138))}
+                    fontSize={9} fill={FR.stone} fontFamily="ui-monospace, Menlo, monospace">{vendorPhone}</text>
+                )}
+
+                {/* Cost row */}
+                <line x1={x + 16} y1={startY + cardH - 36} x2={x + cardW - 16} y2={startY + cardH - 36}
+                  stroke={FR.sand} strokeWidth={0.5} />
+                <text x={x + 16} y={startY + cardH - 18} fontSize={10} fill={FR.stone}
+                  fontFamily="ui-monospace, Menlo, monospace">Cost / m</text>
+                <text x={x + cardW - 16} y={startY + cardH - 18} textAnchor="end"
+                  fontSize={12} fontWeight={700} fill={FR.slate} fontFamily="ui-monospace, Menlo, monospace">
+                  {unitCost > 0 ? `$${unitCost.toFixed(2)}` : '$0.00'}
+                </text>
               </>
             )}
           </g>
