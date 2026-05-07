@@ -812,6 +812,45 @@ export function StepDesignOverview({ data, set, images, onUpload, onRemove }) {
         </Row>
       </GenSection>
 
+      {/* Forward-looking placeholder — visualize the PDP at the design phase */}
+      <div style={{
+        marginTop: 28,
+        padding: '28px 22px',
+        border: `2px dashed ${FR.sand}`,
+        borderRadius: 8,
+        background: FR.salt,
+        textAlign: 'center',
+      }}>
+        <div style={{
+          fontSize: 9,
+          color: FR.stone,
+          fontWeight: 600,
+          letterSpacing: 1.5,
+          textTransform: 'uppercase',
+          marginBottom: 8,
+        }}>
+          Coming Soon
+        </div>
+        <div style={{
+          fontFamily: "'Cormorant Garamond', Georgia, serif",
+          fontSize: 22,
+          color: FR.slate,
+          lineHeight: 1.2,
+          marginBottom: 8,
+        }}>
+          Website Preview
+        </div>
+        <div style={{
+          fontSize: 12,
+          color: FR.stone,
+          lineHeight: 1.55,
+          maxWidth: 480,
+          margin: '0 auto',
+        }}>
+          Visualize this product on the live storefront before sampling — prototype merchandising, hero imagery, and PDP copy at the design phase.
+        </div>
+      </div>
+
       {showModal && (
         <GenerateViewsModal
           viewSources={{ front: sourceFront, back: sourceBack, side: sourceSide }}
