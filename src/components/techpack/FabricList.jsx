@@ -87,8 +87,8 @@ function Hero({ fabric }) {
 function GridCard({ fabric, onOpen, onMenu, menuOpen, onMenuClose, onArchive, onRestore, onDuplicate }) {
   const status = fabric.status || 'draft';
   const weight = fabric.weight_gsm ? `${fabric.weight_gsm} gsm` : '—';
-  const price = fabric.price_per_yard_usd
-    ? `$${Number(fabric.price_per_yard_usd).toFixed(2)} / yd`
+  const price = fabric.price_per_meter_usd
+    ? `$${Number(fabric.price_per_meter_usd).toFixed(2)} / m`
     : '—';
   const lead = fabric.lead_time_days ? `${fabric.lead_time_days} days` : '—';
   const mill = fabric.mill_id || '—';

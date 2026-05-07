@@ -46,7 +46,7 @@ function useResolved(ref) {
 
 function fmtPrice(p) {
   if (p == null || p === '' || Number.isNaN(Number(p))) return '—';
-  return `$${Number(p).toFixed(2)} / yd`;
+  return `$${Number(p).toFixed(2)} / m`;
 }
 function fmtNum(n, suffix = '') {
   if (n == null || n === '' || Number.isNaN(Number(n))) return '—';
@@ -133,8 +133,8 @@ function PageBody({ fabric }) {
     { label: 'Weight',         value: fmtNum(fabric.weight_gsm, ' gsm') },
     { label: 'Width',          value: fmtNum(fabric.width_cm, ' cm') },
     { label: 'Lead Time',      value: fmtNum(fabric.lead_time_days, ' days') },
-    { label: 'MOQ',            value: fmtNum(fabric.moq_yards, ' yd') },
-    { label: 'Price',          value: fmtPrice(fabric.price_per_yard_usd) },
+    { label: 'MOQ',            value: fmtNum(fabric.moq_meters, ' m') },
+    { label: 'Price',          value: fmtPrice(fabric.price_per_meter_usd) },
   ];
   const stripStartX = 40;
   const stripCellW = (PAGE_W - stripStartX * 2) / stripCells.length;

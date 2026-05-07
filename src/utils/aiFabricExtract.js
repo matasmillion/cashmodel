@@ -22,7 +22,17 @@ const WEAVE_VOCAB = [
   'poplin', 'oxford', 'rib', 'pique', 'canvas', 'other',
 ];
 
-const SYSTEM_PROMPT = `You are a textile sourcing analyst for a US fashion brand. You read fabric color cards / spec sheets supplied by Asian mills (often Chinese, sometimes mixed CN/EN, sometimes Japanese or Korean) and translate them into a canonical English schema.
+// Approximate CNY → USD rate. Mills routinely quote in RMB; the user
+// reviews the suggestion before applying so a stale-by-a-few-percent rate
+// is not a correctness issue, only a convenience.
+const CNY_TO_USD = 0.14;
+
+function buildSystemPrompt(knownVendors) {
+  const vendorBlock = knownVendors && knownVendors.length
+    ? `\n\nKNOWN VENDORS (existing in our library):\n${knownVendors.map(n => `- ${n}`).join('\n')}\n\nIf the mill on the card matches one of these (even partially — e.g. "Jufeng Textile", "Jufeng Cloth Industry", "Jufeng Mill" all refer to the same Jufeng), output the EXACT name from the list above in mill_id. Only invent a new mill_id if no entry above plausibly matches.`
+    : '';
+
+  return `You are a textile sourcing analyst for a US fashion brand. You read fabric color cards / spec sheets supplied by Asian mills (often Chinese, sometimes mixed CN/EN, sometimes Japanese or Korean) and translate them into a canonical English schema.
 
 Return ONLY a single JSON object (no markdown fences, no prose) with this shape:
 
@@ -39,8 +49,8 @@ Return ONLY a single JSON object (no markdown fences, no prose) with this shape:
   "hand": string | null,
   "mill_id": string | null,
   "lead_time_days": number | null,
-  "moq_yards": number | null,
-  "price_per_yard_usd": number | null,
+  "moq_meters": number | null,
+  "price_per_meter_usd": number | null,
   "colors": [ { "label": string, "hex": string | null } ],
   "notes": string | null
 }
@@ -52,7 +62,13 @@ Rules:
 - Map mill weaves to our vocabulary (${WEAVE_VOCAB.join(', ')}). If a fabric is "interlock" / "double knit" pick "jersey". If unsure, use "other".
 - "category" must match the weave: jersey/french_terry/fleece/rib/pique → knit; twill/denim/poplin/oxford/canvas → woven.
 - Read every distinct color swatch on the card. Estimate hex from the swatch fill where visible; null if unclear.
-- All numeric fields must be plain numbers (no units).`;
+- All numeric fields must be plain numbers (no units).
+- Units are METRIC. moq_meters is in meters; price_per_meter_usd is USD per meter.
+- Pricing and MOQ are often buried in free-form notes / footers / margin scrawl rather than a labeled field. SCAN the entire card (including handwritten notes, footnotes, "备注", "价格", "起订量") for these.
+  · Convert RMB/CNY/¥ per meter to USD per meter using ~${CNY_TO_USD} USD/CNY (e.g. "37.5 RMB/m" → 37.5 × ${CNY_TO_USD} = ${(37.5 * CNY_TO_USD).toFixed(2)}).
+  · If a price is given per kg ("RMB/kg"), use the per-meter price if also stated; do NOT guess a per-meter price from per-kg alone.
+  · MOQ may appear as "起订量 1000m", "MOQ 1000m", "min order 1000m" — capture the numeric value as moq_meters.${vendorBlock}`;
+}
 
 function buildContent(media) {
   const out = [];
@@ -111,8 +127,12 @@ async function callAnthropicProxy(body) {
  * Run Claude Vision against one or more fabric-card files.
  * @param {Object} args
  * @param {Array<{mediaType: string, base64: string}>} args.media
+ * @param {string[]} [args.knownVendors] vendor names already in the library —
+ *   passed into the system prompt so the model reuses an existing entry
+ *   instead of inventing a near-duplicate (e.g. "Jufeng Textile" vs
+ *   "Jufeng Cloth Industry Ltd").
  */
-export async function extractFabricFromMedia({ media }) {
+export async function extractFabricFromMedia({ media, knownVendors = [] }) {
   if (!media || media.length === 0) throw new Error('Upload at least one fabric image or PDF.');
 
   // Big swatch cards (20+ colorways) can produce 4–8KB of JSON. Cap well
@@ -120,7 +140,7 @@ export async function extractFabricFromMedia({ media }) {
   const json = await callAnthropicProxy({
     model: MODEL,
     max_tokens: 16384,
-    system: SYSTEM_PROMPT,
+    system: buildSystemPrompt(knownVendors),
     messages: [{ role: 'user', content: buildContent(media) }],
   });
 
