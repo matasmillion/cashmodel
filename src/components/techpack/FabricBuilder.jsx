@@ -297,17 +297,17 @@ export default function FabricBuilder({ fabric, onBack }) {
           <div style={CARD_STYLE}>
             <h4 style={SECTION_TITLE}>Sourcing</h4>
             <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr', gap: 10 }}>
-              <Field label="Mill / supplier">
-                <VendorPicker value={draft.mill_id} onChange={v => set({ mill_id: v })} placeholder="Select mill or supplier…" />
+              <Field label="Vendor">
+                <VendorPicker value={draft.mill_id} onChange={v => set({ mill_id: v })} placeholder="Select vendor…" />
               </Field>
               <Field label="Lead time (days)">
                 <input type="number" value={draft.lead_time_days ?? 0} onChange={e => set({ lead_time_days: parseInt(e.target.value, 10) || 0 })} style={INPUT_STYLE} />
               </Field>
-              <Field label="MOQ (yards)">
-                <input type="number" value={draft.moq_yards ?? 0} onChange={e => set({ moq_yards: parseInt(e.target.value, 10) || 0 })} style={INPUT_STYLE} />
+              <Field label="MOQ (meters)">
+                <input type="number" value={draft.moq_meters ?? 0} onChange={e => set({ moq_meters: parseInt(e.target.value, 10) || 0 })} style={INPUT_STYLE} />
               </Field>
-              <Field label="Price / yd (USD)">
-                <input type="number" step="0.01" value={draft.price_per_yard_usd ?? 0} onChange={e => set({ price_per_yard_usd: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
+              <Field label="Price / m (USD)">
+                <input type="number" step="0.01" value={draft.price_per_meter_usd ?? 0} onChange={e => set({ price_per_meter_usd: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
               </Field>
             </div>
           </div>

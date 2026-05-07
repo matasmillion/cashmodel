@@ -15,10 +15,42 @@ import { copyCoverImage } from './plmAssets';
 
 const LOCAL_KEY = 'cashmodel_fabrics';
 
+// 1 yard = 0.9144 meters. Older rows used `moq_yards` / `price_per_yard_usd`;
+// we now store everything in meters because every mill we deal with quotes
+// in metric. Convert in place once on read so existing rows surface with the
+// new field names without losing data.
+const YARDS_TO_METERS = 0.9144;
+let _unitsMigrated = false;
+
+function migrateYardsToMeters(rows) {
+  if (_unitsMigrated) return rows;
+  _unitsMigrated = true;
+  let dirty = false;
+  for (const r of rows) {
+    if (!r || typeof r !== 'object') continue;
+    if (r.moq_yards != null && r.moq_meters == null) {
+      r.moq_meters = Math.round(Number(r.moq_yards) * YARDS_TO_METERS);
+      dirty = true;
+    }
+    if (r.price_per_yard_usd != null && r.price_per_meter_usd == null) {
+      r.price_per_meter_usd = Number((Number(r.price_per_yard_usd) / YARDS_TO_METERS).toFixed(2));
+      dirty = true;
+    }
+    delete r.moq_yards;
+    delete r.price_per_yard_usd;
+  }
+  if (dirty) {
+    try { localStorage.setItem(LOCAL_KEY, JSON.stringify(rows)); }
+    catch (err) { console.error('fabricStore yards→meters migrate:', err); }
+  }
+  return rows;
+}
+
 function readLocal() {
   try {
     const raw = localStorage.getItem(LOCAL_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const rows = raw ? JSON.parse(raw) : [];
+    return migrateYardsToMeters(rows);
   } catch {
     return [];
   }
@@ -230,8 +262,8 @@ export async function seedFabricsIfEmpty() {
       color_id: 'PFD',
       mill_id: 'Lien Hsing Knits (Taipei)',
       lead_time_days: 35,
-      moq_yards: 800,
-      price_per_yard_usd: 6.40,
+      moq_meters: 732,
+      price_per_meter_usd: 7.00,
       currency: 'USD',
       status: 'approved',
       version: 'v1.2',
@@ -253,8 +285,8 @@ export async function seedFabricsIfEmpty() {
       color_id: 'PFD',
       mill_id: 'Lien Hsing Knits (Taipei)',
       lead_time_days: 28,
-      moq_yards: 600,
-      price_per_yard_usd: 4.10,
+      moq_meters: 549,
+      price_per_meter_usd: 4.48,
       currency: 'USD',
       status: 'approved',
       version: 'v2.0',
@@ -276,8 +308,8 @@ export async function seedFabricsIfEmpty() {
       color_id: 'Slate',
       mill_id: 'Kuroki Mills (Okayama)',
       lead_time_days: 56,
-      moq_yards: 300,
-      price_per_yard_usd: 22.0,
+      moq_meters: 274,
+      price_per_meter_usd: 24.06,
       currency: 'USD',
       status: 'testing',
       version: 'v1.0',

@@ -7,13 +7,42 @@
 // their hex (no image attached — those still need to be uploaded
 // individually for tactile accuracy).
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Sparkles, X, Upload, FileText, Image as ImageIcon, Check } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { extractFabricFromMedia, fileToMedia } from '../../utils/aiFabricExtract';
 import { categoryForWeave, FABRIC_WEAVES } from '../../utils/fabricLibrary';
+import { listVendors } from '../../utils/vendorLibrary';
 
 const VALID_WEAVES = new Set(FABRIC_WEAVES.map(w => w.id));
+
+// Normalize a vendor / mill name for fuzzy comparison: lowercase, drop
+// company-suffix noise ("ltd", "co", "textile", "mill", "factory", "工厂"…),
+// and collapse whitespace. Matches "Jufeng Textile" / "Jufeng Cloth Industry
+// Ltd" / "Jufeng Mill" all to "jufeng" so the picker reuses the existing
+// library entry instead of creating a near-duplicate.
+function normalizeVendorName(s) {
+  if (!s) return '';
+  return String(s)
+    .toLowerCase()
+    .replace(/[　.,()·\-_/]/g, ' ')
+    .replace(/\b(ltd|co|inc|corp|corporation|company|group|holdings|industry|industries|industrial|textile|textiles|mill|mills|factory|cloth|knit|knits|weaving|knitting|fabric|fabrics|trading)\b/gi, ' ')
+    .replace(/(纺织|工厂|有限公司|公司|集团|针织|布业)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function findVendorMatch(suggested, knownNames) {
+  if (!suggested) return null;
+  const target = normalizeVendorName(suggested);
+  if (!target) return null;
+  for (const name of knownNames) {
+    const norm = normalizeVendorName(name);
+    if (!norm) continue;
+    if (norm === target || norm.includes(target) || target.includes(norm)) return name;
+  }
+  return null;
+}
 
 function Row({ label, value, kind = 'text', suffix = '' }) {
   if (value == null || value === '') return null;
@@ -31,6 +60,15 @@ export default function FabricAIExtract({ onClose, onApply }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const [vendors, setVendors] = useState([]);
+  const [vendorMatched, setVendorMatched] = useState(null); // { suggested, matched } | null
+
+  useEffect(() => {
+    let cancelled = false;
+    listVendors().then(rows => { if (!cancelled) setVendors(rows || []); })
+      .catch(err => console.error('FabricAIExtract listVendors:', err));
+    return () => { cancelled = true; };
+  }, []);
 
   const onPick = (e) => {
     const list = Array.from(e.target.files || []);
@@ -47,13 +85,26 @@ export default function FabricAIExtract({ onClose, onApply }) {
   const removeFile = (idx) => setFiles(prev => prev.filter((_, i) => i !== idx));
 
   const run = async () => {
-    setError(null); setBusy(true); setResult(null);
+    setError(null); setBusy(true); setResult(null); setVendorMatched(null);
     try {
       const media = await Promise.all(files.map(fileToMedia));
-      const json = await extractFabricFromMedia({ media });
+      const knownVendors = vendors.map(v => v.name).filter(Boolean);
+      const json = await extractFabricFromMedia({ media, knownVendors });
       if (json.weave && !VALID_WEAVES.has(json.weave)) json.weave = 'other';
       if (!json.category && json.weave) json.category = categoryForWeave(json.weave);
       if (json.category && !['knit', 'woven'].includes(json.category)) json.category = null;
+
+      // Vendor de-dup: even with the prompt hint, the model can still
+      // surface a near-duplicate ("Jufeng Cloth Industry Ltd" when we
+      // already have "Jufeng Textile"). Snap the suggestion to the
+      // existing library entry whenever the normalized forms collide.
+      if (json.mill_id) {
+        const matched = findVendorMatch(json.mill_id, knownVendors);
+        if (matched && matched !== json.mill_id) {
+          setVendorMatched({ suggested: json.mill_id, matched });
+          json.mill_id = matched;
+        }
+      }
       setResult(json);
     } catch (err) {
       console.error(err);
@@ -69,11 +120,16 @@ export default function FabricAIExtract({ onClose, onApply }) {
     const fields = [
       'name', 'mill_fabric_no', 'category', 'weave', 'composition',
       'weight_gsm', 'width_cm', 'shrinkage_pct', 'stretch_pct',
-      'hand', 'mill_id', 'lead_time_days', 'moq_yards', 'price_per_yard_usd', 'notes',
+      'hand', 'mill_id', 'lead_time_days', 'moq_meters', 'price_per_meter_usd', 'notes',
     ];
     fields.forEach(k => {
       if (result[k] != null && result[k] !== '') patch[k] = result[k];
     });
+    // Mill fabric # IS the canonical fabric name in our system — fall
+    // back to it whenever the model didn't extract a separate name.
+    if ((!patch.name || !String(patch.name).trim()) && patch.mill_fabric_no) {
+      patch.name = patch.mill_fabric_no;
+    }
     if (Array.isArray(result.colors) && result.colors.length) {
       patch.color_card_images = result.colors.map(c => ({
         url: '', label: c.label || '', hex: c.hex || '',
@@ -157,10 +213,15 @@ export default function FabricAIExtract({ onClose, onApply }) {
               <Row label="Shrinkage"      value={result.shrinkage_pct} suffix=" %" />
               <Row label="Stretch"        value={result.stretch_pct} suffix=" %" />
               <Row label="Hand"           value={result.hand} />
-              <Row label="Mill / supplier" value={result.mill_id} />
+              <Row label="Vendor"         value={result.mill_id} />
+              {vendorMatched && (
+                <div style={{ fontSize: 10, color: FR.stone, padding: '2px 0 6px', lineHeight: 1.4 }}>
+                  ↳ matched <em>{vendorMatched.suggested}</em> to existing vendor <strong>{vendorMatched.matched}</strong>
+                </div>
+              )}
               <Row label="Lead time"      value={result.lead_time_days} suffix=" days" />
-              <Row label="MOQ"            value={result.moq_yards} suffix=" yd" />
-              <Row label="Price"          value={result.price_per_yard_usd ? `$${Number(result.price_per_yard_usd).toFixed(2)} / yd` : null} />
+              <Row label="MOQ"            value={result.moq_meters} suffix=" m" />
+              <Row label="Price"          value={result.price_per_meter_usd ? `$${Number(result.price_per_meter_usd).toFixed(2)} / m` : null} />
               <Row label="Notes"          value={result.notes} />
               {Array.isArray(result.colors) && result.colors.length > 0 && (
                 <div style={{ marginTop: 10 }}>
