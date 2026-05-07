@@ -67,10 +67,11 @@ Rules:
 - Pricing and MOQ are often buried in free-form notes / footers / margin scrawl rather than a labeled field. SCAN the entire card (including handwritten notes, footnotes, "备注", "价格", "起订量") for these.
   · Convert RMB/CNY/¥ per meter to USD per meter using ~${CNY_TO_USD} USD/CNY (e.g. "37.5 RMB/m" → 37.5 × ${CNY_TO_USD} = ${(37.5 * CNY_TO_USD).toFixed(2)}).
   · If a price is given per kg ("RMB/kg"), use the per-meter price if also stated; do NOT guess a per-meter price from per-kg alone.
-  · MOQ may appear as "起订量 1000m", "MOQ 1000m", "min order 1000m" — capture the numeric value as moq_meters.${vendorBlock}`;
+  · MOQ may appear as "起订量 1000m", "MOQ 1000m", "min order 1000m" — capture the numeric value as moq_meters.
+- Honor any instructions from the user message. If the user says they only want certain fields (e.g. "just add these new colors, leave everything else alone"), return null for every field they didn't ask about — the apply step skips null fields, so this leaves the existing draft untouched.${vendorBlock}`;
 }
 
-function buildContent(media) {
+function buildContent(media, instructions) {
   const out = [];
   for (const m of media) {
     if (m.mediaType === 'application/pdf') {
@@ -85,10 +86,11 @@ function buildContent(media) {
       });
     }
   }
-  out.push({
-    type: 'text',
-    text: 'Extract the fabric specification from these mill documents. Return JSON only.',
-  });
+  const trimmed = String(instructions || '').trim();
+  const userText = trimmed
+    ? `User instructions:\n${trimmed}\n\nExtract the fabric specification from these mill documents, honoring the instructions above. Return JSON only.`
+    : 'Extract the fabric specification from these mill documents. Return JSON only.';
+  out.push({ type: 'text', text: userText });
   return out;
 }
 
@@ -131,8 +133,14 @@ async function callAnthropicProxy(body) {
  *   passed into the system prompt so the model reuses an existing entry
  *   instead of inventing a near-duplicate (e.g. "Jufeng Textile" vs
  *   "Jufeng Cloth Industry Ltd").
+ * @param {string} [args.instructions] free-form user note appended to the
+ *   user message. Lets the user scope the extraction (e.g. "just add these
+ *   new colors, don't change anything else"). The system prompt tells the
+ *   model to return null for fields the user didn't ask about, and the
+ *   apply step skips null fields — so partial updates leave the draft
+ *   untouched everywhere except where the user wants changes.
  */
-export async function extractFabricFromMedia({ media, knownVendors = [] }) {
+export async function extractFabricFromMedia({ media, knownVendors = [], instructions = '' }) {
   if (!media || media.length === 0) throw new Error('Upload at least one fabric image or PDF.');
 
   // Big swatch cards (20+ colorways) can produce 4–8KB of JSON. Cap well
@@ -141,7 +149,7 @@ export async function extractFabricFromMedia({ media, knownVendors = [] }) {
     model: MODEL,
     max_tokens: 16384,
     system: buildSystemPrompt(knownVendors),
-    messages: [{ role: 'user', content: buildContent(media) }],
+    messages: [{ role: 'user', content: buildContent(media, instructions) }],
   });
 
   const blocks = Array.isArray(json?.content) ? json.content : [];

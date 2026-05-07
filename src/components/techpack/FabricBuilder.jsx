@@ -152,11 +152,25 @@ export default function FabricBuilder({ fabric, onBack }) {
     setAiOpen(false);
     setDraft(d => {
       const next = { ...d, ...patch };
-      // Color card from AI: only adopt suggestions when the user hasn't
-      // already curated swatches manually — protects in-progress work.
-      if (patch.color_card_images) {
+      // Color card from AI is additive: append any swatches the model
+      // surfaced that aren't already on the draft. Dedup on the lowercased
+      // hex when present, otherwise on the trimmed label, so re-running
+      // the importer over the same card doesn't duplicate swatches and
+      // an "add only these new colors" run leaves the existing ones alone.
+      if (Array.isArray(patch.color_card_images) && patch.color_card_images.length) {
         const existing = Array.isArray(d.color_card_images) ? d.color_card_images : [];
-        next.color_card_images = existing.length ? existing : patch.color_card_images;
+        const seen = new Set(existing.map(c => (c.hex || '').toLowerCase() || (c.label || '').trim().toLowerCase()).filter(Boolean));
+        const additions = patch.color_card_images.filter(c => {
+          const key = (c.hex || '').toLowerCase() || (c.label || '').trim().toLowerCase();
+          if (!key) return true;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        next.color_card_images = [...existing, ...additions];
+      } else {
+        // Model returned no colors — preserve what's already on the draft.
+        next.color_card_images = d.color_card_images || [];
       }
       return next;
     });

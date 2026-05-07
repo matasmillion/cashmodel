@@ -62,6 +62,7 @@ export default function FabricAIExtract({ onClose, onApply }) {
   const [result, setResult] = useState(null);
   const [vendors, setVendors] = useState([]);
   const [vendorMatched, setVendorMatched] = useState(null); // { suggested, matched } | null
+  const [instructions, setInstructions] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -89,7 +90,7 @@ export default function FabricAIExtract({ onClose, onApply }) {
     try {
       const media = await Promise.all(files.map(fileToMedia));
       const knownVendors = vendors.map(v => v.name).filter(Boolean);
-      const json = await extractFabricFromMedia({ media, knownVendors });
+      const json = await extractFabricFromMedia({ media, knownVendors, instructions });
       if (json.weave && !VALID_WEAVES.has(json.weave)) json.weave = 'other';
       if (!json.category && json.weave) json.category = categoryForWeave(json.weave);
       if (json.category && !['knit', 'woven'].includes(json.category)) json.category = null;
@@ -177,6 +178,27 @@ export default function FabricAIExtract({ onClose, onApply }) {
             <Upload size={20} style={{ color: FR.sand, margin: '0 auto 6px', display: 'block' }} />
             <div style={{ fontSize: 12, color: FR.slate }}>Drop images or PDFs here, or click to browse</div>
             <div style={{ fontSize: 10, color: FR.stone, marginTop: 4 }}>Supports JPG, PNG, WebP, PDF · multiple files OK</div>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <label style={{ fontSize: 10, color: FR.stone, marginBottom: 4, display: 'block', letterSpacing: 0.2, textTransform: 'uppercase', fontWeight: 600 }}>
+              Instructions (optional)
+            </label>
+            <textarea
+              value={instructions}
+              onChange={e => setInstructions(e.target.value)}
+              rows={2}
+              placeholder={`e.g. "Just add these new colors to my existing fabric, don't touch composition / weight / vendor."`}
+              style={{
+                width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`,
+                borderRadius: 4, fontSize: 12, color: FR.slate, background: '#fff',
+                fontFamily: "'Inter', sans-serif", outline: 'none', boxSizing: 'border-box',
+                resize: 'vertical',
+              }}
+            />
+            <div style={{ fontSize: 10, color: FR.stone, marginTop: 4, lineHeight: 1.4 }}>
+              Tell the AI what to focus on. Fields you don't mention stay untouched.
+            </div>
           </div>
 
           {files.length > 0 && (
