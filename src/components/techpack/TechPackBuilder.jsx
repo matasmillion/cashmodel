@@ -208,32 +208,42 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     let cancelled = false;
     (async () => {
       const ids = componentIdKey.split('|').filter(Boolean);
-      if (!ids.length) return;
+      if (!ids.length) { setComponentsById({}); return; }
       const { getComponentPack } = await import('../../utils/componentPackStore');
-      const { getAssetUrl } = await import('../../utils/plmAssets');
+      const { getAssetUrl, invalidateAssetUrl } = await import('../../utils/plmAssets');
       const next = {};
       for (const id of ids) {
-        if (componentsById[id]) { next[id] = componentsById[id]; continue; }
+        // Always re-fetch — library edits to a component pack must reflect
+        // here on next render, not stay frozen behind a cached row.
         const row = await getComponentPack(id);
         if (cancelled) return;
         if (!row) continue;
-        // Resolve cover paths to signed URLs so <image href> works in SVG.
-        const resolveCover = async (v) => {
-          if (!v || typeof v !== 'string') return null;
-          if (/^(https?:|data:|blob:)/.test(v)) return v;
-          try { return await getAssetUrl(v); } catch { return null; }
+        const v = row.updated_at;
+        // Bypass the signed-URL cache for any path that belongs to this
+        // pack — when the cover changes the path is the same and the
+        // browser would otherwise serve the old image. invalidate forces
+        // a fresh signed URL on the next call.
+        const stripQuery = (s) => (typeof s === 'string' ? s.split('?')[0] : s);
+        const resolveCover = async (path) => {
+          if (!path || typeof path !== 'string') return null;
+          if (/^(https?:|data:|blob:)/.test(path)) return `${path}${path.includes('?') ? '&' : '?'}v=${encodeURIComponent(v || '')}`;
+          try { invalidateAssetUrl?.(stripQuery(path)); } catch {}
+          try {
+            const url = await getAssetUrl(path);
+            return url ? `${url}${url.includes('?') ? '&' : '?'}v=${encodeURIComponent(v || '')}` : null;
+          } catch { return null; }
         };
-        const top = await resolveCover(row.cover_image);
+        const top    = await resolveCover(row.cover_image);
         const nested = await resolveCover(row?.data?.cover_image);
-        // Pull the Construction measurement diagram from the pack's
-        // images[]. That's the factory-facing image — full trim with
-        // dimensions — that the BOM live preview should show.
-        const diagramEntry = (row.images || []).find(img => img.slot === 'construction-diagram');
-        let diagramUrl = null;
-        if (diagramEntry) {
-          if (diagramEntry.data?.startsWith?.('data:')) diagramUrl = diagramEntry.data;
-          else if (diagramEntry.path) diagramUrl = await resolveCover(diagramEntry.path);
-        }
+        // Cover priority: construction-diagram → design-sketch → cover_image
+        const findImage = async (slot) => {
+          const entry = (row.images || []).find(img => img.slot === slot);
+          if (!entry) return null;
+          if (entry.data?.startsWith?.('data:')) return entry.data;
+          if (entry.path) return await resolveCover(entry.path);
+          return null;
+        };
+        const diagramUrl = await findImage('construction-diagram') || await findImage('design-sketch');
         next[id] = {
           ...row,
           cover_image: top || row.cover_image,
@@ -253,18 +263,23 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     let cancelled = false;
     (async () => {
       const ids = fabricIdKey.split('|').filter(Boolean);
-      if (!ids.length) return;
+      if (!ids.length) { setFabricsById({}); return; }
       const { getFabric } = await import('../../utils/fabricStore');
-      const { getAssetUrl } = await import('../../utils/plmAssets');
+      const { getAssetUrl, invalidateAssetUrl } = await import('../../utils/plmAssets');
       const next = {};
       for (const id of ids) {
-        if (fabricsById[id]) { next[id] = fabricsById[id]; continue; }
+        // Always re-fetch — picks up library edits on every render.
         const row = await getFabric(id);
         if (cancelled) return;
         if (!row) continue;
-        const cover = row.cover_image && !/^(https?:|data:|blob:)/.test(row.cover_image)
-          ? await getAssetUrl(row.cover_image).catch(() => null) : row.cover_image;
-        next[id] = { ...row, cover_image: cover || row.cover_image };
+        const v = row.updated_at;
+        let cover = row.cover_image;
+        if (cover && !/^(https?:|data:|blob:)/.test(cover)) {
+          try { invalidateAssetUrl?.(cover); } catch {}
+          cover = await getAssetUrl(cover).catch(() => null) || row.cover_image;
+        }
+        const tagged = cover ? `${cover}${cover.includes('?') ? '&' : '?'}v=${encodeURIComponent(v || '')}` : null;
+        next[id] = { ...row, cover_image: tagged || cover || row.cover_image };
       }
       if (!cancelled) setFabricsById(next);
     })();

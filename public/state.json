@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T17:43:23.629Z",
+  "lastUpdated": "2026-05-07T18:15:14.139Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,21 @@
   ],
   "changelog": [
     {
+      "sha": "7f401b7",
+      "date": "2026-05-07T18:13:50+00:00",
+      "message": "techpack: never serve stale fabric / component cover images"
+    },
+    {
+      "sha": "0817f6d",
+      "date": "2026-05-07T18:09:27+00:00",
+      "message": "techpack: BOM slot grid → 2x3, bigger cards"
+    },
+    {
+      "sha": "cd21fc9",
+      "date": "2026-05-07T20:57:47+03:00",
+      "message": "techpack: trim slot — wider 3:2 image, per-card pack link, drop files footer (#50)"
+    },
+    {
       "sha": "1b14aa7",
       "date": "2026-05-07T20:37:02+03:00",
       "message": "techpack: trim slot — full image, measurement diagram, quantity, type as text (#48)"
@@ -1077,21 +1092,6 @@
       "sha": "99cd43f",
       "date": "2026-05-07T20:01:06+03:00",
       "message": "fabrics: knit/woven category, mill fabric #, AI auto-fill, BOM PDF (#42)"
-    },
-    {
-      "sha": "96b5d7a",
-      "date": "2026-05-07T19:47:35+03:00",
-      "message": "techpack: BOM picker fixes — populate library, resolve cover paths, fix typo (#41)"
-    },
-    {
-      "sha": "b2553ee",
-      "date": "2026-05-07T18:14:25+03:00",
-      "message": "techpack: BOM phase split (Fabrics/Trims/Packaging) + style # in header (#40)"
-    },
-    {
-      "sha": "6516f36",
-      "date": "2026-05-07T17:54:05+03:00",
-      "message": "techpack: device-frame Merch Preview, lockable, skippable, auto-open cover (#39)"
     }
   ]
 }

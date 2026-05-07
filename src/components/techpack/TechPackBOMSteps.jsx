@@ -15,11 +15,24 @@ import { getAssetUrl } from '../../utils/plmAssets';
 // Storage paths, not URLs. The browser can't render them directly — we
 // need to swap them for short-lived signed URLs first. Already-resolved
 // HTTP URLs and data URIs pass through unchanged.
-async function resolveCoverPath(value) {
+//
+// The optional `version` (typically the row's updated_at) is appended as
+// `?v=…` so the browser's HTTP cache busts whenever the underlying row
+// changes — this is what stops stale cover images sticking around after
+// the user updates a fabric / component in the library.
+async function resolveCoverPath(value, version) {
   if (!value) return null;
   if (typeof value !== 'string') return null;
-  if (value.startsWith('http') || value.startsWith('data:') || value.startsWith('blob:')) return value;
-  try { return await getAssetUrl(value); } catch { return null; }
+  const tag = version ? `v=${encodeURIComponent(version)}` : '';
+  const append = (url) => {
+    if (!tag) return url;
+    return url + (url.includes('?') ? '&' : '?') + tag;
+  };
+  if (value.startsWith('http') || value.startsWith('data:') || value.startsWith('blob:')) return append(value);
+  try {
+    const url = await getAssetUrl(value);
+    return url ? append(url) : null;
+  } catch { return null; }
 }
 
 const labelStyle = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' };
@@ -36,10 +49,11 @@ function LibraryPickerModal({ title, subtitle, fetchItems, renderItem, getId, on
     let cancelled = false;
     (async () => {
       const rows = (await fetchItems()) || [];
-      // Resolve any path-based cover_image to a signed URL up front so
-      // the grid doesn't render broken-image icons.
+      // Resolve every cover_image into a versioned signed URL — the
+      // ?v=updated_at cache buster keeps the browser from showing
+      // yesterday's image after the row was edited in the library.
       const resolved = await Promise.all(rows.map(async r => {
-        const url = await resolveCoverPath(r?.cover_image);
+        const url = await resolveCoverPath(r?.cover_image, r?.updated_at);
         return url && url !== r.cover_image ? { ...r, cover_image: url } : r;
       }));
       if (!cancelled) setItems(resolved);
@@ -165,21 +179,25 @@ export function StepFabrics({ data, set }) {
   const picked = data.pickedFabrics || [];
   const slots = [0, 1, 2]; // up to 3 fabrics
 
-  // Lazy-resolve picked fabric specs so we can render the spec card.
+  // Always re-fetch the picked fabric rows on mount or when the picked
+  // ids change. We don't short-circuit on cached entries — the user may
+  // have edited the fabric in the library and we want those edits to
+  // show up immediately. The cache buster on resolveCoverPath forces a
+  // fresh image load whenever the row's updated_at moves.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const ids = picked.map(p => p?.fabricId).filter(Boolean).filter(id => !resolved[id]);
-      if (!ids.length) return;
+      const ids = picked.map(p => p?.fabricId).filter(Boolean);
+      if (!ids.length) { setResolved({}); return; }
       const { getFabric } = await import('../../utils/fabricStore');
-      const next = { ...resolved };
+      const next = {};
       for (const id of ids) {
         const row = await getFabric(id);
-        if (!cancelled && row) {
-          const spec = fabricSpec(row);
-          spec.cover = await resolveCoverPath(spec.cover);
-          next[id] = spec;
-        }
+        if (cancelled) return;
+        if (!row) continue;
+        const spec = fabricSpec(row);
+        spec.cover = await resolveCoverPath(spec.cover, row.updated_at);
+        next[id] = spec;
       }
       if (!cancelled) setResolved(next);
     })();
@@ -406,34 +424,42 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
 
   const picked = data?.[fieldName] || [];
 
+  // Always re-fetch picked components — never short-circuit on cached
+  // entries. Library edits (cover updates, type rename, color change) need
+  // to land in the slot card the moment the user comes back to this page.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const ids = picked.map(p => p?.componentId).filter(Boolean).filter(id => !fullById[id]);
-      if (!ids.length) return;
-      const next = { ...fullById };
+      const ids = picked.map(p => p?.componentId).filter(Boolean);
+      if (!ids.length) { setFullById({}); return; }
+      const next = {};
       for (const id of ids) {
         const row = await getComponentPack(id);
-        if (!cancelled && row) {
-          // Storage paths → signed URLs so the slot cover can render.
-          const resolvedTop    = await resolveCoverPath(row.cover_image);
-          const resolvedNested = await resolveCoverPath(row?.data?.cover_image);
-          // Construction measurement diagram — pulled from the pack's
-          // images[] under slot `construction-diagram`. This is the
-          // factory-facing image of choice (full trim with dimensions).
-          const diagramEntry = (row.images || []).find(img => img.slot === 'construction-diagram');
-          let diagramUrl = null;
-          if (diagramEntry) {
-            if (diagramEntry.data?.startsWith?.('data:')) diagramUrl = diagramEntry.data;
-            else if (diagramEntry.path) diagramUrl = await resolveCoverPath(diagramEntry.path);
-          }
-          next[id] = {
-            ...row,
-            cover_image: resolvedTop || row.cover_image,
-            data: { ...(row.data || {}), cover_image: resolvedNested || row?.data?.cover_image },
-            _constructionDiagram: diagramUrl,
-          };
-        }
+        if (cancelled) return;
+        if (!row) continue;
+        const v = row.updated_at;
+        const resolvedTop    = await resolveCoverPath(row.cover_image, v);
+        const resolvedNested = await resolveCoverPath(row?.data?.cover_image, v);
+        // Cover image priority for the BOM card / live preview:
+        //   1. Construction → Measurement Diagram   (slot: construction-diagram)
+        //   2. Design → Sketch                       (slot: design-sketch)
+        //   3. Pack cover_image                      (fallback)
+        // The first two come from the pack's images[] array. We try them
+        // in order and the first non-null wins.
+        const findImage = async (slot) => {
+          const entry = (row.images || []).find(img => img.slot === slot);
+          if (!entry) return null;
+          if (entry.data?.startsWith?.('data:')) return entry.data;
+          if (entry.path) return await resolveCoverPath(entry.path, v);
+          return null;
+        };
+        const diagramUrl = await findImage('construction-diagram') || await findImage('design-sketch');
+        next[id] = {
+          ...row,
+          cover_image: resolvedTop || row.cover_image,
+          data: { ...(row.data || {}), cover_image: resolvedNested || row?.data?.cover_image },
+          _constructionDiagram: diagramUrl,
+        };
       }
       if (!cancelled) setFullById(next);
     })();
@@ -449,14 +475,26 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
       if (full?.data?.componentType) role = full.data.componentType;
       // Cache it for the slot card so it renders immediately.
       if (full) {
-        const resolvedTop    = await resolveCoverPath(full.cover_image);
-        const resolvedNested = await resolveCoverPath(full?.data?.cover_image);
+        const v = full.updated_at;
+        const resolvedTop    = await resolveCoverPath(full.cover_image, v);
+        const resolvedNested = await resolveCoverPath(full?.data?.cover_image, v);
+        const findImage = async (slot) => {
+          const entry = (full.images || []).find(img => img.slot === slot);
+          if (!entry) return null;
+          if (entry.data?.startsWith?.('data:')) return entry.data;
+          if (entry.path) return await resolveCoverPath(entry.path, v);
+          return null;
+        };
+        // Construction diagram is the canonical hero; fall back to the
+        // Design Sketch if no diagram has been uploaded yet.
+        const diagramUrl = await findImage('construction-diagram') || await findImage('design-sketch');
         setFullById(prev => ({
           ...prev,
           [item.id]: {
             ...full,
             cover_image: resolvedTop || full.cover_image,
             data: { ...(full.data || {}), cover_image: resolvedNested || full?.data?.cover_image },
+            _constructionDiagram: diagramUrl,
           },
         }));
       }
@@ -484,7 +522,7 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
         {subtitle} Each card links straight to its component pack — the supplier can click <strong>View pack ↗</strong> to see the full spec.
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 22 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14, marginBottom: 22 }}>
         {Array.from({ length: maxSlots }).map((_, i) => {
           const entry = picked[i];
           if (!entry) {
