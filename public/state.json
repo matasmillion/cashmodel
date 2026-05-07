@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T10:26:48.825Z",
+  "lastUpdated": "2026-05-07T10:49:18.048Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,29 +1044,14 @@
   ],
   "changelog": [
     {
-      "sha": "61bfb8a",
-      "date": "2026-05-07T10:23:14+00:00",
-      "message": "docs: add context handoff file for tech pack buildout"
+      "sha": "c57069d",
+      "date": "2026-05-07T10:41:19+00:00",
+      "message": "feat(techpack): Phase 4 — Color & Artwork split"
     },
     {
-      "sha": "45f3803",
-      "date": "2026-05-07T10:08:25+00:00",
-      "message": "feat(techpack): Phase 3 — POM split + Graded Size Matrix"
-    },
-    {
-      "sha": "5865531",
-      "date": "2026-05-07T10:04:22+00:00",
-      "message": "docs: add tech pack phases plan (Phases 3–7)"
-    },
-    {
-      "sha": "2cad200",
-      "date": "2026-05-07T09:35:44+00:00",
-      "message": "feat(techpack): Phase 2 — split Construction into Seam Spec + Notes pages"
-    },
-    {
-      "sha": "5a6a303",
-      "date": "2026-05-07T09:08:43+00:00",
-      "message": "feat(techpack): Phase 1 — split BOM into Fabrics/Trims + Labels/Files pages"
+      "sha": "7596491",
+      "date": "2026-05-07T13:31:55+03:00",
+      "message": "Tech Pack Phase 1: split BOM into Fabrics/Trims + Labels/Files pages (#24)"
     },
     {
       "sha": "5e2567e",
@@ -1092,6 +1077,21 @@
       "sha": "2cc6005",
       "date": "2026-05-06T18:53:44+00:00",
       "message": "feat: Creative Engine Phase 5 — evaluation + learning"
+    },
+    {
+      "sha": "44b4a58",
+      "date": "2026-05-06T18:47:01+00:00",
+      "message": "feat: Creative Engine Phases 3.5 + 4 — encoder + Meta publish"
+    },
+    {
+      "sha": "42f29f3",
+      "date": "2026-05-06T18:34:34+00:00",
+      "message": "feat: Creative Engine Phase 3 — render dispatch"
+    },
+    {
+      "sha": "96be3c9",
+      "date": "2026-05-06T18:16:38+00:00",
+      "message": "feat: knowledge files upload + AI auto-fill"
     }
   ]
 }

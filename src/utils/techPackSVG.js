@@ -91,7 +91,7 @@ export function generateTechPackSVG(pack) {
   // The PDF is the printable deliverable; the SVG is for editing in Illustrator.
 
   const pageH = 794;
-  const numPages = 6; // compact layout — cover + identity + materials + bom-trims + construction + order
+  const numPages = 7; // compact layout — cover + identity + materials + bom-trims + construction + colorways + order
   const totalH = pageH * numPages;
 
   let svg = `<?xml version="1.0" encoding="UTF-8"?>
@@ -191,10 +191,24 @@ export function generateTechPackSVG(pack) {
   svg += skipIf(5);
   svg += `</g>`;
 
+  // ─── Colorways ───
+  yOff += pageH;
+  svg += `<g id="page-6-colorways" transform="translate(0 ${yOff})">`;
+  svg += pageFrame('Colorways', null, 6, numPages, styleInfo);
+  svg += sectionHeading('Colorway Specification', 40, 110);
+  const cwRows = (d.colorways || []).filter(c => c && (c.name || c.frColor || c.pantone || c.hex)).map(c =>
+    [c.name, c.frColor, c.pantone, c.hex, c.fabricSwatch, c.approvalStatus]);
+  if (cwRows.length) {
+    const tc = table(40, 140, ['Name', 'FR Color', 'Pantone TCX', 'Hex', 'Fabric Swatch', 'Approval'], cwRows, [180, 140, 150, 120, 270, 183]);
+    svg += tc.svg;
+  }
+  svg += skipIf(11);
+  svg += `</g>`;
+
   // ─── Order & Delivery ───
   yOff += pageH;
-  svg += `<g id="page-6-order" transform="translate(0 ${yOff})">`;
-  svg += pageFrame('Order & Delivery', null, 6, numPages, styleInfo);
+  svg += `<g id="page-7-order" transform="translate(0 ${yOff})">`;
+  svg += pageFrame('Order & Delivery', null, 7, numPages, styleInfo);
   svg += sectionHeading('Quantity Per Size', 40, 110);
   const qRows = (d.quantities || []).filter(q => q.colorway).map(q => [q.colorway, q.s, q.m, q.l, q.xl, q.unitCost]);
   if (qRows.length) {
@@ -209,7 +223,7 @@ export function generateTechPackSVG(pack) {
   svg += field('Incoterm', d.incoterm, 40, orderY + 85);
   svg += field('Target Ship', d.targetShipDate, 400, orderY + 85);
   svg += field('Target Arrival', d.targetArrivalDate, 700, orderY + 85);
-  svg += skipIf(15);
+  svg += skipIf(17);
   svg += `</g>`;
 
   svg += `</svg>`;

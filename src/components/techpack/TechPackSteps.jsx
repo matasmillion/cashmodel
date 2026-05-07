@@ -629,7 +629,7 @@ export function StepBOMTrims({ data, set, packId, existingSuppliers = [] }) {
   );
 }
 
-export function StepColor({ data, set, images, onUpload, onRemove }) {
+export function StepColor({ data, set }) {
   const colorways = data.colorways && data.colorways.length ? data.colorways : [{ name: '', frColor: '', pantone: '', hex: '', fabricSwatch: '', approvalStatus: 'Pending' }];
   // When frColor changes, cache the library's Pantone TCX + hex onto the
   // colorway row so preview rendering keeps working without extra lookups.
@@ -650,11 +650,6 @@ export function StepColor({ data, set, images, onUpload, onRemove }) {
   };
   const addCW = () => set('colorways', [...colorways, { name: '', frColor: '', pantone: '', hex: '', fabricSwatch: '', approvalStatus: 'Pending' }]);
   const rmCW = (i) => set('colorways', colorways.filter((_, idx) => idx !== i));
-
-  const placements = data.artworkPlacements && data.artworkPlacements.length ? data.artworkPlacements : [{ placement: '', artworkFile: '', method: '', sizeCm: '', positionFrom: '', color: '', notes: '' }];
-  const updateAP = (i, k, v) => set('artworkPlacements', placements.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
-  const addAP = () => set('artworkPlacements', [...placements, { placement: '', artworkFile: '', method: '', sizeCm: '', positionFrom: '', color: '', notes: '' }]);
-  const rmAP = (i) => set('artworkPlacements', placements.filter((_, idx) => idx !== i));
 
   const frColorRender = (v, onChange) => <FRColorCell value={v} onChange={onChange} />;
   // Read-only text cells that pull their value from the color library using
@@ -679,7 +674,7 @@ export function StepColor({ data, set, images, onUpload, onRemove }) {
 
   return (
     <div>
-      <SectionTitle>Color & Artwork</SectionTitle>
+      <SectionTitle>Colorways</SectionTitle>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         {listFRColors().map(c => (
@@ -706,9 +701,35 @@ export function StepColor({ data, set, images, onUpload, onRemove }) {
           ]}
           rows={colorways} onUpdate={updateCW} onAdd={addCW} onRemove={rmCW} />
       </div>
+    </div>
+  );
+}
+
+export function StepArtwork({ data, set, images, onUpload, onRemove }) {
+  const placements = data.artworkPlacements && data.artworkPlacements.length ? data.artworkPlacements : [{ placement: '', artworkFile: '', method: '', sizeCm: '', positionFrom: '', color: '', notes: '' }];
+  const updateAP = (i, k, v) => set('artworkPlacements', placements.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addAP = () => set('artworkPlacements', [...placements, { placement: '', artworkFile: '', method: '', sizeCm: '', positionFrom: '', color: '', notes: '' }]);
+  const rmAP = (i) => set('artworkPlacements', placements.filter((_, idx) => idx !== i));
+
+  const frColorRender = (v, onChange) => <FRColorCell value={v} onChange={onChange} />;
+
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+
+  return (
+    <div>
+      <SectionTitle>Artwork & Placement</SectionTitle>
 
       <div style={{ marginBottom: 18 }}>
-        <label style={sectionLabel}>Artwork & Logo Placement</label>
+        <label style={sectionLabel}>Logo & Method</label>
+        <Row>
+          <Input label="Front Logo"  value={data.logoFront}  onChange={v => set('logoFront', v)}  placeholder="Foreign Resource wordmark" />
+          <Input label="Back Logo"   value={data.logoBack}   onChange={v => set('logoBack', v)}   placeholder="—" />
+          <Input label="Method"      value={data.logoMethod} onChange={v => set('logoMethod', v)} placeholder="Embroidery / Screen Print" />
+        </Row>
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
+        <label style={sectionLabel}>Artwork References</label>
         <Row>
           <PhotoUpload label="Front Artwork — Position, Size, Method" slotKey="artwork-front" images={images} onUpload={onUpload} onRemove={onRemove} />
           <PhotoUpload label="Back Artwork — Position, Size, Method"  slotKey="artwork-back"  images={images} onUpload={onUpload} onRemove={onRemove} />
@@ -716,7 +737,7 @@ export function StepColor({ data, set, images, onUpload, onRemove }) {
       </div>
 
       <div style={{ marginBottom: 10 }}>
-        <label style={sectionLabel}>Placement</label>
+        <label style={sectionLabel}>Placement Detail</label>
         <ArrayTable
           headers={[
             { key: 'placement',    label: 'Placement',    placeholder: 'Center chest / Back yoke' },
@@ -1105,7 +1126,7 @@ export function StepTreatments({ data, set, images, onUpload, onRemove }) {
   );
 }
 export function StepLabels({ data, set, images, onUpload, onRemove }) {
-  const locked = isStepLocked(10, data.status);
+  const locked = isStepLocked(16, data.status);
 
   const packaging = data.packagingItems && data.packagingItems.length ? data.packagingItems : [{ component: '', material: '', color: '', size: '', artworkPrint: '', qtyPerOrder: '', notes: '' }];
   const updP = (i, k, v) => set('packagingItems', packaging.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
@@ -1163,7 +1184,7 @@ function computeQtyRow(row) {
 }
 
 export function StepOrder({ data, set, library, saveToLibrary }) {
-  const locked = isStepLocked(11, data.status);
+  const locked = isStepLocked(17, data.status);
   const [unitWeightG, setUnitWeightG] = useState(data.unitWeightGrams || '500');
   const [aiKey, setAiKey] = useState(getStoredKey());
   const [aiNotes, setAiNotes] = useState('');
@@ -1303,7 +1324,7 @@ export function StepOrder({ data, set, library, saveToLibrary }) {
   );
 }
 export function StepCompliance({ data, set }) {
-  const locked = isStepLocked(12, data.status);
+  const locked = isStepLocked(14, data.status);
 
   const shipping = data.shippingReqs && data.shippingReqs.length ? data.shippingReqs : [{ requirement: '', specification: '', notes: '' }];
   const updS = (i, k, v) => set('shippingReqs', shipping.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
@@ -1341,7 +1362,7 @@ export function StepCompliance({ data, set }) {
 
   return (
     <div>
-      <SectionTitle>Compliance &amp; Quality</SectionTitle>
+      <SectionTitle>Compliance &amp; Testing</SectionTitle>
       {locked && <LockedBanner status={data.status} />}
       <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
 
@@ -1357,7 +1378,7 @@ export function StepCompliance({ data, set }) {
         </div>
 
         <div style={{ marginBottom: 18 }}>
-          <label style={sectionLabel}>Quality &amp; Testing Standards</label>
+          <label style={sectionLabel}>Testing Standards</label>
           <ArrayTable
             headers={[
               { key: 'test',        label: 'Test',        placeholder: 'Colorfastness / Tensile' },
@@ -1387,6 +1408,68 @@ export function StepCompliance({ data, set }) {
             ]}
             rows={matrix} onUpdate={updM} onAdd={addM} onRemove={rmM} />
         </div>
+      </fieldset>
+    </div>
+  );
+}
+
+const INSPECTION_STAGES = ['Pre-Production', 'During Production', 'Final Random Inspection', 'Pre-Shipment'];
+const SEVERITY_OPTIONS = ['Critical', 'Major', 'Minor'];
+
+export function StepQuality({ data, set }) {
+  const locked = isStepLocked(15, data.status);
+
+  const qi = data.qualityInspection || { aqlMajor: '2.5', aqlMinor: '4.0', inspectionStage: 'During Production', checklist: [], photoRequirements: '' };
+  const setQI = (k, v) => set('qualityInspection', { ...qi, [k]: v });
+
+  const checklist = qi.checklist && qi.checklist.length ? qi.checklist : [{ area: '', criterion: '', severity: 'Major' }];
+  const updC = (i, k, v) => setQI('checklist', checklist.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addC = () => setQI('checklist', [...checklist, { area: '', criterion: '', severity: 'Major' }]);
+  const rmC  = (i) => setQI('checklist', checklist.filter((_, idx) => idx !== i));
+
+  const severityRender = (v, onChange) => (
+    <select value={v || 'Major'} onChange={e => onChange(e.target.value)}
+      style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box' }}>
+      {SEVERITY_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+    </select>
+  );
+
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+
+  return (
+    <div>
+      <SectionTitle>Quality Inspection (AQL)</SectionTitle>
+      {locked && <LockedBanner status={data.status} />}
+      <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
+
+        <div style={{ marginBottom: 18 }}>
+          <label style={sectionLabel}>AQL Standard</label>
+          <Row cols="1fr 1fr 1fr">
+            <Input label="Major Defects (AQL)" value={qi.aqlMajor} onChange={v => setQI('aqlMajor', v)} placeholder="2.5" />
+            <Input label="Minor Defects (AQL)" value={qi.aqlMinor} onChange={v => setQI('aqlMinor', v)} placeholder="4.0" />
+            <div>
+              <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>Inspection Stage</label>
+              <select value={qi.inspectionStage || 'During Production'} onChange={e => setQI('inspectionStage', e.target.value)}
+                style={{ width: '100%', padding: '6px 8px', fontSize: 12, border: `1px solid ${FR.sand}`, borderRadius: 3, background: FR.white, color: FR.slate, fontFamily: "'Helvetica Neue',sans-serif" }}>
+                {INSPECTION_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </Row>
+        </div>
+
+        <div style={{ marginBottom: 18 }}>
+          <label style={sectionLabel}>Inspection Checklist</label>
+          <ArrayTable
+            headers={[
+              { key: 'area',      label: 'Area',      placeholder: 'Seam / Hem / Print' },
+              { key: 'criterion', label: 'Criterion', placeholder: 'Stitches per inch ≥ 8' },
+              { key: 'severity',  label: 'Severity',  render: severityRender },
+            ]}
+            rows={checklist} onUpdate={updC} onAdd={addC} onRemove={rmC} />
+        </div>
+
+        <Input label="Photo Requirements" value={qi.photoRequirements} onChange={v => setQI('photoRequirements', v)} multiline
+          placeholder="What photos must the vendor send with each batch (front / back / detail / packaging)?" />
       </fieldset>
     </div>
   );
@@ -1488,12 +1571,14 @@ export const STEP_FNS = [
   StepPattern,           // 08 Cut & Sew — Pattern & Cutting
   StepPom,               // 09 Cut & Sew — POM (base size)
   StepSizeMatrix,        // 10 Cut & Sew — Graded Size Matrix (skippable)
-  StepColor,             // 11 Embellishments
-  StepTreatments,        // 12 Treatments
-  StepCompliance,        // 13 QC
-  StepLabels,            // 14 Packaging
-  StepOrder,             // 15 Logistics
-  StepRevision,          // 16 Sign-off
+  StepColor,             // 11 Embellishments — Colorways
+  StepArtwork,           // 12 Embellishments — Artwork & Placement
+  StepTreatments,        // 13 Treatments
+  StepCompliance,        // 14 QC — Compliance & Testing
+  StepQuality,           // 15 QC — Quality Inspection (AQL)
+  StepLabels,            // 16 Packaging
+  StepOrder,             // 17 Logistics
+  StepRevision,          // 18 Sign-off
 ];
 
 // Backwards-compat aliases so older references keep resolving during the
