@@ -8,17 +8,20 @@
 // chunks 08-10.
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Edit2, Check, X } from 'lucide-react';
+import { ArrowLeft, Edit2, Check, X, Sparkles, FileDown } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { getFRColor } from '../../utils/colorLibrary';
 import { resolveVendor } from '../../utils/vendorLibrary';
 import { getTreatment, getTreatmentRollups, getProductionLog, getUsedInForTreatment, updateTreatment } from '../../utils/treatmentStore';
 import { listDriftLogs } from '../../utils/productionStore';
 import { TREATMENT_TYPE_LABEL, LORA_BASE_MODELS } from '../../utils/treatmentLibrary';
+import { generateTreatmentBOMPDF } from '../../utils/treatmentBOMPDF';
 import CoverImagePicker from './CoverImagePicker';
 import CoverThumb from './CoverThumb';
 import VendorPicker from './VendorPicker';
 import FileSlot from './FileSlot';
+import TreatmentAIExtract from './TreatmentAIExtract';
+import SendToVendorButton from './SendToVendorButton';
 import { migrateLegacyCoverIfNeeded, isLegacyDataUrl } from '../../utils/plmAssets';
 
 const STATUS_PILL = {
@@ -144,6 +147,8 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -233,6 +238,25 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
 
   const enterEdit = () => { setDraft({ ...treatment, digital: { ...(treatment.digital || {}) } }); setEditing(true); };
   const cancelEdit = () => { setDraft(null); setEditing(false); };
+
+  // AI auto-fill drops the suggestion onto an in-flight draft. If the
+  // user wasn't editing yet, we open the editor so the values land
+  // somewhere reviewable rather than auto-saving silently.
+  const onApplyAI = (patch) => {
+    setAiOpen(false);
+    setDraft(prev => {
+      const base = prev || { ...treatment, digital: { ...(treatment.digital || {}) } };
+      return { ...base, ...patch };
+    });
+    setEditing(true);
+  };
+
+  const onExportPDF = async () => {
+    setExporting(true);
+    try { await generateTreatmentBOMPDF(treatment); }
+    catch (err) { console.error('Export Treatment PDF:', err); alert(err?.message || 'PDF export failed'); }
+    finally { setExporting(false); }
+  };
   const saveEdit = async () => {
     if (!draft) return;
     setSaving(true);
@@ -316,7 +340,22 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
             <ArrowLeft size={12} /> Back
           </button>
         ) : <span />}
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button onClick={() => setAiOpen(true)} title="Auto-fill from a vendor treatment card"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 10px', background: FR.salt, color: FR.soil, border: `1px solid ${FR.sand}`, borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+            <Sparkles size={12} /> AI auto-fill
+          </button>
+          <button onClick={onExportPDF} disabled={exporting}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 10px', background: 'transparent', color: FR.slate, border: `1px solid ${FR.sand}`, borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: exporting ? 'wait' : 'pointer' }}>
+            <FileDown size={12} /> {exporting ? 'Exporting…' : 'Export spec PDF'}
+          </button>
+          <div style={{ background: FR.slate, borderRadius: 6, padding: '2px 4px' }}>
+            <SendToVendorButton
+              vendorName={primaryVendor?.name || ''}
+              styleId={treatment.code}
+              variant="header"
+            />
+          </div>
           {!editing ? (
             <button onClick={enterEdit} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'transparent', color: FR.slate, border: '0.5px solid rgba(58,58,58,0.25)', borderRadius: 6, fontSize: 11, cursor: 'pointer' }}>
               <Edit2 size={12} /> Edit
@@ -395,35 +434,29 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
             <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 17, color: FR.slate }}>Physical spec</div>
             <div style={{ fontSize: 10, color: 'rgba(58,58,58,0.5)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>What the vendor produces</div>
           </div>
+          {/* Process recipe — the brand never dictates the chemistry, the
+              laundry hits a target swatch. These fields are visible but
+              gated until we have a real chemistry-capture flow. */}
+          <div style={{ position: 'relative', marginBottom: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ fontSize: 10, color: 'rgba(58,58,58,0.5)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Process recipe</div>
+              <div style={{ fontSize: 9.5, color: FR.soil, letterSpacing: '0.1em', textTransform: 'uppercase', background: FR.salt, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '2px 7px' }}>
+                Coming soon
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', rowGap: 10, fontSize: 12, lineHeight: 1.5, opacity: 0.45, pointerEvents: 'none', userSelect: 'none' }}>
+              <Spec label="Chemistry">{view.chemistry || '—'}</Spec>
+              <Spec label="Duration">{view.duration_minutes ? `${view.duration_minutes} minutes` : '—'}</Spec>
+              <Spec label="Temperature">{view.temperature_c ? `${view.temperature_c} °C` : '—'}</Spec>
+              <Spec label="Substrate">{substrate}</Spec>
+              <Spec label="Shrinkage">{view.shrinkage_expected_pct ? `${view.shrinkage_expected_pct}% expected` : '—'}</Spec>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '0.5px solid rgba(58,58,58,0.1)', paddingTop: 14, marginBottom: 8 }}>
+            <div style={{ fontSize: 10, color: 'rgba(58,58,58,0.5)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Vendor terms</div>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', rowGap: 10, fontSize: 12, lineHeight: 1.5 }}>
-            <Spec label="Chemistry">
-              {editing
-                ? <TextInput value={view.chemistry} onChange={v => setField('chemistry', v)} />
-                : (view.chemistry || '—')}
-            </Spec>
-            <Spec label="Duration">
-              {editing
-                ? <NumberInput value={view.duration_minutes} onChange={v => setField('duration_minutes', v)} />
-                : (view.duration_minutes ? `${view.duration_minutes} minutes` : '—')}
-            </Spec>
-            <Spec label="Temperature">
-              {editing
-                ? <NumberInput value={view.temperature_c} onChange={v => setField('temperature_c', v)} />
-                : (view.temperature_c ? `${view.temperature_c} °C` : '—')}
-            </Spec>
-            <Spec label="Substrate">
-              {editing
-                ? <TextInput
-                    value={(view.compatible_fabric_ids || []).join(', ')}
-                    onChange={v => setField('compatible_fabric_ids', v.split(',').map(s => s.trim()).filter(Boolean))}
-                    placeholder="Comma-separated fabric ids" />
-                : substrate}
-            </Spec>
-            <Spec label="Shrinkage">
-              {editing
-                ? <NumberInput step={0.1} value={view.shrinkage_expected_pct} onChange={v => setField('shrinkage_expected_pct', v)} />
-                : (view.shrinkage_expected_pct ? `${view.shrinkage_expected_pct}% expected` : '—')}
-            </Spec>
             <Spec label="Vendor">
               {editing
                 ? <VendorPicker value={view.primary_vendor_id} onChange={v => setField('primary_vendor_id', v)} placeholder="Select vendor…" />
@@ -521,6 +554,13 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
         treatment={treatment}
         onEdit={enterEdit}
       />
+
+      {aiOpen && (
+        <TreatmentAIExtract
+          onClose={() => setAiOpen(false)}
+          onApply={onApplyAI}
+        />
+      )}
     </div>
   );
 }
