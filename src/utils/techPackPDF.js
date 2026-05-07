@@ -547,28 +547,35 @@ export async function generateTechPackPDF(pack) {
   // ─── Cut & Sew → Seam & Stitch (now stepIdx 7) ───
   newPage('Seam & Stitch Specifications', null, 10);
   {
-    // Stitch reference strip — six image cells across the top.
+    // Stitch reference strip — visible cells span the printable width.
+    // Each cell is 2:3 vertical; height capped so a single cell doesn't
+    // blow up the page. Table sits immediately below the strip.
+    const margin   = 10;
     const stripTop = 24;
-    const stripH = 32;
-    const margin = 10;
-    const gap = 2;
-    const cellW = (W - margin * 2 - gap * 5) / 6;
-    const stitchBlocks = (d.seamStitchBlocks && d.seamStitchBlocks.length)
+    const gap      = 3;
+    const labelH   = 8;
+    const allBlocks = (d.seamStitchBlocks && d.seamStitchBlocks.length)
       ? d.seamStitchBlocks
-      : [1, 2, 3, 4, 5, 6].map(num => ({ num, label: '' }));
-    stitchBlocks.slice(0, 6).forEach((b, i) => {
+      : [1, 2, 3, 4, 5, 6].map(num => ({ num, label: '', hidden: false }));
+    const stitchBlocks = allBlocks.filter(b => !b.hidden).slice(0, 6);
+    const N = stitchBlocks.length;
+    const contentW = W - margin * 2;
+    const cellW = N > 0 ? (contentW - gap * Math.max(N - 1, 0)) / N : 0;
+    const imgHCap = 100; // mm — leaves ~70mm for the table + label below
+    const imgH = N > 0 ? Math.min(cellW * 1.5, imgHCap) : 0;
+    stitchBlocks.forEach((b, i) => {
       const cx = margin + i * (cellW + gap);
-      addImage(`seam-stitch-${b.num}`, cx, stripTop, cellW, stripH);
+      addImage(`seam-stitch-${b.num}`, cx, stripTop, cellW, imgH);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(6);
       doc.setTextColor(...hex(FR.soil));
-      doc.text(`STITCH ${b.num}`, cx, stripTop + stripH + 4);
+      doc.text(`STITCH ${b.num}`, cx, stripTop + imgH + 4);
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7);
+      doc.setFontSize(8);
       doc.setTextColor(...hex(FR.slate));
-      doc.text(String(b.label || '—').slice(0, 22), cx, stripTop + stripH + 8.5);
+      doc.text(String(b.label || '—').slice(0, 28), cx, stripTop + imgH + 8);
     });
-    y = stripTop + stripH + 14;
+    y = stripTop + imgH + labelH + 8;
     sectionHeading('Seam Specifications', y); y += 6;
     const seamRows = (d.seams || []).filter(s => s.operation).map(s =>
       [s.operation, s.seamType, s.stitchType, s.machine, s.spiSpcm, s.threadColor, s.notes]);

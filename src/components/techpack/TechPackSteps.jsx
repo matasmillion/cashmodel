@@ -1521,9 +1521,18 @@ export function StepConstruction({ data, set, images, onUpload, onRemove }) {
 
   const stitchBlocks = (data.seamStitchBlocks && data.seamStitchBlocks.length)
     ? data.seamStitchBlocks
-    : [1, 2, 3, 4, 5, 6].map(num => ({ num, label: '' }));
+    : [1, 2, 3, 4, 5, 6].map(num => ({ num, label: '', hidden: false }));
+  const visibleBlocks = stitchBlocks.filter(b => !b.hidden);
+  const hiddenBlocks  = stitchBlocks.filter(b =>  b.hidden);
   const updateBlockLabel = (num, label) => {
     set('seamStitchBlocks', stitchBlocks.map(b => (b.num === num ? { ...b, label } : b)));
+  };
+  const hideBlock = (num) => {
+    set('seamStitchBlocks', stitchBlocks.map(b => (b.num === num ? { ...b, hidden: true } : b)));
+  };
+  const restoreNextBlock = () => {
+    const next = stitchBlocks.find(b => b.hidden);
+    if (next) set('seamStitchBlocks', stitchBlocks.map(b => (b.num === next.num ? { ...b, hidden: false } : b)));
   };
 
   const threadColorRender = (v, onChange) => <FRColorCell value={v} onChange={onChange} />;
@@ -1533,35 +1542,59 @@ export function StepConstruction({ data, set, images, onUpload, onRemove }) {
     <div>
       <SectionTitle>Seam &amp; Stitch Specifications</SectionTitle>
 
-      {/* Stitch reference image blocks — six modular cells, one per stitch the
-          factory will run. Labels (e.g. "401 Coverstitch") cross-reference the
-          Stitch Type column in the table below. */}
+      {/* Stitch reference image blocks — up to six modular 2:3 vertical cells,
+          one per stitch the factory will run. Labels (e.g. "401 Coverstitch")
+          cross-reference the Stitch Type column in the table below. Each card
+          can be hidden via × and restored via "+ Add stitch". */}
       <div style={{ marginBottom: 18 }}>
-        <label style={sectionLabel}>Stitch Reference Images</label>
-        <p style={{ fontSize: 11, color: FR.stone, marginBottom: 10, fontStyle: 'italic' }}>
-          Up to six modular stitch image blocks. Each shows the actual stitch the factory will run; labels cross-reference the Stitch Type column below.
-        </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10 }}>
-          {stitchBlocks.map(b => (
-            <div key={b.num} style={{ background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 6, padding: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <PhotoUpload
-                single
-                slotKey={`seam-stitch-${b.num}`}
-                images={images}
-                onUpload={onUpload}
-                onRemove={onRemove}
-                aspect="1 / 1"
-                label={`Stitch ${b.num}`}
-              />
-              <input
-                value={b.label}
-                onChange={e => updateBlockLabel(b.num, e.target.value)}
-                placeholder={`e.g. 401 Coverstitch`}
-                style={{ width: '100%', border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '4px 6px', fontSize: 10, color: FR.slate, background: FR.salt, outline: 'none', boxSizing: 'border-box' }}
-              />
-            </div>
-          ))}
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
+          <label style={{ ...sectionLabel, marginBottom: 0 }}>Stitch Reference Images</label>
+          {hiddenBlocks.length > 0 && (
+            <button
+              onClick={restoreNextBlock}
+              style={{ background: 'none', border: `0.5px dashed ${FR.soil}`, borderRadius: 4, padding: '4px 10px', fontSize: 10, color: FR.soil, cursor: 'pointer', fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase' }}
+            >
+              + Add stitch ({hiddenBlocks.length} hidden)
+            </button>
+          )}
         </div>
+        <p style={{ fontSize: 11, color: FR.stone, marginBottom: 12, fontStyle: 'italic' }}>
+          Up to six modular 2:3 stitch image blocks. Each shows the actual stitch the factory will run; labels cross-reference the Stitch Type column below. Hide a block with × if you don't need it.
+        </p>
+        {visibleBlocks.length === 0 ? (
+          <div style={{ padding: '32px 16px', textAlign: 'center', border: `0.5px dashed ${FR.sand}`, borderRadius: 6, color: FR.stone, fontStyle: 'italic', fontSize: 11, background: FR.salt }}>
+            All stitch reference blocks hidden. Click <strong>+ Add stitch</strong> above to bring one back.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${visibleBlocks.length}, minmax(0, 1fr))`, gap: 12 }}>
+            {visibleBlocks.map(b => (
+              <div key={b.num} style={{ background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 6, padding: 10, display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
+                <button
+                  onClick={() => hideBlock(b.num)}
+                  title="Hide this stitch reference"
+                  style={{ position: 'absolute', top: 6, right: 6, zIndex: 5, width: 22, height: 22, borderRadius: 11, background: FR.slate, color: FR.salt, border: 'none', fontSize: 14, cursor: 'pointer', lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  ×
+                </button>
+                <PhotoUpload
+                  single
+                  slotKey={`seam-stitch-${b.num}`}
+                  images={images}
+                  onUpload={onUpload}
+                  onRemove={onRemove}
+                  aspect="2 / 3"
+                  label={`Stitch ${b.num}`}
+                />
+                <input
+                  value={b.label}
+                  onChange={e => updateBlockLabel(b.num, e.target.value)}
+                  placeholder={`e.g. 401 Coverstitch`}
+                  style={{ width: '100%', border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '6px 8px', fontSize: 11, color: FR.slate, background: FR.salt, outline: 'none', boxSizing: 'border-box', fontFamily: "'Helvetica Neue', sans-serif" }}
+                />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{ marginBottom: 10 }}>
