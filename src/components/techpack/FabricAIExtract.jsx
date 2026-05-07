@@ -10,14 +10,8 @@
 import { useRef, useState } from 'react';
 import { Sparkles, X, Upload, FileText, Image as ImageIcon, Check } from 'lucide-react';
 import { FR } from './techPackConstants';
-import { extractFabricFromMedia, fileToMedia, getStoredKey, saveKey } from '../../utils/aiFabricExtract';
+import { extractFabricFromMedia, fileToMedia } from '../../utils/aiFabricExtract';
 import { categoryForWeave, FABRIC_WEAVES } from '../../utils/fabricLibrary';
-
-const INPUT_STYLE = {
-  width: '100%', padding: '6px 8px', border: `1px solid ${FR.sand}`,
-  borderRadius: 4, fontSize: 12, color: FR.slate, background: '#fff',
-  fontFamily: "'Inter', sans-serif", outline: 'none', boxSizing: 'border-box',
-};
 
 const VALID_WEAVES = new Set(FABRIC_WEAVES.map(w => w.id));
 
@@ -34,8 +28,6 @@ function Row({ label, value, kind = 'text', suffix = '' }) {
 export default function FabricAIExtract({ onClose, onApply }) {
   const fileRef = useRef(null);
   const [files, setFiles] = useState([]);
-  const [apiKey, setApiKey] = useState(getStoredKey());
-  const [showKey, setShowKey] = useState(!getStoredKey());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
@@ -57,10 +49,8 @@ export default function FabricAIExtract({ onClose, onApply }) {
   const run = async () => {
     setError(null); setBusy(true); setResult(null);
     try {
-      if (apiKey) saveKey(apiKey);
       const media = await Promise.all(files.map(fileToMedia));
-      const json = await extractFabricFromMedia({ apiKey, media });
-      // Sanitize weave / category.
+      const json = await extractFabricFromMedia({ media });
       if (json.weave && !VALID_WEAVES.has(json.weave)) json.weave = 'other';
       if (!json.category && json.weave) json.category = categoryForWeave(json.weave);
       if (json.category && !['knit', 'woven'].includes(json.category)) json.category = null;
@@ -117,18 +107,6 @@ export default function FabricAIExtract({ onClose, onApply }) {
             Claude reads composition, weight, width, shrinkage, weave, and every color swatch on the card,
             then drops the values onto your draft so you can review before saving.
           </p>
-
-          {showKey ? (
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 11, color: FR.stone, display: 'block', marginBottom: 4 }}>Anthropic API key</label>
-              <input value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-ant-…" style={INPUT_STYLE} type="password" />
-              <div style={{ fontSize: 10, color: FR.stone, marginTop: 4 }}>Stored in this browser only. Required for AI extraction.</div>
-            </div>
-          ) : (
-            <div style={{ marginBottom: 12, fontSize: 11, color: FR.stone }}>
-              Using stored API key. <button onClick={() => setShowKey(true)} style={{ background: 'none', border: 'none', color: FR.soil, cursor: 'pointer', padding: 0, fontSize: 11 }}>Change</button>
-            </div>
-          )}
 
           <div
             onClick={() => fileRef.current?.click()}
@@ -210,7 +188,7 @@ export default function FabricAIExtract({ onClose, onApply }) {
               <Check size={13} /> Apply to fabric
             </button>
           ) : (
-            <button onClick={run} disabled={busy || files.length === 0 || !apiKey} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: (busy || files.length === 0 || !apiKey) ? 'not-allowed' : 'pointer', opacity: (busy || files.length === 0 || !apiKey) ? 0.55 : 1 }}>
+            <button onClick={run} disabled={busy || files.length === 0} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: (busy || files.length === 0) ? 'not-allowed' : 'pointer', opacity: (busy || files.length === 0) ? 0.55 : 1 }}>
               <Sparkles size={13} /> {busy ? 'Analyzing…' : 'Analyze'}
             </button>
           )}

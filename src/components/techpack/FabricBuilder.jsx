@@ -230,11 +230,11 @@ export default function FabricBuilder({ fabric, onBack }) {
         </div>
       )}
 
-      {/* ─── Main 2-column grid ─────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)', gap: 12, alignItems: 'start' }}>
+      {/* ─── Layout: data block, then full-width landscape BOM preview ─ */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-        {/* LEFT — data */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {/* DATA — two-column for forms; preview lives below at full width */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 10 }}>
 
           {/* Category + Identity */}
           <div style={CARD_STYLE}>
@@ -382,17 +382,15 @@ export default function FabricBuilder({ fabric, onBack }) {
           </div>
         </div>
 
-        {/* RIGHT — BOM page preview */}
-        <div style={{ position: 'sticky', top: 8 }}>
-          <div style={{ ...CARD_STYLE, padding: 10 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, padding: '0 4px' }}>
-              <h4 style={{ ...SECTION_TITLE, marginBottom: 0 }}>BOM page</h4>
-              <span style={{ fontSize: 10, color: FR.stone }}>A4 · 1 page</span>
-            </div>
-            <FabricBOMPreview fabric={draft} />
-            <div style={{ fontSize: 10, color: FR.stone, marginTop: 8, padding: '0 4px', lineHeight: 1.5 }}>
-              This is exactly what lands in the tech pack BOM page when this fabric is selected.
-            </div>
+        {/* BOM page preview — full width landscape A4, mirrors tech pack chrome */}
+        <div style={{ ...CARD_STYLE, padding: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, padding: '0 4px' }}>
+            <h4 style={{ ...SECTION_TITLE, marginBottom: 0 }}>BOM page · live preview</h4>
+            <span style={{ fontSize: 10, color: FR.stone }}>A4 landscape · matches tech pack chrome</span>
+          </div>
+          <FabricBOMPreview fabric={draft} />
+          <div style={{ fontSize: 10, color: FR.stone, marginTop: 8, padding: '0 4px', lineHeight: 1.5 }}>
+            This is exactly what lands in the tech pack BOM page when this fabric is selected.
           </div>
         </div>
       </div>
