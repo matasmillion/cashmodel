@@ -57,11 +57,20 @@ function StatRow({ label, value }) {
   );
 }
 
-function formatSince(iso) {
-  if (!iso) return '—';
-  try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); }
-  catch { return '—'; }
+// Title shown on every fabric card: the mill's article number is the
+// canonical handle (e.g. "B1750"). When the user has also typed a
+// descriptive name (Snowflake Cotton, FR French Terry 340, …) we tack
+// it on after the number, mirroring the way the mill's own card is
+// labeled. Falls back to the descriptive name alone when no mill # is
+// set yet, then to a placeholder.
+function formatFabricTitle(fabric) {
+  const num  = (fabric.mill_fabric_no || '').trim();
+  const name = (fabric.name || '').trim();
+  if (num && name && name !== num) return `${num} ${name}`;
+  return num || name || 'Untitled fabric';
 }
+
+const TITLE_FONT = "'General Sans', 'Inter', system-ui, -apple-system, sans-serif";
 
 function Hero({ fabric }) {
   const heroSrc = fabric.front_image_url || fabric.cover_image;
@@ -87,11 +96,14 @@ function Hero({ fabric }) {
 function GridCard({ fabric, onOpen, onMenu, menuOpen, onMenuClose, onArchive, onRestore, onDuplicate }) {
   const status = fabric.status || 'draft';
   const weight = fabric.weight_gsm ? `${fabric.weight_gsm} gsm` : '—';
-  const price = fabric.price_per_meter_usd
-    ? `$${Number(fabric.price_per_meter_usd).toFixed(2)} / m`
+  // Mill cards routinely quote $/kg, not $/m, so this stat block surfaces
+  // per-kg pricing first. The full m / kg × USD / RMB matrix lives in the
+  // builder; the card just shows the most-shopped figure.
+  const price = fabric.price_per_kg_usd
+    ? `$${Number(fabric.price_per_kg_usd).toFixed(2)} / kg`
     : '—';
   const lead = fabric.lead_time_days ? `${fabric.lead_time_days} days` : '—';
-  const mill = fabric.mill_id || '—';
+  const vendor = fabric.mill_id || '—';
   const composition = fabric.composition
     ? (fabric.composition.length > 30 ? `${fabric.composition.slice(0, 30)}…` : fabric.composition)
     : '—';
@@ -114,23 +126,20 @@ function GridCard({ fabric, onOpen, onMenu, menuOpen, onMenuClose, onArchive, on
       <Hero fabric={fabric} />
       <div style={{ padding: 14 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {fabric.name || 'Untitled fabric'}
+          <div style={{ fontFamily: TITLE_FONT, fontWeight: 600, fontSize: 17, color: FR.slate, lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {formatFabricTitle(fabric)}
           </div>
           <StatusPill status={status} />
         </div>
-        <div style={{ fontSize: 10, color: FR.stone, marginTop: 4, marginBottom: 8, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          <span>{fabric.code}</span>
-          {fabric.mill_fabric_no && <span>· #{fabric.mill_fabric_no}</span>}
-          <span>· {FABRIC_WEAVE_LABEL[fabric.weave] || fabric.weave}</span>
+        <div style={{ fontSize: 10, color: FR.stone, marginTop: 4, marginBottom: 8, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+          {FABRIC_WEAVE_LABEL[fabric.weave] || fabric.weave}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr', columnGap: 8, rowGap: 3, fontSize: 11, lineHeight: 1.3 }}>
-          <StatRow label="Comp"   value={composition} />
-          <StatRow label="Weight" value={weight} />
-          <StatRow label="Mill"   value={mill} />
-          <StatRow label="Price"  value={price} />
-          <StatRow label="Lead"   value={lead} />
-          <StatRow label="Since"  value={formatSince(fabric.created_at)} />
+        <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr', columnGap: 8, rowGap: 3, fontSize: 11, lineHeight: 1.3 }}>
+          <StatRow label="Comp"      value={composition} />
+          <StatRow label="Weight"    value={weight} />
+          <StatRow label="Vendor"    value={vendor} />
+          <StatRow label="Price"     value={price} />
+          <StatRow label="Lead time" value={lead} />
         </div>
         <button
           aria-label="Card menu"
@@ -184,11 +193,11 @@ function KanbanCard({ fabric, onOpen, onDragStart, onDragEnd }) {
           {heroSrc && <CoverThumb src={heroSrc} alt="" />}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: FR.slate, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {fabric.name || 'Untitled fabric'}
+          <div style={{ fontFamily: TITLE_FONT, fontWeight: 600, fontSize: 13, color: FR.slate, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {formatFabricTitle(fabric)}
           </div>
           <div style={{ fontSize: 10, color: FR.stone, marginTop: 2, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {fabric.code}{fabric.mill_fabric_no ? ` · #${fabric.mill_fabric_no}` : ''} · {FABRIC_WEAVE_LABEL[fabric.weave] || fabric.weave}
+            {FABRIC_WEAVE_LABEL[fabric.weave] || fabric.weave}
           </div>
           <div style={{ fontSize: 10, color: FR.stone, marginTop: 2 }}>
             {fabric.weight_gsm ? `${fabric.weight_gsm} gsm` : '—'} · {fabric.mill_id || '—'}
