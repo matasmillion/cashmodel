@@ -381,9 +381,14 @@ function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
   const [description, setDesc]  = useState('');
   const [views, setViews]       = useState({ front: null, back: null, side: null });
   const [vstatus, setVstatus]   = useState({ front: 'pending', back: 'pending', side: 'pending' });
+  const [verrors, setVerrors]   = useState({ front: '', back: '', side: '' });
   const [errMsg, setErrMsg]     = useState('');
 
   useEffect(() => { startAll(); }, []);
+
+  function toMsg(e) {
+    return (typeof e?.message === 'string' ? e.message : String(e)) || 'Unknown error';
+  }
 
   async function startAll(viewsToRun = VIEWS, existingDesc = null) {
     try {
@@ -410,15 +415,15 @@ function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
           const url = await generateGarmentView(desc, view);
           setViews(vs => ({ ...vs, [view]: url }));
           setVstatus(vs => ({ ...vs, [view]: 'done' }));
-        } catch {
+        } catch (e) {
           setVstatus(vs => ({ ...vs, [view]: 'error' }));
+          setVerrors(ve => ({ ...ve, [view]: toMsg(e) }));
         }
       }));
 
       setPhase('done');
     } catch (e) {
-      const msg = typeof e?.message === 'string' ? e.message : String(e);
-      setErrMsg(msg || 'Generation failed — check that your Anthropic and fal.ai keys are connected in Integrations.');
+      setErrMsg(toMsg(e));
       setPhase('error');
     }
   }
@@ -427,12 +432,14 @@ function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
     if (!description) return;
     setViews(vs => ({ ...vs, [view]: null }));
     setVstatus(vs => ({ ...vs, [view]: 'loading' }));
+    setVerrors(ve => ({ ...ve, [view]: '' }));
     try {
       const url = await generateGarmentView(description, view);
       setViews(vs => ({ ...vs, [view]: url }));
       setVstatus(vs => ({ ...vs, [view]: 'done' }));
-    } catch {
+    } catch (e) {
       setVstatus(vs => ({ ...vs, [view]: 'error' }));
+      setVerrors(ve => ({ ...ve, [view]: toMsg(e) }));
     }
   }
 
@@ -498,7 +505,9 @@ function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
                     <div style={{ fontSize: 11, color: FR.stone }}>Generating…</div>
                   )}
                   {vstatus[view] === 'error' && (
-                    <div style={{ fontSize: 11, color: '#A32D2D' }}>Failed</div>
+                    <div style={{ fontSize: 10, color: '#A32D2D', padding: '0 8px', textAlign: 'center', lineHeight: 1.4 }}>
+                      {verrors[view] || 'Failed'}
+                    </div>
                   )}
                   {views[view] && (
                     <img src={views[view]} alt={VIEW_LABELS[view]} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
