@@ -699,23 +699,35 @@ function GenerateViewsModal({ viewSources, sharedRefs, customContext, style, bgC
     await runOneView(view, description, perViewRefs[view] || [], ctx);
   }
 
+  // accepting guards against double-click duplicates. The fetch + base64
+  // pass takes a beat, so an undisabled button used to let the user mash
+  // through repeated accept cycles, each one stacking a fresh copy of
+  // every generated view into design-front/back/side.
+  const [accepting, setAccepting] = useState(false);
   async function handleAccept() {
-    await Promise.all(VIEWS.map(async view => {
-      const url = views[view];
-      if (!url) return;
-      try {
-        const res    = await fetch(url);
-        const blob   = await res.blob();
-        const dataUrl = await new Promise((resolve, reject) => {
-          const r = new FileReader();
-          r.onload  = e => resolve(e.target.result);
-          r.onerror = reject;
-          r.readAsDataURL(blob);
-        });
-        onAccept(`design-${view}`, dataUrl);
-      } catch { /* skip failed view */ }
-    }));
-    onClose();
+    if (accepting) return;
+    setAccepting(true);
+    try {
+      await Promise.all(VIEWS.map(async view => {
+        const url = views[view];
+        if (!url) return;
+        try {
+          const res    = await fetch(url);
+          const blob   = await res.blob();
+          const dataUrl = await new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload  = e => resolve(e.target.result);
+            r.onerror = reject;
+            r.readAsDataURL(blob);
+          });
+          onAccept(`design-${view}`, dataUrl);
+        } catch (e) {
+          console.error(`[techpack-views] accept failed for ${view}:`, e);
+        }
+      }));
+    } finally {
+      onClose();
+    }
   }
 
   const allDone = VIEWS.every(v => views[v]);
@@ -816,12 +828,12 @@ function GenerateViewsModal({ viewSources, sharedRefs, customContext, style, bgC
 
         {/* Footer */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-          <button onClick={onClose} style={{ padding: '8px 18px', background: 'none', border: `0.5px solid ${FR.sand}`, borderRadius: 6, cursor: 'pointer', fontSize: 12, color: FR.slate }}>
+          <button onClick={onClose} disabled={accepting} style={{ padding: '8px 18px', background: 'none', border: `0.5px solid ${FR.sand}`, borderRadius: 6, cursor: accepting ? 'not-allowed' : 'pointer', fontSize: 12, color: FR.slate, opacity: accepting ? 0.5 : 1 }}>
             Cancel
           </button>
           {allDone && (
-            <button onClick={handleAccept} style={{ padding: '8px 22px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, letterSpacing: 0.3 }}>
-              Use These Views
+            <button onClick={handleAccept} disabled={accepting} style={{ padding: '8px 22px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, cursor: accepting ? 'not-allowed' : 'pointer', fontSize: 12, letterSpacing: 0.3, opacity: accepting ? 0.7 : 1 }}>
+              {accepting ? 'Saving…' : 'Use These Views'}
             </button>
           )}
         </div>
