@@ -272,16 +272,31 @@ export async function generateTechPackPDF(pack) {
     doc.text('No source documents attached.', 10, y + 4);
   }
 
-  // ─── Cut & Sew → Construction ───
-  newPage('Construction Details', null, 5);
+  // ─── Cut & Sew → Seam & Stitch ───
+  newPage('Seam & Stitch Specifications', null, 5);
   y = 28;
   sectionHeading('Seam Specifications', y); y += 8;
   const seamRows = (d.seams || []).filter(s => s.operation).map(s =>
     [s.operation, s.seamType, s.stitchType, s.spiSpcm, s.threadColor, s.notes]);
   table(['Operation', 'Seam Type', 'Stitch', 'SPI', 'Thread', 'Notes'], seamRows, 10, y, [50, 40, 30, 20, 40, 97]);
 
+  // ─── Cut & Sew → Construction Notes ───
+  newPage('Construction Notes', null, 6);
+  y = 28;
+  sectionHeading('Detail Callouts', y); y += 8;
+  const cnRows = (d.constructionNotesTable || []).filter(n => n.area || n.description).map((n, i) =>
+    [String(i + 1), n.area, n.description, n.reference]);
+  table(['#', 'Area', 'Description', 'Reference'], cnRows, 10, y, [15, 50, 140, 72]);
+  y += 18 + cnRows.length * 6;
+  sectionHeading('Free-Form Notes', y); y += 8;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...hex(FR.slate));
+  const cnLines = (d.constructionNotes || '').split('\n');
+  cnLines.forEach((line, i) => doc.text(line, 10, y + i * 5, { maxWidth: W - 20 }));
+
   // ─── Cut & Sew → Pattern & Cutting ───
-  newPage('Pattern Pieces & Cutting', null, 7);
+  newPage('Pattern Pieces & Cutting', null, 8);
   y = 28;
   const ppRows = (d.patternPieces || []).filter(p => p.name).map(p =>
     [p.name, p.qty, p.fabric, p.grain, p.fusing, p.notes]);
@@ -290,7 +305,7 @@ export async function generateTechPackPDF(pack) {
   field('Cutting Notes', d.cuttingNotes, 10, y);
 
   // ─── Cut & Sew → Points of Measure ───
-  newPage('Points of Measure (cm)', null, 8);
+  newPage('Points of Measure (cm)', null, 9);
   y = 28;
   field('Size Type', d.sizeType, 10, y); y += 14;
   const sz = d.sizeType === 'waist' ? ['W30', 'W32', 'W34', 'W36'] : ['S', 'M', 'L', 'XL'];
@@ -299,7 +314,7 @@ export async function generateTechPackPDF(pack) {
   table(['Measurement', 'Tol ±', ...sz], pomRows, 10, y, [70, 25, 30, 30, 30, 30]);
 
   // ─── Embellishments → Color & Artwork ───
-  newPage('Color & Artwork', null, 9);
+  newPage('Color & Artwork', null, 10);
   y = 28;
   sectionHeading('Colorways', y); y += 8;
   const cwRows = (d.colorways || []).filter(c => c.name).map(c => [c.name, c.frColor, c.pantone, c.hex]);
@@ -311,7 +326,7 @@ export async function generateTechPackPDF(pack) {
   field('Method', d.logoMethod, 200, y);
 
   // ─── Treatments → Garment Treatments ───
-  newPage('Garment Treatments', null, 10);
+  newPage('Garment Treatments', null, 11);
   y = 28;
   sectionHeading('Wash & Dye', y); y += 8;
   const trtRows = (d.treatments || []).filter(t => t.treatment).map(t =>
@@ -324,7 +339,7 @@ export async function generateTechPackPDF(pack) {
   table(['Area', 'Technique', 'Intensity', 'Notes'], distRows, 10, y, [50, 50, 30, 147]);
 
   // ─── Packaging → Labels & Packaging ───
-  newPage('Labels & Packaging', null, 12);
+  newPage('Labels & Packaging', null, 13);
   y = 28;
   field('Packaging', d.packaging, 10, y); y += 14;
   field('Packaging Notes', d.packagingNotes, 10, y); y += 14;
@@ -336,7 +351,7 @@ export async function generateTechPackPDF(pack) {
   careLines.forEach((line, i) => doc.text(line, 10, y + i * 5));
 
   // ─── Logistics → Order & Delivery ───
-  newPage('Order & Delivery', null, 13);
+  newPage('Order & Delivery', null, 14);
   y = 28;
   sectionHeading('Quantity Per Size', y); y += 8;
   const qRows = (d.quantities || []).filter(q => q.colorway).map(q =>
@@ -352,14 +367,14 @@ export async function generateTechPackPDF(pack) {
   field('Target Arrival', d.targetArrivalDate, 200, y);
 
   // ─── Logistics → Packing List ───
-  newPage('Packing List', null, 13);
+  newPage('Packing List', null, 14);
   y = 28;
   const pkRows = (d.cartons || []).filter(c => c.cartonNum).map(c =>
     [c.cartonNum, c.colorway, c.sizeBreakdown, c.qtyPerCarton, c.dims, c.grossWeight, c.netWeight]);
   table(['#', 'Colorway', 'Size Breakdown', 'Qty', 'Dims (cm)', 'Gross kg', 'Net kg'], pkRows, 10, y, [15, 40, 60, 25, 40, 30, 67]);
 
-  // ─── Page 15: Review & Revision ───
-  newPage('Review & Revision', null, 14);
+  // ─── Page 16: Review & Revision ───
+  newPage('Review & Revision', null, 15);
   y = 40;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);

@@ -738,19 +738,14 @@ export function StepConstruction({ data, set }) {
   const addS = () => set('seams', [...seams, { operation: '', seamType: '', stitchType: '', spiSpcm: '', threadColor: '', threadType: '', notes: '' }]);
   const rmS  = (i) => set('seams', seams.filter((_, idx) => idx !== i));
 
-  const notes = data.constructionNotesTable && data.constructionNotesTable.length ? data.constructionNotesTable : [{ detail: '', area: '', description: '', reference: '' }];
-  const updN = (i, k, v) => set('constructionNotesTable', notes.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
-  const addN = () => set('constructionNotesTable', [...notes, { detail: '', area: '', description: '', reference: '' }]);
-  const rmN  = (i) => set('constructionNotesTable', notes.filter((_, idx) => idx !== i));
-
   const threadColorRender = (v, onChange) => <FRColorCell value={v} onChange={onChange} />;
   const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
 
   return (
     <div>
-      <SectionTitle>Construction Details</SectionTitle>
+      <SectionTitle>Seam &amp; Stitch Specifications</SectionTitle>
 
-      <div style={{ marginBottom: 18 }}>
+      <div style={{ marginBottom: 10 }}>
         <label style={sectionLabel}>Seam &amp; Stitch Specification</label>
         <ArrayTable
           headers={[
@@ -764,9 +759,26 @@ export function StepConstruction({ data, set }) {
           ]}
           rows={seams} onUpdate={updS} onAdd={addS} onRemove={rmS} />
       </div>
+    </div>
+  );
+}
 
+export function StepConstructionNotes({ data, set }) {
+  const notes = data.constructionNotesTable && data.constructionNotesTable.length ? data.constructionNotesTable : [{ detail: '', area: '', description: '', reference: '' }];
+  const updN = (i, k, v) => set('constructionNotesTable', notes.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addN = () => set('constructionNotesTable', [...notes, { detail: '', area: '', description: '', reference: '' }]);
+  const rmN  = (i) => set('constructionNotesTable', notes.filter((_, idx) => idx !== i));
+
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+
+  return (
+    <div>
+      <SectionTitle>Construction Notes</SectionTitle>
+      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 12, lineHeight: 1.5 }}>
+        Free-form construction details that don't fit the seam/stitch grid: how the collar is built, pocket bag attachment, special bartacks, etc. Each row maps to a numbered detail callout that can be referenced from sketches.
+      </p>
       <div style={{ marginBottom: 10 }}>
-        <label style={sectionLabel}>Construction Notes</label>
+        <label style={sectionLabel}>Detail Callouts</label>
         <ArrayTable
           headers={[
             { key: '__idx',       label: 'Detail #',    render: (_v, _onChange, row) => (
@@ -777,6 +789,15 @@ export function StepConstruction({ data, set }) {
             { key: 'reference',   label: 'Reference',    placeholder: 'Filename or sketch #' },
           ]}
           rows={notes} onUpdate={updN} onAdd={addN} onRemove={rmN} />
+      </div>
+      <div>
+        <label style={sectionLabel}>Free-Form Notes</label>
+        <Input
+          multiline
+          value={data.constructionNotes || ''}
+          onChange={v => set('constructionNotes', v)}
+          placeholder="Anything that doesn't fit a row — overall garment construction philosophy, special instructions, vendor-specific guidance…"
+        />
       </div>
     </div>
   );
@@ -1316,21 +1337,22 @@ export function StepRevision({ data, set, onSubmit, submitting, submitResult, on
 
 // Order mirrors STEPS in techPackConstants.js — by manufacturing stage.
 export const STEP_FNS = [
-  StepCover,            // 00 Design
-  StepDesignOverview,   // 01 Design
-  StepFlatlays,         // 02 Design
-  StepBOM,              // 03 Materials — Fabrics & Trims
-  StepBOMTrims,         // 04 Materials — Labels & Files (skippable)
-  StepConstruction,     // 05 Cut & Sew
-  StepSketches,         // 06 Cut & Sew
-  StepPattern,          // 07 Cut & Sew
-  StepPom,              // 08 Cut & Sew
-  StepColor,            // 09 Embellishments
-  StepTreatments,       // 10 Treatments
-  StepCompliance,       // 11 QC
-  StepLabels,           // 12 Packaging
-  StepOrder,            // 13 Logistics
-  StepRevision,         // 14 Sign-off
+  StepCover,             // 00 Design
+  StepDesignOverview,    // 01 Design
+  StepFlatlays,          // 02 Design
+  StepBOM,               // 03 Materials — Fabrics & Trims
+  StepBOMTrims,          // 04 Materials — Labels & Files (skippable)
+  StepConstruction,      // 05 Cut & Sew — Seam & Stitch
+  StepConstructionNotes, // 06 Cut & Sew — Construction Notes (skippable)
+  StepSketches,          // 07 Cut & Sew — Detail Sketches
+  StepPattern,           // 08 Cut & Sew — Pattern & Cutting
+  StepPom,               // 09 Cut & Sew — POM
+  StepColor,             // 10 Embellishments
+  StepTreatments,        // 11 Treatments
+  StepCompliance,        // 12 QC
+  StepLabels,            // 13 Packaging
+  StepOrder,             // 14 Logistics
+  StepRevision,          // 15 Sign-off
 ];
 
 // Backwards-compat aliases so older references keep resolving during the

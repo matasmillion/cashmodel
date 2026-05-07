@@ -7,7 +7,7 @@ import { FR } from './techPackConstants';
 
 const PAGE_W = 1123;
 const PAGE_H = 794;
-const TOTAL_PAGES = 15;
+const TOTAL_PAGES = 16;
 
 function esc(s) { return String(s ?? ''); }
 function clampLine(s, maxW, charW = 6.5) {
@@ -527,10 +527,9 @@ function PageColor({ d, images }) {
   );
 }
 
-// ─── Page 6 — Construction Details ───────────────────────────────────────────
+// ─── Page 6 — Seam & Stitch Specifications ──────────────────────────────────
 function PageConstruction({ d }) {
   const seams = (d.seams || []).filter(r => r.operation || r.seamType || r.stitchType || r.threadColor);
-  const notes = (d.constructionNotesTable || []).filter(r => r.area || r.description || r.reference);
 
   const seamCols = [
     { key: 'operation',   label: 'Operation',     w: 180 },
@@ -541,6 +540,21 @@ function PageConstruction({ d }) {
     { key: 'threadType',  label: 'Thread Type',   w: 160 },
     { key: 'notes',       label: 'Notes',         w: 193 },
   ];
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <SectionHeading x={40} y={158}>Seam &amp; Stitch Specification</SectionHeading>
+      <GridTable x={40} y={170} cols={seamCols} rows={seams} bodyRows={12} />
+    </g>
+  );
+}
+
+// ─── Page 7 — Construction Notes ────────────────────────────────────────────
+function PageConstructionNotes({ d }) {
+  const notes = (d.constructionNotesTable || []).filter(r => r.area || r.description || r.reference);
+  const freeForm = (d.constructionNotes || '').trim();
 
   const noteCols = [
     { key: '#',           label: 'Detail #',    w: 70  },
@@ -553,11 +567,15 @@ function PageConstruction({ d }) {
     <g>
       <InfoStrip d={d} />
 
-      <SectionHeading x={40} y={158}>Seam &amp; Stitch Specification</SectionHeading>
-      <GridTable x={40} y={170} cols={seamCols} rows={seams} bodyRows={5} />
+      <SectionHeading x={40} y={158}>Detail Callouts</SectionHeading>
+      <GridTable x={40} y={170} cols={noteCols} rows={notes} bodyRows={8} />
 
-      <SectionHeading x={40} y={338}>Construction Notes</SectionHeading>
-      <GridTable x={40} y={350} cols={noteCols} rows={notes} bodyRows={6} />
+      <SectionHeading x={40} y={400}>Free-Form Notes</SectionHeading>
+      {freeForm ? freeForm.split('\n').slice(0, 18).map((line, i) => (
+        <text key={i} x={40} y={420 + i * 14} fontSize={11} fill={FR.slate} fontFamily="Helvetica, Arial, sans-serif">{line}</text>
+      )) : (
+        <text x={40} y={420} fontSize={11} fill={FR.stone} fontFamily="Helvetica, Arial, sans-serif" fontStyle="italic">No free-form notes.</text>
+      )}
     </g>
   );
 }
@@ -1025,7 +1043,8 @@ const PAGE_FNS = [
   { title: 'Technical Flat Lay Diagrams',       phase: 'Design',         body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
   { title: 'BOM — Fabrics & Trims',             phase: 'Materials',      body: ({ d }) => <PageBOM d={d} /> },
   { title: 'BOM — Labels & Source Files',       phase: 'Materials',      body: ({ d }) => <PageBOMTrims d={d} /> },
-  { title: 'Construction Details',              phase: 'Cut & Sew',      body: ({ d }) => <PageConstruction d={d} /> },
+  { title: 'Seam & Stitch Specifications',      phase: 'Cut & Sew',      body: ({ d }) => <PageConstruction d={d} /> },
+  { title: 'Construction Notes',                phase: 'Cut & Sew',      body: ({ d }) => <PageConstructionNotes d={d} /> },
   { title: 'Construction Detail Sketches',      phase: 'Cut & Sew',      body: ({ d, images }) => <PageSketches d={d} images={images} /> },
   { title: 'Pattern Pieces & Cutting',          phase: 'Cut & Sew',      body: ({ d, images }) => <PagePattern d={d} images={images} /> },
   { title: 'Points of Measure',                 phase: 'Cut & Sew',      body: ({ d, images }) => <PagePom d={d} images={images} /> },

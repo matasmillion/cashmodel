@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T09:08:17.564Z",
+  "lastUpdated": "2026-05-07T09:35:17.101Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "a1b8f5e",
+      "date": "2026-05-07T09:08:43+00:00",
+      "message": "feat(techpack): Phase 1 — split BOM into Fabrics/Trims + Labels/Files pages"
+    },
+    {
       "sha": "d5bafbe",
       "date": "2026-05-07T08:02:39+00:00",
       "message": "techpack: reorder steps by mfg stage + redesign cover preview"
@@ -1087,11 +1092,6 @@
       "sha": "42f29f3",
       "date": "2026-05-06T18:34:34+00:00",
       "message": "feat: Creative Engine Phase 3 — render dispatch"
-    },
-    {
-      "sha": "96be3c9",
-      "date": "2026-05-06T18:16:38+00:00",
-      "message": "feat: knowledge files upload + AI auto-fill"
     }
   ]
 }
