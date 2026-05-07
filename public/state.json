@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T15:22:28.063Z",
+  "lastUpdated": "2026-05-07T17:05:13.998Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,9 +1044,9 @@
   ],
   "changelog": [
     {
-      "sha": "356f311",
-      "date": "2026-05-07T15:21:48+00:00",
-      "message": "techpack: BOM picker fixes — show all components, resolve cover paths, fix typo"
+      "sha": "96b5d7a",
+      "date": "2026-05-07T19:47:35+03:00",
+      "message": "techpack: BOM picker fixes — populate library, resolve cover paths, fix typo (#41)"
     },
     {
       "sha": "b2553ee",

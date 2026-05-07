@@ -644,7 +644,7 @@ export function StepMaterials({ data, set, images, onUpload, onRemove, existingS
   const updateMat = (i, k, v) =>
     set('materials', materials.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
   const addMat = () =>
-    set('materials', [...materials, { name: '', composition: '', weightGauge: '', vendor: '', color: '', finish: '' }]);
+    set('materials', [...materials, { name: '', composition: '', weightGauge: '', vendor: '', color: '', finish: '', length: '', size: '' }]);
   const removeMat = (i) => {
     if (materials.length <= 1) return;
     set('materials', materials.filter((_, idx) => idx !== i));
@@ -683,6 +683,10 @@ export function StepMaterials({ data, set, images, onUpload, onRemove, existingS
                 <FRColorCell value={m.color || ''} onChange={v => updateMat(i, 'color', v)} />
               </div>
               <Select label="Finish" value={m.finish || ''} onChange={v => updateMat(i, 'finish', v)} options={MATERIAL_FINISHES} />
+            </Row>
+            <Row>
+              <Input label="Length" value={m.length || ''} onChange={v => updateMat(i, 'length', v)} placeholder="e.g. 22 cm" />
+              <Input label="Size" value={m.size || ''} onChange={v => updateMat(i, 'size', v)} placeholder="e.g. #5 / 18 mm" />
             </Row>
             <EditableSelect
               label="Vendor"

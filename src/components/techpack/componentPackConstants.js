@@ -59,7 +59,7 @@ const todayISO = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-const emptyMaterial  = () => ({ name: '', composition: '', weightGauge: '', vendor: '', color: '', finish: '' });
+const emptyMaterial  = () => ({ name: '', composition: '', weightGauge: '', vendor: '', color: '', finish: '', length: '', size: '' });
 
 // Cap on cost-tier rows. First row is implicitly the MOQ; volume tiers stack
 // below. Capping prevents the preview table from overflowing the cover page.

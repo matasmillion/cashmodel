@@ -278,40 +278,50 @@ export function StepFabrics({ data, set }) {
 
 const MAX_TRIMS = 6;
 
-function ComponentSlotCard({ entry, fullData, onClear, onChangeRole, roleOptions }) {
-  const cover = fullData?.cover_image || fullData?.data?.cover_image || null;
+// Read the most useful material fields from a Component Pack data row.
+// First material wins (rule of three pattern in ComponentPackBuilder).
+export function readComponentSpec(fullData) {
   const c = fullData?.data || {};
-  const vendor = fullData?.supplier || c.supplier || '—';
-  const color  = c.color || c.colorPantone || '—';
-  const length = c.length || c.lengthCm || c.size || '—';
-  const size   = c.sizeSpec || c.size || '—';
-  const name   = fullData?.component_name || c.component || 'Loading…';
+  const m = (c.materials || [])[0] || {};
+  return {
+    name:   fullData?.component_name || c.componentName || '—',
+    type:   c.componentType || fullData?.component_category || '',
+    cover:  fullData?.cover_image || c.cover_image || null,
+    vendor: m.vendor || c.supplier || fullData?.supplier || '—',
+    color:  m.color || (c.colorwaysList || [])[0]?.frColor || '—',
+    length: m.length || '—',
+    size:   m.size || '—',
+  };
+}
+
+function ComponentSlotCard({ entry, fullData, onClear, onChangeRole, roleOptions }) {
+  const s = readComponentSpec(fullData);
 
   return (
-    <div style={{ background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ aspectRatio: '1 / 1', background: FR.salt, position: 'relative', overflow: 'hidden' }}>
-        {cover ? (
-          <img src={cover} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+    <div style={{ background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 6, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ aspectRatio: '4 / 3', background: FR.salt, position: 'relative', overflow: 'hidden' }}>
+        {s.cover ? (
+          <img src={s.cover} alt={s.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: FR.stone, fontSize: 10, fontStyle: 'italic' }}>No cover image</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: FR.stone, fontSize: 9, fontStyle: 'italic' }}>No cover</div>
         )}
-        <button onClick={onClear} style={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 11, background: FR.slate, color: FR.salt, border: 'none', fontSize: 12, cursor: 'pointer' }}>×</button>
+        <button onClick={onClear} style={{ position: 'absolute', top: 4, right: 4, width: 18, height: 18, borderRadius: 9, background: FR.slate, color: FR.salt, border: 'none', fontSize: 10, cursor: 'pointer', lineHeight: 1 }}>×</button>
       </div>
-      <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 3 }}>
         <select
           value={entry.role || ''}
           onChange={e => onChangeRole(e.target.value)}
-          style={{ background: 'transparent', border: 'none', color: FR.soil, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', cursor: 'pointer', outline: 'none', padding: 0 }}
+          style={{ background: 'transparent', border: 'none', color: FR.soil, fontSize: 8, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', cursor: 'pointer', outline: 'none', padding: 0 }}
         >
           <option value="">— Role —</option>
           {(roleOptions || []).map(r => <option key={r} value={r}>{r}</option>)}
         </select>
-        <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 14, color: FR.slate, lineHeight: 1.2, marginBottom: 4 }}>{name}</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 12px', fontSize: 10, color: FR.stone }}>
-          <div><span style={{ color: FR.soil, fontWeight: 600 }}>Vendor</span><br />{vendor}</div>
-          <div><span style={{ color: FR.soil, fontWeight: 600 }}>Color</span><br />{color}</div>
-          <div><span style={{ color: FR.soil, fontWeight: 600 }}>Length</span><br />{length}</div>
-          <div><span style={{ color: FR.soil, fontWeight: 600 }}>Size</span><br />{size}</div>
+        <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 13, color: FR.slate, lineHeight: 1.15 }}>{s.name}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 8px', fontSize: 9, color: FR.stone, lineHeight: 1.3 }}>
+          <div><span style={{ color: FR.soil, fontWeight: 600 }}>Vendor</span> {s.vendor}</div>
+          <div><span style={{ color: FR.soil, fontWeight: 600 }}>Color</span> {s.color}</div>
+          <div><span style={{ color: FR.soil, fontWeight: 600 }}>Length</span> {s.length}</div>
+          <div><span style={{ color: FR.soil, fontWeight: 600 }}>Size</span> {s.size}</div>
         </div>
       </div>
     </div>
@@ -391,10 +401,28 @@ function ComponentBOMPage({ title, singularNoun, subtitle, fieldName, data, set,
     return () => { cancelled = true; };
   }, [picked.map(p => p?.componentId).join('|')]);
 
-  function addComponent(item) {
+  async function addComponent(item) {
     if (picked.length >= maxSlots) return;
-    const next = [...picked, { componentId: item.id, role: '', notes: '' }];
-    set(fieldName, next);
+    // Pull the full pack so we can auto-populate role from componentType.
+    let role = item.component_category || '';
+    try {
+      const full = await getComponentPack(item.id);
+      if (full?.data?.componentType) role = full.data.componentType;
+      // Cache it for the slot card so it renders immediately.
+      if (full) {
+        const resolvedTop    = await resolveCoverPath(full.cover_image);
+        const resolvedNested = await resolveCoverPath(full?.data?.cover_image);
+        setFullById(prev => ({
+          ...prev,
+          [item.id]: {
+            ...full,
+            cover_image: resolvedTop || full.cover_image,
+            data: { ...(full.data || {}), cover_image: resolvedNested || full?.data?.cover_image },
+          },
+        }));
+      }
+    } catch { /* fall back to category */ }
+    set(fieldName, [...picked, { componentId: item.id, role, notes: '' }]);
     setPickerOpen(false);
   }
 
