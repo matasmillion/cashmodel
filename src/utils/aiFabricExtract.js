@@ -22,11 +22,6 @@ const WEAVE_VOCAB = [
   'poplin', 'oxford', 'rib', 'pique', 'canvas', 'other',
 ];
 
-// Approximate CNY → USD rate. Mills routinely quote in RMB; the user
-// reviews the suggestion before applying so a stale-by-a-few-percent rate
-// is not a correctness issue, only a convenience.
-const CNY_TO_USD = 0.14;
-
 function buildSystemPrompt(knownVendors) {
   const vendorBlock = knownVendors && knownVendors.length
     ? `\n\nKNOWN VENDORS (existing in our library):\n${knownVendors.map(n => `- ${n}`).join('\n')}\n\nIf the mill on the card matches one of these (even partially — e.g. "Jufeng Textile", "Jufeng Cloth Industry", "Jufeng Mill" all refer to the same Jufeng), output the EXACT name from the list above in mill_id. Only invent a new mill_id if no entry above plausibly matches.`
@@ -51,6 +46,9 @@ Return ONLY a single JSON object (no markdown fences, no prose) with this shape:
   "lead_time_days": number | null,
   "moq_meters": number | null,
   "price_per_meter_usd": number | null,
+  "price_per_meter_cny": number | null,
+  "price_per_kg_usd": number | null,
+  "price_per_kg_cny": number | null,
   "colors": [ { "label": string, "hex": string | null } ],
   "notes": string | null
 }
@@ -65,8 +63,8 @@ Rules:
 - All numeric fields must be plain numbers (no units).
 - Units are METRIC. moq_meters is in meters; price_per_meter_usd is USD per meter.
 - Pricing and MOQ are often buried in free-form notes / footers / margin scrawl rather than a labeled field. SCAN the entire card (including handwritten notes, footnotes, "备注", "价格", "起订量") for these.
-  · Convert RMB/CNY/¥ per meter to USD per meter using ~${CNY_TO_USD} USD/CNY (e.g. "37.5 RMB/m" → 37.5 × ${CNY_TO_USD} = ${(37.5 * CNY_TO_USD).toFixed(2)}).
-  · If a price is given per kg ("RMB/kg"), use the per-meter price if also stated; do NOT guess a per-meter price from per-kg alone.
+  · Capture each price exactly as it appears on the card: if you see "37.5 RMB/m", set price_per_meter_cny = 37.5; if you see "55.12 RMB/kg", set price_per_kg_cny = 55.12; if you see "$5.20/m", set price_per_meter_usd = 5.20. Do NOT convert currencies — the client handles USD ↔ RMB conversion with a live FX rate.
+  · price_per_meter and price_per_kg are independent quotes from the mill. Fill in only the ones actually shown; leave the others null. Never derive one unit from the other.
   · MOQ may appear as "起订量 1000m", "MOQ 1000m", "min order 1000m" — capture the numeric value as moq_meters.
 - Honor any instructions from the user message. If the user says they only want certain fields (e.g. "just add these new colors, leave everything else alone"), return null for every field they didn't ask about — the apply step skips null fields, so this leaves the existing draft untouched.${vendorBlock}`;
 }

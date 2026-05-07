@@ -13,6 +13,7 @@ import { FR } from './techPackConstants';
 import { extractFabricFromMedia, fileToMedia } from '../../utils/aiFabricExtract';
 import { categoryForWeave, FABRIC_WEAVES } from '../../utils/fabricLibrary';
 import { listVendors } from '../../utils/vendorLibrary';
+import { getUsdCnyRate, cnyToUsd, usdToCny } from '../../utils/fxRates';
 
 const VALID_WEAVES = new Set(FABRIC_WEAVES.map(w => w.id));
 
@@ -115,13 +116,16 @@ export default function FabricAIExtract({ onClose, onApply }) {
     }
   };
 
-  const apply = () => {
+  const apply = async () => {
     if (!result) return;
     const patch = {};
     const fields = [
       'name', 'mill_fabric_no', 'category', 'weave', 'composition',
       'weight_gsm', 'width_cm', 'shrinkage_pct', 'stretch_pct',
-      'hand', 'mill_id', 'lead_time_days', 'moq_meters', 'price_per_meter_usd', 'notes',
+      'hand', 'mill_id', 'lead_time_days', 'moq_meters',
+      'price_per_meter_usd', 'price_per_meter_cny',
+      'price_per_kg_usd',    'price_per_kg_cny',
+      'notes',
     ];
     fields.forEach(k => {
       if (result[k] != null && result[k] !== '') patch[k] = result[k];
@@ -130,6 +134,29 @@ export default function FabricAIExtract({ onClose, onApply }) {
     // back to it whenever the model didn't extract a separate name.
     if ((!patch.name || !String(patch.name).trim()) && patch.mill_fabric_no) {
       patch.name = patch.mill_fabric_no;
+    }
+    // The model is told to capture each price exactly as the card shows
+    // it (RMB/m, RMB/kg, USD/m, …) without converting. Fill in the
+    // missing side of each pair using the live FX rate so the builder
+    // shows both currencies even if only one was on the card.
+    try {
+      const fx = await getUsdCnyRate();
+      if (fx?.usdPerCny) {
+        if (patch.price_per_meter_cny != null && patch.price_per_meter_usd == null) {
+          patch.price_per_meter_usd = cnyToUsd(patch.price_per_meter_cny, fx.usdPerCny);
+        }
+        if (patch.price_per_meter_usd != null && patch.price_per_meter_cny == null) {
+          patch.price_per_meter_cny = usdToCny(patch.price_per_meter_usd, fx.usdPerCny);
+        }
+        if (patch.price_per_kg_cny != null && patch.price_per_kg_usd == null) {
+          patch.price_per_kg_usd = cnyToUsd(patch.price_per_kg_cny, fx.usdPerCny);
+        }
+        if (patch.price_per_kg_usd != null && patch.price_per_kg_cny == null) {
+          patch.price_per_kg_cny = usdToCny(patch.price_per_kg_usd, fx.usdPerCny);
+        }
+      }
+    } catch (err) {
+      console.error('FabricAIExtract FX backfill:', err);
     }
     if (Array.isArray(result.colors) && result.colors.length) {
       patch.color_card_images = result.colors.map(c => ({
@@ -243,7 +270,10 @@ export default function FabricAIExtract({ onClose, onApply }) {
               )}
               <Row label="Lead time"      value={result.lead_time_days} suffix=" days" />
               <Row label="MOQ"            value={result.moq_meters} suffix=" m" />
-              <Row label="Price"          value={result.price_per_meter_usd ? `$${Number(result.price_per_meter_usd).toFixed(2)} / m` : null} />
+              <Row label="Price / m (USD)" value={result.price_per_meter_usd != null ? `$${Number(result.price_per_meter_usd).toFixed(2)}` : null} />
+              <Row label="Price / m (RMB)" value={result.price_per_meter_cny != null ? `¥${Number(result.price_per_meter_cny).toFixed(2)}` : null} />
+              <Row label="Price / kg (USD)" value={result.price_per_kg_usd != null ? `$${Number(result.price_per_kg_usd).toFixed(2)}` : null} />
+              <Row label="Price / kg (RMB)" value={result.price_per_kg_cny != null ? `¥${Number(result.price_per_kg_cny).toFixed(2)}` : null} />
               <Row label="Notes"          value={result.notes} />
               {Array.isArray(result.colors) && result.colors.length > 0 && (
                 <div style={{ marginTop: 10 }}>
