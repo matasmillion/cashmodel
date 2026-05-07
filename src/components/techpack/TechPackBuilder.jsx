@@ -196,6 +196,71 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     return () => { cancelled = true; };
   }, []);
 
+  // Resolve picked Component Pack rows for the BOM live preview pages —
+  // covers, vendor, color, length, size all come from the library, not from
+  // the pack's own data. Keyed by component pack id.
+  const [componentsById, setComponentsById] = useState({});
+  const componentIdKey = [
+    ...(data.pickedTrims || []).map(p => p?.componentId || ''),
+    ...(data.pickedPackaging || []).map(p => p?.componentId || ''),
+  ].filter(Boolean).join('|');
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ids = componentIdKey.split('|').filter(Boolean);
+      if (!ids.length) return;
+      const { getComponentPack } = await import('../../utils/componentPackStore');
+      const { getAssetUrl } = await import('../../utils/plmAssets');
+      const next = {};
+      for (const id of ids) {
+        if (componentsById[id]) { next[id] = componentsById[id]; continue; }
+        const row = await getComponentPack(id);
+        if (cancelled) return;
+        if (!row) continue;
+        // Resolve cover paths to signed URLs so <image href> works in SVG.
+        const resolveCover = async (v) => {
+          if (!v || typeof v !== 'string') return null;
+          if (/^(https?:|data:|blob:)/.test(v)) return v;
+          try { return await getAssetUrl(v); } catch { return null; }
+        };
+        const top = await resolveCover(row.cover_image);
+        const nested = await resolveCover(row?.data?.cover_image);
+        next[id] = {
+          ...row,
+          cover_image: top || row.cover_image,
+          data: { ...(row.data || {}), cover_image: nested || row?.data?.cover_image },
+        };
+      }
+      if (!cancelled) setComponentsById(next);
+    })();
+    return () => { cancelled = true; };
+  }, [componentIdKey]);
+
+  // Same idea for picked fabrics — fabric library row + resolved cover.
+  const [fabricsById, setFabricsById] = useState({});
+  const fabricIdKey = (data.pickedFabrics || []).map(p => p?.fabricId || '').filter(Boolean).join('|');
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ids = fabricIdKey.split('|').filter(Boolean);
+      if (!ids.length) return;
+      const { getFabric } = await import('../../utils/fabricStore');
+      const { getAssetUrl } = await import('../../utils/plmAssets');
+      const next = {};
+      for (const id of ids) {
+        if (fabricsById[id]) { next[id] = fabricsById[id]; continue; }
+        const row = await getFabric(id);
+        if (cancelled) return;
+        if (!row) continue;
+        const cover = row.cover_image && !/^(https?:|data:|blob:)/.test(row.cover_image)
+          ? await getAssetUrl(row.cover_image).catch(() => null) : row.cover_image;
+        next[id] = { ...row, cover_image: cover || row.cover_image };
+      }
+      if (!cancelled) setFabricsById(next);
+    })();
+    return () => { cancelled = true; };
+  }, [fabricIdKey]);
+
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -705,7 +770,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
             <div style={{ fontSize: 9, color: FR.stone, letterSpacing: 2, fontWeight: 600, textTransform: 'uppercase' }}>Live Preview</div>
             <div style={{ fontSize: 9, color: FR.stone }}>Page {step + 1} / {STEPS.length}</div>
           </div>
-          <TechPackPagePreview data={data} images={previewImages} step={step} skippedSteps={skippedSteps} treatmentsById={treatmentsById} />
+          <TechPackPagePreview data={data} images={previewImages} step={step} skippedSteps={skippedSteps} treatmentsById={treatmentsById} componentsById={componentsById} fabricsById={fabricsById} />
         </div>
       </div>
     </div>
