@@ -38,7 +38,13 @@ async function callProxy(name, body) {
   const text = await res.text();
   let data;
   try { data = JSON.parse(text); } catch { data = { raw: text }; }
-  if (!res.ok) throw new Error(data.error || `${name} returned ${res.status}`);
+  if (!res.ok) {
+    // Anthropic / fal errors return { error: { type, message } } — flatten to a string
+    const e = data.error;
+    const msg = typeof e === 'string' ? e
+      : (e?.message || e?.type || JSON.stringify(e) || `${name} returned ${res.status}`);
+    throw new Error(msg);
+  }
   return data;
 }
 
@@ -105,15 +111,14 @@ export async function generateGarmentView(description, view, onStatus) {
 
   onStatus?.('submitting');
 
+  // Nano Banana takes a minimal input schema — no FLUX-style sampling params.
   const submitted = await callProxy('fal-proxy', {
     endpoint: NB2_ENDPOINT,
     payload: {
       prompt,
-      image_size: { width: 896, height: 1344 },
-      num_inference_steps: 28,
-      guidance_scale: 3.5,
       num_images: 1,
-      enable_safety_checker: false,
+      output_format: 'jpeg',
+      aspect_ratio: '2:3',
     },
   });
 

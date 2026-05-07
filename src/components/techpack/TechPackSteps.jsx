@@ -376,48 +376,105 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
 const VIEW_LABELS = { front: 'Front View', back: 'Back View', side: 'Side View' };
 const VIEWS = ['front', 'back', 'side'];
 
+function ProgressBar({ pct }) {
+  const value = Math.max(0, Math.min(100, pct || 0));
+  return (
+    <div style={{ width: '100%', height: 4, background: FR.sand, borderRadius: 2, overflow: 'hidden' }}>
+      <div style={{
+        width: `${value}%`,
+        height: '100%',
+        background: FR.slate,
+        transition: 'width 0.25s linear',
+      }} />
+    </div>
+  );
+}
+
+// Smooth progress simulation. NB2 jobs typically finish in 25–60s; this
+// fills 0 → 95% over EXPECTED_MS, then sticks at 95 until the real result
+// returns and we jump to 100. Any leftover variance reads as "almost done"
+// rather than "stuck".
+const EXPECTED_GEN_MS = 35000;
+const TICK_MS = 250;
+
 function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
   const [phase, setPhase]       = useState('analyzing'); // analyzing | generating | done | error
+  const [analyzeProg, setAnalyzeProg] = useState(0); // 0..100 during analyzing
   const [description, setDesc]  = useState('');
   const [views, setViews]       = useState({ front: null, back: null, side: null });
   const [vstatus, setVstatus]   = useState({ front: 'pending', back: 'pending', side: 'pending' });
+  const [vprog, setVprog]       = useState({ front: 0, back: 0, side: 0 });
+  const [verrors, setVerrors]   = useState({ front: '', back: '', side: '' });
   const [errMsg, setErrMsg]     = useState('');
 
   useEffect(() => { startAll(); }, []);
+
+  function toMsg(e) {
+    return (typeof e?.message === 'string' ? e.message : String(e)) || 'Unknown error';
+  }
+
+  // Returns a cleanup fn that stops the progress simulation for `view`.
+  function startProgressSim(view) {
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const pct = Math.min(95, (elapsed / EXPECTED_GEN_MS) * 100);
+      setVprog(p => ({ ...p, [view]: pct }));
+    }, TICK_MS);
+    return () => clearInterval(timer);
+  }
+
+  async function runOneView(view, desc) {
+    setVstatus(vs => ({ ...vs, [view]: 'loading' }));
+    setVprog(p => ({ ...p, [view]: 0 }));
+    setVerrors(ve => ({ ...ve, [view]: '' }));
+    const stopSim = startProgressSim(view);
+    try {
+      const url = await generateGarmentView(desc, view);
+      stopSim();
+      setVprog(p => ({ ...p, [view]: 100 }));
+      setViews(vs => ({ ...vs, [view]: url }));
+      setVstatus(vs => ({ ...vs, [view]: 'done' }));
+    } catch (e) {
+      stopSim();
+      console.error(`[techpack-views] ${view} failed:`, e);
+      setVprog(p => ({ ...p, [view]: 0 }));
+      setVstatus(vs => ({ ...vs, [view]: 'error' }));
+      setVerrors(ve => ({ ...ve, [view]: toMsg(e) }));
+    }
+  }
 
   async function startAll(viewsToRun = VIEWS, existingDesc = null) {
     try {
       let desc = existingDesc;
       if (!desc) {
         setPhase('analyzing');
-        const dataUrl = await imageEntryToDataUrl(srcEntry);
-        if (!dataUrl) throw new Error('Could not read source image');
-        const mime = dataUrl.match(/^data:([^;]+);/)?.[1] || 'image/jpeg';
-        const b64  = dataUrl.replace(/^data:[^;]+;base64,/, '');
-        desc = await analyzeGarmentImage(b64, mime);
-        setDesc(desc);
+        // Fake progress for the analyze step — Claude vision usually 4–10s
+        const startA = Date.now();
+        const aTimer = setInterval(() => {
+          const pct = Math.min(95, ((Date.now() - startA) / 8000) * 100);
+          setAnalyzeProg(pct);
+        }, TICK_MS);
+
+        try {
+          const dataUrl = await imageEntryToDataUrl(srcEntry);
+          if (!dataUrl) throw new Error('Could not read source image');
+          const mime = dataUrl.match(/^data:([^;]+);/)?.[1] || 'image/jpeg';
+          const b64  = dataUrl.replace(/^data:[^;]+;base64,/, '');
+          desc = await analyzeGarmentImage(b64, mime);
+          setDesc(desc);
+          setAnalyzeProg(100);
+        } finally {
+          clearInterval(aTimer);
+        }
       }
 
       setPhase('generating');
-      setVstatus(vs => {
-        const next = { ...vs };
-        viewsToRun.forEach(v => { next[v] = 'loading'; });
-        return next;
-      });
-
-      await Promise.all(viewsToRun.map(async view => {
-        try {
-          const url = await generateGarmentView(desc, view);
-          setViews(vs => ({ ...vs, [view]: url }));
-          setVstatus(vs => ({ ...vs, [view]: 'done' }));
-        } catch {
-          setVstatus(vs => ({ ...vs, [view]: 'error' }));
-        }
-      }));
-
+      await Promise.all(viewsToRun.map(view => runOneView(view, desc)));
       setPhase('done');
     } catch (e) {
-      setErrMsg(e.message || 'Generation failed');
+      console.error('[techpack-views] analyze failed:', e);
+      setErrMsg(toMsg(e));
       setPhase('error');
     }
   }
@@ -425,14 +482,7 @@ function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
   async function regenView(view) {
     if (!description) return;
     setViews(vs => ({ ...vs, [view]: null }));
-    setVstatus(vs => ({ ...vs, [view]: 'loading' }));
-    try {
-      const url = await generateGarmentView(description, view);
-      setViews(vs => ({ ...vs, [view]: url }));
-      setVstatus(vs => ({ ...vs, [view]: 'done' }));
-    } catch {
-      setVstatus(vs => ({ ...vs, [view]: 'error' }));
-    }
+    await runOneView(view, description);
   }
 
   async function handleAccept() {
@@ -470,10 +520,13 @@ function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: FR.stone, lineHeight: 1, padding: 0 }}>×</button>
         </div>
 
-        {/* Status bar */}
-        {(phase === 'analyzing' || (phase === 'generating' && anyLoading)) && (
-          <div style={{ fontSize: 12, color: FR.stone, marginBottom: 18, fontStyle: 'italic' }}>
-            {phase === 'analyzing' ? 'Analyzing garment with Claude Vision…' : 'Generating views with Nano Banana 2…'}
+        {/* Analyzing phase — single progress bar across the modal */}
+        {phase === 'analyzing' && (
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ fontSize: 12, color: FR.stone, marginBottom: 8, fontStyle: 'italic' }}>
+              Analyzing garment with Claude Vision…
+            </div>
+            <ProgressBar pct={analyzeProg} />
           </div>
         )}
 
@@ -492,12 +545,18 @@ function GenerateViewsModal({ srcEntry, onAccept, onClose }) {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  position: 'relative',
                 }}>
                   {vstatus[view] === 'loading' && (
-                    <div style={{ fontSize: 11, color: FR.stone }}>Generating…</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '0 12px', width: '100%' }}>
+                      <div style={{ fontSize: 11, color: FR.stone }}>Generating… {Math.round(vprog[view])}%</div>
+                      <ProgressBar pct={vprog[view]} />
+                    </div>
                   )}
                   {vstatus[view] === 'error' && (
-                    <div style={{ fontSize: 11, color: '#A32D2D' }}>Failed</div>
+                    <div style={{ fontSize: 10, color: '#A32D2D', padding: '0 10px', textAlign: 'center', lineHeight: 1.4, wordBreak: 'break-word' }}>
+                      {verrors[view] || 'Failed'}
+                    </div>
                   )}
                   {views[view] && (
                     <img src={views[view]} alt={VIEW_LABELS[view]} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
