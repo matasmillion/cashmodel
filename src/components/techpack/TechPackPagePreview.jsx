@@ -516,7 +516,7 @@ function PageFabrics({ d, fabricsById = {} }) {
                 )}
                 <text x={x + 16} y={cy}
                   fontSize={9} fontWeight={600} fill={FR.soil} letterSpacing={1}>
-                  {(entry.role || `Fabric ${i + 1}`).toUpperCase()}
+                  AREA OF PRODUCT: {(entry.role || `Fabric ${i + 1}`).toUpperCase()}
                 </text>
                 <text x={x + 16} y={cy + 22}
                   fontSize={16} fill={FR.slate} fontFamily="'Cormorant Garamond', Georgia, serif">

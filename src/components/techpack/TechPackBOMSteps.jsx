@@ -200,13 +200,11 @@ function fabricSpec(row) {
     parseFloat(d?.costPerMeter) || 0;
   const weightGsm = row?.weight_gsm || d?.weight_gsm;
   return {
-    name:        row?.code || d.name || row?.name || 'Untitled fabric',
+    name:        row?.name || d.name || row?.mill_fabric_no || 'Untitled fabric',
     composition: row?.composition || d?.composition || '—',
     weight:      weightGsm ? `${weightGsm} GSM` : '—',
     weave:       row?.weave || d?.weave || '—',
     millId:      row?.mill_id || d?.mill_id || d?.supplier || row?.supplier || row?.mill || '',
-    // Cover prefers explicit cover_image, falls back to front_image_url
-    // (the canonical hero swatch in fabricLibrary.emptyFabric()).
     cover:       row?.cover_image || row?.front_image_url || d?.cover_image || d?.front_image_url || null,
     colors:      row?.color_card_images || d?.color_card_images || [],
     unitCost,
@@ -371,7 +369,8 @@ export function StepFabrics({ data, set }) {
                 <button onClick={() => setSlot(i, null)} style={{ position: 'absolute', top: 8, right: 8, width: 22, height: 22, borderRadius: 11, background: FR.slate, color: FR.salt, border: 'none', fontSize: 12, cursor: 'pointer' }}>×</button>
               </div>
               <div style={{ padding: 12 }}>
-                <div style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4 }}>
+                <div style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span>Area of product:</span>
                   <select
                     value={entry.role || ''}
                     onChange={e => setSlot(i, { ...entry, role: e.target.value })}
