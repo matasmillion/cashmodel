@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T12:49:00.784Z",
+  "lastUpdated": "2026-05-07T13:05:05.728Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "8ba73d8",
+      "date": "2026-05-07T15:57:10+03:00",
+      "message": "techpack: AI view generation — skill engine + ghost mannequin + per-view refs (#34)"
+    },
+    {
       "sha": "9e6daf3",
       "date": "2026-05-07T15:41:46+03:00",
       "message": "techpack: fetch fal response_url + indeterminate loading bar (#33)"
@@ -1087,11 +1092,6 @@
       "sha": "22b45ae",
       "date": "2026-05-07T14:05:15+03:00",
       "message": "feat(techpack): Phase 6 — Treatments deepening (#26)"
-    },
-    {
-      "sha": "8817002",
-      "date": "2026-05-07T13:57:22+03:00",
-      "message": "Tech Pack Phases 4+5: Color/Artwork split + Compliance/QC split (#25)"
     }
   ]
 }
