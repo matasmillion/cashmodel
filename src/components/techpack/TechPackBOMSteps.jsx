@@ -20,6 +20,25 @@ import { getAssetUrl } from '../../utils/plmAssets';
 // `?v=…` so the browser's HTTP cache busts whenever the underlying row
 // changes — this is what stops stale cover images sticking around after
 // the user updates a fabric / component in the library.
+// Returns a counter that bumps every time the window regains focus or
+// this tab becomes visible. Use it as a useEffect dep to force a
+// re-fetch when the user comes back from editing the library in another
+// tab — without it, the picker keeps showing yesterday's data.
+function useFocusRefresh() {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const onFocus = () => setTick(t => t + 1);
+    const onVis   = () => { if (!document.hidden) setTick(t => t + 1); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, []);
+  return tick;
+}
+
 async function resolveCoverPath(value, version) {
   if (!value) return null;
   if (typeof value !== 'string') return null;
@@ -110,6 +129,50 @@ function LibraryPickerModal({ title, subtitle, fetchItems, renderItem, getId, on
   );
 }
 
+// Color picker shown after a fabric is selected. Each color_card_images
+// entry on the fabric is rendered as a clickable swatch — pick one to
+// commit the fabric + color, or skip to commit without a colorway.
+function FabricColorPickerModal({ fabric, onSelect, onSkip, onClose }) {
+  const colors = fabric?.color_card_images || [];
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(58,58,58,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+      <div style={{ background: FR.salt, borderRadius: 8, padding: 22, width: 720, maxWidth: '94vw', maxHeight: '88vh', overflowY: 'auto', border: `0.5px solid rgba(58,58,58,0.15)` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 22, color: FR.slate }}>Pick a Colorway</div>
+            <div style={{ fontSize: 11, color: FR.stone, marginTop: 4 }}>{colors.length} color{colors.length === 1 ? '' : 's'} on this fabric.</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: FR.stone, lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
+          {colors.map((c, i) => (
+            <button
+              key={i}
+              onClick={() => onSelect(i, c)}
+              style={{ background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 6, padding: 0, cursor: 'pointer', overflow: 'hidden', textAlign: 'left' }}
+              onMouseOver={e => { e.currentTarget.style.borderColor = FR.soil; }}
+              onMouseOut={e => { e.currentTarget.style.borderColor = FR.sand; }}
+            >
+              <div style={{ aspectRatio: '1 / 1', background: c.hex || FR.salt, overflow: 'hidden' }}>
+                {c.url && <img src={c.url} alt={c.label || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+              </div>
+              <div style={{ padding: '6px 8px' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: FR.slate }}>{c.label || `Color ${i + 1}`}</div>
+                {c.hex && <div style={{ fontSize: 9, color: FR.stone, fontFamily: 'ui-monospace,Menlo,monospace' }}>{c.hex}</div>}
+              </div>
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
+          <button onClick={onSkip} style={{ padding: '7px 14px', background: 'none', border: `0.5px solid ${FR.sand}`, borderRadius: 6, cursor: 'pointer', fontSize: 11, color: FR.stone }}>
+            Skip — no colorway yet
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function specOf(componentRow) {
@@ -127,9 +190,6 @@ function specOf(componentRow) {
 function fabricSpec(row) {
   const d = row?.data || row?.fabric_data || row || {};
   const tier = (d?.costTiers || [])[0];
-  // fabricStore canonical cost field is price_per_meter_usd; fall back
-  // through every other shape we've shipped in case older rows are still
-  // using costTiers / costPerYard / etc.
   const unitCost =
     parseFloat(row?.price_per_meter_usd) ||
     parseFloat(d?.price_per_meter_usd) ||
@@ -138,13 +198,17 @@ function fabricSpec(row) {
     parseFloat(d?.cost_per_unit) ||
     parseFloat(d?.costPerYard) ||
     parseFloat(d?.costPerMeter) || 0;
+  const weightGsm = row?.weight_gsm || d?.weight_gsm;
   return {
-    name:        d.name || row?.name || 'Untitled fabric',
-    composition: d.composition || '—',
-    weight:      d.weight_gsm ? `${d.weight_gsm} GSM` : '—',
-    weave:       d.weave || row?.weave || '—',
-    vendor:      d.supplier || row?.supplier || '—',
-    cover:       d.cover_image || row?.cover_image || null,
+    name:        row?.code || d.name || row?.name || 'Untitled fabric',
+    composition: row?.composition || d?.composition || '—',
+    weight:      weightGsm ? `${weightGsm} GSM` : '—',
+    weave:       row?.weave || d?.weave || '—',
+    millId:      row?.mill_id || d?.mill_id || d?.supplier || row?.supplier || row?.mill || '',
+    // Cover prefers explicit cover_image, falls back to front_image_url
+    // (the canonical hero swatch in fabricLibrary.emptyFabric()).
+    cover:       row?.cover_image || row?.front_image_url || d?.cover_image || d?.front_image_url || null,
+    colors:      row?.color_card_images || d?.color_card_images || [],
     unitCost,
     currency:    d.currency || tier?.currency || 'USD',
   };
@@ -189,6 +253,7 @@ const FABRIC_ROLES = ['Body', 'Lining', 'Rib / Trim', 'Other'];
 export function StepFabrics({ data, set }) {
   const [pickerSlot, setPickerSlot] = useState(null); // 0..2 | null
   const [resolved, setResolved] = useState({}); // fabricId -> spec
+  const refreshTick = useFocusRefresh();
 
   const picked = data.pickedFabrics || [];
   const slots = [0, 1, 2]; // up to 3 fabrics
@@ -198,12 +263,18 @@ export function StepFabrics({ data, set }) {
   // have edited the fabric in the library and we want those edits to
   // show up immediately. The cache buster on resolveCoverPath forces a
   // fresh image load whenever the row's updated_at moves.
+  // After fabric is picked, optionally show a color-card picker
+  // (only if the fabric has color_card_images on it). Stores the
+  // pending fabric until the user makes a color choice or skips.
+  const [colorPickFor, setColorPickFor] = useState(null); // { fabric, slot } | null
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const ids = picked.map(p => p?.fabricId).filter(Boolean);
       if (!ids.length) { setResolved({}); return; }
       const { getFabric } = await import('../../utils/fabricStore');
+      const { getVendor } = await import('../../utils/vendorLibrary');
       const next = {};
       for (const id of ids) {
         const row = await getFabric(id);
@@ -211,12 +282,30 @@ export function StepFabrics({ data, set }) {
         if (!row) continue;
         const spec = fabricSpec(row);
         spec.cover = await resolveCoverPath(spec.cover, row.updated_at);
+        // Resolve every color card image (Storage paths become signed URLs).
+        spec.colors = await Promise.all((spec.colors || []).map(async c => ({
+          ...c,
+          url: await resolveCoverPath(c.url, row.updated_at) || c.url,
+        })));
+        // Pull vendor contact info (email, phone, primary contact) from
+        // the vendor library so the BOM card can show "who to call".
+        if (spec.millId) {
+          const v = getVendor(spec.millId);
+          spec.vendor = {
+            name:    spec.millId,
+            email:   v?.email || '',
+            phone:   v?.phone || '',
+            contact: v?.primary_contact || '',
+          };
+        } else {
+          spec.vendor = { name: '—', email: '', phone: '', contact: '' };
+        }
         next[id] = spec;
       }
       if (!cancelled) setResolved(next);
     })();
     return () => { cancelled = true; };
-  }, [picked.map(p => p?.fabricId).join('|')]);
+  }, [picked.map(p => p?.fabricId).join('|'), refreshTick]);
 
   function setSlot(i, next) {
     const arr = [...(picked || [])];
@@ -225,9 +314,29 @@ export function StepFabrics({ data, set }) {
     set('pickedFabrics', arr.filter(Boolean));
   }
 
-  function pickFabric(item) {
-    setSlot(pickerSlot, { fabricId: item.id, role: picked[pickerSlot]?.role || FABRIC_ROLES[pickerSlot] || '', notes: '' });
+  async function pickFabric(item) {
+    const slotIdx = pickerSlot;
     setPickerSlot(null);
+    // If the fabric has color cards, prompt for which colorway. Otherwise
+    // commit immediately with no color.
+    const colors = item.color_card_images || [];
+    if (colors.length > 0) {
+      setColorPickFor({ fabric: item, slot: slotIdx });
+    } else {
+      commitFabric(slotIdx, item, null);
+    }
+  }
+
+  function commitFabric(slotIdx, item, colorChoice) {
+    setSlot(slotIdx, {
+      fabricId:   item.id,
+      role:       picked[slotIdx]?.role || FABRIC_ROLES[slotIdx] || '',
+      notes:      '',
+      colorIndex: colorChoice?.index ?? null,
+      colorLabel: colorChoice?.label || '',
+      colorHex:   colorChoice?.hex || '',
+      colorUrl:   colorChoice?.url || '',
+    });
   }
 
   const fabricsSubtotal = picked.reduce((sum, p) => sum + (resolved[p?.fabricId]?.unitCost || 0), 0);
@@ -274,13 +383,39 @@ export function StepFabrics({ data, set }) {
                 <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 16, color: FR.slate, lineHeight: 1.2, marginBottom: 8 }}>
                   {spec?.name || 'Loading…'}
                 </div>
+                {/* Selected colorway badge */}
+                {entry.colorLabel && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    {entry.colorUrl ? (
+                      <img src={entry.colorUrl} alt={entry.colorLabel} style={{ width: 28, height: 28, borderRadius: 4, objectFit: 'cover', border: `0.5px solid ${FR.sand}` }} />
+                    ) : (
+                      <span style={{ width: 28, height: 28, borderRadius: 4, background: entry.colorHex || FR.salt, border: `0.5px solid ${FR.sand}`, display: 'inline-block' }} />
+                    )}
+                    <span style={{ fontSize: 11, color: FR.slate, fontWeight: 500 }}>{entry.colorLabel}</span>
+                    <button
+                      onClick={() => setColorPickFor({ fabric: { id: entry.fabricId, color_card_images: spec?.colors || [] }, slot: i })}
+                      style={{ marginLeft: 'auto', fontSize: 9, color: FR.soil, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                    >Change</button>
+                  </div>
+                )}
+                {!entry.colorLabel && spec?.colors?.length > 0 && (
+                  <button
+                    onClick={() => setColorPickFor({ fabric: { id: entry.fabricId, color_card_images: spec.colors }, slot: i })}
+                    style={{ marginBottom: 8, fontSize: 10, color: FR.soil, background: FR.salt, border: `0.5px dashed ${FR.sand}`, borderRadius: 4, padding: '4px 8px', cursor: 'pointer', width: '100%' }}
+                  >+ Pick colorway ({spec.colors.length} available)</button>
+                )}
                 <div style={{ fontSize: 11, color: FR.stone, lineHeight: 1.5, marginBottom: 8 }}>
                   <div>{spec?.composition || '—'}</div>
                   <div>{spec?.weight} · {spec?.weave}</div>
-                  <div>Vendor: {spec?.vendor || '—'}</div>
+                  <div style={{ marginTop: 4, paddingTop: 4, borderTop: `0.5px solid ${FR.sand}` }}>
+                    <div style={{ fontWeight: 600, color: FR.slate }}>{spec?.vendor?.name || '—'}</div>
+                    {spec?.vendor?.contact && <div>{spec.vendor.contact}</div>}
+                    {spec?.vendor?.email && <div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 10 }}>{spec.vendor.email}</div>}
+                    {spec?.vendor?.phone && <div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 10 }}>{spec.vendor.phone}</div>}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6, paddingTop: 6, borderTop: `0.5px solid ${FR.sand}`, fontFamily: "ui-monospace, Menlo, monospace" }}>
-                  <span style={{ fontSize: 10, color: FR.stone }}>Cost / unit</span>
+                  <span style={{ fontSize: 10, color: FR.stone }}>Cost / m</span>
                   <span style={{ fontSize: 12, fontWeight: 700, color: FR.slate }}>{formatMoney(spec?.unitCost || 0, spec?.currency)}</span>
                 </div>
               </div>
@@ -311,6 +446,20 @@ export function StepFabrics({ data, set }) {
           }}
           onSelect={pickFabric}
           onClose={() => setPickerSlot(null)}
+        />
+      )}
+      {colorPickFor && (
+        <FabricColorPickerModal
+          fabric={colorPickFor.fabric}
+          onSelect={(idx, color) => {
+            commitFabric(colorPickFor.slot, colorPickFor.fabric, { index: idx, ...color });
+            setColorPickFor(null);
+          }}
+          onSkip={() => {
+            commitFabric(colorPickFor.slot, colorPickFor.fabric, null);
+            setColorPickFor(null);
+          }}
+          onClose={() => setColorPickFor(null)}
         />
       )}
     </div>
@@ -469,6 +618,7 @@ export function StepPackaging({ data, set, packId }) {
 function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, fieldName, data, set, pickerSubtitle, maxSlots }) {
   const noun = singularNoun || title.replace(/s$/, '');
   const [pickerOpen, setPickerOpen] = useState(false);
+  const refreshTick = useFocusRefresh();
   const [fullById, setFullById] = useState({});
 
   const picked = data?.[fieldName] || [];
@@ -513,7 +663,7 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
       if (!cancelled) setFullById(next);
     })();
     return () => { cancelled = true; };
-  }, [picked.map(p => p?.componentId).join('|')]);
+  }, [picked.map(p => p?.componentId).join('|'), refreshTick]);
 
   async function addComponent(item) {
     if (picked.length >= maxSlots) return;
