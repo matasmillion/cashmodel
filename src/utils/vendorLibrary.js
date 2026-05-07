@@ -92,6 +92,7 @@ function syncVendorToCloud(name, entry) {
       capabilities: entry.capabilities || [],
       payment_terms: entry.payment_terms || '',
       rating: Number(entry.rating) || 0,
+      sam_rate_usd_per_min: Number(entry.samRateUsdPerMin) || 0,
     }, { onConflict: 'organization_id,name' })
     .then(({ error }) => { if (error) console.error('vendorLibrary sync:', error); });
   });
@@ -126,6 +127,12 @@ const emptyEntry = (name) => ({
   lead_time_days: 0,
   payment_terms: '',
   rating: 0,
+  // Fully-loaded SAM (Standard Allowed Minute) billing rate the factory
+  // charges for cut & sew, in USD per minute. Optional — only set on
+  // vendors that are cut & sew manufacturers. The AI labor cost
+  // estimator uses this rate × estimated SAM minutes when present, and
+  // falls back to regional CMT benchmarks when blank.
+  samRateUsdPerMin: '',
 });
 
 // Synchronous snapshot of every library record. VendorManager shows these
