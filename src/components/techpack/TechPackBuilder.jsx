@@ -225,10 +225,20 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
         };
         const top = await resolveCover(row.cover_image);
         const nested = await resolveCover(row?.data?.cover_image);
+        // Pull the Construction measurement diagram from the pack's
+        // images[]. That's the factory-facing image — full trim with
+        // dimensions — that the BOM live preview should show.
+        const diagramEntry = (row.images || []).find(img => img.slot === 'construction-diagram');
+        let diagramUrl = null;
+        if (diagramEntry) {
+          if (diagramEntry.data?.startsWith?.('data:')) diagramUrl = diagramEntry.data;
+          else if (diagramEntry.path) diagramUrl = await resolveCover(diagramEntry.path);
+        }
         next[id] = {
           ...row,
           cover_image: top || row.cover_image,
           data: { ...(row.data || {}), cover_image: nested || row?.data?.cover_image },
+          _constructionDiagram: diagramUrl,
         };
       }
       if (!cancelled) setComponentsById(next);

@@ -552,12 +552,16 @@ function ComponentGridPage({ entries, subtitle, componentsById = {} }) {
         const full = entry ? componentsById[entry.componentId] : null;
         const cd = full?.data || {};
         const m = (cd.materials || [])[0] || {};
-        const cover  = full?.cover_image || cd.cover_image;
+        // Prefer the construction measurement diagram so the factory sees
+        // the full trim with dimensions; fall back to cover_image.
+        const cover  = full?._constructionDiagram || full?.cover_image || cd.cover_image;
         const name   = full?.component_name || cd.componentName || (entry ? 'Loading…' : '');
+        const type   = cd.componentType || full?.component_category || (entry?.role || '');
         const vendor = m.vendor || cd.supplier || full?.supplier || '—';
-        const color  = m.color || (cd.colorwaysList || [])[0]?.frColor || '—';
+        const color  = (cd.colorwayPicks || [])[0] || (cd.colorwaysList || [])[0]?.frColor || m.color || '—';
         const length = m.length || '—';
         const size   = m.size || '—';
+        const qty    = entry?.quantity || '—';
         return (
           <g key={i}>
             <rect x={x} y={y} width={cardW} height={cardH}
@@ -570,28 +574,30 @@ function ComponentGridPage({ entries, subtitle, componentsById = {} }) {
               <>
                 <rect x={x} y={y} width={cardW} height={imgH} fill={FR.salt} rx={6} />
                 {cover ? (
-                  <image href={cover} x={x} y={y} width={cardW} height={imgH}
-                    preserveAspectRatio="xMidYMid slice" />
+                  // `meet` (not slice) so the full trim image is always
+                  // visible — measurement diagrams must never be cropped.
+                  <image href={cover} x={x + 4} y={y + 4} width={cardW - 8} height={imgH - 8}
+                    preserveAspectRatio="xMidYMid meet" />
                 ) : (
                   <text x={x + cardW / 2} y={y + imgH / 2 + 4} textAnchor="middle"
-                    fontSize={9} fill={FR.stone} fontStyle="italic">cover image</text>
+                    fontSize={9} fill={FR.stone} fontStyle="italic">measurement diagram</text>
                 )}
                 <text x={x + 14} y={y + imgH + 18}
                   fontSize={9} fontWeight={600} fill={FR.soil} letterSpacing={1}>
-                  {(entry.role || `Slot ${i + 1}`).toUpperCase()}
+                  {String(type || `Slot ${i + 1}`).toUpperCase()}
                 </text>
                 <text x={x + 14} y={y + imgH + 38}
                   fontSize={13} fill={FR.slate} fontFamily="'Cormorant Garamond', Georgia, serif">
                   {name}
                 </text>
-                <text x={x + 14} y={y + imgH + 58} fontSize={9} fill={FR.stone}>
-                  Vendor · {vendor}
+                <text x={x + 14} y={y + imgH + 56} fontSize={9} fill={FR.stone}>
+                  Vendor · {vendor}    Color · {color}
                 </text>
-                <text x={x + 14} y={y + imgH + 73} fontSize={9} fill={FR.stone}>
-                  Color · {color}
-                </text>
-                <text x={x + 14} y={y + imgH + 88} fontSize={9} fill={FR.stone}>
+                <text x={x + 14} y={y + imgH + 70} fontSize={9} fill={FR.stone}>
                   Length · {length}    Size · {size}
+                </text>
+                <text x={x + 14} y={y + imgH + 88} fontSize={10} fontWeight={600} fill={FR.slate}>
+                  Quantity · {qty}
                 </text>
               </>
             )}

@@ -279,55 +279,51 @@ export function StepFabrics({ data, set }) {
 const MAX_TRIMS = 6;
 
 // Read the most useful spec fields from a Component Pack data row.
-// Color prefers the Colorways picker on the pack (colorwayPicks[0] or
-// colorwaysList[0].frColor) — that's the canonical color the trim is
-// being supplied in. Length/Size live on the first material row.
+// `cover` prefers the Construction measurement diagram (full trim with
+// dimensions, that's what the factory needs) and falls back to the
+// cover_image. `color` reads from the Colorways picker on the pack.
 export function readComponentSpec(fullData) {
   const c = fullData?.data || {};
   const m = (c.materials || [])[0] || {};
   return {
-    name:   fullData?.component_name || c.componentName || '—',
-    type:   c.componentType || fullData?.component_category || '',
-    cover:  fullData?.cover_image || c.cover_image || null,
-    vendor: m.vendor || c.supplier || fullData?.supplier || '—',
-    color:  (c.colorwayPicks || [])[0] || (c.colorwaysList || [])[0]?.frColor || m.color || '—',
-    length: m.length || '—',
-    size:   m.size || '—',
+    name:    fullData?.component_name || c.componentName || '—',
+    type:    c.componentType || fullData?.component_category || '',
+    cover:   fullData?._constructionDiagram || fullData?.cover_image || c.cover_image || null,
+    vendor:  m.vendor || c.supplier || fullData?.supplier || '—',
+    color:   (c.colorwayPicks || [])[0] || (c.colorwaysList || [])[0]?.frColor || m.color || '—',
+    length:  m.length || '—',
+    size:    m.size || '—',
   };
 }
 
-function ComponentSlotCard({ entry, fullData, onClear, onChangeRole, roleOptions, roleLabel = 'Type' }) {
+function ComponentSlotCard({ entry, fullData, onClear, onChangeRole, onChangeQty, roleLabel = 'Type' }) {
   const s = readComponentSpec(fullData);
 
-  // Self-heal: if the entry was saved with an empty role (e.g. before this
-  // auto-populate logic shipped) and the full pack has a componentType,
-  // back-fill it now so the dropdown reflects the library value.
+  // Back-fill the saved role from the library's componentType the moment
+  // it lands. We always overwrite, even for non-empty values, so renames
+  // in the library propagate automatically. Skipped if the type matches
+  // already (no-op write).
   useEffect(() => {
-    if (!entry.role && s.type) onChangeRole(s.type);
-    // Only reacts when type lands; entry.role intentionally not in deps so
-    // we don't loop after the heal write.
+    if (s.type && entry.role !== s.type) onChangeRole(s.type);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.type]);
 
   return (
     <div style={{ background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 6, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ aspectRatio: '4 / 3', background: FR.salt, position: 'relative', overflow: 'hidden' }}>
+      <div style={{ aspectRatio: '4 / 3', background: FR.salt, position: 'relative' }}>
         {s.cover ? (
-          <img src={s.cover} alt={s.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          // contain (not cover) so the full trim image is always visible —
+          // factory-facing pages mustn't crop the measurement diagram.
+          <img src={s.cover} alt={s.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: FR.stone, fontSize: 9, fontStyle: 'italic' }}>No cover</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: FR.stone, fontSize: 9, fontStyle: 'italic' }}>No image</div>
         )}
         <button onClick={onClear} style={{ position: 'absolute', top: 4, right: 4, width: 18, height: 18, borderRadius: 9, background: FR.slate, color: FR.salt, border: 'none', fontSize: 10, cursor: 'pointer', lineHeight: 1 }}>×</button>
       </div>
-      <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <select
-          value={entry.role || s.type || ''}
-          onChange={e => onChangeRole(e.target.value)}
-          style={{ background: 'transparent', border: 'none', color: FR.soil, fontSize: 8, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', cursor: 'pointer', outline: 'none', padding: 0 }}
-        >
-          <option value="">— {roleLabel} —</option>
-          {(roleOptions || []).map(r => <option key={r} value={r}>{r}</option>)}
-        </select>
+      <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ fontSize: 8, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', color: FR.soil }}>
+          {roleLabel}: {s.type || '—'}
+        </div>
         <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 13, color: FR.slate, lineHeight: 1.15 }}>{s.name}</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 8px', fontSize: 9, color: FR.stone, lineHeight: 1.3 }}>
           <div><span style={{ color: FR.soil, fontWeight: 600 }}>Vendor</span> {s.vendor}</div>
@@ -335,12 +331,20 @@ function ComponentSlotCard({ entry, fullData, onClear, onChangeRole, roleOptions
           <div><span style={{ color: FR.soil, fontWeight: 600 }}>Length</span> {s.length}</div>
           <div><span style={{ color: FR.soil, fontWeight: 600 }}>Size</span> {s.size}</div>
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, paddingTop: 6, borderTop: `0.5px solid ${FR.sand}` }}>
+          <span style={{ fontSize: 9, fontWeight: 600, color: FR.soil, letterSpacing: 0.4, textTransform: 'uppercase' }}>Qty</span>
+          <input
+            type="text"
+            value={entry.quantity || ''}
+            onChange={e => onChangeQty(e.target.value)}
+            placeholder="e.g. 1, 2 m, 4 cm"
+            style={{ flex: 1, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '3px 6px', fontSize: 10, color: FR.slate, background: FR.white, outline: 'none', fontFamily: "'Helvetica Neue', sans-serif" }}
+          />
+        </div>
       </div>
     </div>
   );
 }
-
-const TRIM_ROLES = ['Zipper', 'Drawcord', 'Aglet', 'Button', 'Snap', 'Rivet', 'Bartack', 'Eyelet', 'Patch', 'Hardware', 'Tape', 'Other'];
 
 export function StepTrims({ data, set, packId }) {
   return (
@@ -354,15 +358,12 @@ export function StepTrims({ data, set, packId }) {
       set={set}
       packId={packId}
       pickerSubtitle="Pulled from the Component Pack library."
-      roleOptions={TRIM_ROLES}
       maxSlots={MAX_TRIMS}
     />
   );
 }
 
 // ─── Page 05 — Packaging ────────────────────────────────────────────────────
-
-const PACKAGING_ROLES = ['Polybag', 'Carton', 'Sticker', 'Hang Tag', 'Care Card', 'Tissue', 'Branded Box', 'Other'];
 
 export function StepPackaging({ data, set, packId }) {
   return (
@@ -376,7 +377,6 @@ export function StepPackaging({ data, set, packId }) {
       set={set}
       packId={packId}
       pickerSubtitle="Pulled from the Component Pack library."
-      roleOptions={PACKAGING_ROLES}
       maxSlots={MAX_TRIMS}
     />
   );
@@ -384,7 +384,7 @@ export function StepPackaging({ data, set, packId }) {
 
 // ─── Shared component-pack BOM page (used by Trims + Packaging) ────────────
 
-function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, fieldName, data, set, pickerSubtitle, roleOptions, maxSlots }) {
+function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, fieldName, data, set, pickerSubtitle, maxSlots }) {
   const noun = singularNoun || title.replace(/s$/, '');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [fullById, setFullById] = useState({});
@@ -401,12 +401,22 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
         const row = await getComponentPack(id);
         if (!cancelled && row) {
           // Storage paths → signed URLs so the slot cover can render.
-          const resolvedTop = await resolveCoverPath(row.cover_image);
+          const resolvedTop    = await resolveCoverPath(row.cover_image);
           const resolvedNested = await resolveCoverPath(row?.data?.cover_image);
+          // Construction measurement diagram — pulled from the pack's
+          // images[] under slot `construction-diagram`. This is the
+          // factory-facing image of choice (full trim with dimensions).
+          const diagramEntry = (row.images || []).find(img => img.slot === 'construction-diagram');
+          let diagramUrl = null;
+          if (diagramEntry) {
+            if (diagramEntry.data?.startsWith?.('data:')) diagramUrl = diagramEntry.data;
+            else if (diagramEntry.path) diagramUrl = await resolveCoverPath(diagramEntry.path);
+          }
           next[id] = {
             ...row,
             cover_image: resolvedTop || row.cover_image,
             data: { ...(row.data || {}), cover_image: resolvedNested || row?.data?.cover_image },
+            _constructionDiagram: diagramUrl,
           };
         }
       }
@@ -448,6 +458,10 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
     set(fieldName, picked.map((p, i) => (i === idx ? { ...p, role } : p)));
   }
 
+  function setQty(idx, quantity) {
+    set(fieldName, picked.map((p, i) => (i === idx ? { ...p, quantity } : p)));
+  }
+
   // Aggregate file refs from every picked component for the bottom strip.
   const aggregatedFiles = picked
     .map(p => fullById[p.componentId])
@@ -472,7 +486,7 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
               fullData={fullById[entry.componentId]}
               onClear={() => removeComponent(i)}
               onChangeRole={role => setRole(i, role)}
-              roleOptions={roleOptions}
+              onChangeQty={quantity => setQty(i, quantity)}
               roleLabel={roleLabel}
             />
           );
