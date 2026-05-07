@@ -157,171 +157,196 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
 
   const [assumptionsOpen, setAssumptionsOpen] = useState(false);
 
-  const labelStyle = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+  const fieldLabel = { fontSize: 9, color: FR.stone, fontWeight: 600, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 3 };
   const chipBase = { padding: '4px 10px', borderRadius: 20, fontSize: 11, cursor: 'pointer', border: `1px solid ${FR.sand}`, transition: 'background 0.15s' };
+  const readonlyField = { padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, background: FR.salt, boxSizing: 'border-box' };
+
+  const packAssumptions = data.assumptions || {};
+  const a = state.assumptions || {};
+  const cogsRate = parseFloat(a.cogsRate ?? 0.27);
+  const fulfillmentPercent = parseFloat(a.fulfillmentPercent ?? 0.10);
+  const seaFreightSpot = parseFloat(packAssumptions.seaFreightSpot ?? 4);
+  const shippingCharge = parseFloat(packAssumptions.shippingCharge ?? 0);
+  const retail = parseFloat(data.targetRetail) || 0;
+  const maxFOB = retail > 0
+    ? retail * (cogsRate + fulfillmentPercent) - (fulfillmentCost || 0) + shippingCharge - seaFreightSpot
+    : null;
 
   return (
     <div>
-      <SectionTitle>Style Overview</SectionTitle>
+      {/* ── Zone 1: Hero — cover image + identity fields ─────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 20, marginBottom: 20, alignItems: 'start' }}>
+        {/* Left: cover photo */}
+        <CoverPhoto
+          label="Ghost Mannequin Image"
+          slotKey="cover"
+          images={images}
+          onUpload={onUpload}
+          onRemove={onRemove}
+          portrait
+          uploadPrompt="Click or drop ghost mannequin image here."
+        />
 
-      <CoverPhoto
-        label="Ghost Mannequin Product Image"
-        slotKey="cover"
-        images={images}
-        onUpload={onUpload}
-        onRemove={onRemove}
-        portrait
-        uploadPrompt="Click or drop ghost mannequin product image here."
-      />
+        {/* Right: identity fields */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {/* Style number badge */}
+          <div style={{ marginBottom: 14, paddingBottom: 12, borderBottom: `1px solid ${FR.sand}` }}>
+            <div style={fieldLabel}>Style #</div>
+            <div style={{ fontFamily: "'ui-monospace','SF Mono',Menlo,monospace", fontSize: 16, color: FR.slate, letterSpacing: 1.2, fontWeight: 600 }}>
+              {styleNumberDisplay}
+            </div>
+            <div style={{ fontSize: 9, color: FR.stone, marginTop: 2 }}>Product # {data.productNumber || '—'} · auto-generated</div>
+          </div>
 
-      {/* Style number — read-only derived display */}
-      <div style={{ marginBottom: 14, padding: '10px 14px', background: FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 6 }}>
-        <div style={{ fontSize: 10, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4 }}>Style #</div>
-        <div style={{ fontFamily: "'ui-monospace','SF Mono',Menlo,monospace", fontSize: 15, color: FR.slate, letterSpacing: 1 }}>
-          {styleNumberDisplay}
+          <Row cols="1fr 1fr">
+            <Select label="Season" value={data.season} onChange={v => updateStyleNumber({ season: v })}
+              options={['Core (Evergreen)', 'SS26', 'FW26', 'SS27', 'FW27']} />
+            <Select label="Collection" value={data.collection} onChange={v => updateStyleNumber({ collection: v })}
+              options={COLLECTIONS.map(c => c.label)} />
+          </Row>
+
+          <Row cols="1fr 1fr">
+            <Select label="Product Type" value={data.productType} onChange={v => updateStyleNumber({ productType: v })}
+              options={PRODUCT_TYPES.map(t => t.label)} />
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' }}>Version</label>
+              <div style={{ ...readonlyField, color: FR.stone }}>{data.revision || 'V1.0'}</div>
+            </div>
+          </Row>
+
+          <EditableSelect label="Vendor" value={data.vendor}
+            onChange={v => set('vendor', v)}
+            options={existingSuppliers}
+            onAddOption={addSupplier}
+            placeholder="Add a new vendor…" />
+
+          <div style={{ marginTop: 2 }}>
+            <Select label="Status" value={data.status} onChange={v => set('status', v)} options={STATUSES} />
+            <p style={{ fontSize: 10, color: FR.stone, marginTop: -6, marginBottom: 0, lineHeight: 1.5 }}>
+              Labels, Order &amp; Delivery, and Compliance unlock at Pre-Production.
+            </p>
+          </div>
         </div>
-        <div style={{ fontSize: 9, color: FR.stone, marginTop: 3 }}>Product # {data.productNumber || '—'} · auto-generated</div>
       </div>
 
-      <Row cols="1fr 1fr">
-        <Select label="Season" value={data.season} onChange={v => updateStyleNumber({ season: v })}
-          options={['Core (Evergreen)', 'SS26', 'FW26', 'SS27', 'FW27']} />
-        <Select label="Collection" value={data.collection} onChange={v => updateStyleNumber({ collection: v })}
-          options={COLLECTIONS.map(c => c.label)} />
-      </Row>
-
-      <Row cols="1fr 1fr">
-        <Select label="Product Type" value={data.productType} onChange={v => updateStyleNumber({ productType: v })}
-          options={PRODUCT_TYPES.map(t => t.label)} />
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' }}>Version</label>
-          <input readOnly value={data.revision || 'V1.0'}
-            style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.stone, background: FR.salt, outline: 'none', boxSizing: 'border-box' }} />
+      {/* ── Zone 2: Colorways + Size Range ───────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20, paddingTop: 16, borderTop: `1px solid ${FR.sand}` }}>
+        <div>
+          <div style={fieldLabel}>Colorways</div>
+          {libraryColors.length > 0 ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+              {libraryColors.map(color => {
+                const active = selectedColorways.some(c => c.frColor === color.name);
+                return (
+                  <button key={color.name} type="button" onClick={() => toggleColorway(color)}
+                    style={{ ...chipBase, background: active ? FR.slate : FR.white, color: active ? FR.salt : FR.slate, borderColor: active ? FR.slate : FR.sand, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: color.hex || FR.sand, border: `1px solid rgba(0,0,0,0.1)`, flexShrink: 0 }} />
+                    {color.name}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ fontSize: 11, color: FR.stone, fontStyle: 'italic', marginTop: 6 }}>No colors in library yet.</div>
+          )}
+          {selectedColorways.length > 0 && (
+            <div style={{ marginTop: 6, fontSize: 10, color: FR.stone }}>
+              {selectedColorways.map(c => c.name).join(' · ')}
+            </div>
+          )}
         </div>
-      </Row>
 
-      <EditableSelect label="Vendor" value={data.vendor}
-        onChange={v => set('vendor', v)}
-        options={existingSuppliers}
-        onAddOption={addSupplier}
-        placeholder="Add a new vendor…" />
-
-      {/* Colorways — chip picker from color library */}
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>Colorways</label>
-        {libraryColors.length > 0 ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {libraryColors.map(color => {
-              const active = selectedColorways.some(c => c.frColor === color.name);
+        <div>
+          <div style={fieldLabel}>Size Range</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+            {SIZE_OPTIONS.map(s => {
+              const active = selectedSizes.includes(s);
               return (
-                <button key={color.name} type="button" onClick={() => toggleColorway(color)}
-                  style={{ ...chipBase, background: active ? FR.slate : FR.white, color: active ? FR.salt : FR.slate, borderColor: active ? FR.slate : FR.sand, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: color.hex || FR.sand, border: `1px solid ${FR.sand}`, flexShrink: 0 }} />
-                  {color.name}
+                <button key={s} type="button" onClick={() => toggleSize(s)}
+                  style={{ ...chipBase, background: active ? FR.slate : FR.white, color: active ? FR.salt : FR.slate, borderColor: active ? FR.slate : FR.sand, minWidth: 38, textAlign: 'center' }}>
+                  {s}
                 </button>
               );
             })}
           </div>
-        ) : (
-          <div style={{ fontSize: 11, color: FR.stone, fontStyle: 'italic' }}>No colors in library yet — add them in Library → Colors.</div>
-        )}
-        {selectedColorways.length > 0 && (
-          <div style={{ marginTop: 6, fontSize: 10, color: FR.stone }}>
-            Selected: {selectedColorways.map(c => c.name).join(', ')}
-          </div>
-        )}
-      </div>
-
-      {/* Size range — multi-select chips */}
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>Size Range</label>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {SIZE_OPTIONS.map(s => {
-            const active = selectedSizes.includes(s);
-            return (
-              <button key={s} type="button" onClick={() => toggleSize(s)}
-                style={{ ...chipBase, background: active ? FR.slate : FR.white, color: active ? FR.salt : FR.slate, borderColor: active ? FR.slate : FR.sand, minWidth: 42, textAlign: 'center' }}>
-                {s}
-              </button>
-            );
-          })}
         </div>
       </div>
 
-      {/* Target Retail + Maximum FOB */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-        <div>
+      {/* ── Zone 3: Pricing ──────────────────────────────────────────────────── */}
+      <div style={{ paddingTop: 16, borderTop: `1px solid ${FR.sand}`, marginBottom: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 10 }}>
           <Input label="Target Retail ($)" value={data.targetRetail} onChange={v => set('targetRetail', v)} placeholder="117" />
+          <div style={{ marginBottom: 10 }}>
+            <div style={fieldLabel}>Maximum FOB ($)</div>
+            <div style={{ ...readonlyField, color: maxFOB != null ? FR.slate : FR.stone, fontStyle: maxFOB != null ? 'normal' : 'italic', fontFamily: maxFOB != null ? "'ui-monospace',monospace" : 'inherit', marginTop: 3 }}>
+              {maxFOB != null ? `$${maxFOB.toFixed(2)}` : 'Enter target retail'}
+            </div>
+          </div>
         </div>
-        <div>
-          <label style={labelStyle}>Maximum FOB ($)</label>
-          {(() => {
-            const a = state.assumptions || {};
-            const cogsRate = parseFloat(a.cogsRate ?? 0.27);
-            const fulfillmentPercent = parseFloat(a.fulfillmentPercent ?? 0.10);
-            const seaFreightSpot = parseFloat((data.assumptions || {}).seaFreightSpot ?? 4);
-            const shippingCharge = parseFloat((data.assumptions || {}).shippingCharge ?? 0);
-            const retail = parseFloat(data.targetRetail) || 0;
-            if (!retail) return <div style={{ padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.stone, background: FR.salt, fontStyle: 'italic' }}>Enter target retail</div>;
-            const maxFOB = retail * (cogsRate + fulfillmentPercent) - (fulfillmentCost || 0) + shippingCharge - seaFreightSpot;
-            return <div style={{ padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.salt, fontFamily: 'monospace' }}>${maxFOB.toFixed(2)}</div>;
-          })()}
+
+        {/* Assumptions — collapsible */}
+        <div style={{ border: `1px solid ${FR.sand}`, borderRadius: 6, overflow: 'hidden' }}>
+          <button type="button" onClick={() => setAssumptionsOpen(o => !o)}
+            style={{ width: '100%', padding: '7px 12px', background: FR.salt, border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+            Pricing Assumptions
+            <span style={{ fontSize: 11, color: FR.stone }}>{assumptionsOpen ? '▲' : '▼'}</span>
+          </button>
+          {assumptionsOpen && (
+            <div style={{ padding: 12, background: FR.white, borderTop: `1px solid ${FR.sand}` }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 12 }}>
+                {[
+                  ['COGS %', a.cogsRate != null ? `${(parseFloat(a.cogsRate) * 100).toFixed(1)}%` : '—'],
+                  ['Fulfillment %', a.fulfillmentPercent != null ? `${(parseFloat(a.fulfillmentPercent) * 100).toFixed(1)}%` : '—'],
+                  ['Fulfillment Cost', fulfillmentCost != null ? `$${fulfillmentCost.toFixed(2)}` : '—'],
+                ].map(([label, val]) => (
+                  <div key={label}>
+                    <div style={{ fontSize: 9, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>{label}</div>
+                    <div style={{ fontSize: 12, color: FR.slate, fontFamily: "'ui-monospace',monospace" }}>{val}</div>
+                  </div>
+                ))}
+              </div>
+              <Row cols="1fr 1fr">
+                <Input label="Shipping Revenue Offset ($)" value={packAssumptions.shippingCharge ?? '0'}
+                  onChange={v => set('assumptions', { ...packAssumptions, shippingCharge: v })} placeholder="0" />
+                <Input label="Sea Freight Spot ($)" value={packAssumptions.seaFreightSpot ?? '4'}
+                  onChange={v => set('assumptions', { ...packAssumptions, seaFreightSpot: v })} placeholder="4" />
+              </Row>
+              <p style={{ fontSize: 10, color: FR.stone, margin: 0, lineHeight: 1.5 }}>
+                Max FOB = Retail × (COGS% + Fulfillment%) − Fulfillment Cost + Shipping Offset − Sea Freight.
+                COGS% and Fulfillment% are set in the Cash tab.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Assumptions — collapsible */}
-      {(() => {
-        const packAssumptions = data.assumptions || {};
-        const a = state.assumptions || {};
-        const fmt = (v, isPct) => v == null ? '—' : isPct ? `${(parseFloat(v) * 100).toFixed(1)}%` : `$${parseFloat(v).toFixed(2)}`;
-        return (
-          <div style={{ marginBottom: 14, border: `1px solid ${FR.sand}`, borderRadius: 6, overflow: 'hidden' }}>
-            <button type="button" onClick={() => setAssumptionsOpen(o => !o)}
-              style={{ width: '100%', padding: '8px 12px', background: FR.salt, border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-              Pricing Assumptions
-              <span style={{ fontSize: 12, color: FR.stone }}>{assumptionsOpen ? '▲' : '▼'}</span>
-            </button>
-            {assumptionsOpen && (
-              <div style={{ padding: 12, background: FR.white }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 10, fontSize: 11 }}>
-                  <div><div style={{ fontSize: 9, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.5 }}>COGS %</div><div style={{ color: FR.slate }}>{fmt(a.cogsRate, true)}</div></div>
-                  <div><div style={{ fontSize: 9, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.5 }}>Fulfillment %</div><div style={{ color: FR.slate }}>{fmt(a.fulfillmentPercent, true)}</div></div>
-                  <div><div style={{ fontSize: 9, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.5 }}>Fulfillment Cost</div><div style={{ color: FR.slate }}>{fulfillmentCost != null ? `$${fulfillmentCost.toFixed(2)}` : '—'}</div></div>
-                </div>
-                <Row cols="1fr 1fr">
-                  <Input label="Shipping Revenue Offset ($)" value={packAssumptions.shippingCharge ?? '0'}
-                    onChange={v => set('assumptions', { ...packAssumptions, shippingCharge: v })}
-                    placeholder="0" />
-                  <Input label="Sea Freight Spot ($)" value={packAssumptions.seaFreightSpot ?? '4'}
-                    onChange={v => set('assumptions', { ...packAssumptions, seaFreightSpot: v })}
-                    placeholder="4" />
-                </Row>
-                <p style={{ fontSize: 10, color: FR.stone, margin: 0, lineHeight: 1.5 }}>
-                  Max FOB = Retail × (COGS% + Fulfillment%) − Fulfillment Cost + Shipping Charge − Sea Freight Spot.
-                  COGS% and Fulfillment% pulled from the Cash tab. Fulfillment Cost includes Pick&amp;Pack + weight-tier rate + packaging from the rate card.
-                </p>
-              </div>
-            )}
-          </div>
-        );
-      })()}
-
-      <Select label="Status" value={data.status} onChange={v => set('status', v)} options={STATUSES} />
-      <p style={{ fontSize: 10, color: FR.stone, marginTop: -4, lineHeight: 1.5 }}>
-        Labels, Order &amp; Delivery, and Compliance unlock at Pre-Production.
-      </p>
-
-      {/* Quote tiers */}
-      <div style={{ marginTop: 22, padding: 16, background: FR.white, border: `1px solid ${FR.sand}`, borderRadius: 6 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
-          <h4 style={{ margin: 0, fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 18, color: FR.slate }}>Quote</h4>
-          <span style={{ fontSize: 10, color: FR.stone, letterSpacing: 0.5 }}>Pricing &amp; lead times</span>
+      {/* ── Zone 4: Quote + Fulfillment (unified card) ───────────────────────── */}
+      <div style={{ padding: 18, background: FR.white, border: `1px solid ${FR.sand}`, borderRadius: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
+          <h4 style={{ margin: 0, fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 19, color: FR.slate, fontWeight: 500 }}>Quote &amp; Fulfillment</h4>
+          <span style={{ fontSize: 10, color: FR.stone, letterSpacing: 0.5 }}>Pricing, lead times &amp; shipping weight</span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 22 }}>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 24 }}>
+          {/* Left col: cost tiers + weight */}
           <div>
-            <label style={labelStyle}>Cost Tiers</label>
+            <div style={{ ...fieldLabel, marginBottom: 6 }}>Cost Tiers</div>
             <CostTiersTable tiers={data.costTiers || []} onChange={tiers => set('costTiers', tiers)} />
+
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${FR.sand}` }}>
+              <Row cols="1fr 1fr">
+                <Input label="Weight (kg)" value={data.weightKg} onChange={v => set('weightKg', v)} placeholder="0.45" />
+                <div style={{ marginBottom: 10 }}>
+                  <div style={fieldLabel}>Fulfillment Cost</div>
+                  <div style={{ ...readonlyField, marginTop: 3, color: fulfillmentCost != null ? FR.slate : FR.stone, fontStyle: fulfillmentCost != null ? 'normal' : 'italic', fontFamily: fulfillmentCost != null ? "'ui-monospace',monospace" : 'inherit' }}>
+                    {fulfillmentCost != null ? `$${fulfillmentCost.toFixed(2)}` : rateCard ? 'Enter weight' : 'No rate card'}
+                  </div>
+                </div>
+              </Row>
+            </div>
           </div>
+
+          {/* Right col: lead times + provider */}
           <div>
             <Row cols="1fr 1fr">
               <Input label="Lead Time (days)" value={data.leadTimeDays} onChange={v => set('leadTimeDays', v)} placeholder="28" />
@@ -336,26 +361,10 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
               <input value={data.quoteProviderLink || ''} onChange={e => set('quoteProviderLink', e.target.value)}
                 placeholder="e.g. Dongguan Shengde Clothing Ltd."
                 style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.slate, background: FR.white, outline: 'none', boxSizing: 'border-box' }} />
-              <p style={{ fontSize: 10, color: FR.stone, marginTop: 4 }}>Where this quote came from — manufacturer or sourcing agent.</p>
+              <p style={{ fontSize: 10, color: FR.stone, marginTop: 4, marginBottom: 0 }}>Manufacturer or sourcing agent that provided this quote.</p>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Weight → fulfillment cost */}
-      <div style={{ marginTop: 16, padding: 16, background: FR.white, border: `1px solid ${FR.sand}`, borderRadius: 6 }}>
-        <label style={labelStyle}>Weight &amp; Fulfillment</label>
-        <Row cols="1fr 1fr">
-          <Input label="Weight (kg)" value={data.weightKg} onChange={v => set('weightKg', v)} placeholder="0.45" />
-          <div style={{ marginBottom: 10 }}>
-            <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' }}>Fulfillment Cost</label>
-            <div style={{ padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: fulfillmentCost != null ? FR.slate : FR.stone, background: FR.salt, fontStyle: fulfillmentCost != null ? 'normal' : 'italic' }}>
-              {fulfillmentCost != null
-                ? `$${fulfillmentCost.toFixed(2)}`
-                : rateCard ? 'Enter weight above' : 'Set a rate card in Fulfillment tab'}
-            </div>
-          </div>
-        </Row>
       </div>
     </div>
   );
