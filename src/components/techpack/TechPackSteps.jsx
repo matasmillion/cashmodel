@@ -724,16 +724,17 @@ export function StepDesignOverview({ data, set, images, onUpload, onRemove }) {
       {/* Per-view source images (CLO3D workflow) */}
       <GenSection label="Reference Per View — CLO3D Renders or Sketches">
         <Row cols="1fr 1fr 1fr">
-          <PhotoUpload label="Front Reference" slotKey="design-source-front" images={images} onUpload={onUpload} onRemove={onRemove} />
-          <PhotoUpload label="Back Reference"  slotKey="design-source-back"  images={images} onUpload={onUpload} onRemove={onRemove} />
-          <PhotoUpload label="Side Reference"  slotKey="design-source-side"  images={images} onUpload={onUpload} onRemove={onRemove} />
+          <PhotoUpload single label="Front Reference" slotKey="design-source-front" images={images} onUpload={onUpload} onRemove={onRemove} />
+          <PhotoUpload single label="Back Reference"  slotKey="design-source-back"  images={images} onUpload={onUpload} onRemove={onRemove} />
+          <PhotoUpload single label="Side Reference"  slotKey="design-source-side"  images={images} onUpload={onUpload} onRemove={onRemove} />
         </Row>
       </GenSection>
 
       {/* Treatments / wash references */}
-      <GenSection label="Treatment & Wash References — Fabric Finish, Dye, Distressing">
+      <GenSection label="Treatment & Wash Reference — Fabric Finish, Dye, Distressing">
         <PhotoUpload
-          label="Upload swatches or imagery showing the wash, dye, or fabric finish"
+          single
+          label="Upload one swatch or image showing the wash, dye, or fabric finish"
           slotKey="design-treatment-ref"
           images={images}
           onUpload={onUpload}
@@ -742,9 +743,10 @@ export function StepDesignOverview({ data, set, images, onUpload, onRemove }) {
       </GenSection>
 
       {/* Embellishment / artwork references */}
-      <GenSection label="Embellishment References — Graphics, Embroidery, Hardware">
+      <GenSection label="Embellishment Reference — Graphics, Embroidery, Hardware">
         <PhotoUpload
-          label="Upload artwork, prints, embroidery samples, or hardware references"
+          single
+          label="Upload one artwork, print, embroidery, or hardware reference"
           slotKey="design-embellishment-ref"
           images={images}
           onUpload={onUpload}
@@ -804,9 +806,9 @@ export function StepDesignOverview({ data, set, images, onUpload, onRemove }) {
       {/* Manual / generated garment views */}
       <GenSection label="Garment Views">
         <Row cols="1fr 1fr 1fr">
-          <PhotoUpload label="Front View" slotKey="design-front" images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
-          <PhotoUpload label="Back View"  slotKey="design-back"  images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
-          <PhotoUpload label="Side View"  slotKey="design-side"  images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
+          <PhotoUpload single label="Front View" slotKey="design-front" images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
+          <PhotoUpload single label="Back View"  slotKey="design-back"  images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
+          <PhotoUpload single label="Side View"  slotKey="design-side"  images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
         </Row>
       </GenSection>
 
@@ -817,7 +819,12 @@ export function StepDesignOverview({ data, set, images, onUpload, onRemove }) {
           customContext={customContext}
           style={style}
           bgColorName={bgColor}
-          onAccept={(slot, dataUrl) => onUpload(slot, dataUrl, `${slot}-generated.jpg`)}
+          onAccept={(slot, dataUrl) => {
+            // Replace any existing image in this slot — single-image enforcement.
+            const existing = (images || []).filter(i => i.slot === slot);
+            for (let i = existing.length - 1; i >= 0; i--) onRemove(slot, i);
+            onUpload(slot, dataUrl, `${slot}-generated.jpg`);
+          }}
           onClose={() => setShowModal(false)}
         />
       )}
