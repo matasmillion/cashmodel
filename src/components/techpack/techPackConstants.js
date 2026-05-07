@@ -41,14 +41,14 @@ export function isStepLocked(stepIndex, status) {
 export const STEPS = [
   { id: 'cover',         title: 'Style Overview',                   icon: '01', phase: 'Design' },
   { id: 'design',        title: 'Design Overview',                  icon: '02', phase: 'Design' },
-  { id: 'flatlays',      title: 'Technical Flat Lay Diagrams',      icon: '03', phase: 'Design' },
-  { id: 'bom',           title: 'Bill of Materials — Fabrics & Trims', icon: '04', phase: 'Materials' },
-  { id: 'bom-trims',     title: 'Bill of Materials — Labels & Files',  icon: '05', phase: 'Materials', skippable: true },
-  { id: 'construction',  title: 'Seam & Stitch Specifications',     icon: '06', phase: 'Cut & Sew' },
-  { id: 'construction-notes', title: 'Construction Notes',          icon: '07', phase: 'Cut & Sew', skippable: true },
-  { id: 'sketches',      title: 'Construction Detail Sketches',     icon: '08', phase: 'Cut & Sew' },
+  { id: 'bom',           title: 'Bill of Materials — Fabrics & Trims', icon: '03', phase: 'Materials' },
+  { id: 'bom-trims',     title: 'Bill of Materials — Labels & Files',  icon: '04', phase: 'Materials', skippable: true },
+  { id: 'flatlays',      title: 'Technical Flat Lay Diagrams',      icon: '05', phase: 'Cut & Sew' },
+  { id: 'sketches',      title: 'Construction Details — Page 1',    icon: '06', phase: 'Cut & Sew' },
+  { id: 'sketches-2',    title: 'Construction Details — Page 2',    icon: '07', phase: 'Cut & Sew' },
+  { id: 'construction',  title: 'Seam & Stitch Specifications',     icon: '08', phase: 'Cut & Sew' },
   { id: 'pattern',       title: 'Pattern Pieces & Cutting',         icon: '09', phase: 'Cut & Sew' },
-  { id: 'pom',           title: 'Points of Measure (Base Size)',    icon: '10', phase: 'Cut & Sew' },
+  { id: 'pom',           title: 'Points of Measure (Sample Size)',  icon: '10', phase: 'Cut & Sew' },
   { id: 'size-matrix',   title: 'Graded Size Matrix',               icon: '11', phase: 'Cut & Sew', skippable: true },
   { id: 'color',         title: 'Colorways',                        icon: '12', phase: 'Embellishments' },
   { id: 'artwork',       title: 'Artwork & Placement',              icon: '13', phase: 'Embellishments' },
@@ -101,6 +101,22 @@ export const DEFAULT_DATA = {
   seams: [{ operation: '', seamType: '', stitchType: '', spiSpcm: '', threadColor: '', threadType: '', notes: '' }],
   constructionNotes: '',
   constructionNotesTable: [{ detail: '', area: '', description: '', reference: '' }],
+  // Construction Details — two pages, four entries each. Each entry maps to a
+  // red-numbered detail callout on the page's reference image. Title and
+  // description are dedicated fields so they can be translated independently
+  // per factory.
+  constructionDetailsPage1: [
+    { num: 1, title: '', description: '' },
+    { num: 2, title: '', description: '' },
+    { num: 3, title: '', description: '' },
+    { num: 4, title: '', description: '' },
+  ],
+  constructionDetailsPage2: [
+    { num: 5, title: '', description: '' },
+    { num: 6, title: '', description: '' },
+    { num: 7, title: '', description: '' },
+    { num: 8, title: '', description: '' },
+  ],
   patternPieces: [{ pieceNum: '', pieceName: '', quantity: '', fabric: '', grain: '', fusing: '', notes: '' }],
   cuttingNotes: '',
   cuttingInstructions: '',

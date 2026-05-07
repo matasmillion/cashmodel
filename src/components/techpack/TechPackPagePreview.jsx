@@ -522,64 +522,81 @@ function PageConstruction({ d }) {
 }
 
 // ─── Page 7 — Construction Notes ────────────────────────────────────────────
-function PageConstructionNotes({ d }) {
-  const notes = (d.constructionNotesTable || []).filter(r => r.area || r.description || r.reference);
-  const freeForm = (d.constructionNotes || '').trim();
-
-  const noteCols = [
-    { key: '#',           label: 'Detail #',    w: 70  },
-    { key: 'area',        label: 'Area',        w: 180 },
-    { key: 'description', label: 'Description', w: 540 },
-    { key: 'reference',   label: 'Reference',   w: 253 },
-  ];
-
-  return (
-    <g>
-      <InfoStrip d={d} />
-
-      <SectionHeading x={40} y={158}>Detail Callouts</SectionHeading>
-      <GridTable x={40} y={170} cols={noteCols} rows={notes} bodyRows={8} />
-
-      <SectionHeading x={40} y={400}>Free-Form Notes</SectionHeading>
-      {freeForm ? freeForm.split('\n').slice(0, 18).map((line, i) => (
-        <text key={i} x={40} y={420 + i * 14} fontSize={11} fill={FR.slate} fontFamily="Helvetica, Arial, sans-serif">{line}</text>
-      )) : (
-        <text x={40} y={420} fontSize={11} fill={FR.stone} fontFamily="Helvetica, Arial, sans-serif" fontStyle="italic">No free-form notes.</text>
-      )}
-    </g>
-  );
-}
-
-// ─── Page 7 — Construction Detail Sketches ──────────────────────────────────
-function PageSketches({ d, images }) {
+// ─── Construction Details Pages (1 of 2) ────────────────────────────────────
+// Construction Details — page 1 or page 2 depending on `pageKey`. Layout:
+// 9:16 reference image on the left (designer adds red-dot callouts in
+// Photoshop), 2x2 grid of A4-landscape detail cards on the right. Each card
+// has a red-numbered circle at the top + translatable title + description.
+function PageSketches({ d, images, pageKey = 'page1' }) {
   const imgs = images || [];
-  const slots = [1, 2, 3, 4, 5, 6].map(n => imgs.find(i => i.slot === `sketch-${n}`));
+  const fieldName = pageKey === 'page2' ? 'constructionDetailsPage2' : 'constructionDetailsPage1';
+  const entries = ((d?.[fieldName]) || []).slice(0, 4);
+  const callout = imgs.find(i => i.slot === `sketch-callout-${pageKey}`);
 
-  const gridY = 160;
-  const gridGap = 14;
-  const cols = 3;
-  const rows = 2;
-  const cellW = (PAGE_W - 80 - gridGap * (cols - 1)) / cols;
-  const cellH = (PAGE_H - gridY - 90 - gridGap * (rows - 1)) / rows;
+  const topY    = 158;
+  const padX    = 40;
+  const colGap  = 18;
+  const refW    = 240;
+  const refH    = refW * (16 / 9); // 9:16 aspect
+  const refY    = 170;
+
+  const rightX  = padX + refW + colGap;
+  const rightW  = PAGE_W - padX - rightX;
+  const rowGap  = 12;
+  const colGap2 = 12;
+  const cardCols = 2;
+  const cardRows = 2;
+  const cardW   = (rightW - colGap2 * (cardCols - 1)) / cardCols;
+  const cardH   = cardW / 1.414; // A4 landscape
+  const cardsTotalH = cardH * cardRows + rowGap * (cardRows - 1);
 
   return (
     <g>
       <InfoStrip d={d} />
 
-      <text x={PAGE_W / 2} y={152} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
-        Detailed construction sketches: seam closeups, pocket assembly, cuff detail, collar build, etc.
+      <text x={PAGE_W / 2} y={topY - 6} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
+        Number each callout on the reference image (red dots). Titles and descriptions are translatable per factory.
       </text>
 
-      {slots.map((img, i) => {
-        const col = i % cols;
-        const row = Math.floor(i / cols);
+      {/* 9:16 reference image on the left */}
+      <PhotoSlot
+        x={padX} y={refY}
+        w={refW} h={refH}
+        label="Reference"
+        image={callout}
+      />
+
+      {/* 2x2 grid of A4 landscape detail cards on the right */}
+      {entries.map((entry, i) => {
+        const col = i % cardCols;
+        const row = Math.floor(i / cardCols);
+        const cx  = rightX + col * (cardW + colGap2);
+        const cy  = refY   + row * (cardH + rowGap);
+        const numCx = cx + 18;
+        const numCy = cy + 18;
         return (
-          <PhotoSlot key={i}
-            x={40 + col * (cellW + gridGap)}
-            y={gridY + row * (cellH + gridGap)}
-            w={cellW} h={cellH - 22}
-            label={`Detail ${i + 1}`}
-            image={img} />
+          <g key={entry.num}>
+            {/* card border */}
+            <rect x={cx} y={cy} width={cardW} height={cardH}
+              fill={FR.white} stroke={FR.sand} strokeWidth={0.5} rx={4} />
+            {/* red numbered circle at top-left */}
+            <circle cx={numCx} cy={numCy} r={11} fill="#A32D2D" />
+            <text x={numCx} y={numCy + 4} textAnchor="middle"
+              fontSize="11" fontWeight="600" fill="#FFFFFF">
+              {entry.num}
+            </text>
+            {/* title */}
+            <text x={cx + 38} y={numCy + 5} fontSize="11" fontWeight="600" fill={FR.slate}>
+              {entry.title || `Detail ${entry.num}`}
+            </text>
+            {/* description body */}
+            <foreignObject x={cx + 12} y={cy + 38} width={cardW - 24} height={cardH - 50}>
+              <div xmlns="http://www.w3.org/1999/xhtml"
+                style={{ fontSize: 9, color: FR.slate, lineHeight: 1.5, fontFamily: "'Helvetica Neue', sans-serif", whiteSpace: 'pre-wrap' }}>
+                {entry.description || ''}
+              </div>
+            </foreignObject>
+          </g>
         );
       })}
     </g>
@@ -1171,14 +1188,14 @@ function ComingSoon({ pageNum, title }) {
 const PAGE_FNS = [
   { title: 'Style Overview',                    phase: 'Design',         body: ({ d, images }) => <PageCover d={d} images={images} /> },
   { title: 'Design Overview',                   phase: 'Design',         body: ({ d, images }) => <PageDesignOverview d={d} images={images} /> },
-  { title: 'Technical Flat Lay Diagrams',       phase: 'Design',         body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
   { title: 'BOM — Fabrics & Trims',             phase: 'Materials',      body: ({ d }) => <PageBOM d={d} /> },
   { title: 'BOM — Labels & Source Files',       phase: 'Materials',      body: ({ d }) => <PageBOMTrims d={d} /> },
+  { title: 'Technical Flat Lay Diagrams',       phase: 'Cut & Sew',      body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
+  { title: 'Construction Details — Page 1',     phase: 'Cut & Sew',      body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page1" /> },
+  { title: 'Construction Details — Page 2',     phase: 'Cut & Sew',      body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page2" /> },
   { title: 'Seam & Stitch Specifications',      phase: 'Cut & Sew',      body: ({ d }) => <PageConstruction d={d} /> },
-  { title: 'Construction Notes',                phase: 'Cut & Sew',      body: ({ d }) => <PageConstructionNotes d={d} /> },
-  { title: 'Construction Detail Sketches',      phase: 'Cut & Sew',      body: ({ d, images }) => <PageSketches d={d} images={images} /> },
   { title: 'Pattern Pieces & Cutting',          phase: 'Cut & Sew',      body: ({ d, images }) => <PagePattern d={d} images={images} /> },
-  { title: 'Points of Measure (Base Size)',     phase: 'Cut & Sew',      body: ({ d, images }) => <PagePom d={d} images={images} /> },
+  { title: 'Points of Measure (Sample Size)',   phase: 'Cut & Sew',      body: ({ d, images }) => <PagePom d={d} images={images} /> },
   { title: 'Graded Size Matrix',                phase: 'Cut & Sew',      body: ({ d }) => <PageSizeMatrix d={d} /> },
   { title: 'Colorways',                         phase: 'Embellishments', body: ({ d }) => <PageColorways d={d} /> },
   { title: 'Artwork & Placement',               phase: 'Embellishments', body: ({ d, images }) => <PageArtwork d={d} images={images} /> },

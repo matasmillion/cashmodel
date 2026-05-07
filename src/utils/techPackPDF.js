@@ -223,8 +223,41 @@ export async function generateTechPackPDF(pack) {
   field('Design Notes', d.designNotes, 10, y); y += 6;
   addImage('design-refs', 180, 28, 100, 80);
 
-  // ─── Page 4: Flat Lays ───
-  newPage('Flat Lay Diagrams', null, 2);
+  // ─── Materials → BOM: Fabrics & Trims (now stepIdx 2) ───
+  newPage('BOM — Fabrics & Trims', null, 2);
+  y = 28;
+  sectionHeading('Fabrics', y); y += 8;
+  const fabRowsA = (d.fabrics || []).filter(f => f.component || f.fabricType).map(f =>
+    [f.component, f.fabricType, f.composition, f.weightGsm, f.colorPantone, f.supplier, f.notes]);
+  table(['Component', 'Fabric Type', 'Composition', 'Weight GSM', 'Color / Pantone', 'Vendor', 'Notes'], fabRowsA, 10, y, [30, 35, 35, 25, 40, 40, 72]);
+  y += 10 + fabRowsA.length * 6;
+  sectionHeading('Trims & Accessories', y + 14); y += 22;
+  const trimsRowsA = (d.trimsAccessories || []).filter(t => t.component || t.type).map(t =>
+    [t.component, t.type, t.material, t.color, t.sizeSpec, t.supplier, t.qtyPerGarment]);
+  table(['Component', 'Type', 'Material', 'Color', 'Size / Spec', 'Vendor', 'Qty/Garment'], trimsRowsA, 10, y, [30, 40, 35, 25, 35, 40, 72]);
+
+  // ─── Materials → BOM: Labels & Files (now stepIdx 3) ───
+  newPage('BOM — Labels & Source Files', null, 3);
+  y = 28;
+  sectionHeading('Labels & Branding', y); y += 8;
+  const lblRowsA = (d.labelsBranding || []).filter(l => l.labelType || l.placement).map(l =>
+    [l.labelType, l.material, l.size, l.placement, l.artworkRef, l.notes]);
+  table(['Label Type', 'Material', 'Size', 'Placement', 'Artwork Ref', 'Notes'], lblRowsA, 10, y, [40, 30, 25, 45, 60, 77]);
+  y += 18 + lblRowsA.length * 6;
+  sectionHeading('Source Documents', y); y += 8;
+  const attRowsA = (d.attachments || []).filter(a => a.name).map(a =>
+    [a.name, (a.type || '').split('/').pop()?.toUpperCase() || '', a.size ? `${Math.round(a.size / 1024)} KB` : '', a.uploaded_at ? a.uploaded_at.slice(0, 10) : '']);
+  if (attRowsA.length) {
+    table(['File Name', 'Type', 'Size', 'Uploaded'], attRowsA, 10, y, [100, 30, 25, 40]);
+  } else {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(9);
+    doc.setTextColor(...hex(FR.stone));
+    doc.text('No source documents attached.', 10, y + 4);
+  }
+
+  // ─── Cut & Sew → Flat Lay Diagrams (moved from Design, now stepIdx 4) ───
+  newPage('Flat Lay Diagrams', null, 4);
   addImage('flatlay-front', 10, 28, 85, 90);
   addImage('flatlay-back', 105, 28, 85, 90);
   addImage('flatlay-detail', 200, 28, 85, 90);
@@ -239,61 +272,29 @@ export async function generateTechPackPDF(pack) {
   doc.setTextColor(...hex(FR.slate));
   doc.text(d.flatLayNotes || '', 10, 140, { maxWidth: W - 20 });
 
-  // ─── Materials → BOM: Fabrics & Trims ───
-  newPage('BOM — Fabrics & Trims', null, 3);
+  // ─── Cut & Sew → Construction Details Page 1 (stepIdx 5) ───
+  newPage('Construction Details — Page 1', null, 5);
   y = 28;
-  sectionHeading('Fabrics', y); y += 8;
-  const fabRows = (d.fabrics || []).filter(f => f.component || f.fabricType).map(f =>
-    [f.component, f.fabricType, f.composition, f.weightGsm, f.colorPantone, f.supplier, f.notes]);
-  table(['Component', 'Fabric Type', 'Composition', 'Weight GSM', 'Color / Pantone', 'Vendor', 'Notes'], fabRows, 10, y, [30, 35, 35, 25, 40, 40, 72]);
-  y += 10 + fabRows.length * 6;
-  sectionHeading('Trims & Accessories', y + 14); y += 22;
-  const trimsRows = (d.trimsAccessories || []).filter(t => t.component || t.type).map(t =>
-    [t.component, t.type, t.material, t.color, t.sizeSpec, t.supplier, t.qtyPerGarment]);
-  table(['Component', 'Type', 'Material', 'Color', 'Size / Spec', 'Vendor', 'Qty/Garment'], trimsRows, 10, y, [30, 40, 35, 25, 35, 40, 72]);
+  sectionHeading('Detail Callouts', y); y += 8;
+  const cdRows1 = (d.constructionDetailsPage1 || []).map(c =>
+    [String(c.num), c.title || '', c.description || '']);
+  table(['#', 'Title', 'Description'], cdRows1, 10, y, [15, 60, 202]);
 
-  // ─── Materials → BOM: Labels & Files ───
-  newPage('BOM — Labels & Source Files', null, 4);
+  // ─── Cut & Sew → Construction Details Page 2 (stepIdx 6) ───
+  newPage('Construction Details — Page 2', null, 6);
   y = 28;
-  sectionHeading('Labels & Branding', y); y += 8;
-  const lblRows = (d.labelsBranding || []).filter(l => l.labelType || l.placement).map(l =>
-    [l.labelType, l.material, l.size, l.placement, l.artworkRef, l.notes]);
-  table(['Label Type', 'Material', 'Size', 'Placement', 'Artwork Ref', 'Notes'], lblRows, 10, y, [40, 30, 25, 45, 60, 77]);
-  y += 18 + lblRows.length * 6;
-  sectionHeading('Source Documents', y); y += 8;
-  const attRows = (d.attachments || []).filter(a => a.name).map(a =>
-    [a.name, (a.type || '').split('/').pop()?.toUpperCase() || '', a.size ? `${Math.round(a.size / 1024)} KB` : '', a.uploaded_at ? a.uploaded_at.slice(0, 10) : '']);
-  if (attRows.length) {
-    table(['File Name', 'Type', 'Size', 'Uploaded'], attRows, 10, y, [100, 30, 25, 40]);
-  } else {
-    doc.setFont('helvetica', 'italic');
-    doc.setFontSize(9);
-    doc.setTextColor(...hex(FR.stone));
-    doc.text('No source documents attached.', 10, y + 4);
-  }
+  sectionHeading('Detail Callouts', y); y += 8;
+  const cdRows2 = (d.constructionDetailsPage2 || []).map(c =>
+    [String(c.num), c.title || '', c.description || '']);
+  table(['#', 'Title', 'Description'], cdRows2, 10, y, [15, 60, 202]);
 
-  // ─── Cut & Sew → Seam & Stitch ───
-  newPage('Seam & Stitch Specifications', null, 5);
+  // ─── Cut & Sew → Seam & Stitch (now stepIdx 7) ───
+  newPage('Seam & Stitch Specifications', null, 7);
   y = 28;
   sectionHeading('Seam Specifications', y); y += 8;
   const seamRows = (d.seams || []).filter(s => s.operation).map(s =>
     [s.operation, s.seamType, s.stitchType, s.spiSpcm, s.threadColor, s.notes]);
   table(['Operation', 'Seam Type', 'Stitch', 'SPI', 'Thread', 'Notes'], seamRows, 10, y, [50, 40, 30, 20, 40, 97]);
-
-  // ─── Cut & Sew → Construction Notes ───
-  newPage('Construction Notes', null, 6);
-  y = 28;
-  sectionHeading('Detail Callouts', y); y += 8;
-  const cnRows = (d.constructionNotesTable || []).filter(n => n.area || n.description).map((n, i) =>
-    [String(i + 1), n.area, n.description, n.reference]);
-  table(['#', 'Area', 'Description', 'Reference'], cnRows, 10, y, [15, 50, 140, 72]);
-  y += 18 + cnRows.length * 6;
-  sectionHeading('Free-Form Notes', y); y += 8;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(...hex(FR.slate));
-  const cnLines = (d.constructionNotes || '').split('\n');
-  cnLines.forEach((line, i) => doc.text(line, 10, y + i * 5, { maxWidth: W - 20 }));
 
   // ─── Cut & Sew → Pattern & Cutting ───
   newPage('Pattern Pieces & Cutting', null, 8);

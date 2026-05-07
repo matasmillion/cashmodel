@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T13:19:14.704Z",
+  "lastUpdated": "2026-05-07T13:34:29.660Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "c7298e4",
+      "date": "2026-05-07T16:27:18+03:00",
+      "message": "techpack: Website Preview placeholder on Design Overview (#36)"
+    },
+    {
       "sha": "99a2a11",
       "date": "2026-05-07T16:12:16+03:00",
       "message": "techpack: regen feedback + single-image slots + 2:3 portrait + bg color fix (#35)"
@@ -1087,11 +1092,6 @@
       "sha": "627c6e1",
       "date": "2026-05-07T14:36:11+03:00",
       "message": "techpack: simplify Design Overview to 3 garment-view photos in 2:3 aspect ratio (#28)"
-    },
-    {
-      "sha": "63e344a",
-      "date": "2026-05-07T14:10:00+03:00",
-      "message": "feat(techpack): Phase 7 — Sign-off & revision diff (#27)"
     }
   ]
 }
