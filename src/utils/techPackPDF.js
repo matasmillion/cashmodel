@@ -365,8 +365,40 @@ export async function generateTechPackPDF(pack) {
     [dd.area, dd.technique, dd.intensity, dd.notes]);
   table(['Area', 'Technique', 'Intensity', 'Notes'], distRows, 10, y, [50, 50, 30, 147]);
 
+  // ─── QC → Compliance & Testing ───
+  newPage('Compliance & Testing', null, 14);
+  y = 28;
+  sectionHeading('Shipping Requirements', y); y += 8;
+  const shipRows = (d.shippingReqs || []).filter(r => r.requirement || r.specification).map(r =>
+    [r.requirement, r.specification, r.notes]);
+  table(['Requirement', 'Specification', 'Notes'], shipRows, 10, y, [70, 130, 77]);
+  y += 24 + shipRows.length * 6;
+  sectionHeading('Testing Standards', y); y += 8;
+  const testRows = (d.testingStandards || []).filter(t => t.test || t.standard).map(t =>
+    [t.test, t.standard, t.requirement, t.testMethod, t.passFail]);
+  table(['Test', 'Standard', 'Requirement', 'Test Method', 'Pass-Fail'], testRows, 10, y, [55, 55, 55, 60, 52]);
+
+  // ─── QC → Quality Inspection (AQL) ───
+  newPage('Quality Inspection (AQL)', null, 15);
+  y = 28;
+  const qi = d.qualityInspection || { aqlMajor: '2.5', aqlMinor: '4.0', inspectionStage: 'During Production', checklist: [], photoRequirements: '' };
+  sectionHeading('AQL Standard', y); y += 8;
+  field('Major (AQL)', qi.aqlMajor, 10, y);
+  field('Minor (AQL)', qi.aqlMinor, 80, y);
+  field('Inspection Stage', qi.inspectionStage, 150, y); y += 18;
+  sectionHeading('Inspection Checklist', y); y += 8;
+  const cqRows = (qi.checklist || []).filter(c => c.area || c.criterion).map(c =>
+    [c.area, c.criterion, c.severity]);
+  table(['Area', 'Criterion', 'Severity'], cqRows, 10, y, [55, 180, 42]);
+  y += 24 + cqRows.length * 6;
+  sectionHeading('Photo Requirements', y); y += 8;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...hex(FR.slate));
+  (qi.photoRequirements || '—').split('\n').forEach((line, i) => doc.text(line, 10, y + i * 5, { maxWidth: W - 20 }));
+
   // ─── Packaging → Labels & Packaging ───
-  newPage('Labels & Packaging', null, 15);
+  newPage('Labels & Packaging', null, 16);
   y = 28;
   field('Packaging', d.packaging, 10, y); y += 14;
   field('Packaging Notes', d.packagingNotes, 10, y); y += 14;
@@ -378,7 +410,7 @@ export async function generateTechPackPDF(pack) {
   careLines.forEach((line, i) => doc.text(line, 10, y + i * 5));
 
   // ─── Logistics → Order & Delivery ───
-  newPage('Order & Delivery', null, 16);
+  newPage('Order & Delivery', null, 17);
   y = 28;
   sectionHeading('Quantity Per Size', y); y += 8;
   const qRows = (d.quantities || []).filter(q => q.colorway).map(q =>
@@ -394,14 +426,14 @@ export async function generateTechPackPDF(pack) {
   field('Target Arrival', d.targetArrivalDate, 200, y);
 
   // ─── Logistics → Packing List ───
-  newPage('Packing List', null, 16);
+  newPage('Packing List', null, 17);
   y = 28;
   const pkRows = (d.cartons || []).filter(c => c.cartonNum).map(c =>
     [c.cartonNum, c.colorway, c.sizeBreakdown, c.qtyPerCarton, c.dims, c.grossWeight, c.netWeight]);
   table(['#', 'Colorway', 'Size Breakdown', 'Qty', 'Dims (cm)', 'Gross kg', 'Net kg'], pkRows, 10, y, [15, 40, 60, 25, 40, 30, 67]);
 
   // ─── Sign-off → Review & Revision ───
-  newPage('Review & Revision', null, 17);
+  newPage('Review & Revision', null, 18);
   y = 40;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);

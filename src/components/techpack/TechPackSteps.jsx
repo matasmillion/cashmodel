@@ -1126,7 +1126,7 @@ export function StepTreatments({ data, set, images, onUpload, onRemove }) {
   );
 }
 export function StepLabels({ data, set, images, onUpload, onRemove }) {
-  const locked = isStepLocked(10, data.status);
+  const locked = isStepLocked(16, data.status);
 
   const packaging = data.packagingItems && data.packagingItems.length ? data.packagingItems : [{ component: '', material: '', color: '', size: '', artworkPrint: '', qtyPerOrder: '', notes: '' }];
   const updP = (i, k, v) => set('packagingItems', packaging.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
@@ -1184,7 +1184,7 @@ function computeQtyRow(row) {
 }
 
 export function StepOrder({ data, set, library, saveToLibrary }) {
-  const locked = isStepLocked(11, data.status);
+  const locked = isStepLocked(17, data.status);
   const [unitWeightG, setUnitWeightG] = useState(data.unitWeightGrams || '500');
   const [aiKey, setAiKey] = useState(getStoredKey());
   const [aiNotes, setAiNotes] = useState('');
@@ -1324,7 +1324,7 @@ export function StepOrder({ data, set, library, saveToLibrary }) {
   );
 }
 export function StepCompliance({ data, set }) {
-  const locked = isStepLocked(12, data.status);
+  const locked = isStepLocked(14, data.status);
 
   const shipping = data.shippingReqs && data.shippingReqs.length ? data.shippingReqs : [{ requirement: '', specification: '', notes: '' }];
   const updS = (i, k, v) => set('shippingReqs', shipping.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
@@ -1362,7 +1362,7 @@ export function StepCompliance({ data, set }) {
 
   return (
     <div>
-      <SectionTitle>Compliance &amp; Quality</SectionTitle>
+      <SectionTitle>Compliance &amp; Testing</SectionTitle>
       {locked && <LockedBanner status={data.status} />}
       <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
 
@@ -1378,7 +1378,7 @@ export function StepCompliance({ data, set }) {
         </div>
 
         <div style={{ marginBottom: 18 }}>
-          <label style={sectionLabel}>Quality &amp; Testing Standards</label>
+          <label style={sectionLabel}>Testing Standards</label>
           <ArrayTable
             headers={[
               { key: 'test',        label: 'Test',        placeholder: 'Colorfastness / Tensile' },
@@ -1408,6 +1408,68 @@ export function StepCompliance({ data, set }) {
             ]}
             rows={matrix} onUpdate={updM} onAdd={addM} onRemove={rmM} />
         </div>
+      </fieldset>
+    </div>
+  );
+}
+
+const INSPECTION_STAGES = ['Pre-Production', 'During Production', 'Final Random Inspection', 'Pre-Shipment'];
+const SEVERITY_OPTIONS = ['Critical', 'Major', 'Minor'];
+
+export function StepQuality({ data, set }) {
+  const locked = isStepLocked(15, data.status);
+
+  const qi = data.qualityInspection || { aqlMajor: '2.5', aqlMinor: '4.0', inspectionStage: 'During Production', checklist: [], photoRequirements: '' };
+  const setQI = (k, v) => set('qualityInspection', { ...qi, [k]: v });
+
+  const checklist = qi.checklist && qi.checklist.length ? qi.checklist : [{ area: '', criterion: '', severity: 'Major' }];
+  const updC = (i, k, v) => setQI('checklist', checklist.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addC = () => setQI('checklist', [...checklist, { area: '', criterion: '', severity: 'Major' }]);
+  const rmC  = (i) => setQI('checklist', checklist.filter((_, idx) => idx !== i));
+
+  const severityRender = (v, onChange) => (
+    <select value={v || 'Major'} onChange={e => onChange(e.target.value)}
+      style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box' }}>
+      {SEVERITY_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+    </select>
+  );
+
+  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+
+  return (
+    <div>
+      <SectionTitle>Quality Inspection (AQL)</SectionTitle>
+      {locked && <LockedBanner status={data.status} />}
+      <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
+
+        <div style={{ marginBottom: 18 }}>
+          <label style={sectionLabel}>AQL Standard</label>
+          <Row cols="1fr 1fr 1fr">
+            <Input label="Major Defects (AQL)" value={qi.aqlMajor} onChange={v => setQI('aqlMajor', v)} placeholder="2.5" />
+            <Input label="Minor Defects (AQL)" value={qi.aqlMinor} onChange={v => setQI('aqlMinor', v)} placeholder="4.0" />
+            <div>
+              <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>Inspection Stage</label>
+              <select value={qi.inspectionStage || 'During Production'} onChange={e => setQI('inspectionStage', e.target.value)}
+                style={{ width: '100%', padding: '6px 8px', fontSize: 12, border: `1px solid ${FR.sand}`, borderRadius: 3, background: FR.white, color: FR.slate, fontFamily: "'Helvetica Neue',sans-serif" }}>
+                {INSPECTION_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </Row>
+        </div>
+
+        <div style={{ marginBottom: 18 }}>
+          <label style={sectionLabel}>Inspection Checklist</label>
+          <ArrayTable
+            headers={[
+              { key: 'area',      label: 'Area',      placeholder: 'Seam / Hem / Print' },
+              { key: 'criterion', label: 'Criterion', placeholder: 'Stitches per inch ≥ 8' },
+              { key: 'severity',  label: 'Severity',  render: severityRender },
+            ]}
+            rows={checklist} onUpdate={updC} onAdd={addC} onRemove={rmC} />
+        </div>
+
+        <Input label="Photo Requirements" value={qi.photoRequirements} onChange={v => setQI('photoRequirements', v)} multiline
+          placeholder="What photos must the vendor send with each batch (front / back / detail / packaging)?" />
       </fieldset>
     </div>
   );
@@ -1512,10 +1574,11 @@ export const STEP_FNS = [
   StepColor,             // 11 Embellishments — Colorways
   StepArtwork,           // 12 Embellishments — Artwork & Placement
   StepTreatments,        // 13 Treatments
-  StepCompliance,        // 14 QC
-  StepLabels,            // 15 Packaging
-  StepOrder,             // 16 Logistics
-  StepRevision,          // 17 Sign-off
+  StepCompliance,        // 14 QC — Compliance & Testing
+  StepQuality,           // 15 QC — Quality Inspection (AQL)
+  StepLabels,            // 16 Packaging
+  StepOrder,             // 17 Logistics
+  StepRevision,          // 18 Sign-off
 ];
 
 // Backwards-compat aliases so older references keep resolving during the

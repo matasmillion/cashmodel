@@ -7,7 +7,7 @@ import { FR } from './techPackConstants';
 
 const PAGE_W = 1123;
 const PAGE_H = 794;
-const TOTAL_PAGES = 18;
+const TOTAL_PAGES = 19;
 
 function esc(s) { return String(s ?? ''); }
 function clampLine(s, maxW, charW = 6.5) {
@@ -1005,7 +1005,7 @@ function PageOrder({ d }) {
   );
 }
 
-// ─── Page 13 — Compliance & Quality ──────────────────────────────────────────
+// ─── QC — Compliance & Testing ───────────────────────────────────────────────
 function PageCompliance({ d }) {
   const shipping = (d.shippingReqs || []).filter(r => r.requirement || r.specification || r.notes);
   const tests    = (d.testingStandards || []).filter(r => r.test || r.standard || r.requirement);
@@ -1038,11 +1038,51 @@ function PageCompliance({ d }) {
       <SectionHeading x={40} y={158}>Shipping Requirements</SectionHeading>
       <GridTable x={40} y={170} cols={shipCols} rows={shipping} bodyRows={3} />
 
-      <SectionHeading x={40} y={290}>Quality &amp; Testing Standards</SectionHeading>
+      <SectionHeading x={40} y={290}>Testing Standards</SectionHeading>
       <GridTable x={40} y={302} cols={testCols} rows={tests} bodyRows={4} />
 
       <SectionHeading x={40} y={434}>Barcode &amp; SKU Matrix</SectionHeading>
       <GridTable x={40} y={446} cols={matrixCols} rows={matrix} bodyRows={10} />
+    </g>
+  );
+}
+
+// ─── QC — Quality Inspection (AQL) ───────────────────────────────────────────
+function PageQuality({ d }) {
+  const qi = d.qualityInspection || { aqlMajor: '2.5', aqlMinor: '4.0', inspectionStage: 'During Production', checklist: [], photoRequirements: '' };
+  const checklist = (qi.checklist || []).filter(r => r.area || r.criterion);
+
+  const cCols = [
+    { key: 'area',      label: 'Area',      w: 240 },
+    { key: 'criterion', label: 'Criterion', w: 600 },
+    { key: 'severity',  label: 'Severity',  w: 203 },
+  ];
+
+  const aqlY = 158;
+  const listY = 270;
+  const photoY = 590;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <SectionHeading x={40} y={aqlY}>AQL Standard</SectionHeading>
+      <text x={40}  y={aqlY + 30} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">MAJOR (AQL)</text>
+      <text x={40}  y={aqlY + 50} fontSize="14" fill={FR.slate}>{esc(qi.aqlMajor || '—')}</text>
+      <text x={300} y={aqlY + 30} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">MINOR (AQL)</text>
+      <text x={300} y={aqlY + 50} fontSize="14" fill={FR.slate}>{esc(qi.aqlMinor || '—')}</text>
+      <text x={560} y={aqlY + 30} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">INSPECTION STAGE</text>
+      <text x={560} y={aqlY + 50} fontSize="14" fill={FR.slate}>{esc(qi.inspectionStage || '—')}</text>
+
+      <SectionHeading x={40} y={listY}>Inspection Checklist</SectionHeading>
+      <GridTable x={40} y={listY + 12} cols={cCols} rows={checklist} bodyRows={14} />
+
+      <SectionHeading x={40} y={photoY}>Photo Requirements</SectionHeading>
+      <foreignObject x="40" y={photoY + 14} width={PAGE_W - 80} height="120">
+        <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: 11, color: FR.slate, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+          {qi.photoRequirements || '—'}
+        </div>
+      </foreignObject>
     </g>
   );
 }
@@ -1138,7 +1178,8 @@ const PAGE_FNS = [
   { title: 'Colorways',                         phase: 'Embellishments', body: ({ d }) => <PageColorways d={d} /> },
   { title: 'Artwork & Placement',               phase: 'Embellishments', body: ({ d, images }) => <PageArtwork d={d} images={images} /> },
   { title: 'Garment Treatments',                phase: 'Treatments',     body: ({ d, images }) => <PageTreatments d={d} images={images} /> },
-  { title: 'Compliance & Quality',              phase: 'QC',             body: ({ d }) => <PageCompliance d={d} /> },
+  { title: 'Compliance & Testing',              phase: 'QC',             body: ({ d }) => <PageCompliance d={d} /> },
+  { title: 'Quality Inspection (AQL)',          phase: 'QC',             body: ({ d }) => <PageQuality d={d} /> },
   { title: 'Labels & Packaging',                phase: 'Packaging',      body: ({ d, images }) => <PageLabels d={d} images={images} /> },
   { title: 'Order & Delivery',                  phase: 'Logistics',      body: ({ d }) => <PageOrder d={d} /> },
   { title: 'Revision History & Approval',       phase: 'Sign-off',       body: ({ d }) => <PageRevision d={d} /> },
