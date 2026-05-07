@@ -308,9 +308,13 @@ function ComponentSlotCard({ entry, fullData, onClear, onChangeRole, onChangeQty
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.type]);
 
+  const packHref = entry.componentId ? `#plm/library/trims/${entry.componentId}` : null;
+
   return (
     <div style={{ background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 6, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ aspectRatio: '4 / 3', background: FR.salt, position: 'relative' }}>
+      {/* Wider 3:2 image area — trim photos are horizontal, this fits the
+          measurement diagram without dwarfing the text below. */}
+      <div style={{ aspectRatio: '3 / 2', background: FR.salt, position: 'relative' }}>
         {s.cover ? (
           // contain (not cover) so the full trim image is always visible —
           // factory-facing pages mustn't crop the measurement diagram.
@@ -324,7 +328,18 @@ function ComponentSlotCard({ entry, fullData, onClear, onChangeRole, onChangeQty
         <div style={{ fontSize: 8, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', color: FR.soil }}>
           {roleLabel}: {s.type || '—'}
         </div>
-        <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 13, color: FR.slate, lineHeight: 1.15 }}>{s.name}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
+          <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 13, color: FR.slate, lineHeight: 1.15, flex: 1 }}>{s.name}</div>
+          {packHref && (
+            <a
+              href={packHref}
+              style={{ fontSize: 9, color: FR.soil, textDecoration: 'none', borderBottom: `0.5px solid ${FR.soil}`, paddingBottom: 1, whiteSpace: 'nowrap' }}
+              title="Open this component pack in the Library"
+            >
+              View pack ↗
+            </a>
+          )}
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 8px', fontSize: 9, color: FR.stone, lineHeight: 1.3 }}>
           <div><span style={{ color: FR.soil, fontWeight: 600 }}>Vendor</span> {s.vendor}</div>
           <div><span style={{ color: FR.soil, fontWeight: 600 }}>Color</span> {s.color}</div>
@@ -462,16 +477,12 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
     set(fieldName, picked.map((p, i) => (i === idx ? { ...p, quantity } : p)));
   }
 
-  // Aggregate file refs from every picked component for the bottom strip.
-  const aggregatedFiles = picked
-    .map(p => fullById[p.componentId])
-    .filter(Boolean)
-    .flatMap(c => (c.data?.attachments || []).map(a => ({ ...a, componentName: c.component_name })));
-
   return (
     <div>
       <SectionTitle>{title}</SectionTitle>
-      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, lineHeight: 1.5 }}>{subtitle}</p>
+      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, lineHeight: 1.5 }}>
+        {subtitle} Each card links straight to its component pack — the supplier can click <strong>View pack ↗</strong> to see the full spec.
+      </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 22 }}>
         {Array.from({ length: maxSlots }).map((_, i) => {
@@ -491,25 +502,6 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
             />
           );
         })}
-      </div>
-
-      {/* Aggregated component files */}
-      <div style={{ marginTop: 14 }}>
-        <label style={labelStyle}>Component Files</label>
-        {aggregatedFiles.length === 0 ? (
-          <div style={{ padding: '14px 16px', background: FR.salt, border: `1px dashed ${FR.sand}`, borderRadius: 6, fontSize: 11, color: FR.stone, fontStyle: 'italic' }}>
-            Files attached to picked components will appear here automatically.
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
-            {aggregatedFiles.map((f, i) => (
-              <div key={i} style={{ background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 4, padding: '8px 10px', fontSize: 11, color: FR.slate }}>
-                <div style={{ fontWeight: 600, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
-                <div style={{ fontSize: 9, color: FR.stone }}>{f.componentName}</div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {pickerOpen && (
