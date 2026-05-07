@@ -92,31 +92,83 @@ function PageCompetitorLandscape({ d }) {
   );
 }
 
-// ─── Page 00 — Merchandising Preview (placeholder) ─────────────────────────
+// ─── Page 00 — Merchandising Preview (desktop + iPhone frames) ─────────────
 function PageMerchandisingPreview({ d }) {
   void d;
+  // Desktop frame: 16:10 — sits left, takes more horizontal room.
+  const deskW = 620;
+  const deskH = deskW * (10 / 16); // 387.5
+  const deskX = 80;
+  const deskY = 200;
+
+  // Phone frame: 9:19.5 — sits right.
+  const phoneW = 130;
+  const phoneH = phoneW * (19.5 / 9); // 281.7
+  const phoneX = deskX + deskW + 60;
+  const phoneY = 200;
+
+  // Browser chrome inside the desktop frame
+  const chromeH = 28;
+  const dot = (cx, cy, fill) => <circle cx={cx} cy={cy} r={4.5} fill={fill} />;
+
   return (
     <g>
       <text x={PAGE_W / 2} y={108} textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="16" fill={FR.slate}>
-        Storefront Visualization — Coming Soon
+        Storefront Visualization — Desktop & Mobile
+      </text>
+      <text x={PAGE_W / 2} y={130} textAnchor="middle" fontSize={10} fill={FR.stone} fontStyle="italic">
+        Live PDP preview will replace these frames once the product preview engine ships.
       </text>
 
-      {/* Dashed-border placeholder card */}
-      <rect x={140} y={170} width={PAGE_W - 280} height={460}
-        fill={FR.salt} stroke={FR.sand} strokeWidth={2} strokeDasharray="6 6" rx={10} />
+      {/* Section labels above each device */}
+      <text x={deskX + deskW / 2} y={deskY - 14} textAnchor="middle"
+        fontSize={9} fontWeight={600} fill={FR.soil} letterSpacing={1.5}>DESKTOP · 16:10</text>
+      <text x={phoneX + phoneW / 2} y={phoneY - 14} textAnchor="middle"
+        fontSize={9} fontWeight={600} fill={FR.soil} letterSpacing={1.5}>iPHONE · 9:19.5</text>
 
-      <text x={PAGE_W / 2} y={350} textAnchor="middle" fontSize="9" fontWeight="bold"
-        fill={FR.stone} letterSpacing="2">COMING SOON</text>
-      <text x={PAGE_W / 2} y={388} textAnchor="middle"
-        fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="32" fill={FR.slate}>
-        Merchandising Preview
-      </text>
-      <text x={PAGE_W / 2} y={428} textAnchor="middle" fontSize={12} fill={FR.stone}>
-        Visualize this product on the live storefront before sampling —
-      </text>
-      <text x={PAGE_W / 2} y={448} textAnchor="middle" fontSize={12} fill={FR.stone}>
-        prototype merchandising, hero imagery, and PDP copy at the design phase.
-      </text>
+      {/* Desktop frame */}
+      <rect x={deskX} y={deskY} width={deskW} height={deskH}
+        fill={FR.white} stroke={FR.sand} strokeWidth={0.5} rx={10} />
+      {/* Browser chrome bar */}
+      <rect x={deskX} y={deskY} width={deskW} height={chromeH} fill={FR.salt} rx={10} />
+      <rect x={deskX} y={deskY + chromeH - 6} width={deskW} height={6} fill={FR.salt} />
+      <line x1={deskX} y1={deskY + chromeH} x2={deskX + deskW} y2={deskY + chromeH}
+        stroke={FR.sand} strokeWidth={0.5} />
+      {dot(deskX + 14, deskY + 14, '#FF5F57')}
+      {dot(deskX + 28, deskY + 14, '#FEBC2E')}
+      {dot(deskX + 42, deskY + 14, '#28C840')}
+      {/* Address bar */}
+      <rect x={deskX + 70} y={deskY + 6} width={deskW - 80} height={16}
+        fill={FR.white} stroke={FR.sand} strokeWidth={0.5} rx={3} />
+      <text x={deskX + 80} y={deskY + 17} fontSize={9} fill={FR.stone}
+        fontFamily="ui-monospace,Menlo,monospace">foreignresource.co/products/{'{style-slug}'}</text>
+      {/* Empty viewport */}
+      <text x={deskX + deskW / 2} y={deskY + chromeH + (deskH - chromeH) / 2 - 6}
+        textAnchor="middle" fontSize={9} fontWeight={600}
+        fill={FR.stone} letterSpacing={1.5}>COMING SOON</text>
+      <text x={deskX + deskW / 2} y={deskY + chromeH + (deskH - chromeH) / 2 + 14}
+        textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif"
+        fontSize={18} fill={FR.slate}>PDP Layout</text>
+
+      {/* iPhone frame — outer slate body */}
+      <rect x={phoneX} y={phoneY} width={phoneW} height={phoneH}
+        fill={FR.slate} rx={18} />
+      {/* Inner screen */}
+      <rect x={phoneX + 5} y={phoneY + 5} width={phoneW - 10} height={phoneH - 10}
+        fill={FR.white} rx={14} />
+      {/* Dynamic Island */}
+      <rect x={phoneX + phoneW / 2 - 18} y={phoneY + 12} width={36} height={11}
+        fill={FR.slate} rx={6} />
+      {/* Bottom home indicator */}
+      <rect x={phoneX + phoneW / 2 - 22} y={phoneY + phoneH - 11} width={44} height={2.5}
+        fill={FR.slate} opacity={0.4} rx={1.5} />
+      {/* Inner copy */}
+      <text x={phoneX + phoneW / 2} y={phoneY + phoneH / 2 - 6}
+        textAnchor="middle" fontSize={8} fontWeight={600}
+        fill={FR.stone} letterSpacing={1.5}>COMING SOON</text>
+      <text x={phoneX + phoneW / 2} y={phoneY + phoneH / 2 + 10}
+        textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif"
+        fontSize={13} fill={FR.slate}>Mobile PDP</text>
     </g>
   );
 }

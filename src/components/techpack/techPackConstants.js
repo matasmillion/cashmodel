@@ -22,7 +22,7 @@ export const BOM_COMPONENT_OPTIONS = [
 
 export const DEFAULT_LIBRARY = { bom: [], fabrics: [], trims: [], labels: [], locations: [], shipMethods: [] };
 
-export const STATUSES = ['Design', 'Sampling', 'Testing', 'Pre-Production', 'Production', 'Released'];
+export const STATUSES = ['Merchandising', 'Design', 'Sampling', 'Testing', 'Pre-Production', 'Production', 'Released'];
 
 // Steps locked until Pre-Production: Compliance (16), Quality (17), Labels (18), Order (19)
 export const LOCKED_STEPS = new Set([16, 17, 18, 19]);
@@ -31,6 +31,18 @@ export function isStepLocked(stepIndex, status) {
   const unlockAt = STATUSES.indexOf('Pre-Production');
   const current = STATUSES.indexOf(status);
   return current < unlockAt || current === -1;
+}
+
+// Merchandising steps lock the moment the pack moves past the
+// Merchandising phase — competitor and storefront prep is "decided" by
+// then. Empty / undefined status counts as Merchandising (new pack).
+export const MERCH_STEPS = new Set([0, 1]);
+export function isMerchLocked(stepIndex, status) {
+  if (!MERCH_STEPS.has(stepIndex)) return false;
+  const current = STATUSES.indexOf(status);
+  // No status set yet (new pack) → treat as Merchandising → unlocked
+  if (!status || current === -1) return false;
+  return current > STATUSES.indexOf('Merchandising');
 }
 
 // 21-step wizard, ordered by manufacturing stage. Two pre-tech-pack pages
@@ -42,8 +54,8 @@ export function isStepLocked(stepIndex, status) {
 // `icon` is the page-number label shown in the live preview header (string,
 // not always numeric — merchandising pages use 000 and 00).
 export const STEPS = [
-  { id: 'competitors',   title: 'Competitor Landscape',             icon: '000', phase: 'Merchandising' },
-  { id: 'merch-preview', title: 'Merchandising Preview',            icon: '00',  phase: 'Merchandising' },
+  { id: 'competitors',   title: 'Competitor Landscape',             icon: '000', phase: 'Merchandising', skippable: true },
+  { id: 'merch-preview', title: 'Merchandising Preview',            icon: '00',  phase: 'Merchandising', skippable: true },
   { id: 'cover',         title: 'Style Overview',                   icon: '01', phase: 'Design' },
   { id: 'design',        title: 'Design Overview',                  icon: '02', phase: 'Design' },
   { id: 'bom',           title: 'Bill of Materials — Fabrics & Trims', icon: '03', phase: 'Materials' },
