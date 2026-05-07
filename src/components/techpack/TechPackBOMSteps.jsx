@@ -126,6 +126,8 @@ function specOf(componentRow) {
 // in `fabric_data` or top-level columns depending on shape.
 function fabricSpec(row) {
   const d = row?.data || row?.fabric_data || row || {};
+  const tier = (d?.costTiers || [])[0];
+  const unitCost = parseFloat(tier?.unitCost) || parseFloat(row?.cost_per_unit) || parseFloat(d?.cost_per_unit) || parseFloat(d?.costPerYard) || parseFloat(d?.costPerMeter) || 0;
   return {
     name:        d.name || row?.name || 'Untitled fabric',
     composition: d.composition || '—',
@@ -133,6 +135,8 @@ function fabricSpec(row) {
     weave:       d.weave || row?.weave || '—',
     vendor:      d.supplier || row?.supplier || '—',
     cover:       d.cover_image || row?.cover_image || null,
+    unitCost,
+    currency:    d.currency || tier?.currency || 'USD',
   };
 }
 
@@ -216,9 +220,16 @@ export function StepFabrics({ data, set }) {
     setPickerSlot(null);
   }
 
+  const fabricsSubtotal = picked.reduce((sum, p) => sum + (resolved[p?.fabricId]?.unitCost || 0), 0);
+
   return (
     <div>
-      <SectionTitle>Fabrics</SectionTitle>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 14, marginBottom: 4 }}>
+        <SectionTitle>Fabrics</SectionTitle>
+        <span style={{ fontSize: 12, color: FR.slate, fontFamily: "ui-monospace, Menlo, monospace", fontWeight: 600 }}>
+          Fabrics subtotal · {formatMoney(fabricsSubtotal)}
+        </span>
+      </div>
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, lineHeight: 1.5 }}>
         Up to three fabrics per garment, each picked from the PLM Fabric library. Add a new fabric in the library first if it isn't here.
       </p>
@@ -253,10 +264,14 @@ export function StepFabrics({ data, set }) {
                 <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 16, color: FR.slate, lineHeight: 1.2, marginBottom: 8 }}>
                   {spec?.name || 'Loading…'}
                 </div>
-                <div style={{ fontSize: 11, color: FR.stone, lineHeight: 1.5 }}>
+                <div style={{ fontSize: 11, color: FR.stone, lineHeight: 1.5, marginBottom: 8 }}>
                   <div>{spec?.composition || '—'}</div>
                   <div>{spec?.weight} · {spec?.weave}</div>
                   <div>Vendor: {spec?.vendor || '—'}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6, paddingTop: 6, borderTop: `0.5px solid ${FR.sand}`, fontFamily: "ui-monospace, Menlo, monospace" }}>
+                  <span style={{ fontSize: 10, color: FR.stone }}>Cost / unit</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: FR.slate }}>{formatMoney(spec?.unitCost || 0, spec?.currency)}</span>
                 </div>
               </div>
             </div>
@@ -303,19 +318,34 @@ const MAX_TRIMS = 6;
 export function readComponentSpec(fullData) {
   const c = fullData?.data || {};
   const m = (c.materials || [])[0] || {};
+  const tier = (c.costTiers || [])[0];
+  const unitCost = parseFloat(tier?.unitCost) || parseFloat(fullData?.cost_per_unit) || parseFloat(c?.targetUnitCost) || 0;
   return {
-    name:    fullData?.component_name || c.componentName || '—',
-    type:    c.componentType || fullData?.component_category || '',
-    cover:   fullData?._constructionDiagram || fullData?.cover_image || c.cover_image || null,
-    vendor:  m.vendor || c.supplier || fullData?.supplier || '—',
-    color:   (c.colorwayPicks || [])[0] || (c.colorwaysList || [])[0]?.frColor || m.color || '—',
-    length:  m.length || '—',
-    size:    m.size || '—',
+    name:     fullData?.component_name || c.componentName || '—',
+    type:     c.componentType || fullData?.component_category || '',
+    cover:    fullData?._constructionDiagram || fullData?.cover_image || c.cover_image || null,
+    vendor:   m.vendor || c.supplier || fullData?.supplier || '—',
+    color:    (c.colorwayPicks || [])[0] || (c.colorwaysList || [])[0]?.frColor || m.color || '—',
+    length:   m.length || '—',
+    size:     m.size || '—',
+    unitCost,
+    currency: c.currency || tier?.currency || 'USD',
   };
+}
+
+function formatMoney(n, currency = 'USD') {
+  if (!Number.isFinite(n) || n === 0) return '$0.00';
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n);
+  } catch {
+    return `$${n.toFixed(2)}`;
+  }
 }
 
 function ComponentSlotCard({ entry, fullData, onClear, onChangeRole, onChangeQty, roleLabel = 'Type' }) {
   const s = readComponentSpec(fullData);
+  const qtyNum = parseFloat(String(entry.quantity || '').replace(/[^0-9.]/g, '')) || 1;
+  const lineCost = s.unitCost * qtyNum;
 
   // Back-fill the saved role from the library's componentType the moment
   // it lands. We always overwrite, even for non-empty values, so renames
@@ -373,6 +403,15 @@ function ComponentSlotCard({ entry, fullData, onClear, onChangeRole, onChangeQty
             placeholder="e.g. 1, 2 m, 4 cm"
             style={{ flex: 1, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '3px 6px', fontSize: 10, color: FR.slate, background: FR.white, outline: 'none', fontFamily: "'Helvetica Neue', sans-serif" }}
           />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6, fontFamily: "ui-monospace, Menlo, monospace" }}>
+          <span style={{ fontSize: 9, color: FR.stone }}>
+            Unit · {formatMoney(s.unitCost, s.currency)}
+            {qtyNum > 1 && ` × ${qtyNum}`}
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: FR.slate }}>
+            {formatMoney(lineCost, s.currency)}
+          </span>
         </div>
       </div>
     </div>
@@ -515,9 +554,25 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
     set(fieldName, picked.map((p, i) => (i === idx ? { ...p, quantity } : p)));
   }
 
+  // Section subtotal — sum of every picked slot's line cost, displayed
+  // beside the page title so the designer always sees what this section
+  // contributes to the unit cost.
+  const sectionSubtotal = picked.reduce((sum, p) => {
+    const full = fullById[p?.componentId];
+    if (!full) return sum;
+    const s = readComponentSpec(full);
+    const qtyNum = parseFloat(String(p?.quantity || '').replace(/[^0-9.]/g, '')) || 1;
+    return sum + (s.unitCost * qtyNum);
+  }, 0);
+
   return (
     <div>
-      <SectionTitle>{title}</SectionTitle>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 14, marginBottom: 4 }}>
+        <SectionTitle>{title}</SectionTitle>
+        <span style={{ fontSize: 12, color: FR.slate, fontFamily: "ui-monospace, Menlo, monospace", fontWeight: 600 }}>
+          {title} subtotal · {formatMoney(sectionSubtotal)}
+        </span>
+      </div>
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, lineHeight: 1.5 }}>
         {subtitle} Each card links straight to its component pack — the supplier can click <strong>View pack ↗</strong> to see the full spec.
       </p>

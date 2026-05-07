@@ -1405,6 +1405,25 @@ export function StepConstruction({ data, set }) {
           ]}
           rows={seams} onUpdate={updS} onAdd={addS} onRemove={rmS} />
       </div>
+
+      <div style={{ marginTop: 18, padding: '14px 16px', background: FR.salt, border: `0.5px solid ${FR.sand}`, borderRadius: 6 }}>
+        <label style={sectionLabel}>Cut &amp; Sew Labor Cost (per garment)</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 13, color: FR.stone, fontFamily: "ui-monospace, Menlo, monospace" }}>$</span>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={data.cutSewLaborCost || ''}
+            onChange={e => set('cutSewLaborCost', e.target.value)}
+            placeholder="0.00"
+            style={{ flex: 1, padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 4, fontSize: 13, color: FR.slate, background: FR.white, fontFamily: "ui-monospace, Menlo, monospace", outline: 'none' }}
+          />
+        </div>
+        <div style={{ fontSize: 11, color: FR.stone, marginTop: 8, lineHeight: 1.4 }}>
+          Total stitching labor charged by the factory per garment. Rolls into the Cut &amp; Sew phase pill in the sidebar and the unit-cost total in the header.
+        </div>
+      </div>
     </div>
   );
 }

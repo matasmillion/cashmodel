@@ -338,17 +338,64 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     };
   }, [step, pack.id]);
 
-  // Derived: full unit-cost roll-up — BOM + colorway library.
-  // Every cash line on the garment contributes a per-unit number; vendors
-  // aren't a line item here (they're the maker, not a part).
-  const bomCost = computeBOMCost(data);
+  // Derived: full unit-cost roll-up — picked fabrics + trims + packaging
+  // + treatments + colorways + cut/sew labor. The garment's design-phase
+  // cost is the entire reason this builder exists, so every line item the
+  // designer adds rolls up into a phase pill in the sidebar and a total
+  // unit cost in the header.
+  const componentUnitCost = (full) => {
+    if (!full) return 0;
+    const tier = (full.data?.costTiers || [])[0];
+    return parseFloat(tier?.unitCost) || parseFloat(full.cost_per_unit) || parseFloat(full.data?.targetUnitCost) || 0;
+  };
+  const fabricUnitCost = (row) => {
+    if (!row) return 0;
+    const d = row.data || row;
+    const tier = (d?.costTiers || [])[0];
+    return parseFloat(tier?.unitCost) || parseFloat(row.cost_per_unit) || parseFloat(d?.cost_per_unit) || parseFloat(d?.costPerYard) || parseFloat(d?.costPerMeter) || 0;
+  };
+  const parseQty = (q) => {
+    if (q === null || q === undefined || q === '') return 1;
+    const n = parseFloat(String(q).replace(/[^0-9.]/g, ''));
+    return Number.isFinite(n) && n > 0 ? n : 1;
+  };
+
+  const fabricsCost = (data.pickedFabrics || []).reduce((sum, p) => {
+    const row = fabricsById[p?.fabricId];
+    return sum + fabricUnitCost(row);
+  }, 0);
+  const trimsCost = (data.pickedTrims || []).reduce((sum, p) => {
+    const full = componentsById[p?.componentId];
+    return sum + componentUnitCost(full) * parseQty(p?.quantity);
+  }, 0);
+  const packagingCost = (data.pickedPackaging || []).reduce((sum, p) => {
+    const full = componentsById[p?.componentId];
+    return sum + componentUnitCost(full) * parseQty(p?.quantity);
+  }, 0);
+
+  const treatmentsCost = (() => {
+    let sum = 0;
+    (data.fabrics || []).forEach(f => {
+      if (!f?.treatment_id) return;
+      const t = treatmentsById[f.treatment_id];
+      sum += parseFloat(t?.target_cost) || parseFloat(t?.cost_per_unit) || 0;
+    });
+    return sum;
+  })();
+
+  const cutSewCost = parseFloat(data.cutSewLaborCost) || 0;
+
+  const bomCost = computeBOMCost(data);  // legacy free-text BOM, kept for old packs
   const colorwayCost = computeColorwayCost(data, getFRColorCost);
-  const totalUnitCost = bomCost + colorwayCost;
+  const billOfMaterialsCost = fabricsCost + trimsCost + packagingCost + bomCost;
+  const totalUnitCost = billOfMaterialsCost + colorwayCost + treatmentsCost + cutSewCost;
 
   // Per-phase cost subtotals shown as pills in the sidebar phase headers.
   const phaseCosts = {
-    'Materials': bomCost,
+    'Bill of Materials': billOfMaterialsCost,
+    'Cut & Sew': cutSewCost,
     'Embellishments': colorwayCost,
+    'Treatments': treatmentsCost,
   };
   const targetFOB = parseFloat(data.targetFOB) || 0;
   const costVariance = targetFOB > 0 ? totalUnitCost - targetFOB : 0;

@@ -130,6 +130,9 @@ export const DEFAULT_DATA = {
   seams: [{ operation: '', seamType: '', stitchType: '', spiSpcm: '', threadColor: '', threadType: '', notes: '' }],
   constructionNotes: '',
   constructionNotesTable: [{ detail: '', area: '', description: '', reference: '' }],
+  // Labor / cut-and-sew cost per garment, in the same currency as the rest
+  // of the cost roll-up. Designers fill this in on the Seam & Stitch step.
+  cutSewLaborCost: '',
   // Construction Details — two pages, four entries each. Each entry maps to a
   // red-numbered detail callout on the page's reference image. Title and
   // description are dedicated fields so they can be translated independently

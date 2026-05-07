@@ -509,6 +509,15 @@ function PageFabrics({ d, fabricsById = {} }) {
                 <text x={x + 16} y={startY + imgH + 96} fontSize={10} fill={FR.stone}>
                   Vendor: {row?.data?.supplier || row?.supplier || '—'}
                 </text>
+                {(() => {
+                  const tier = (row?.data?.costTiers || [])[0];
+                  const unitCost = parseFloat(tier?.unitCost) || parseFloat(row?.cost_per_unit) || parseFloat(row?.data?.cost_per_unit) || parseFloat(row?.data?.costPerYard) || parseFloat(row?.data?.costPerMeter) || 0;
+                  return (
+                    <text x={cardW + x - 16} y={startY + cardH - 18} textAnchor="end" fontSize={12} fontWeight={700} fill={FR.slate} fontFamily="ui-monospace, Menlo, monospace">
+                      {unitCost > 0 ? `$${unitCost.toFixed(2)}` : '$0.00'} / unit
+                    </text>
+                  );
+                })()}
               </>
             )}
           </g>
@@ -552,6 +561,11 @@ function ComponentGridPage({ entries, subtitle, componentsById = {} }) {
         const full = entry ? componentsById[entry.componentId] : null;
         const cd = full?.data || {};
         const m = (cd.materials || [])[0] || {};
+        const tier = (cd.costTiers || [])[0];
+        const unitCost = parseFloat(tier?.unitCost) || parseFloat(full?.cost_per_unit) || parseFloat(cd?.targetUnitCost) || 0;
+        const qtyNum = parseFloat(String(entry?.quantity || '').replace(/[^0-9.]/g, '')) || 1;
+        const lineCost = unitCost * qtyNum;
+        const formatM = (n) => n > 0 ? `$${n.toFixed(2)}` : '$0.00';
         // Prefer the construction measurement diagram so the factory sees
         // the full trim with dimensions; fall back to cover_image.
         const cover  = full?._constructionDiagram || full?.cover_image || cd.cover_image;
@@ -596,8 +610,11 @@ function ComponentGridPage({ entries, subtitle, componentsById = {} }) {
                 <text x={x + 14} y={y + imgH + 70} fontSize={9} fill={FR.stone}>
                   Length · {length}    Size · {size}
                 </text>
-                <text x={x + 14} y={y + imgH + 88} fontSize={10} fontWeight={600} fill={FR.slate}>
-                  Quantity · {qty}
+                <text x={x + 14} y={y + imgH + 88} fontSize={9} fill={FR.stone}>
+                  Quantity · {qty}    Unit · {formatM(unitCost)}
+                </text>
+                <text x={cardW + x - 14} y={y + cardH - 14} textAnchor="end" fontSize={11} fontWeight={700} fill={FR.slate} fontFamily="ui-monospace, Menlo, monospace">
+                  {formatM(lineCost)}
                 </text>
               </>
             )}
