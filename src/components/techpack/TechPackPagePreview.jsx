@@ -569,11 +569,24 @@ function PageFabrics({ d, fabricsById = {} }) {
                 {/* Cost row */}
                 <line x1={x + 16} y1={startY + cardH - 36} x2={x + cardW - 16} y2={startY + cardH - 36}
                   stroke={FR.sand} strokeWidth={0.5} />
-                <text x={x + 16} y={startY + cardH - 18} fontSize={10} fill={FR.stone}
-                  fontFamily="ui-monospace, Menlo, monospace">Cost / m</text>
-                <text x={x + cardW - 16} y={startY + cardH - 18} textAnchor="end"
+                <text x={x + 16} y={startY + cardH - 22} fontSize={10} fill={FR.stone}
+                  fontFamily="ui-monospace, Menlo, monospace">
+                  {entry.metersPerUnit
+                    ? (entry.yieldIsActual ? 'Cost / unit' : 'Cost / unit (est.)')
+                    : 'Cost / m'}
+                </text>
+                <text x={x + cardW - 16} y={startY + cardH - 22} textAnchor="end"
                   fontSize={12} fontWeight={700} fill={FR.slate} fontFamily="ui-monospace, Menlo, monospace">
-                  {unitCost > 0 ? `$${unitCost.toFixed(2)}` : '$0.00'}
+                  {entry.metersPerUnit
+                    ? (unitCost > 0 ? `$${(unitCost * entry.metersPerUnit).toFixed(2)}` : '$0.00')
+                    : (unitCost > 0 ? `$${unitCost.toFixed(2)}` : '$0.00')}
+                </text>
+                <text x={x + 16} y={startY + cardH - 8} fontSize={8}
+                  fill={entry.metersPerUnit ? (entry.yieldIsActual ? '#3B6D11' : '#854F0B') : '#854F0B'}
+                  fontFamily="ui-monospace, Menlo, monospace">
+                  {entry.metersPerUnit
+                    ? `${entry.metersPerUnit}m/unit · ${entry.yieldIsActual ? 'CLO3D actual' : 'std. estimate'}`
+                    : 'yield TBD — pick garment type in BOM'}
                 </text>
               </>
             )}
@@ -947,6 +960,9 @@ function PageSketches({ d, images, pageKey = 'page1' }) {
 function PagePattern({ d, images }) {
   const layout = (images || []).find(i => i.slot === 'pattern-layout');
   const pieces = (d.patternPieces || []).filter(r => r.pieceName || r.pieceNum || r.fabric);
+  const pickedFabrics = (d?.pickedFabrics || []).filter(p => p?.fabricId);
+  const yieldCols = Math.max(pickedFabrics.length, 1);
+  const yieldColW = (PAGE_W - 80) / yieldCols;
 
   const cols = [
     { key: 'pieceNum',  label: 'Piece #',            w: 90  },
@@ -966,10 +982,40 @@ function PagePattern({ d, images }) {
       <PhotoSlot x={40} y={175} w={PAGE_W - 80} h={200} label="Pattern Layout" image={layout} />
 
       <SectionHeading x={40} y={420}>Pattern Piece Index</SectionHeading>
-      <GridTable x={40} y={432} cols={cols} rows={pieces} bodyRows={5} />
+      {/* bodyRows=4 frees ~22px for the yield strip below */}
+      <GridTable x={40} y={432} cols={cols} rows={pieces} bodyRows={4} />
 
-      <SectionHeading x={40} y={580}>Cutting Instructions</SectionHeading>
-      <foreignObject x="40" y="594" width={PAGE_W - 80} height="160">
+      {/* Fabric Yield — compact 3-column strip, one cell per picked fabric */}
+      <SectionHeading x={40} y={545}>Fabric Yield</SectionHeading>
+      {pickedFabrics.length === 0 && (
+        <text x={50} y={568} fontSize={10} fill={FR.stone} fontStyle="italic">
+          No fabrics picked yet — set garment type in the BOM step.
+        </text>
+      )}
+      {pickedFabrics.map((entry, i) => {
+        const fx = 40 + i * yieldColW;
+        const hasMpu = entry.metersPerUnit != null;
+        return (
+          <g key={i}>
+            <text x={fx + 10} y={562} fontSize={8} fontWeight={600} fill={FR.soil} letterSpacing={0.4}>
+              {(entry.role || `FABRIC ${i + 1}`).toUpperCase()}
+            </text>
+            <text x={fx + 10} y={578} fontSize={12} fontWeight={600} fill={hasMpu ? FR.slate : FR.stone}
+              fontFamily="ui-monospace, Menlo, monospace">
+              {hasMpu ? `${entry.metersPerUnit}m` : '— TBD'}
+            </text>
+            <text x={fx + 10} y={592} fontSize={8}
+              fill={hasMpu ? (entry.yieldIsActual ? '#3B6D11' : '#854F0B') : '#854F0B'}>
+              {hasMpu
+                ? (entry.yieldIsActual ? 'CLO3D actual' : 'std. estimate')
+                : 'set garment type in BOM step'}
+            </text>
+          </g>
+        );
+      })}
+
+      <SectionHeading x={40} y={615}>Cutting Instructions</SectionHeading>
+      <foreignObject x="40" y="630" width={PAGE_W - 80} height="130">
         <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: 11, color: FR.slate, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
           {d.cuttingInstructions || '—'}
         </div>

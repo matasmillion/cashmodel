@@ -5,7 +5,7 @@
 // holds thin references and renders the picker UI.
 
 import React, { useEffect, useState } from 'react';
-import { FR } from './techPackConstants';
+import { FR, GARMENT_YIELDS } from './techPackConstants';
 import { SectionTitle, AssetImage } from './TechPackPrimitives';
 import { listFabrics } from '../../utils/fabricStore';
 import { listComponentPacks, getComponentPack } from '../../utils/componentPackStore';
@@ -337,14 +337,20 @@ export function StepFabrics({ data, set }) {
     });
   }
 
-  const fabricsSubtotal = picked.reduce((sum, p) => sum + (resolved[p?.fabricId]?.unitCost || 0), 0);
+  const fabricsSubtotal = picked.reduce((sum, p) => {
+    const cost = resolved[p?.fabricId]?.unitCost || 0;
+    const mpu = p?.metersPerUnit;
+    return sum + (mpu ? cost * mpu : cost);
+  }, 0);
+  const fabricsHaveYield = picked.some(p => p?.metersPerUnit);
+  const fabricsAllYield  = picked.length > 0 && picked.every(p => p?.metersPerUnit);
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 14, marginBottom: 4 }}>
         <SectionTitle>Fabrics</SectionTitle>
         <span style={{ fontSize: 12, color: FR.slate, fontFamily: "ui-monospace, Menlo, monospace", fontWeight: 600 }}>
-          Fabrics subtotal · {formatMoney(fabricsSubtotal)}
+          Fabrics subtotal · {formatMoney(fabricsSubtotal)}{fabricsHaveYield ? (fabricsAllYield ? ' /unit' : ' /unit (partial est.)') : ' /m'}
         </span>
       </div>
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, lineHeight: 1.5 }}>
@@ -413,9 +419,44 @@ export function StepFabrics({ data, set }) {
                     {spec?.vendor?.phone && <div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 10 }}>{spec.vendor.phone}</div>}
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6, paddingTop: 6, borderTop: `0.5px solid ${FR.sand}`, fontFamily: "ui-monospace, Menlo, monospace" }}>
-                  <span style={{ fontSize: 10, color: FR.stone }}>Cost / m</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: FR.slate }}>{formatMoney(spec?.unitCost || 0, spec?.currency)}</span>
+                <div style={{ paddingTop: 6, borderTop: `0.5px solid ${FR.sand}` }}>
+                  {/* Cost value — shows /unit when yield is known, /m otherwise */}
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6, fontFamily: "ui-monospace, Menlo, monospace" }}>
+                    <span style={{ fontSize: 10, color: FR.stone }}>
+                      {entry.metersPerUnit
+                        ? (entry.yieldIsActual ? 'Cost / unit' : 'Cost / unit (est.)')
+                        : 'Cost / m'}
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: FR.slate }}>
+                      {entry.metersPerUnit
+                        ? formatMoney((spec?.unitCost || 0) * entry.metersPerUnit, spec?.currency)
+                        : formatMoney(spec?.unitCost || 0, spec?.currency)}
+                    </span>
+                  </div>
+                  {/* Yield selector — garment type picks a standard m/unit estimate */}
+                  <div style={{ marginTop: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Yield</span>
+                      <select
+                        value={entry.yieldIsActual ? '' : (entry.metersPerUnit || '')}
+                        onChange={e => {
+                          const v = e.target.value;
+                          setSlot(i, { ...entry, metersPerUnit: v ? parseFloat(v) : null, yieldIsActual: false });
+                        }}
+                        style={{ flex: 1, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '3px 5px', fontSize: 10, color: FR.slate, background: FR.white, outline: 'none' }}
+                      >
+                        <option value="">— garment type —</option>
+                        {GARMENT_YIELDS.map(g => (
+                          <option key={g.label} value={g.metersPerUnit}>{g.label} · {g.metersPerUnit}m</option>
+                        ))}
+                      </select>
+                    </div>
+                    {entry.metersPerUnit && (
+                      <div style={{ marginTop: 3, fontSize: 8, fontFamily: 'ui-monospace, Menlo, monospace', color: entry.yieldIsActual ? '#3B6D11' : '#854F0B' }}>
+                        {entry.metersPerUnit}m/unit · {entry.yieldIsActual ? 'CLO3D actual' : 'std. estimate'}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

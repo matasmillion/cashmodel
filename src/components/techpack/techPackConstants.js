@@ -261,6 +261,35 @@ export function deriveStyleNumber({ season, collection, productType, productNumb
 }
 
 export const SAMPLE_TYPES = ['Proto', 'Fit', 'SMS (Salesman)', 'PP (Pre-Production)', 'TOP (Top of Production)'];
+
+// Industry-standard fabric yield by garment type (meters of fabric per finished unit).
+// Values are midpoints of typical marker utilisation ranges. Designers can override
+// with CLO3D actuals in the Pattern Pieces & Cutting step.
+export const GARMENT_YIELDS = [
+  { label: 'T-Shirt / Tee',           metersPerUnit: 1.3 },
+  { label: 'Tank Top',                metersPerUnit: 0.8 },
+  { label: 'Polo Shirt',              metersPerUnit: 1.4 },
+  { label: 'Hoodie (pullover)',        metersPerUnit: 1.9 },
+  { label: 'Zip-up Hoodie',           metersPerUnit: 2.0 },
+  { label: 'Crew Neck Sweatshirt',    metersPerUnit: 1.8 },
+  { label: 'Sweatpants / Joggers',    metersPerUnit: 1.6 },
+  { label: 'Shorts',                  metersPerUnit: 0.9 },
+  { label: 'Cargo Pants',             metersPerUnit: 2.0 },
+  { label: 'Denim Pants / Trousers',  metersPerUnit: 1.8 },
+  { label: 'Chinos / Dress Pants',    metersPerUnit: 1.9 },
+  { label: 'Skirt (mini)',            metersPerUnit: 1.0 },
+  { label: 'Skirt (midi)',            metersPerUnit: 1.5 },
+  { label: 'Dress (mini)',            metersPerUnit: 1.6 },
+  { label: 'Dress (midi)',            metersPerUnit: 2.2 },
+  { label: 'Dress (maxi)',            metersPerUnit: 2.8 },
+  { label: 'Track Jacket',            metersPerUnit: 1.6 },
+  { label: 'Bomber Jacket',           metersPerUnit: 2.0 },
+  { label: 'Denim Jacket',            metersPerUnit: 2.2 },
+  { label: 'Blazer / Suit Jacket',    metersPerUnit: 2.4 },
+  { label: 'Coat (hip-length)',       metersPerUnit: 3.0 },
+  { label: 'Trench Coat',             metersPerUnit: 3.5 },
+  { label: 'Sling Bag',               metersPerUnit: 0.5 },
+];
 export const SAMPLE_VERDICTS = ['Pending', 'Approved', 'Rejected', 'Revise'];
 export const APPROVAL_STATUSES = ['Pending', 'Approved', 'Rejected', 'Revise'];
 export const PASS_FAIL = ['Pass', 'Fail', 'Pending'];
