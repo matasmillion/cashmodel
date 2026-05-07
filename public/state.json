@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T17:15:37.956Z",
+  "lastUpdated": "2026-05-07T17:29:50.288Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "3bc6c61",
+      "date": "2026-05-07T20:19:09+03:00",
+      "message": "techpack: rename Role→Trim Type, color from colorways, self-heal old picks (#45)"
+    },
+    {
+      "sha": "82ce4ea",
+      "date": "2026-05-07T20:14:31+03:00",
+      "message": "fabrics: use org Anthropic credential, landscape BOM matching tech pack chrome (#44)"
+    },
+    {
       "sha": "a0bfa39",
       "date": "2026-05-07T20:08:22+03:00",
       "message": "techpack: BOM picker — auto-fill specs, compact grid, length/size, live preview (#43)"
@@ -1082,16 +1092,6 @@
       "sha": "c7298e4",
       "date": "2026-05-07T16:27:18+03:00",
       "message": "techpack: Website Preview placeholder on Design Overview (#36)"
-    },
-    {
-      "sha": "99a2a11",
-      "date": "2026-05-07T16:12:16+03:00",
-      "message": "techpack: regen feedback + single-image slots + 2:3 portrait + bg color fix (#35)"
-    },
-    {
-      "sha": "8ba73d8",
-      "date": "2026-05-07T15:57:10+03:00",
-      "message": "techpack: AI view generation — skill engine + ghost mannequin + per-view refs (#34)"
     }
   ]
 }
