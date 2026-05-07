@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T17:05:13.998Z",
+  "lastUpdated": "2026-05-07T17:15:37.956Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "a0bfa39",
+      "date": "2026-05-07T20:08:22+03:00",
+      "message": "techpack: BOM picker — auto-fill specs, compact grid, length/size, live preview (#43)"
+    },
+    {
+      "sha": "99cd43f",
+      "date": "2026-05-07T20:01:06+03:00",
+      "message": "fabrics: knit/woven category, mill fabric #, AI auto-fill, BOM PDF (#42)"
+    },
+    {
       "sha": "96b5d7a",
       "date": "2026-05-07T19:47:35+03:00",
       "message": "techpack: BOM picker fixes — populate library, resolve cover paths, fix typo (#41)"
@@ -1082,16 +1092,6 @@
       "sha": "8ba73d8",
       "date": "2026-05-07T15:57:10+03:00",
       "message": "techpack: AI view generation — skill engine + ghost mannequin + per-view refs (#34)"
-    },
-    {
-      "sha": "9e6daf3",
-      "date": "2026-05-07T15:41:46+03:00",
-      "message": "techpack: fetch fal response_url + indeterminate loading bar (#33)"
-    },
-    {
-      "sha": "992bb85",
-      "date": "2026-05-07T15:35:52+03:00",
-      "message": "fix(integrations): testProxy distinguishes proxy 404 from upstream 404 (#32)"
     }
   ]
 }

@@ -278,8 +278,10 @@ export function StepFabrics({ data, set }) {
 
 const MAX_TRIMS = 6;
 
-// Read the most useful material fields from a Component Pack data row.
-// First material wins (rule of three pattern in ComponentPackBuilder).
+// Read the most useful spec fields from a Component Pack data row.
+// Color prefers the Colorways picker on the pack (colorwayPicks[0] or
+// colorwaysList[0].frColor) — that's the canonical color the trim is
+// being supplied in. Length/Size live on the first material row.
 export function readComponentSpec(fullData) {
   const c = fullData?.data || {};
   const m = (c.materials || [])[0] || {};
@@ -288,14 +290,24 @@ export function readComponentSpec(fullData) {
     type:   c.componentType || fullData?.component_category || '',
     cover:  fullData?.cover_image || c.cover_image || null,
     vendor: m.vendor || c.supplier || fullData?.supplier || '—',
-    color:  m.color || (c.colorwaysList || [])[0]?.frColor || '—',
+    color:  (c.colorwayPicks || [])[0] || (c.colorwaysList || [])[0]?.frColor || m.color || '—',
     length: m.length || '—',
     size:   m.size || '—',
   };
 }
 
-function ComponentSlotCard({ entry, fullData, onClear, onChangeRole, roleOptions }) {
+function ComponentSlotCard({ entry, fullData, onClear, onChangeRole, roleOptions, roleLabel = 'Type' }) {
   const s = readComponentSpec(fullData);
+
+  // Self-heal: if the entry was saved with an empty role (e.g. before this
+  // auto-populate logic shipped) and the full pack has a componentType,
+  // back-fill it now so the dropdown reflects the library value.
+  useEffect(() => {
+    if (!entry.role && s.type) onChangeRole(s.type);
+    // Only reacts when type lands; entry.role intentionally not in deps so
+    // we don't loop after the heal write.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.type]);
 
   return (
     <div style={{ background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 6, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -309,11 +321,11 @@ function ComponentSlotCard({ entry, fullData, onClear, onChangeRole, roleOptions
       </div>
       <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 3 }}>
         <select
-          value={entry.role || ''}
+          value={entry.role || s.type || ''}
           onChange={e => onChangeRole(e.target.value)}
           style={{ background: 'transparent', border: 'none', color: FR.soil, fontSize: 8, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', cursor: 'pointer', outline: 'none', padding: 0 }}
         >
-          <option value="">— Role —</option>
+          <option value="">— {roleLabel} —</option>
           {(roleOptions || []).map(r => <option key={r} value={r}>{r}</option>)}
         </select>
         <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 13, color: FR.slate, lineHeight: 1.15 }}>{s.name}</div>
@@ -335,6 +347,7 @@ export function StepTrims({ data, set, packId }) {
     <ComponentBOMPage
       title="Trims"
       singularNoun="Trim"
+      roleLabel="Trim Type"
       subtitle="Image-first detail of every trim and hardware component on this garment. Pick from the Component Pack library — must be created there first."
       fieldName="pickedTrims"
       data={data}
@@ -356,6 +369,7 @@ export function StepPackaging({ data, set, packId }) {
     <ComponentBOMPage
       title="Packaging"
       singularNoun="Packaging Component"
+      roleLabel="Type"
       subtitle="Polybags, hang tags, stickers, branded boxes — every packaging component, picked from the Component Pack library."
       fieldName="pickedPackaging"
       data={data}
@@ -370,7 +384,7 @@ export function StepPackaging({ data, set, packId }) {
 
 // ─── Shared component-pack BOM page (used by Trims + Packaging) ────────────
 
-function ComponentBOMPage({ title, singularNoun, subtitle, fieldName, data, set, pickerSubtitle, roleOptions, maxSlots }) {
+function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, fieldName, data, set, pickerSubtitle, roleOptions, maxSlots }) {
   const noun = singularNoun || title.replace(/s$/, '');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [fullById, setFullById] = useState({});
@@ -459,6 +473,7 @@ function ComponentBOMPage({ title, singularNoun, subtitle, fieldName, data, set,
               onClear={() => removeComponent(i)}
               onChangeRole={role => setRole(i, role)}
               roleOptions={roleOptions}
+              roleLabel={roleLabel}
             />
           );
         })}
