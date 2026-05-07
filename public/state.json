@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T18:09:01.088Z",
+  "lastUpdated": "2026-05-07T18:13:32.864Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "0817f6d",
+      "date": "2026-05-07T18:09:27+00:00",
+      "message": "techpack: BOM slot grid → 2x3, bigger cards"
+    },
+    {
       "sha": "cd21fc9",
       "date": "2026-05-07T20:57:47+03:00",
       "message": "techpack: trim slot — wider 3:2 image, per-card pack link, drop files footer (#50)"
@@ -1087,11 +1092,6 @@
       "sha": "96b5d7a",
       "date": "2026-05-07T19:47:35+03:00",
       "message": "techpack: BOM picker fixes — populate library, resolve cover paths, fix typo (#41)"
-    },
-    {
-      "sha": "b2553ee",
-      "date": "2026-05-07T18:14:25+03:00",
-      "message": "techpack: BOM phase split (Fabrics/Trims/Packaging) + style # in header (#40)"
     }
   ]
 }
