@@ -15,6 +15,7 @@ import { getFRColorCost } from '../../utils/colorLibrary';
 import { formatCost } from './TechPackPrimitives';
 import { uploadAsset, dataUrlToBlob, isLegacyDataUrl, useResolvedImageEntries, isGhostImage } from '../../utils/plmAssets';
 import { computePackDiff } from '../../utils/techPackDiff';
+import { listTreatments } from '../../utils/treatmentStore';
 
 function sanitizeFilename(s) {
   return (s || 'techpack').replace(/[^\w\-]+/g, '_').slice(0, 60);
@@ -176,6 +177,21 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   const [data, setData] = useState(pack.data || DEFAULT_DATA);
   const [images, setImages] = useState(pack.images || []);
   const [library, setLibrary] = useState(pack.library || DEFAULT_LIBRARY);
+  // Treatment library cache, keyed by id, for resolving fabric.treatment_id
+  // selections into name/code/process on the live preview without forcing
+  // PageTreatments to do async work mid-render.
+  const [treatmentsById, setTreatmentsById] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    listTreatments({ includeArchived: true }).then(rows => {
+      if (cancelled) return;
+      const map = {};
+      (rows || []).forEach(t => { if (t.id) map[t.id] = t; });
+      setTreatmentsById(map);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -685,7 +701,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
             <div style={{ fontSize: 9, color: FR.stone, letterSpacing: 2, fontWeight: 600, textTransform: 'uppercase' }}>Live Preview</div>
             <div style={{ fontSize: 9, color: FR.stone }}>Page {step + 1} / {STEPS.length}</div>
           </div>
-          <TechPackPagePreview data={data} images={previewImages} step={step} skippedSteps={skippedSteps} />
+          <TechPackPagePreview data={data} images={previewImages} step={step} skippedSteps={skippedSteps} treatmentsById={treatmentsById} />
         </div>
       </div>
     </div>

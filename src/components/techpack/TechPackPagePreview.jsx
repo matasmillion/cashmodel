@@ -789,13 +789,27 @@ function PageSizeMatrix({ d }) {
 }
 
 // ─── Page 12 — Garment Treatments ───────────────────────────────────────────
-function PageTreatments({ d, images }) {
+function PageTreatments({ d, images, treatmentsById }) {
   const imgs = images || [];
   const before = imgs.find(i => i.slot === 'treatment-before');
   const after  = imgs.find(i => i.slot === 'treatment-after');
 
   const treatments  = (d.treatments  || []).filter(r => r.step || r.treatment || r.process);
   const distressing = (d.distressing || []).filter(r => r.area || r.technique || r.intensity);
+
+  // Group BOM fabric rows by treatment_id so the linked-treatments strip
+  // shows one chip per unique treatment with all using-components listed.
+  const linkedById = new Map();
+  (d.fabrics || []).forEach(f => {
+    if (!f.treatment_id) return;
+    const arr = linkedById.get(f.treatment_id) || [];
+    const tag = (f.component || '').trim();
+    if (tag && !arr.includes(tag)) arr.push(tag);
+    linkedById.set(f.treatment_id, arr);
+  });
+  const linked = Array.from(linkedById.entries())
+    .map(([id, components]) => ({ id, components, t: (treatmentsById || {})[id] }))
+    .filter(l => l.t);
 
   const tCols = [
     { key: 'step',        label: 'Step',                 w: 60  },
@@ -815,19 +829,54 @@ function PageTreatments({ d, images }) {
     { key: 'notes',          label: 'Notes',           w: 253 },
   ];
 
+  // Layout shifts when there's a linked-treatments strip, so the wash table
+  // and downstream blocks can claim their original Y offsets when nothing
+  // is linked.
+  const linkedY = 158;
+  const linkedH = linked.length ? 92 : 0;
+  const tableY = 158 + (linked.length ? linkedH + 24 : 0);
+  const distressY = tableY + 148;
+  const refY = distressY + 148;
+
   return (
     <g>
       <InfoStrip d={d} />
 
-      <SectionHeading x={40} y={158}>Wash &amp; Dye Treatments</SectionHeading>
-      <GridTable x={40} y={170} cols={tCols} rows={treatments} bodyRows={4} />
+      {linked.length > 0 && (
+        <g>
+          <SectionHeading x={40} y={linkedY}>Linked Treatments (from BOM)</SectionHeading>
+          {linked.slice(0, 4).map(({ t, components }, i) => {
+            const cardW = (PAGE_W - 80 - 12 * 3) / 4;
+            const x = 40 + i * (cardW + 12);
+            const y = linkedY + 14;
+            const procBits = [];
+            if (t.chemistry) procBits.push(t.chemistry);
+            if (t.temperature_c) procBits.push(`${t.temperature_c}°C`);
+            if (t.duration_minutes) procBits.push(`${t.duration_minutes} min`);
+            const proc = procBits.join(' · ') || '—';
+            return (
+              <g key={t.id}>
+                <rect x={x} y={y} width={cardW} height={70} fill={FR.white} stroke={FR.sand} />
+                <text x={x + 10} y={y + 16} fontSize="10.5" fontWeight="bold" fill={FR.slate}>{esc(clampLine(t.name || 'Untitled', cardW - 70, 5.4))}</text>
+                <text x={x + cardW - 10} y={y + 16} textAnchor="end" fontSize="9" fontFamily="ui-monospace, SF Mono, Menlo, monospace" fill={FR.stone}>{esc(t.code || '—')}</text>
+                <text x={x + 10} y={y + 32} fontSize="9" fill={FR.slate}>{esc(clampLine(proc, cardW - 20, 5))}</text>
+                <text x={x + 10} y={y + 50} fontSize="8" fill={FR.soil} letterSpacing="0.4">APPLIES TO</text>
+                <text x={x + 10} y={y + 62} fontSize="9" fill={FR.slate}>{esc(clampLine(components.join(' · ') || '—', cardW - 20, 5.2))}</text>
+              </g>
+            );
+          })}
+        </g>
+      )}
 
-      <SectionHeading x={40} y={306}>Distressing &amp; Special Finishes</SectionHeading>
-      <GridTable x={40} y={318} cols={dCols} rows={distressing} bodyRows={4} />
+      <SectionHeading x={40} y={tableY}>Wash &amp; Dye Treatments</SectionHeading>
+      <GridTable x={40} y={tableY + 12} cols={tCols} rows={treatments} bodyRows={4} />
 
-      <SectionHeading x={40} y={454}>Before / After Reference</SectionHeading>
-      <PhotoSlot x={40}                                 y={475} w={(PAGE_W - 80 - 16) / 2} h={230} label="Before Treatment" image={before} />
-      <PhotoSlot x={40 + (PAGE_W - 80 - 16) / 2 + 16}  y={475} w={(PAGE_W - 80 - 16) / 2} h={230} label="After Treatment"  image={after} />
+      <SectionHeading x={40} y={distressY}>Distressing &amp; Special Finishes</SectionHeading>
+      <GridTable x={40} y={distressY + 12} cols={dCols} rows={distressing} bodyRows={4} />
+
+      <SectionHeading x={40} y={refY}>Before / After Reference</SectionHeading>
+      <PhotoSlot x={40}                                 y={refY + 21} w={(PAGE_W - 80 - 16) / 2} h={Math.max(140, PAGE_H - refY - 110)} label="Before Treatment" image={before} />
+      <PhotoSlot x={40 + (PAGE_W - 80 - 16) / 2 + 16}  y={refY + 21} w={(PAGE_W - 80 - 16) / 2} h={Math.max(140, PAGE_H - refY - 110)} label="After Treatment"  image={after} />
     </g>
   );
 }
@@ -1177,7 +1226,7 @@ const PAGE_FNS = [
   { title: 'Graded Size Matrix',                phase: 'Cut & Sew',      body: ({ d }) => <PageSizeMatrix d={d} /> },
   { title: 'Colorways',                         phase: 'Embellishments', body: ({ d }) => <PageColorways d={d} /> },
   { title: 'Artwork & Placement',               phase: 'Embellishments', body: ({ d, images }) => <PageArtwork d={d} images={images} /> },
-  { title: 'Garment Treatments',                phase: 'Treatments',     body: ({ d, images }) => <PageTreatments d={d} images={images} /> },
+  { title: 'Garment Treatments',                phase: 'Treatments',     body: ({ d, images, treatmentsById }) => <PageTreatments d={d} images={images} treatmentsById={treatmentsById} /> },
   { title: 'Compliance & Testing',              phase: 'QC',             body: ({ d }) => <PageCompliance d={d} /> },
   { title: 'Quality Inspection (AQL)',          phase: 'QC',             body: ({ d }) => <PageQuality d={d} /> },
   { title: 'Labels & Packaging',                phase: 'Packaging',      body: ({ d, images }) => <PageLabels d={d} images={images} /> },
@@ -1199,7 +1248,7 @@ function SkipOverlay() {
   );
 }
 
-export default function TechPackPagePreview({ data, images, step, skippedSteps }) {
+export default function TechPackPagePreview({ data, images, step, skippedSteps, treatmentsById }) {
   const d = data || {};
   const styleInfo = `© 2026 Foreign Resource Co. — Confidential Tech Pack`;
   const pageNum = Math.min(Math.max((step ?? 0) + 1, 1), TOTAL_PAGES);
@@ -1213,7 +1262,7 @@ export default function TechPackPagePreview({ data, images, step, skippedSteps }
       preserveAspectRatio="xMidYMin meet"
       style={{ width: '100%', height: 'auto', background: FR.white, boxShadow: '0 2px 14px rgba(0,0,0,0.12)', borderRadius: 6, fontFamily: 'Helvetica, Arial, sans-serif' }}>
       <PageFrame title={current.title} phase={current.phase} pageNum={pageNum} styleInfo={styleInfo}>
-        <Body d={d} images={images} />
+        <Body d={d} images={images} treatmentsById={treatmentsById} />
       </PageFrame>
       {isSkipped && <SkipOverlay />}
     </svg>
