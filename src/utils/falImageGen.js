@@ -150,7 +150,89 @@ export async function analyzeGarmentImage(imageBase64, mediaType = 'image/jpeg')
   return text;
 }
 
-// ─── Flat Lay generator (used by tech pack design overview) ─────────────────
+// ─── Background color resolution ─────────────────────────────────────────────
+// Translate an FR color name into descriptive language for the prompt.
+// Returns null for unknown colors so the caller can fall back.
+function describeBackground(colorName, surfaceMode) {
+  const key = (colorName || '').toLowerCase();
+  const desc = FR_COLOR_PROMPT[key];
+  if (!desc) {
+    return surfaceMode === 'mannequin'
+      ? 'pure white seamless studio background'
+      : 'pure white seamless paper surface';
+  }
+  // For ghost mannequin, the bg is a "seamless background"; for flat lay it's
+  // a "surface" the garment rests on.
+  return surfaceMode === 'mannequin'
+    ? `seamless ${desc} studio background — the entire negative space behind the garment is this color`
+    : `${desc} flat surface — the entire surface beneath and around the garment is this color`;
+}
+
+// ─── Ghost Mannequin generator (default for tech pack design overview) ─────
+
+const GHOST_MANNEQUIN_VIEW_ANGLE = {
+  front: 'front-facing view, garment as if worn by an invisible body facing the camera directly, full chest and front panel visible',
+  back:  'rear view, garment rotated 180 degrees as if worn by an invisible body facing away, full back panel and any back construction visible',
+  side:  'profile side view, garment rotated 90 degrees as if worn by an invisible body in profile, side seam silhouette and sleeve drape visible',
+};
+
+/**
+ * Generate a single Ghost Mannequin view (front / back / side) using NB2.
+ *
+ * @param {object} args
+ * @param {string} args.garmentDescription
+ * @param {'front'|'back'|'side'} args.view
+ * @param {string[]} [args.references]      - base64 data URIs (max 6)
+ * @param {string} [args.customContext]     - free-form designer additions
+ * @param {string} [args.bgColorName]       - FR color name (defaults to 'salt')
+ * @param {function} [args.onStatus]
+ * @returns {Promise<string>} image CDN URL
+ */
+export async function generateGhostMannequin({
+  garmentDescription,
+  view,
+  references = [],
+  customContext = '',
+  bgColorName = 'salt',
+  onStatus,
+}) {
+  if (!IS_SUPABASE_ENABLED) throw new Error('Supabase not configured');
+  if (!GHOST_MANNEQUIN_VIEW_ANGLE[view]) throw new Error(`Unknown view: ${view}`);
+
+  const trimmedRefs = references.slice(0, 6);
+  const usingRefs = trimmedRefs.length > 0;
+  const endpoint = usingRefs ? NB2_EDIT : NB2_TXT2IMG;
+  const bg = describeBackground(bgColorName, 'mannequin');
+
+  const refClause = usingRefs
+    ? `Using the reference image${trimmedRefs.length > 1 ? 's' : ''} as the source for garment shape, color, fabric texture, construction details, treatments, and embellishments — preserve those elements exactly. `
+    : '';
+
+  const prompt = [
+    refClause + `Professional e-commerce product photograph.`,
+    `${garmentDescription}, ghost mannequin invisible mannequin presentation, garment perfectly three-dimensional as if worn by an invisible body, floating against ${bg}.`,
+    `${GHOST_MANNEQUIN_VIEW_ANGLE[view]}, centered, full garment visible from collar to hem.`,
+    `Visible interior at neckline showing hollow collar construction and any rib trim. Realistic garment volume and natural drape from shoulders, no flat or pasted-on appearance.`,
+    customContext ? `Additional designer direction: ${customContext}` : '',
+    `Soft even diffuse studio lighting, neutral white balance, no harsh shadows. Sharp focus across entire garment, high-resolution editorial quality, professional fashion product photography.`,
+    BRAND_DEFAULTS,
+    EXCLUSIONS,
+  ].filter(Boolean).join('\n\n');
+
+  return runFalJob({
+    endpoint,
+    payload: {
+      prompt,
+      num_images: 1,
+      output_format: 'jpeg',
+      image_size: RES.ghostMannequin,
+      ...(usingRefs ? { image_urls: trimmedRefs } : {}),
+    },
+    onStatus,
+  });
+}
+
+// ─── Flat Lay generator ──────────────────────────────────────────────────────
 
 const FLAT_LAY_VIEW_ANGLE = {
   front: 'garment laid perfectly flat face-up on the surface, showing the front panel, neckline, and any front pockets or hardware',
@@ -175,7 +257,7 @@ export async function generateFlatLay({
   view,
   references = [],
   customContext = '',
-  surface = 'pure white seamless paper',
+  bgColorName = 'salt',
   onStatus,
 }) {
   if (!IS_SUPABASE_ENABLED) throw new Error('Supabase not configured');
@@ -184,11 +266,12 @@ export async function generateFlatLay({
   const trimmedRefs = references.slice(0, 6);
   const usingRefs = trimmedRefs.length > 0;
   const endpoint = usingRefs ? NB2_EDIT : NB2_TXT2IMG;
+  const surface = describeBackground(bgColorName, 'flat');
 
   // Skill rule: with references, lead with explicit preservation language so
   // the model treats unmentioned elements as creative freedom.
   const refClause = usingRefs
-    ? `Using the reference image${trimmedRefs.length > 1 ? 's' : ''} as the source for garment shape, color, fabric texture, and construction details — preserve those exactly. `
+    ? `Using the reference image${trimmedRefs.length > 1 ? 's' : ''} as the source for garment shape, color, fabric texture, construction details, treatments, and embellishments — preserve those elements exactly. `
     : '';
 
   // Skill rule: critical specs FIRST.

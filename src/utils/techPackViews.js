@@ -9,7 +9,7 @@
 // then dispatching a Flat Lay job per view.
 
 import { getAssetUrl } from './plmAssets';
-import { analyzeGarmentImage, generateFlatLay } from './falImageGen';
+import { analyzeGarmentImage, generateFlatLay, generateGhostMannequin } from './falImageGen';
 
 export { analyzeGarmentImage };
 
@@ -21,17 +21,23 @@ export { analyzeGarmentImage };
  * @param {object} [opts]
  * @param {string[]} [opts.references]   - base64 data URIs (refs become image_urls)
  * @param {string} [opts.customContext]  - designer's free-form prompt addition
+ * @param {string} [opts.style]          - 'ghost-mannequin' (default) | 'flat-lay'
+ * @param {string} [opts.bgColorName]    - FR color name (defaults to 'salt')
  * @param {function} [opts.onStatus]
  * @returns {Promise<string>} CDN URL
  */
 export async function generateGarmentView(description, view, opts = {}) {
-  return generateFlatLay({
+  const args = {
     garmentDescription: description,
     view,
     references: opts.references || [],
     customContext: opts.customContext || '',
+    bgColorName: opts.bgColorName || 'salt',
     onStatus: opts.onStatus,
-  });
+  };
+  return opts.style === 'flat-lay'
+    ? generateFlatLay(args)
+    : generateGhostMannequin(args);
 }
 
 /**

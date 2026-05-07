@@ -5,7 +5,7 @@
 // that will be replaced in subsequent prompts.
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { FR, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, isStepLocked, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
+import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, isStepLocked, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
 import { listFRColors } from '../../utils/colorLibrary';
 import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, ArrayTable, EditableSelect, FRColorCell, FilesPanel } from './TechPackPrimitives';
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
@@ -403,10 +403,10 @@ function LoopingBar() {
   );
 }
 
-function GenerateViewsModal({ srcEntries, customContext, onAccept, onClose }) {
-  const [phase, setPhase]       = useState('analyzing'); // analyzing | generating | done | error
+function GenerateViewsModal({ viewSources, sharedRefs, customContext, style, bgColorName, onAccept, onClose }) {
+  const [phase, setPhase]       = useState('analyzing');
   const [description, setDesc]  = useState('');
-  const [refDataUrls, setRefs]  = useState([]); // base64 data URIs
+  const [perViewRefs, setPVR]   = useState({ front: [], back: [], side: [] }); // resolved data URIs per view
   const [views, setViews]       = useState({ front: null, back: null, side: null });
   const [vstatus, setVstatus]   = useState({ front: 'pending', back: 'pending', side: 'pending' });
   const [verrors, setVerrors]   = useState({ front: '', back: '', side: '' });
@@ -418,13 +418,15 @@ function GenerateViewsModal({ srcEntries, customContext, onAccept, onClose }) {
     return (typeof e?.message === 'string' ? e.message : String(e)) || 'Unknown error';
   }
 
-  async function runOneView(view, desc, refs, ctx) {
+  async function runOneView(view, desc, refs) {
     setVstatus(vs => ({ ...vs, [view]: 'loading' }));
     setVerrors(ve => ({ ...ve, [view]: '' }));
     try {
       const url = await generateGarmentView(desc, view, {
         references: refs,
-        customContext: ctx,
+        customContext,
+        style,
+        bgColorName,
       });
       setViews(vs => ({ ...vs, [view]: url }));
       setVstatus(vs => ({ ...vs, [view]: 'done' }));
@@ -435,31 +437,39 @@ function GenerateViewsModal({ srcEntries, customContext, onAccept, onClose }) {
     }
   }
 
-  async function startAll(viewsToRun = VIEWS, existingDesc = null, existingRefs = null) {
+  async function startAll(viewsToRun = VIEWS) {
     try {
-      let desc = existingDesc;
-      let refs = existingRefs;
+      setPhase('analyzing');
 
-      if (!refs) {
-        setPhase('analyzing');
-        const resolved = await Promise.all((srcEntries || []).map(imageEntryToDataUrl));
-        refs = resolved.filter(Boolean);
-        if (!refs.length) throw new Error('Could not read any source images');
-        setRefs(refs);
-      }
+      // Resolve per-view sources + shared refs in parallel
+      const [frontUrl, backUrl, sideUrl, ...sharedUrls] = await Promise.all([
+        viewSources?.front ? imageEntryToDataUrl(viewSources.front) : Promise.resolve(null),
+        viewSources?.back  ? imageEntryToDataUrl(viewSources.back)  : Promise.resolve(null),
+        viewSources?.side  ? imageEntryToDataUrl(viewSources.side)  : Promise.resolve(null),
+        ...(sharedRefs || []).map(imageEntryToDataUrl),
+      ]);
 
-      if (!desc) {
-        setPhase('analyzing');
-        // First reference drives the technical garment description.
-        const first = refs[0];
-        const mime = first.match(/^data:([^;]+);/)?.[1] || 'image/jpeg';
-        const b64  = first.replace(/^data:[^;]+;base64,/, '');
-        desc = await analyzeGarmentImage(b64, mime);
-        setDesc(desc);
-      }
+      const sharedClean = sharedUrls.filter(Boolean);
+
+      // Per-view refs: that view's own source (if any) + all shared refs
+      const refs = {
+        front: [frontUrl, ...sharedClean].filter(Boolean),
+        back:  [backUrl,  ...sharedClean].filter(Boolean),
+        side:  [sideUrl,  ...sharedClean].filter(Boolean),
+      };
+
+      // Need at least one ref somewhere to drive the analysis
+      const seed = frontUrl || backUrl || sideUrl || sharedClean[0];
+      if (!seed) throw new Error('Could not read any reference images');
+      setPVR(refs);
+
+      const mime = seed.match(/^data:([^;]+);/)?.[1] || 'image/jpeg';
+      const b64  = seed.replace(/^data:[^;]+;base64,/, '');
+      const desc = await analyzeGarmentImage(b64, mime);
+      setDesc(desc);
 
       setPhase('generating');
-      await Promise.all(viewsToRun.map(view => runOneView(view, desc, refs, customContext)));
+      await Promise.all(viewsToRun.map(view => runOneView(view, desc, refs[view])));
       setPhase('done');
     } catch (e) {
       console.error('[techpack-views] analyze failed:', e);
@@ -469,9 +479,9 @@ function GenerateViewsModal({ srcEntries, customContext, onAccept, onClose }) {
   }
 
   async function regenView(view) {
-    if (!description || !refDataUrls.length) return;
+    if (!description) return;
     setViews(vs => ({ ...vs, [view]: null }));
-    await runOneView(view, description, refDataUrls, customContext);
+    await runOneView(view, description, perViewRefs[view] || []);
   }
 
   async function handleAccept() {
@@ -583,31 +593,135 @@ function GenerateViewsModal({ srcEntries, customContext, onAccept, onClose }) {
   );
 }
 
+// Tiny inline section wrapper — label + content, FR brand spacing.
+function GenSection({ label, children }) {
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function StyleChip({ active, label, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: '8px 18px',
+        background: active ? FR.slate : FR.white,
+        color: active ? FR.salt : FR.slate,
+        border: `0.5px solid ${active ? FR.slate : FR.sand}`,
+        borderRadius: 6,
+        cursor: 'pointer',
+        fontSize: 11,
+        letterSpacing: 0.5,
+        textTransform: 'uppercase',
+        fontWeight: active ? 600 : 400,
+      }}>
+      {label}
+    </button>
+  );
+}
+
+function ColorBlock({ name, hex, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      title={name}
+      style={{
+        width: 36,
+        height: 36,
+        borderRadius: 6,
+        background: hex,
+        border: active ? `2px solid ${FR.slate}` : `0.5px solid ${FR.sand}`,
+        cursor: 'pointer',
+        padding: 0,
+        boxShadow: active ? `0 0 0 2px ${FR.salt}` : 'none',
+        transition: 'all 0.15s',
+      }}
+    />
+  );
+}
+
 export function StepDesignOverview({ data, set, images, onUpload, onRemove }) {
   const [showModal, setShowModal] = useState(false);
 
-  const srcEntries    = (images || []).filter(i => i.slot === 'design-source');
+  const sourceFront      = (images || []).find(i => i.slot === 'design-source-front');
+  const sourceBack       = (images || []).find(i => i.slot === 'design-source-back');
+  const sourceSide       = (images || []).find(i => i.slot === 'design-source-side');
+  const treatmentRefs    = (images || []).filter(i => i.slot === 'design-treatment-ref');
+  const embellishmentRefs = (images || []).filter(i => i.slot === 'design-embellishment-ref');
+
   const customContext = data?.designContextPrompt || '';
+  const style         = data?.designStyle || 'ghost-mannequin';
+  const bgColor       = data?.designBgColor || 'salt';
+
+  const hasAnyRef = !!(sourceFront || sourceBack || sourceSide || treatmentRefs.length || embellishmentRefs.length);
 
   return (
     <div>
       <SectionTitle>Design Overview</SectionTitle>
 
-      {/* Reference images (multi-upload) for AI view generation */}
-      <div style={{ marginBottom: 14 }}>
-        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>Reference Images</label>
+      {/* Style toggle */}
+      <GenSection label="Generation Style">
+        <div style={{ display: 'flex', gap: 8 }}>
+          <StyleChip active={style === 'ghost-mannequin'} label="Ghost Mannequin" onClick={() => set('designStyle', 'ghost-mannequin')} />
+          <StyleChip active={style === 'flat-lay'}        label="Flat Lay"        onClick={() => set('designStyle', 'flat-lay')} />
+        </div>
+      </GenSection>
+
+      {/* Background color from FR palette */}
+      <GenSection label="Background Color">
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          {FR_COLOR_OPTIONS.map(opt => (
+            <ColorBlock
+              key={opt.name}
+              name={opt.name}
+              hex={opt.hex}
+              active={bgColor === opt.name.toLowerCase()}
+              onClick={() => set('designBgColor', opt.name.toLowerCase())}
+            />
+          ))}
+          <span style={{ fontSize: 11, color: FR.stone, marginLeft: 6, fontFamily: 'ui-monospace,Menlo,monospace' }}>
+            {FR_COLOR_OPTIONS.find(o => o.name.toLowerCase() === bgColor)?.name || '—'}
+          </span>
+        </div>
+      </GenSection>
+
+      {/* Per-view source images (CLO3D workflow) */}
+      <GenSection label="Reference Per View — CLO3D Renders or Sketches">
+        <Row cols="1fr 1fr 1fr">
+          <PhotoUpload label="Front Reference" slotKey="design-source-front" images={images} onUpload={onUpload} onRemove={onRemove} />
+          <PhotoUpload label="Back Reference"  slotKey="design-source-back"  images={images} onUpload={onUpload} onRemove={onRemove} />
+          <PhotoUpload label="Side Reference"  slotKey="design-source-side"  images={images} onUpload={onUpload} onRemove={onRemove} />
+        </Row>
+      </GenSection>
+
+      {/* Treatments / wash references */}
+      <GenSection label="Treatment & Wash References — Fabric Finish, Dye, Distressing">
         <PhotoUpload
-          label="Upload up to 6 — CLO3D renders, flat lays, sketches, swatches, mood images"
-          slotKey="design-source"
+          label="Upload swatches or imagery showing the wash, dye, or fabric finish"
+          slotKey="design-treatment-ref"
           images={images}
           onUpload={onUpload}
           onRemove={onRemove}
         />
-      </div>
+      </GenSection>
 
-      {/* Free-form context for the AI prompt */}
-      <div style={{ marginBottom: 18 }}>
-        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>Additional Context for AI</label>
+      {/* Embellishment / artwork references */}
+      <GenSection label="Embellishment References — Graphics, Embroidery, Hardware">
+        <PhotoUpload
+          label="Upload artwork, prints, embroidery samples, or hardware references"
+          slotKey="design-embellishment-ref"
+          images={images}
+          onUpload={onUpload}
+          onRemove={onRemove}
+        />
+      </GenSection>
+
+      {/* Free-form context */}
+      <GenSection label="Additional Context for AI">
         <textarea
           value={customContext}
           onChange={e => set('designContextPrompt', e.target.value)}
@@ -627,27 +741,28 @@ export function StepDesignOverview({ data, set, images, onUpload, onRemove }) {
             boxSizing: 'border-box',
           }}
         />
-      </div>
+      </GenSection>
 
-      {/* Generate button — disabled until at least one reference image */}
-      <div style={{ marginBottom: 22 }}>
+      {/* Generate button */}
+      <div style={{ marginBottom: 26 }}>
         <button
           onClick={() => setShowModal(true)}
-          disabled={!srcEntries.length}
+          disabled={!hasAnyRef}
           style={{
-            padding: '10px 22px',
-            background: srcEntries.length ? FR.slate : FR.sand,
-            color: srcEntries.length ? FR.salt : FR.stone,
+            padding: '11px 24px',
+            background: hasAnyRef ? FR.slate : FR.sand,
+            color: hasAnyRef ? FR.salt : FR.stone,
             border: 'none',
             borderRadius: 6,
-            cursor: srcEntries.length ? 'pointer' : 'not-allowed',
+            cursor: hasAnyRef ? 'pointer' : 'not-allowed',
             fontSize: 11,
             letterSpacing: 0.5,
             textTransform: 'uppercase',
+            fontWeight: 600,
           }}>
           Generate Views with AI
         </button>
-        {!srcEntries.length && (
+        {!hasAnyRef && (
           <span style={{ marginLeft: 12, fontSize: 11, color: FR.stone, fontStyle: 'italic' }}>
             Upload at least one reference image to enable
           </span>
@@ -655,19 +770,21 @@ export function StepDesignOverview({ data, set, images, onUpload, onRemove }) {
       </div>
 
       {/* Manual / generated garment views */}
-      <div style={{ marginBottom: 16 }}>
-        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>Garment Views</label>
+      <GenSection label="Garment Views">
         <Row cols="1fr 1fr 1fr">
           <PhotoUpload label="Front View" slotKey="design-front" images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
           <PhotoUpload label="Back View"  slotKey="design-back"  images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
           <PhotoUpload label="Side View"  slotKey="design-side"  images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
         </Row>
-      </div>
+      </GenSection>
 
-      {showModal && srcEntries.length > 0 && (
+      {showModal && (
         <GenerateViewsModal
-          srcEntries={srcEntries}
+          viewSources={{ front: sourceFront, back: sourceBack, side: sourceSide }}
+          sharedRefs={[...treatmentRefs, ...embellishmentRefs]}
           customContext={customContext}
+          style={style}
+          bgColorName={bgColor}
           onAccept={(slot, dataUrl) => onUpload(slot, dataUrl, `${slot}-generated.jpg`)}
           onClose={() => setShowModal(false)}
         />
