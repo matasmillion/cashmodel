@@ -23,6 +23,22 @@ import { copyCoverImage } from './plmAssets';
 
 const LOCAL_KEY = 'cashmodel_patterns';
 
+const PATTERN_CLOUD_COLUMNS = new Set([
+  'id', 'code', 'name', 'status', 'version', 'created_at', 'updated_at',
+  'category', 'base_block', 'sizes', 'grade_rule', 'ease_chest_cm',
+  'drop_cm', 'seam_allowance_cm', 'cad_file_url', 'thumbnail_url',
+  'cover_image', 'notes',
+  'organization_id', 'user_id',
+]);
+
+function toPatternCloudRow(row) {
+  const out = {};
+  for (const k of Object.keys(row)) {
+    if (PATTERN_CLOUD_COLUMNS.has(k)) out[k] = row[k];
+  }
+  return out;
+}
+
 function readLocal() {
   try {
     const raw = localStorage.getItem(LOCAL_KEY);
@@ -132,7 +148,7 @@ export async function createPattern({ category = 'hoodie', ...overrides } = {}) 
   if (IS_SUPABASE_ENABLED && orgId) {
     const userId = getCurrentUserIdSync();
     const db = await getAuthedSupabase();
-    const { error } = await db.from('patterns').insert({ ...row, user_id: userId, organization_id: orgId });
+    const { error } = await db.from('patterns').insert(toPatternCloudRow({ ...row, user_id: userId, organization_id: orgId }));
     if (error) console.error('createPattern:', error);
   }
   return row;
@@ -159,7 +175,7 @@ export async function savePattern(id, updates) {
     const db = await getAuthedSupabase();
     const { error } = await db
       .from('patterns')
-      .upsert({ ...merged, organization_id: orgId, user_id: merged.user_id || userId, updated_at: now });
+      .upsert(toPatternCloudRow({ ...merged, organization_id: orgId, user_id: merged.user_id || userId, updated_at: now }));
     if (error) console.error('savePattern:', error);
   }
   return merged;
@@ -202,7 +218,7 @@ export async function duplicatePattern(id) {
   if (IS_SUPABASE_ENABLED && orgId) {
     const userId = getCurrentUserIdSync();
     const db = await getAuthedSupabase();
-    const { error } = await db.from('patterns').insert({ ...copy, user_id: userId, organization_id: orgId });
+    const { error } = await db.from('patterns').insert(toPatternCloudRow({ ...copy, user_id: userId, organization_id: orgId }));
     if (error) console.error('duplicatePattern:', error);
   }
   return copy;
@@ -281,7 +297,7 @@ export async function seedPatternsIfEmpty() {
     const userId = getCurrentUserIdSync();
     const db = await getAuthedSupabase();
     const { error } = await db.from('patterns').insert(
-      filled.map(r => ({ ...r, user_id: userId, organization_id: orgId }))
+      filled.map(r => toPatternCloudRow({ ...r, user_id: userId, organization_id: orgId }))
     );
     if (error) console.error('seedPatterns:', error);
   }

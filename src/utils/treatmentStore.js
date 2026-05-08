@@ -21,6 +21,25 @@ import { copyCoverImage } from './plmAssets';
 
 const LOCAL_KEY = 'cashmodel_treatments';
 
+const TREATMENT_CLOUD_COLUMNS = new Set([
+  'id', 'code', 'name', 'status', 'version', 'created_at', 'updated_at',
+  'type', 'base_color_id', 'chemistry', 'duration_minutes', 'temperature_c',
+  'compatible_fabric_ids', 'compatible_pattern_categories',
+  'shrinkage_expected_pct', 'primary_vendor_id', 'backup_vendor_id',
+  'cost_per_unit_usd', 'lead_time_days', 'moq_units', 'notes',
+  'swatch_image_url', 'cover_image', 'digital',
+  'defect_rate_pct', 'units_produced_total',
+  'organization_id', 'user_id',
+]);
+
+function toTreatmentCloudRow(row) {
+  const out = {};
+  for (const k of Object.keys(row)) {
+    if (TREATMENT_CLOUD_COLUMNS.has(k)) out[k] = row[k];
+  }
+  return out;
+}
+
 function readLocal() {
   try {
     const raw = localStorage.getItem(LOCAL_KEY);
@@ -137,7 +156,7 @@ export async function createTreatment({ type = 'wash', ...overrides } = {}) {
   if (IS_SUPABASE_ENABLED && orgId) {
     const userId = getCurrentUserIdSync();
     const db = await getAuthedSupabase();
-    const { error } = await db.from('treatments').insert({ ...row, user_id: userId, organization_id: orgId });
+    const { error } = await db.from('treatments').insert(toTreatmentCloudRow({ ...row, user_id: userId, organization_id: orgId }));
     if (error) console.error('createTreatment:', error);
   }
   return row;
@@ -167,7 +186,7 @@ export async function saveTreatment(id, updates) {
     const db = await getAuthedSupabase();
     const { error } = await db
       .from('treatments')
-      .upsert({ ...merged, organization_id: orgId, user_id: merged.user_id || userId, updated_at: now });
+      .upsert(toTreatmentCloudRow({ ...merged, organization_id: orgId, user_id: merged.user_id || userId, updated_at: now }));
     if (error) console.error('saveTreatment:', error);
   }
   return merged;
@@ -248,7 +267,7 @@ export async function duplicateTreatment(id) {
   if (IS_SUPABASE_ENABLED && orgId) {
     const userId = getCurrentUserIdSync();
     const db = await getAuthedSupabase();
-    const { error } = await db.from('treatments').insert({ ...copy, user_id: userId, organization_id: orgId });
+    const { error } = await db.from('treatments').insert(toTreatmentCloudRow({ ...copy, user_id: userId, organization_id: orgId }));
     if (error) console.error('duplicateTreatment:', error);
   }
   return copy;
@@ -497,7 +516,7 @@ export async function seedTreatmentsIfEmpty() {
     const userId = getCurrentUserIdSync();
     const db = await getAuthedSupabase();
     const { error } = await db.from('treatments').insert(
-      filled.map(r => ({ ...r, user_id: userId, organization_id: orgId }))
+      filled.map(r => toTreatmentCloudRow({ ...r, user_id: userId, organization_id: orgId }))
     );
     if (error) console.error('seedTreatments:', error);
   }

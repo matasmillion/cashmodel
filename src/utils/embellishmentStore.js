@@ -14,6 +14,24 @@ import { copyCoverImage } from './plmAssets';
 
 const LOCAL_KEY = 'cashmodel_embellishments';
 
+const EMBELLISHMENT_CLOUD_COLUMNS = new Set([
+  'id', 'code', 'name', 'status', 'version', 'created_at', 'updated_at',
+  'type', 'technique', 'artwork_file_url', 'placement', 'placement_image_url',
+  'size_w_cm', 'size_h_cm', 'color_count', 'thread_color_ids',
+  'primary_vendor_id', 'backup_vendor_id', 'cost_per_unit_usd', 'currency',
+  'lead_time_days', 'moq_units', 'cover_image',
+  'adobe_ai_url', 'adobe_psd_url', 'digitizing_file_url', 'notes',
+  'organization_id', 'user_id',
+]);
+
+function toEmbellishmentCloudRow(row) {
+  const out = {};
+  for (const k of Object.keys(row)) {
+    if (EMBELLISHMENT_CLOUD_COLUMNS.has(k)) out[k] = row[k];
+  }
+  return out;
+}
+
 function readLocal() {
   try {
     const raw = localStorage.getItem(LOCAL_KEY);
@@ -121,7 +139,7 @@ export async function createEmbellishment({ type = 'embroidery', ...overrides } 
   if (IS_SUPABASE_ENABLED && orgId) {
     const userId = getCurrentUserIdSync();
     const db = await getAuthedSupabase();
-    const { error } = await db.from('embellishments').insert({ ...row, user_id: userId, organization_id: orgId });
+    const { error } = await db.from('embellishments').insert(toEmbellishmentCloudRow({ ...row, user_id: userId, organization_id: orgId }));
     if (error) console.error('createEmbellishment:', error);
   }
   return row;
@@ -148,7 +166,7 @@ export async function saveEmbellishment(id, updates) {
     const db = await getAuthedSupabase();
     const { error } = await db
       .from('embellishments')
-      .upsert({ ...merged, organization_id: orgId, user_id: merged.user_id || userId, updated_at: now });
+      .upsert(toEmbellishmentCloudRow({ ...merged, organization_id: orgId, user_id: merged.user_id || userId, updated_at: now }));
     if (error) console.error('saveEmbellishment:', error);
   }
   return merged;
@@ -191,7 +209,7 @@ export async function duplicateEmbellishment(id) {
   if (IS_SUPABASE_ENABLED && orgId) {
     const userId = getCurrentUserIdSync();
     const db = await getAuthedSupabase();
-    const { error } = await db.from('embellishments').insert({ ...copy, user_id: userId, organization_id: orgId });
+    const { error } = await db.from('embellishments').insert(toEmbellishmentCloudRow({ ...copy, user_id: userId, organization_id: orgId }));
     if (error) console.error('duplicateEmbellishment:', error);
   }
   return copy;
@@ -251,7 +269,7 @@ export async function seedEmbellishmentsIfEmpty() {
     const userId = getCurrentUserIdSync();
     const db = await getAuthedSupabase();
     const { error } = await db.from('embellishments').insert(
-      filled.map(r => ({ ...r, user_id: userId, organization_id: orgId }))
+      filled.map(r => toEmbellishmentCloudRow({ ...r, user_id: userId, organization_id: orgId }))
     );
     if (error) console.error('seedEmbellishments:', error);
   }
