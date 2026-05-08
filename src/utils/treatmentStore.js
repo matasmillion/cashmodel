@@ -403,6 +403,19 @@ export async function seedTreatmentsIfEmpty() {
   try { seedSeedVendors(); } catch (err) { console.error('seedSeedVendors:', err); }
   const local = readLocal();
   if (local.length > 0) return [];
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { count, error } = await db
+      .from('treatments')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', orgId);
+    if (error) console.error('seedTreatmentsIfEmpty count:', error);
+    if ((count || 0) > 0) {
+      localStorage.setItem('cashmodel_seeded', '1');
+      return [];
+    }
+  }
   const now = new Date().toISOString();
   const seeds = [
     {
@@ -511,7 +524,6 @@ export async function seedTreatmentsIfEmpty() {
   // Use empty defaults for any field a seed left out.
   const filled = seeds.map(s => ({ ...emptyTreatment(s), updated_at: s.updated_at || now, created_at: s.created_at || now }));
   writeLocal(filled);
-  const orgId = getCurrentOrgIdSync();
   if (IS_SUPABASE_ENABLED && orgId) {
     const userId = getCurrentUserIdSync();
     const db = await getAuthedSupabase();
