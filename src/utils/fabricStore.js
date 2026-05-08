@@ -272,6 +272,23 @@ export async function seedFabricsIfEmpty() {
   if (localStorage.getItem('cashmodel_seeded')) return [];
   const local = readLocal();
   if (local.length > 0) return [];
+  // Don't seed if cloud already has rows for this org — otherwise a fresh
+  // device signing into an existing org pollutes the shared library with
+  // duplicate defaults.
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { count, error } = await db
+      .from('fabrics')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', orgId);
+    if (error) console.error('seedFabricsIfEmpty count:', error);
+    if ((count || 0) > 0) {
+      // Mark seeded so we don't keep hitting cloud on every page load.
+      localStorage.setItem('cashmodel_seeded', '1');
+      return [];
+    }
+  }
   const now = new Date().toISOString();
   const seeds = [
     {
@@ -346,7 +363,6 @@ export async function seedFabricsIfEmpty() {
   ];
   const filled = seeds.map(s => ({ ...emptyFabric(s), updated_at: s.updated_at || now, created_at: s.created_at || now }));
   writeLocal(filled);
-  const orgId = getCurrentOrgIdSync();
   if (IS_SUPABASE_ENABLED && orgId) {
     const userId = getCurrentUserIdSync();
     const db = await getAuthedSupabase();

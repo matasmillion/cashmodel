@@ -230,6 +230,19 @@ export async function seedPatternsIfEmpty() {
   if (localStorage.getItem('cashmodel_seeded')) return [];
   const local = readLocal();
   if (local.length > 0) return [];
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { count, error } = await db
+      .from('patterns')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', orgId);
+    if (error) console.error('seedPatternsIfEmpty count:', error);
+    if ((count || 0) > 0) {
+      localStorage.setItem('cashmodel_seeded', '1');
+      return [];
+    }
+  }
   const now = new Date().toISOString();
   const seeds = [
     {
@@ -292,7 +305,6 @@ export async function seedPatternsIfEmpty() {
   ];
   const filled = seeds.map(s => ({ ...emptyPattern(s), updated_at: s.updated_at || now, created_at: s.created_at || now }));
   writeLocal(filled);
-  const orgId = getCurrentOrgIdSync();
   if (IS_SUPABASE_ENABLED && orgId) {
     const userId = getCurrentUserIdSync();
     const db = await getAuthedSupabase();
