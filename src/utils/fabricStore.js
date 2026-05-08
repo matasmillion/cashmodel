@@ -15,6 +15,30 @@ import { copyCoverImage } from './plmAssets';
 
 const LOCAL_KEY = 'cashmodel_fabrics';
 
+// Whitelist of columns that exist on the cloud `fabrics` table. Anything
+// outside this set (legacy fields lingering in localStorage, in-memory UI
+// state, computed values) gets dropped before the upsert — Postgres rejects
+// the whole row if a single unknown column is sent, so silently filtering is
+// the only way to keep cloud sync robust as the schema evolves.
+const FABRIC_CLOUD_COLUMNS = new Set([
+  'id', 'code', 'name', 'status', 'version', 'created_at', 'updated_at',
+  'category', 'mill_fabric_no', 'composition', 'weight_gsm', 'weave', 'hand',
+  'width_cm', 'shrinkage_pct', 'stretch_pct', 'mill_id', 'lead_time_days',
+  'moq_meters', 'price_per_meter_usd', 'price_per_meter_cny',
+  'price_per_kg_usd', 'price_per_kg_cny', 'currency',
+  'front_image_url', 'back_image_url', 'color_card_images', 'cover_image',
+  'zfab_file_url', 'color_id', 'notes',
+  'organization_id', 'user_id',
+]);
+
+function toFabricCloudRow(row) {
+  const out = {};
+  for (const k of Object.keys(row)) {
+    if (FABRIC_CLOUD_COLUMNS.has(k)) out[k] = row[k];
+  }
+  return out;
+}
+
 // 1 yard = 0.9144 meters. Older rows used `moq_yards` / `price_per_yard_usd`;
 // we now store everything in meters because every mill we deal with quotes
 // in metric. Convert in place once on read so existing rows surface with the
@@ -159,7 +183,7 @@ export async function createFabric({ weave = 'jersey', ...overrides } = {}) {
   if (IS_SUPABASE_ENABLED && orgId) {
     const userId = getCurrentUserIdSync();
     const db = await getAuthedSupabase();
-    const { error } = await db.from('fabrics').insert({ ...row, user_id: userId, organization_id: orgId });
+    const { error } = await db.from('fabrics').insert(toFabricCloudRow({ ...row, user_id: userId, organization_id: orgId }));
     if (error) console.error('createFabric:', error);
   }
   return row;
@@ -192,7 +216,7 @@ export async function saveFabric(id, updates) {
     // the next save instead of update-zero-rows silent failure.
     const { error } = await db
       .from('fabrics')
-      .upsert({ ...merged, organization_id: orgId, user_id: merged.user_id || userId, updated_at: now });
+      .upsert(toFabricCloudRow({ ...merged, organization_id: orgId, user_id: merged.user_id || userId, updated_at: now }));
     if (error) console.error('saveFabric:', error);
   }
   return merged;
@@ -238,7 +262,7 @@ export async function duplicateFabric(id) {
   if (IS_SUPABASE_ENABLED && orgId) {
     const userId = getCurrentUserIdSync();
     const db = await getAuthedSupabase();
-    const { error } = await db.from('fabrics').insert({ ...copy, user_id: userId, organization_id: orgId });
+    const { error } = await db.from('fabrics').insert(toFabricCloudRow({ ...copy, user_id: userId, organization_id: orgId }));
     if (error) console.error('duplicateFabric:', error);
   }
   return copy;
@@ -327,7 +351,7 @@ export async function seedFabricsIfEmpty() {
     const userId = getCurrentUserIdSync();
     const db = await getAuthedSupabase();
     const { error } = await db.from('fabrics').insert(
-      filled.map(r => ({ ...r, user_id: userId, organization_id: orgId }))
+      filled.map(r => toFabricCloudRow({ ...r, user_id: userId, organization_id: orgId }))
     );
     if (error) console.error('seedFabrics:', error);
   }
