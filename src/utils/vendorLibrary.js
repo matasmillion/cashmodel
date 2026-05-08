@@ -55,6 +55,71 @@ function migrateLegacyIfNeeded() {
   }
 }
 
+// Map a Supabase row (snake_case projection) back into the camelCase
+// shape the rest of the app uses on entries pulled from localStorage.
+function fromSupabaseRow(row) {
+  if (!row) return null;
+  return {
+    name: row.name,
+    country: row.country || '',
+    city: row.city || '',
+    primaryContact: row.primary_contact || '',
+    email: row.email || '',
+    phone: row.phone || '',
+    website: row.website || '',
+    moq: row.moq || '',
+    leadTimeDays: row.lead_time_days != null ? String(row.lead_time_days) : '',
+    specialties: row.specialties || '',
+    notes: row.notes || '',
+    logoImage: row.logo_image || null,
+    capabilities: Array.isArray(row.capabilities) ? row.capabilities : [],
+    moq_units: Number(row.moq_units) || 0,
+    lead_time_days: Number(row.lead_time_days) || 0,
+    payment_terms: row.payment_terms || '',
+    rating: Number(row.rating) || 0,
+    samRateUsdPerMin: row.sam_rate_usd_per_min != null && row.sam_rate_usd_per_min !== 0
+      ? String(row.sam_rate_usd_per_min)
+      : '',
+  };
+}
+
+// Pull every vendor row for the current org from Supabase and merge into
+// the local store (cloud-wins on collisions, since cloud is the source
+// of truth across devices). Idempotent — safe to call on every mount.
+// Returns the hydrated vendor map keyed by name.
+async function hydrateVendorsFromCloud() {
+  const orgId = getCurrentOrgIdSync();
+  if (!IS_SUPABASE_ENABLED || !orgId) return null;
+  try {
+    const db = await getAuthedSupabase();
+    if (!db) return null;
+    const { data, error } = await db
+      .from('vendors')
+      .select('*')
+      .eq('organization_id', orgId);
+    if (error) {
+      console.error('vendorLibrary hydrate:', error);
+      return null;
+    }
+    const cloudByName = {};
+    (data || []).forEach(row => {
+      const camel = fromSupabaseRow(row);
+      if (camel?.name) cloudByName[camel.name] = camel;
+    });
+    // Cloud-wins merge into local store.
+    const local = readStore();
+    const merged = { ...local };
+    Object.entries(cloudByName).forEach(([name, entry]) => {
+      merged[name] = { ...(local[name] || {}), ...entry };
+    });
+    writeStore(merged);
+    return merged;
+  } catch (err) {
+    console.error('vendorLibrary hydrate:', err);
+    return null;
+  }
+}
+
 function readStore() {
   migrateLegacyIfNeeded();
   try {
@@ -149,7 +214,11 @@ export function listVendorsLocal() {
 // aggregation. Names that aren't in the store are returned as empty
 // records with `_hasRecord: false` so the UI can badge them.
 export async function listVendors() {
-  const store = readStore();
+  // Hydrate from cloud first so a fresh device sees vendors created on
+  // another laptop. Cloud-wins merge into localStorage; subsequent sync
+  // reads (getVendor, listVendorsLocal) then return the merged set.
+  const hydrated = await hydrateVendorsFromCloud();
+  const store = hydrated || readStore();
   const fromStore = Object.keys(store)
     .map(name => ({ ...emptyEntry(name), ...store[name], _hasRecord: true }));
   let fromDirectory = [];
