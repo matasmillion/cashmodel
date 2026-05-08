@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-08T10:28:13.090Z",
+  "lastUpdated": "2026-05-08T14:34:23.653Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,9 +1044,19 @@
   ],
   "changelog": [
     {
-      "sha": "b84417e",
-      "date": "2026-05-08T10:19:11+00:00",
-      "message": "chore: refresh public/state.json metadata"
+      "sha": "4698014",
+      "date": "2026-05-08T16:35:04+03:00",
+      "message": "plm: route atom cloud writes through JWT-reconciled upsert + visible Sync Diagnostics panel (#77)"
+    },
+    {
+      "sha": "979fa2c",
+      "date": "2026-05-08T13:34:30+03:00",
+      "message": "plm: auto-heal local-only atom rows to cloud on every list call (#76)"
+    },
+    {
+      "sha": "19686fe",
+      "date": "2026-05-08T13:28:54+03:00",
+      "message": "plm: don't seed defaults if cloud already has rows for this org (#75)"
     },
     {
       "sha": "5885fc9",
@@ -1082,16 +1092,6 @@
       "sha": "985da17",
       "date": "2026-05-08T01:00:24+03:00",
       "message": "techpack: vendor SAM rate field + two-mode AI labor cost (rate × SAM | CMT fallback) (#68)"
-    },
-    {
-      "sha": "015b126",
-      "date": "2026-05-08T00:24:38+03:00",
-      "message": "techpack: re-anchor AI labor cost prompt on observed CMT prices, not SAM × rate (#67)"
-    },
-    {
-      "sha": "2223146",
-      "date": "2026-05-08T00:21:28+03:00",
-      "message": "techpack: stitch reference uses AspectPhoto so the user can crop to 2:3 on upload (#66)"
     }
   ]
 }

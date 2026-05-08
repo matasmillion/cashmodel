@@ -15,6 +15,7 @@ import {
   saveTransloaditCredentials, deleteTransloaditCredentials,
   saveMetaCredentialsServer, deleteMetaCredentialsServer,
   saveSlackCredentials, deleteSlackCredentials,
+  saveSlackInventoryCredentials, deleteSlackInventoryCredentials,
   saveApifyCredentials, deleteApifyCredentials,
 } from '../utils/liveDataSync';
 
@@ -1271,6 +1272,90 @@ function SlackCard({ creds, onSave, onClear }) {
   );
 }
 
+// ─── Slack Inventory (sell-through alerts, separate Slack app) ────────────────
+function SlackInventoryCard({ creds, onSave, onClear }) {
+  const [open, setOpen] = useState(!creds?.connected);
+  const [token, setToken] = useState('');
+  const [channelId, setChannelId] = useState('');
+  const [status, setStatus] = useState(null);
+  const [errMsg, setErrMsg] = useState('');
+
+  async function handleConnect(e) {
+    e.preventDefault();
+    setStatus('saving');
+    setErrMsg('');
+    try {
+      await saveSlackInventoryCredentials({ token, channelId });
+      setStatus('ok');
+      onSave({ connected: true, savedAt: new Date().toISOString(), channelId });
+      setToken('');
+      setOpen(false);
+    } catch (err) {
+      setStatus('error');
+      setErrMsg(err.message);
+    }
+  }
+
+  async function handleDisconnect() {
+    try { await deleteSlackInventoryCredentials(); } catch {}
+    onClear();
+  }
+
+  return (
+    <IntegrationCard
+      name="Slack — Inventory Alerts"
+      description="Daily stockout warnings for tracked variants. Use a separate Slack app from creative-engine."
+      icon={Hash}
+      iconColor={FR.sienna}
+      connected={creds?.connected}
+      open={open}
+      onToggle={() => setOpen(o => !o)}
+      onDisconnect={handleDisconnect}
+    >
+      {!creds?.connected ? (
+        <form onSubmit={handleConnect} className="space-y-3 mt-3">
+          <div className="p-2 rounded-lg text-xs flex items-start gap-2" style={{ background: FR.salt, border: `1px solid ${FR.sand}` }}>
+            <Server size={12} style={{ color: FR.soil, marginTop: 2, flexShrink: 0 }} />
+            <span style={{ color: FR.stone }}>
+              Create a dedicated Slack app for inventory (e.g. “FR Inventory Bot”), give it <code>chat:write</code> + <code>chat:write.public</code>, install to workspace, and paste the Bot User OAuth Token plus the channel ID where alerts should land.
+            </span>
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: FR.stone }}>Bot Token</label>
+            <input
+              type="password"
+              value={token}
+              onChange={e => setToken(e.target.value)}
+              placeholder="xoxb-…"
+              required
+              className="w-full px-3 py-2 rounded-lg text-sm border"
+              style={{ borderColor: FR.sand, fontFamily: 'ui-monospace, SF Mono, Menlo, monospace' }}
+            />
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: FR.stone }}>Channel ID</label>
+            <input
+              type="text"
+              value={channelId}
+              onChange={e => setChannelId(e.target.value)}
+              placeholder="C0XXXXXXXX"
+              required
+              className="w-full px-3 py-2 rounded-lg text-sm border"
+              style={{ borderColor: FR.sand, fontFamily: 'ui-monospace, SF Mono, Menlo, monospace' }}
+            />
+          </div>
+          <StatusButton status={status} label="Save" errMsg={errMsg} />
+        </form>
+      ) : (
+        <div className="mt-3 text-xs space-y-1" style={{ color: FR.stone }}>
+          <p>Connected — alerts post to <code>{creds.channelId || '—'}</code> daily.</p>
+          {creds.savedAt && <p>Saved {new Date(creds.savedAt).toLocaleDateString()}</p>}
+        </div>
+      )}
+    </IntegrationCard>
+  );
+}
+
 // ─── Transloadit (video encoder pass for Meta-spec normalization) ─────────────
 function TransloaditCard({ creds, onSave, onClear }) {
   const [open, setOpen] = useState(!creds?.connected);
@@ -1460,6 +1545,7 @@ export default function IntegrationsPanel() {
         <HiggsfieldCard creds={creds.higgsfield} onSave={d => update('higgsfield', d)} onClear={() => update('higgsfield', null)} />
         <TransloaditCard creds={creds.transloadit} onSave={d => update('transloadit', d)} onClear={() => update('transloadit', null)} />
         <SlackCard creds={creds.slack} onSave={d => update('slack', d)} onClear={() => update('slack', null)} />
+        <SlackInventoryCard creds={creds.slack_inventory} onSave={d => update('slack_inventory', d)} onClear={() => update('slack_inventory', null)} />
         <ApifyCard creds={creds.apify} onSave={d => update('apify', d)} onClear={() => update('apify', null)} />
 
         {/* 3PL — handled by the Fulfillment tab */}

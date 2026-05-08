@@ -290,7 +290,8 @@ export async function fetchShopifyVariantsWithInventory() {
             sku
             title
             inventoryQuantity
-            product { id title }
+            inventoryItem { unitCost { amount } }
+            product { id title vendor }
           }
         }
       }
@@ -314,12 +315,16 @@ export async function fetchShopifyVariantsWithInventory() {
 
     for (const edge of conn.edges) {
       const n = edge.node;
+      const unitCostAmount = n.inventoryItem?.unitCost?.amount;
       out.push({
         variantId: n.id,
         sku: n.sku || '',
+        productId: n.product?.id || '',
         productTitle: n.product?.title || '',
+        productVendor: n.product?.vendor || '',
         variantTitle: n.title || '',
         inventoryQuantity: typeof n.inventoryQuantity === 'number' ? n.inventoryQuantity : 0,
+        unitCost: unitCostAmount != null ? Number(unitCostAmount) : null,
       });
     }
     if (!conn.pageInfo.hasNextPage) break;
@@ -1063,8 +1068,42 @@ export async function deleteSlackCredentials() {
   await db.from('user_integrations').delete().eq('org_id', orgId).eq('provider', 'slack');
 }
 
-export async function callSlackProxy({ method = 'POST', path, body, query }) {
-  return await callEdgeFunction('slack-proxy', { method, path, body, query });
+export async function callSlackProxy({ method = 'POST', path, body, query, provider }) {
+  return await callEdgeFunction('slack-proxy', { method, path, body, query, provider });
+}
+
+// ─── Slack inventory bot (separate app for sell-through alerts) ───────────────
+
+export async function saveSlackInventoryCredentials({ token, channelId }) {
+  if (!IS_SUPABASE_ENABLED) throw new Error('Supabase not configured');
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) throw new Error('No active organization');
+  const db = await getAuthedSupabase();
+  const { error } = await db
+    .from('user_integrations')
+    .upsert(
+      {
+        org_id: orgId,
+        provider: 'slack_inventory',
+        token,
+        metadata: { channel_id: channelId },
+      },
+      { onConflict: 'org_id,provider' },
+    );
+  if (error) throw new Error(`Failed to save credentials: ${error.message}`);
+}
+
+export async function deleteSlackInventoryCredentials() {
+  if (!IS_SUPABASE_ENABLED) return;
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) return;
+  const db = await getAuthedSupabase();
+  await db.from('user_integrations').delete().eq('org_id', orgId).eq('provider', 'slack_inventory');
+}
+
+/** Manually trigger sell-through-alert for the current org. */
+export async function callSellThroughAlert() {
+  return await callEdgeFunction('sell-through-alert', {});
 }
 
 /** Manually trigger evaluate-daily for the current org (cron also runs nightly). */
