@@ -155,12 +155,11 @@ export async function savePattern(id, updates) {
 
   const orgId = getCurrentOrgIdSync();
   if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
     const db = await getAuthedSupabase();
     const { error } = await db
       .from('patterns')
-      .update({ ...updates, updated_at: now })
-      .eq('id', id)
-      .eq('organization_id', orgId);
+      .upsert({ ...merged, organization_id: orgId, user_id: merged.user_id || userId, updated_at: now });
     if (error) console.error('savePattern:', error);
   }
   return merged;
