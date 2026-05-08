@@ -96,6 +96,23 @@ function unionByIdCloudFirst(cloudRows, localRows) {
   return out;
 }
 
+async function healOrphanTreatments(localRows, cloudRows, orgId, db) {
+  if (!orgId || !Array.isArray(localRows) || localRows.length === 0) return;
+  const cloudIds = new Set((cloudRows || []).map(r => r.id));
+  const orphans = localRows.filter(r => r && r.id && !cloudIds.has(r.id));
+  if (orphans.length === 0) return;
+  const userId = getCurrentUserIdSync();
+  console.log(`[treatmentStore] healing ${orphans.length} local-only treatment(s) to cloud`);
+  const { error } = await db.from('treatments').upsert(
+    orphans.map(r => toTreatmentCloudRow({
+      ...r,
+      organization_id: orgId,
+      user_id: r.user_id || userId,
+    }))
+  );
+  if (error) console.error('healOrphanTreatments:', error);
+}
+
 export async function listTreatments({ includeArchived = false, status = null, type = null } = {}) {
   const filterOpts = { includeArchived, status, type };
   const orgId = getCurrentOrgIdSync();
@@ -109,6 +126,8 @@ export async function listTreatments({ includeArchived = false, status = null, t
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) cloudRows = data;
     else if (error) console.error('listTreatments:', error);
+    try { await healOrphanTreatments(readLocal(), cloudRows, orgId, db); }
+    catch (err) { console.error('healOrphanTreatments:', err); }
   }
   const merged = unionByIdCloudFirst(cloudRows, readLocal());
   return filterRows(merged, filterOpts)

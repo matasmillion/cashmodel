@@ -88,6 +88,23 @@ function unionByIdCloudFirst(cloudRows, localRows) {
   return out;
 }
 
+async function healOrphanPatterns(localRows, cloudRows, orgId, db) {
+  if (!orgId || !Array.isArray(localRows) || localRows.length === 0) return;
+  const cloudIds = new Set((cloudRows || []).map(r => r.id));
+  const orphans = localRows.filter(r => r && r.id && !cloudIds.has(r.id));
+  if (orphans.length === 0) return;
+  const userId = getCurrentUserIdSync();
+  console.log(`[patternStore] healing ${orphans.length} local-only pattern(s) to cloud`);
+  const { error } = await db.from('patterns').upsert(
+    orphans.map(r => toPatternCloudRow({
+      ...r,
+      organization_id: orgId,
+      user_id: r.user_id || userId,
+    }))
+  );
+  if (error) console.error('healOrphanPatterns:', error);
+}
+
 export async function listPatterns({ includeArchived = false, status = null, category = null } = {}) {
   const filterOpts = { includeArchived, status, category };
   const orgId = getCurrentOrgIdSync();
@@ -101,6 +118,8 @@ export async function listPatterns({ includeArchived = false, status = null, cat
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) cloudRows = data;
     else if (error) console.error('listPatterns:', error);
+    try { await healOrphanPatterns(readLocal(), cloudRows, orgId, db); }
+    catch (err) { console.error('healOrphanPatterns:', err); }
   }
   const merged = unionByIdCloudFirst(cloudRows, readLocal());
   return filterRows(merged, filterOpts)
