@@ -17,9 +17,10 @@
 // transitions, not the atom records themselves.
 
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
-import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
+import { getCurrentOrgIdSync } from '../lib/auth';
 import { emptyPattern, PATTERN_CATEGORIES, PATTERN_CATEGORY_CODE } from './patternLibrary';
 import { copyCoverImage } from './plmAssets';
+import { robustUpsertAtom, robustUpsertAtomBatch } from './atomCloudSync';
 
 const LOCAL_KEY = 'cashmodel_patterns';
 
@@ -31,7 +32,7 @@ const PATTERN_CLOUD_COLUMNS = new Set([
   'organization_id', 'user_id',
 ]);
 
-function toPatternCloudRow(row) {
+export function toPatternCloudRow(row) {
   const out = {};
   for (const k of Object.keys(row)) {
     if (PATTERN_CLOUD_COLUMNS.has(k)) out[k] = row[k];
@@ -88,21 +89,12 @@ function unionByIdCloudFirst(cloudRows, localRows) {
   return out;
 }
 
-async function healOrphanPatterns(localRows, cloudRows, orgId, db) {
-  if (!orgId || !Array.isArray(localRows) || localRows.length === 0) return;
+async function healOrphanPatterns(localRows, cloudRows) {
+  if (!Array.isArray(localRows) || localRows.length === 0) return;
   const cloudIds = new Set((cloudRows || []).map(r => r.id));
   const orphans = localRows.filter(r => r && r.id && !cloudIds.has(r.id));
   if (orphans.length === 0) return;
-  const userId = getCurrentUserIdSync();
-  console.log(`[patternStore] healing ${orphans.length} local-only pattern(s) to cloud`);
-  const { error } = await db.from('patterns').upsert(
-    orphans.map(r => toPatternCloudRow({
-      ...r,
-      organization_id: orgId,
-      user_id: r.user_id || userId,
-    }))
-  );
-  if (error) console.error('healOrphanPatterns:', error);
+  await robustUpsertAtomBatch('patterns', orphans.map(r => toPatternCloudRow(r)));
 }
 
 export async function listPatterns({ includeArchived = false, status = null, category = null } = {}) {
@@ -118,7 +110,7 @@ export async function listPatterns({ includeArchived = false, status = null, cat
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) cloudRows = data;
     else if (error) console.error('listPatterns:', error);
-    try { await healOrphanPatterns(readLocal(), cloudRows, orgId, db); }
+    try { await healOrphanPatterns(readLocal(), cloudRows); }
     catch (err) { console.error('healOrphanPatterns:', err); }
   }
   const merged = unionByIdCloudFirst(cloudRows, readLocal());
@@ -163,13 +155,7 @@ export async function createPattern({ category = 'hoodie', ...overrides } = {}) 
   local.push(row);
   writeLocal(local);
 
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('patterns').insert(toPatternCloudRow({ ...row, user_id: userId, organization_id: orgId }));
-    if (error) console.error('createPattern:', error);
-  }
+  await robustUpsertAtom('patterns', toPatternCloudRow(row));
   return row;
 }
 
@@ -188,15 +174,7 @@ export async function savePattern(id, updates) {
   }
   writeLocal(local);
 
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db
-      .from('patterns')
-      .upsert(toPatternCloudRow({ ...merged, organization_id: orgId, user_id: merged.user_id || userId, updated_at: now }));
-    if (error) console.error('savePattern:', error);
-  }
+  await robustUpsertAtom('patterns', toPatternCloudRow({ ...merged, updated_at: now }));
   return merged;
 }
 
@@ -233,13 +211,7 @@ export async function duplicatePattern(id) {
   delete copy.organization_id;
   local.push(copy);
   writeLocal(local);
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('patterns').insert(toPatternCloudRow({ ...copy, user_id: userId, organization_id: orgId }));
-    if (error) console.error('duplicatePattern:', error);
-  }
+  await robustUpsertAtom('patterns', toPatternCloudRow(copy));
   return copy;
 }
 
@@ -324,14 +296,7 @@ export async function seedPatternsIfEmpty() {
   ];
   const filled = seeds.map(s => ({ ...emptyPattern(s), updated_at: s.updated_at || now, created_at: s.created_at || now }));
   writeLocal(filled);
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('patterns').insert(
-      filled.map(r => toPatternCloudRow({ ...r, user_id: userId, organization_id: orgId }))
-    );
-    if (error) console.error('seedPatterns:', error);
-  }
+  await robustUpsertAtomBatch('patterns', filled.map(r => toPatternCloudRow(r)));
   return filled;
 }
 

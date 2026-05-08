@@ -14,10 +14,11 @@
 // Restoring just flips the status back.
 
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
-import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
+import { getCurrentOrgIdSync } from '../lib/auth';
 import { emptyTreatment, TREATMENT_TYPE_CODE } from './treatmentLibrary';
 import { addVendor } from './vendorLibrary';
 import { copyCoverImage } from './plmAssets';
+import { robustUpsertAtom, robustUpsertAtomBatch } from './atomCloudSync';
 
 const LOCAL_KEY = 'cashmodel_treatments';
 
@@ -32,7 +33,7 @@ const TREATMENT_CLOUD_COLUMNS = new Set([
   'organization_id', 'user_id',
 ]);
 
-function toTreatmentCloudRow(row) {
+export function toTreatmentCloudRow(row) {
   const out = {};
   for (const k of Object.keys(row)) {
     if (TREATMENT_CLOUD_COLUMNS.has(k)) out[k] = row[k];
@@ -96,21 +97,12 @@ function unionByIdCloudFirst(cloudRows, localRows) {
   return out;
 }
 
-async function healOrphanTreatments(localRows, cloudRows, orgId, db) {
-  if (!orgId || !Array.isArray(localRows) || localRows.length === 0) return;
+async function healOrphanTreatments(localRows, cloudRows) {
+  if (!Array.isArray(localRows) || localRows.length === 0) return;
   const cloudIds = new Set((cloudRows || []).map(r => r.id));
   const orphans = localRows.filter(r => r && r.id && !cloudIds.has(r.id));
   if (orphans.length === 0) return;
-  const userId = getCurrentUserIdSync();
-  console.log(`[treatmentStore] healing ${orphans.length} local-only treatment(s) to cloud`);
-  const { error } = await db.from('treatments').upsert(
-    orphans.map(r => toTreatmentCloudRow({
-      ...r,
-      organization_id: orgId,
-      user_id: r.user_id || userId,
-    }))
-  );
-  if (error) console.error('healOrphanTreatments:', error);
+  await robustUpsertAtomBatch('treatments', orphans.map(r => toTreatmentCloudRow(r)));
 }
 
 export async function listTreatments({ includeArchived = false, status = null, type = null } = {}) {
@@ -126,7 +118,7 @@ export async function listTreatments({ includeArchived = false, status = null, t
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) cloudRows = data;
     else if (error) console.error('listTreatments:', error);
-    try { await healOrphanTreatments(readLocal(), cloudRows, orgId, db); }
+    try { await healOrphanTreatments(readLocal(), cloudRows); }
     catch (err) { console.error('healOrphanTreatments:', err); }
   }
   const merged = unionByIdCloudFirst(cloudRows, readLocal());
@@ -171,13 +163,7 @@ export async function createTreatment({ type = 'wash', ...overrides } = {}) {
   local.push(row);
   writeLocal(local);
 
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('treatments').insert(toTreatmentCloudRow({ ...row, user_id: userId, organization_id: orgId }));
-    if (error) console.error('createTreatment:', error);
-  }
+  await robustUpsertAtom('treatments', toTreatmentCloudRow(row));
   return row;
 }
 
@@ -199,15 +185,7 @@ export async function saveTreatment(id, updates) {
   }
   writeLocal(local);
 
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db
-      .from('treatments')
-      .upsert(toTreatmentCloudRow({ ...merged, organization_id: orgId, user_id: merged.user_id || userId, updated_at: now }));
-    if (error) console.error('saveTreatment:', error);
-  }
+  await robustUpsertAtom('treatments', toTreatmentCloudRow({ ...merged, updated_at: now }));
   return merged;
 }
 
@@ -282,13 +260,7 @@ export async function duplicateTreatment(id) {
   delete copy.organization_id;
   local.push(copy);
   writeLocal(local);
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('treatments').insert(toTreatmentCloudRow({ ...copy, user_id: userId, organization_id: orgId }));
-    if (error) console.error('duplicateTreatment:', error);
-  }
+  await robustUpsertAtom('treatments', toTreatmentCloudRow(copy));
   return copy;
 }
 
@@ -543,13 +515,6 @@ export async function seedTreatmentsIfEmpty() {
   // Use empty defaults for any field a seed left out.
   const filled = seeds.map(s => ({ ...emptyTreatment(s), updated_at: s.updated_at || now, created_at: s.created_at || now }));
   writeLocal(filled);
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('treatments').insert(
-      filled.map(r => toTreatmentCloudRow({ ...r, user_id: userId, organization_id: orgId }))
-    );
-    if (error) console.error('seedTreatments:', error);
-  }
+  await robustUpsertAtomBatch('treatments', filled.map(r => toTreatmentCloudRow(r)));
   return filled;
 }

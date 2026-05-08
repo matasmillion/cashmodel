@@ -9,9 +9,10 @@
 // still resolves.
 
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
-import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
+import { getCurrentOrgIdSync } from '../lib/auth';
 import { emptyFabric, FABRIC_WEAVE_CODE } from './fabricLibrary';
 import { copyCoverImage } from './plmAssets';
+import { robustUpsertAtom, robustUpsertAtomBatch } from './atomCloudSync';
 
 const LOCAL_KEY = 'cashmodel_fabrics';
 
@@ -31,7 +32,7 @@ const FABRIC_CLOUD_COLUMNS = new Set([
   'organization_id', 'user_id',
 ]);
 
-function toFabricCloudRow(row) {
+export function toFabricCloudRow(row) {
   const out = {};
   for (const k of Object.keys(row)) {
     if (FABRIC_CLOUD_COLUMNS.has(k)) out[k] = row[k];
@@ -122,24 +123,16 @@ function unionByIdLocalFirst(cloudRows, localRows) {
 }
 
 // Heal local-only fabrics: any row in localStorage that's not in cloud gets
-// upserted to cloud. This is the recovery path for fabrics whose original
-// INSERT failed silently during the pre-2026-05-08 schema drift window.
-// Runs on every listFabrics so users don't have to manually re-save anything.
-async function healOrphanFabrics(localRows, cloudRows, orgId, db) {
-  if (!orgId || !Array.isArray(localRows) || localRows.length === 0) return;
+// upserted to cloud. Runs on every listFabrics so users don't have to
+// manually re-save anything. Uses the robust upsert path so a stale JWT
+// (the most common reason heal silently failed before) gets refreshed and
+// retried once before giving up — see atomCloudSync.js.
+async function healOrphanFabrics(localRows, cloudRows) {
+  if (!Array.isArray(localRows) || localRows.length === 0) return;
   const cloudIds = new Set((cloudRows || []).map(r => r.id));
   const orphans = localRows.filter(r => r && r.id && !cloudIds.has(r.id));
   if (orphans.length === 0) return;
-  const userId = getCurrentUserIdSync();
-  console.log(`[fabricStore] healing ${orphans.length} local-only fabric(s) to cloud`);
-  const { error } = await db.from('fabrics').upsert(
-    orphans.map(r => toFabricCloudRow({
-      ...r,
-      organization_id: orgId,
-      user_id: r.user_id || userId,
-    }))
-  );
-  if (error) console.error('healOrphanFabrics:', error);
+  await robustUpsertAtomBatch('fabrics', orphans.map(r => toFabricCloudRow(r)));
 }
 
 export async function listFabrics({ includeArchived = false, status = null, weave = null } = {}) {
@@ -155,7 +148,7 @@ export async function listFabrics({ includeArchived = false, status = null, weav
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) cloudRows = data;
     else if (error) console.error('listFabrics:', error);
-    try { await healOrphanFabrics(readLocal(), cloudRows, orgId, db); }
+    try { await healOrphanFabrics(readLocal(), cloudRows); }
     catch (err) { console.error('healOrphanFabrics:', err); }
   }
   const merged = unionByIdLocalFirst(cloudRows, readLocal());
@@ -202,13 +195,7 @@ export async function createFabric({ weave = 'jersey', ...overrides } = {}) {
   local.push(row);
   writeLocal(local);
 
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('fabrics').insert(toFabricCloudRow({ ...row, user_id: userId, organization_id: orgId }));
-    if (error) console.error('createFabric:', error);
-  }
+  await robustUpsertAtom('fabrics', toFabricCloudRow(row));
   return row;
 }
 
@@ -230,18 +217,7 @@ export async function saveFabric(id, updates) {
   }
   writeLocal(local);
 
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    // Upsert (not update) so a fabric whose original insert was rejected
-    // by the pre-2026-05-08 schema drift gets its cloud row created on
-    // the next save instead of update-zero-rows silent failure.
-    const { error } = await db
-      .from('fabrics')
-      .upsert(toFabricCloudRow({ ...merged, organization_id: orgId, user_id: merged.user_id || userId, updated_at: now }));
-    if (error) console.error('saveFabric:', error);
-  }
+  await robustUpsertAtom('fabrics', toFabricCloudRow({ ...merged, updated_at: now }));
   return merged;
 }
 
@@ -281,13 +257,7 @@ export async function duplicateFabric(id) {
   delete copy.organization_id;
   local.push(copy);
   writeLocal(local);
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('fabrics').insert(toFabricCloudRow({ ...copy, user_id: userId, organization_id: orgId }));
-    if (error) console.error('duplicateFabric:', error);
-  }
+  await robustUpsertAtom('fabrics', toFabricCloudRow(copy));
   return copy;
 }
 
@@ -386,13 +356,6 @@ export async function seedFabricsIfEmpty() {
   ];
   const filled = seeds.map(s => ({ ...emptyFabric(s), updated_at: s.updated_at || now, created_at: s.created_at || now }));
   writeLocal(filled);
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('fabrics').insert(
-      filled.map(r => toFabricCloudRow({ ...r, user_id: userId, organization_id: orgId }))
-    );
-    if (error) console.error('seedFabrics:', error);
-  }
+  await robustUpsertAtomBatch('fabrics', filled.map(r => toFabricCloudRow(r)));
   return filled;
 }
