@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-07T19:32:29.390Z",
+  "lastUpdated": "2026-05-08T10:06:40.605Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,54 +1044,54 @@
   ],
   "changelog": [
     {
-      "sha": "b9f96b2",
-      "date": "2026-05-07T19:20:27+00:00",
-      "message": "techpack: simplify trim cards + clickable View pack in editor / SVG / PDF"
+      "sha": "d755926",
+      "date": "2026-05-08T09:17:57+00:00",
+      "message": "db: add sam_rate_usd_per_min column to vendors (silent fail since PR #68)"
     },
     {
-      "sha": "0ebc008",
-      "date": "2026-05-07T22:14:43+03:00",
-      "message": "techpack: mirror fabric editor card to live preview SVG (#59)"
+      "sha": "673c759",
+      "date": "2026-05-08T12:11:52+03:00",
+      "message": "db: add missing PLM atom columns so cloud sync stops silently failing (#71)"
     },
     {
-      "sha": "aeea8f6",
-      "date": "2026-05-07T22:08:56+03:00",
-      "message": "techpack: fabric vendor + color picker + cost / m label (#57)"
+      "sha": "968c573",
+      "date": "2026-05-08T12:05:42+03:00",
+      "message": "libraries: vendor + color libraries now hydrate from cloud on mount (#70)"
     },
     {
-      "sha": "14fbfdf",
-      "date": "2026-05-07T22:03:01+03:00",
-      "message": "fabrics: dual-currency pricing (USD ↔ RMB) and price per kg (#56)"
+      "sha": "07b8097",
+      "date": "2026-05-08T01:01:40+03:00",
+      "message": "treatments: AI auto-fill, spec PDF, send-to-vendor, gate process recipe (#69)"
     },
     {
-      "sha": "79408ad",
-      "date": "2026-05-07T21:53:37+03:00",
-      "message": "techpack: disable Use These Views during accept to prevent dup images (#55)"
+      "sha": "985da17",
+      "date": "2026-05-08T01:00:24+03:00",
+      "message": "techpack: vendor SAM rate field + two-mode AI labor cost (rate × SAM | CMT fallback) (#68)"
     },
     {
-      "sha": "9f44596",
-      "date": "2026-05-07T21:49:06+03:00",
-      "message": "fabric AI: optional instructions box, additive color merge (#53)"
+      "sha": "015b126",
+      "date": "2026-05-08T00:24:38+03:00",
+      "message": "techpack: re-anchor AI labor cost prompt on observed CMT prices, not SAM × rate (#67)"
     },
     {
-      "sha": "11d30da",
-      "date": "2026-05-07T21:43:22+03:00",
-      "message": "techpack: read fabric cost from price_per_meter_usd, fix grid clipping (#54)"
+      "sha": "2223146",
+      "date": "2026-05-08T00:21:28+03:00",
+      "message": "techpack: stitch reference uses AspectPhoto so the user can crop to 2:3 on upload (#66)"
     },
     {
-      "sha": "2593460",
-      "date": "2026-05-07T21:33:56+03:00",
-      "message": "techpack: comprehensive cost roll-up — phase pills, slot cards, labor (#52)"
+      "sha": "53d7df9",
+      "date": "2026-05-07T23:44:56+03:00",
+      "message": "techpack: bigger modular 2:3 stitch reference blocks; push seam table down (#65)"
     },
     {
-      "sha": "356e77c",
-      "date": "2026-05-07T21:24:00+03:00",
-      "message": "fabrics: switch yards → meters, fuzzy vendor match, name from mill # (#49)"
+      "sha": "b00fa57",
+      "date": "2026-05-07T23:32:11+03:00",
+      "message": "techpack: flat-lay simplification, per-detail construction images, stitch refs, AI labor cost (#64)"
     },
     {
-      "sha": "057a314",
-      "date": "2026-05-07T21:15:54+03:00",
-      "message": "techpack: BOM 2x3 grid + stale-image fix + Design Sketch fallback (#51)"
+      "sha": "69b4a7a",
+      "date": "2026-05-07T23:02:14+03:00",
+      "message": "techpack: roll fabric yield into global unit cost (was raw $/m) (#63)"
     }
   ]
 }
