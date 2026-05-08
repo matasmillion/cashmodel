@@ -185,12 +185,14 @@ export async function saveFabric(id, updates) {
 
   const orgId = getCurrentOrgIdSync();
   if (IS_SUPABASE_ENABLED && orgId) {
+    const userId = getCurrentUserIdSync();
     const db = await getAuthedSupabase();
+    // Upsert (not update) so a fabric whose original insert was rejected
+    // by the pre-2026-05-08 schema drift gets its cloud row created on
+    // the next save instead of update-zero-rows silent failure.
     const { error } = await db
       .from('fabrics')
-      .update({ ...updates, updated_at: now })
-      .eq('id', id)
-      .eq('organization_id', orgId);
+      .upsert({ ...merged, organization_id: orgId, user_id: merged.user_id || userId, updated_at: now });
     if (error) console.error('saveFabric:', error);
   }
   return merged;
