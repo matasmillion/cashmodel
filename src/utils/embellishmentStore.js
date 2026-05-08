@@ -81,6 +81,23 @@ function unionByIdCloudFirst(cloudRows, localRows) {
   return out;
 }
 
+async function healOrphanEmbellishments(localRows, cloudRows, orgId, db) {
+  if (!orgId || !Array.isArray(localRows) || localRows.length === 0) return;
+  const cloudIds = new Set((cloudRows || []).map(r => r.id));
+  const orphans = localRows.filter(r => r && r.id && !cloudIds.has(r.id));
+  if (orphans.length === 0) return;
+  const userId = getCurrentUserIdSync();
+  console.log(`[embellishmentStore] healing ${orphans.length} local-only embellishment(s) to cloud`);
+  const { error } = await db.from('embellishments').upsert(
+    orphans.map(r => toEmbellishmentCloudRow({
+      ...r,
+      organization_id: orgId,
+      user_id: r.user_id || userId,
+    }))
+  );
+  if (error) console.error('healOrphanEmbellishments:', error);
+}
+
 export async function listEmbellishments({ includeArchived = false, status = null, type = null } = {}) {
   const filterOpts = { includeArchived, status, type };
   const orgId = getCurrentOrgIdSync();
@@ -94,6 +111,8 @@ export async function listEmbellishments({ includeArchived = false, status = nul
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) cloudRows = data;
     else if (error) console.error('listEmbellishments:', error);
+    try { await healOrphanEmbellishments(readLocal(), cloudRows, orgId, db); }
+    catch (err) { console.error('healOrphanEmbellishments:', err); }
   }
   const merged = unionByIdCloudFirst(cloudRows, readLocal());
   return filterRows(merged, filterOpts)

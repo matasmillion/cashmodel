@@ -121,6 +121,27 @@ function unionByIdLocalFirst(cloudRows, localRows) {
   return out;
 }
 
+// Heal local-only fabrics: any row in localStorage that's not in cloud gets
+// upserted to cloud. This is the recovery path for fabrics whose original
+// INSERT failed silently during the pre-2026-05-08 schema drift window.
+// Runs on every listFabrics so users don't have to manually re-save anything.
+async function healOrphanFabrics(localRows, cloudRows, orgId, db) {
+  if (!orgId || !Array.isArray(localRows) || localRows.length === 0) return;
+  const cloudIds = new Set((cloudRows || []).map(r => r.id));
+  const orphans = localRows.filter(r => r && r.id && !cloudIds.has(r.id));
+  if (orphans.length === 0) return;
+  const userId = getCurrentUserIdSync();
+  console.log(`[fabricStore] healing ${orphans.length} local-only fabric(s) to cloud`);
+  const { error } = await db.from('fabrics').upsert(
+    orphans.map(r => toFabricCloudRow({
+      ...r,
+      organization_id: orgId,
+      user_id: r.user_id || userId,
+    }))
+  );
+  if (error) console.error('healOrphanFabrics:', error);
+}
+
 export async function listFabrics({ includeArchived = false, status = null, weave = null } = {}) {
   const filterOpts = { includeArchived, status, weave };
   const orgId = getCurrentOrgIdSync();
@@ -134,6 +155,8 @@ export async function listFabrics({ includeArchived = false, status = null, weav
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) cloudRows = data;
     else if (error) console.error('listFabrics:', error);
+    try { await healOrphanFabrics(readLocal(), cloudRows, orgId, db); }
+    catch (err) { console.error('healOrphanFabrics:', err); }
   }
   const merged = unionByIdLocalFirst(cloudRows, readLocal());
   return filterRows(merged, filterOpts)
