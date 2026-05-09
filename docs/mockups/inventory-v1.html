@@ -1,0 +1,572 @@
+<!doctype html>
+<!--
+  Inventory v1 — Apple-simple morning view for the founder/COO.
+  Locked spec for the new Inventory module (subsumes Sell-Through).
+  Brand: FR (Salt/Slate/Sand). One accent — Navy — used only for the
+  ad-spend-aware projection band, mirroring the Creative Engine convention.
+
+  Layout intent:
+    1) Hero — single forward-looking number (Ad-Adjusted FWOS) and three
+       supporting tiles. If the founder reads only this, they know enough.
+    2) The Bridge — the chart that makes the founder's insight visible:
+       trailing demand vs. ad-adjusted projected demand vs. inventory
+       runway, week by week.
+    3) Decisions — two short lists (chase + markdown) that turn red
+       numbers into actions.
+    4) Class roll-up — one row per merchandise class, drill to style/SKU.
+
+  This file is the canonical visual spec; the React implementation in
+  src/components/inventory/* must match pixel-for-pixel.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FR / Inventory — Today</title>
+<style>
+  :root {
+    --salt: #F5F0E8;
+    --slate: #3A3A3A;
+    --sand: #EBE5D5;
+    --stone: #716F70;
+    --line: rgba(58,58,58,0.15);
+    --line-soft: rgba(58,58,58,0.08);
+    --good: #3B6D11;
+    --warn: #854F0B;
+    --bad:  #A32D2D;
+    --navy: #1B2741; /* single accent — only on ad-projection band */
+    --serif: 'Cormorant Garamond', 'Garamond', 'Times New Roman', serif;
+    --sans:  'Inter', 'Helvetica Neue', system-ui, sans-serif;
+    --mono:  ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--salt); color: var(--slate); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  .num { font-variant-numeric: tabular-nums; font-family: var(--mono); }
+
+  /* Hover-to-explain — every metric/assumption can carry data-explain.    */
+  /* The ⓘ glyph is unobtrusive; hover reveals the equation, inputs, and   */
+  /* source so an operator can always trace where a number came from.      */
+  .explain { position: relative; display: inline-flex; align-items: center; gap: 5px; }
+  .explain .info { display: inline-flex; align-items: center; justify-content: center; width: 12px; height: 12px; border-radius: 50%; border: 0.5px solid var(--stone); color: var(--stone); font-size: 9px; font-family: var(--serif); font-style: italic; line-height: 1; cursor: help; opacity: 0.55; transition: opacity 120ms ease; }
+  .explain:hover .info { opacity: 1; color: var(--slate); border-color: var(--slate); }
+  .explain .tip { position: absolute; top: 100%; left: 0; margin-top: 8px; min-width: 240px; max-width: 320px; background: var(--slate); color: var(--salt); padding: 12px 14px; border-radius: 6px; font-size: 11px; line-height: 1.55; font-family: var(--sans); letter-spacing: 0; text-transform: none; z-index: 50; opacity: 0; pointer-events: none; transform: translateY(-4px); transition: opacity 140ms ease, transform 140ms ease; box-shadow: 0 8px 24px rgba(58,58,58,0.15); }
+  .explain:hover .tip { opacity: 1; transform: translateY(0); }
+  .tip .tip-eq { font-family: var(--mono); font-size: 11px; color: #fff; background: rgba(255,255,255,0.08); padding: 6px 8px; border-radius: 4px; margin: 6px 0; display: block; }
+  .tip .tip-row { display: flex; justify-content: space-between; gap: 10px; margin-top: 3px; color: rgba(245,240,232,0.75); }
+  .tip .tip-row b { color: #fff; font-family: var(--mono); font-weight: 500; }
+  .tip .tip-source { margin-top: 8px; padding-top: 8px; border-top: 0.5px solid rgba(255,255,255,0.15); color: rgba(245,240,232,0.55); font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .display { font-family: var(--serif); font-weight: 400; line-height: 1; }
+  .eyebrow { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--stone); font-weight: 500; }
+  .label { font-size: 11px; letter-spacing: 0.06em; color: var(--stone); }
+  .delta-good { color: var(--good); }
+  .delta-warn { color: var(--warn); }
+  .delta-bad  { color: var(--bad); }
+
+  /* Top bar */
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 32px; border-bottom: 0.5px solid var(--line); background: var(--salt); position: sticky; top: 0; z-index: 10; }
+  .nav { display: flex; gap: 28px; font-size: 13px; }
+  .nav a { color: var(--stone); text-decoration: none; }
+  .nav a.active { color: var(--slate); font-weight: 500; border-bottom: 1.5px solid var(--slate); padding-bottom: 4px; }
+  .brandmark { font-size: 11px; letter-spacing: 0.18em; font-weight: 600; }
+
+  /* Page */
+  main { max-width: 1320px; margin: 0 auto; padding: 32px; }
+  .pagehead { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 28px; }
+  .pagehead h1 { font-family: var(--serif); font-weight: 400; font-size: 32px; margin: 0; }
+  .pagehead .muted { color: var(--stone); font-size: 12px; }
+
+  /* Hero — one big number + three tiles */
+  .hero { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 20px; margin-bottom: 32px; }
+  .card { background: #fff; border: 0.5px solid var(--line); border-radius: 8px; padding: 22px; }
+  .hero .card { display: flex; flex-direction: column; justify-content: space-between; min-height: 168px; }
+  .hero .big { font-family: var(--serif); font-size: 64px; line-height: 1; }
+  .hero .big .unit { font-size: 22px; color: var(--stone); margin-left: 6px; }
+  .hero .mid { font-family: var(--serif); font-size: 38px; line-height: 1; }
+  .hero .sub { font-size: 11px; color: var(--stone); margin-top: 6px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 5px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; }
+  .pill.good { background: rgba(59,109,17,0.1); color: var(--good); }
+  .pill.warn { background: rgba(133,79,11,0.10); color: var(--warn); }
+  .pill.bad  { background: rgba(163,45,45,0.10); color: var(--bad); }
+
+  /* Assumptions strip — modular, editable, drives the bridge chart */
+  .assumptions { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 0; background: #fff; border: 0.5px solid var(--line); border-radius: 8px; padding: 0; margin-bottom: 24px; overflow: hidden; }
+  .assumption { padding: 18px 22px; border-right: 0.5px solid var(--line-soft); display: flex; flex-direction: column; gap: 6px; }
+  .assumption:last-child { border-right: 0; background: rgba(27,39,65,0.03); }
+  .assumption .head { display: flex; align-items: center; gap: 6px; }
+  .assumption .name { font-size: 11px; letter-spacing: 0.06em; color: var(--stone); text-transform: uppercase; font-weight: 500; }
+  .assumption .lock { font-size: 9px; letter-spacing: 0.1em; color: var(--stone); text-transform: uppercase; padding: 2px 6px; border: 0.5px solid var(--line); border-radius: 3px; }
+  .assumption .value-row { display: flex; align-items: baseline; gap: 8px; }
+  .assumption input.val { font-family: var(--mono); font-size: 22px; color: var(--slate); border: 0; border-bottom: 1px dashed var(--line); background: transparent; padding: 2px 0; width: 100px; outline: none; }
+  .assumption input.val:focus { border-bottom-color: var(--slate); }
+  .assumption .val.locked { font-family: var(--mono); font-size: 22px; color: var(--slate); padding: 2px 0; }
+  .assumption .anchor { font-size: 11px; color: var(--stone); }
+  .assumption .anchor b { color: var(--slate); font-family: var(--mono); font-weight: 500; }
+  .assumption .imply { font-size: 11px; color: var(--navy); font-weight: 500; margin-top: 2px; }
+
+  /* The Bridge chart — trailing vs ad-adjusted vs runway */
+  .bridge { background: #fff; border: 0.5px solid var(--line); border-radius: 8px; padding: 24px; margin-bottom: 32px; }
+  .bridge-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; }
+  .bridge-head h2 { font-family: var(--serif); font-weight: 400; font-size: 22px; margin: 0; }
+  .legend { display: flex; gap: 20px; font-size: 11px; color: var(--stone); }
+  .legend i { display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 6px; }
+  .legend i.dot { height: 10px; width: 10px; border-radius: 50%; }
+  .chart { height: 260px; position: relative; padding: 8px 0 28px; border-bottom: 0.5px solid var(--line-soft); }
+  .grid { position: absolute; inset: 8px 0 28px 0; display: flex; flex-direction: column; justify-content: space-between; }
+  .grid hr { border: 0; border-top: 0.5px dashed var(--line-soft); margin: 0; }
+  .x-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--stone); margin-top: 8px; }
+
+  /* SVG overlay for chart shapes (mockup-only fake data) */
+  .svg-wrap { position: absolute; inset: 8px 0 28px 0; }
+  .svg-wrap svg { width: 100%; height: 100%; }
+
+  .runway-note { font-size: 11px; color: var(--stone); margin-top: 10px; }
+
+  /* Decisions: two columns */
+  .decisions { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 32px; }
+  .decisions h3 { font-family: var(--serif); font-weight: 400; font-size: 18px; margin: 0 0 12px; }
+  .row { display: grid; grid-template-columns: 36px 1fr auto auto; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 0.5px solid var(--line-soft); }
+  .row:last-child { border-bottom: 0; }
+  .swatch { width: 28px; height: 36px; border: 0.5px solid var(--line); border-radius: 2px; }
+  .style-name { font-size: 13px; }
+  .style-sub { font-size: 10px; color: var(--stone); font-family: var(--mono); margin-top: 2px; }
+  .row .num { font-size: 13px; }
+  .row .lost { font-size: 10px; color: var(--bad); display: block; margin-top: 2px; }
+  .row .save { font-size: 10px; color: var(--good); display: block; margin-top: 2px; }
+
+  /* Class roll-up table */
+  .rollup { background: #fff; border: 0.5px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .rollup-head { padding: 20px 24px 12px; display: flex; align-items: baseline; justify-content: space-between; }
+  .rollup-head h3 { font-family: var(--serif); font-weight: 400; font-size: 18px; margin: 0; }
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { background: var(--sand); }
+  th { text-align: left; padding: 12px 16px; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--stone); font-weight: 500; border-bottom: 0.5px solid var(--line); border-top: 0.5px solid var(--line); }
+  th.r, td.r { text-align: right; }
+  td { padding: 14px 16px; font-size: 13px; border-bottom: 0.5px solid var(--line-soft); vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: 0; }
+  .spark { width: 80px; height: 22px; vertical-align: middle; }
+
+  /* Hero ad-lift inline diff */
+  .lift { display: flex; align-items: baseline; gap: 8px; margin-top: 10px; }
+  .lift .strike { color: var(--stone); text-decoration: line-through; font-family: var(--mono); font-size: 13px; }
+  .lift .delta  { color: var(--bad); font-family: var(--mono); font-size: 12px; }
+
+  footer { margin-top: 40px; padding-top: 20px; border-top: 0.5px solid var(--line); display: flex; justify-content: space-between; font-size: 10px; color: var(--stone); letter-spacing: 0.1em; text-transform: uppercase; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div style="display: flex; align-items: center; gap: 32px;">
+    <span class="brandmark">FOREIGN RESOURCE</span>
+    <nav class="nav">
+      <a>Cash</a>
+      <a>Marketing</a>
+      <a>Product</a>
+      <a class="active">Inventory</a>
+      <a>Operations</a>
+    </nav>
+  </div>
+  <div style="font-size: 11px; color: var(--stone);">Last sync · 2 min ago</div>
+</div>
+
+<main>
+
+  <div class="pagehead">
+    <div>
+      <h1>Inventory · Today</h1>
+      <div class="muted">Fri, May 9 · all numbers projected at planned ad spend pacing (+15% over next 30d)</div>
+    </div>
+    <div class="muted">Lead time 10w · Safety 4w · Horizon 16w</div>
+  </div>
+
+  <!-- HERO ─────────────────────────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="card">
+      <div class="eyebrow explain">
+        Forward weeks of supply
+        <span class="info">i</span>
+        <div class="tip">
+          Brand-wide weighted FWOS — total on-hand units divided by projected weekly demand.
+          <span class="tip-eq">FWOS = Σ on-hand / (Σ velocity × lift × seasonality)</span>
+          <div class="tip-row"><span>On-hand units</span><b>134,820</b></div>
+          <div class="tip-row"><span>Trailing weekly velocity</span><b>10,860 u/wk</b></div>
+          <div class="tip-row"><span>Demand lift multiplier</span><b>1.11×</b></div>
+          <div class="tip-row"><span>Seasonality (W19)</span><b>1.04×</b></div>
+          <div class="tip-source">Shopify on-hand + 7d trailing sales · spend assumption applied</div>
+        </div>
+      </div>
+      <div>
+        <div class="big">9.2<span class="unit">wks</span></div>
+        <div class="lift">
+          <span class="strike">12.4w</span>
+          <span class="delta">−3.2w from ad lift</span>
+        </div>
+        <div class="sub">Below lead time + safety (14w). Reorder window is now.</div>
+      </div>
+      <span class="pill warn">Restock window</span>
+    </div>
+
+    <div class="card">
+      <div class="eyebrow">Inventory at cost</div>
+      <div>
+        <div class="mid">$3.42<span class="unit" style="font-size:18px;color:var(--stone)">M</span></div>
+        <div class="sub">$11.8M at retail · $1.1M over plan</div>
+      </div>
+      <span class="pill warn">+$1.1M vs plan</span>
+    </div>
+
+    <div class="card">
+      <div class="eyebrow">Revenue at risk · 7d</div>
+      <div>
+        <div class="mid">$48<span class="unit" style="font-size:18px;color:var(--stone)">k</span></div>
+        <div class="sub">7 SKUs stocking out before next PO lands</div>
+      </div>
+      <span class="pill bad">Air freight decision</span>
+    </div>
+
+    <div class="card">
+      <div class="eyebrow explain">
+        MER · 7d trailing
+        <span class="info">i</span>
+        <div class="tip">
+          Marketing Efficiency Ratio — total Shopify revenue divided by total ad spend across all channels (platform-agnostic; Meta-attribution-independent).
+          <span class="tip-eq">MER = total revenue / total spend</span>
+          <div class="tip-row"><span>7d Shopify revenue</span><b>$217,000</b></div>
+          <div class="tip-row"><span>7d total ad spend</span><b>$70,000</b></div>
+          <div class="tip-row"><span>Healthy band</span><b>2.8 – 3.4×</b></div>
+          <div class="tip-source">Shopify orders (gross, shop_money) ÷ Meta + other channels</div>
+        </div>
+      </div>
+      <div>
+        <div class="mid">3.1<span class="unit" style="font-size:18px;color:var(--stone)">x</span></div>
+        <div class="sub">Total revenue / total spend · band 2.8–3.4</div>
+      </div>
+      <span class="pill good">In band</span>
+    </div>
+  </section>
+
+  <!-- ASSUMPTIONS ──────────────────────────────────────────────────────── -->
+  <!-- Modular, editable demand-projection assumptions. The two left tiles -->
+  <!-- are operator inputs; the third is the derived implication; the      -->
+  <!-- fourth is the lift multiplier the rest of the page consumes.        -->
+  <section class="assumptions">
+    <div class="assumption">
+      <div class="head">
+        <span class="name">Planned daily ad spend</span>
+        <span class="lock">EDIT</span>
+      </div>
+      <div class="value-row">
+        <span style="font-family: var(--mono); color: var(--stone); font-size: 22px;">$</span>
+        <input class="val" value="11,500" />
+        <span style="font-size: 12px; color: var(--stone);">/ day</span>
+      </div>
+      <div class="anchor">Last 7d avg <b>$10,000</b> · +15%</div>
+    </div>
+
+    <div class="assumption">
+      <div class="head">
+        <span class="name">Planned MER (efficiency)</span>
+        <span class="lock">EDIT</span>
+      </div>
+      <div class="value-row">
+        <input class="val" value="3.0" />
+        <span style="font-size: 12px; color: var(--stone);">×</span>
+      </div>
+      <div class="anchor">Last 7d avg <b>3.1×</b> · −0.1× (slight conservatism)</div>
+    </div>
+
+    <div class="assumption">
+      <div class="head">
+        <span class="name">Planned daily revenue</span>
+        <span class="lock">DERIVED</span>
+      </div>
+      <div class="value-row">
+        <span class="val locked">$34,500</span>
+        <span style="font-size: 12px; color: var(--stone);">/ day</span>
+      </div>
+      <div class="anchor">Spend × MER · last 7d was <b>$31,000</b></div>
+    </div>
+
+    <div class="assumption">
+      <div class="head explain">
+        <span class="name" style="color: var(--navy);">Demand lift multiplier</span>
+        <span class="info" style="border-color: var(--navy); color: var(--navy); opacity: 0.7;">i</span>
+        <span class="lock" style="border-color: var(--navy); color: var(--navy);">APPLIED</span>
+        <div class="tip">
+          The single number that flows from your spend/MER assumptions into every projected demand calculation on this page.
+          <span class="tip-eq">Lift = planned daily revenue / trailing daily revenue</span>
+          <div class="tip-row"><span>Planned daily revenue</span><b>$34,500</b></div>
+          <div class="tip-row"><span>Trailing daily revenue (7d)</span><b>$31,000</b></div>
+          <div class="tip-row"><span>Resulting multiplier</span><b>1.11×</b></div>
+          <div class="tip-source">Applied to every SKU's trailing velocity in the bridge, FWOS, chase qty, OTB</div>
+        </div>
+      </div>
+      <div class="value-row">
+        <span class="val locked" style="color: var(--navy);">1.11×</span>
+      </div>
+      <div class="imply">Drives the bridge chart, FWOS, chase qty, OTB</div>
+    </div>
+  </section>
+
+  <!-- THE BRIDGE ───────────────────────────────────────────────────────── -->
+  <section class="bridge">
+    <div class="bridge-head">
+      <div>
+        <div class="eyebrow">The bridge</div>
+        <h2>Inventory runway vs. ad-adjusted demand · next 16 weeks</h2>
+      </div>
+      <div class="legend">
+        <span><i style="background: var(--slate)"></i>On-hand units</span>
+        <span><i style="background: var(--stone)"></i>Trailing-velocity demand</span>
+        <span><i style="background: var(--navy)"></i>Ad-adjusted demand</span>
+        <span><i class="dot" style="background: var(--sand); border: 0.5px dashed var(--slate);"></i>Inbound PO</span>
+      </div>
+    </div>
+
+    <div class="chart">
+      <div class="grid">
+        <hr><hr><hr><hr><hr>
+      </div>
+      <div class="svg-wrap">
+        <!-- Mockup-only schematic; actual chart will be Recharts ComposedChart -->
+        <svg viewBox="0 0 1000 230" preserveAspectRatio="none">
+          <!-- on-hand area declining -->
+          <defs>
+            <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#3A3A3A" stop-opacity="0.18"/>
+              <stop offset="100%" stop-color="#3A3A3A" stop-opacity="0"/>
+            </linearGradient>
+            <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#1B2741" stop-opacity="0.10"/>
+              <stop offset="100%" stop-color="#1B2741" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <!-- on-hand path: starts high, drops, big PO bump at week 10 -->
+          <path d="M0,40 L312,150 L312,90 L687,180 L687,80 L1000,200 L1000,230 L0,230 Z" fill="url(#g1)"/>
+          <path d="M0,40 L312,150 L312,90 L687,180 L687,80 L1000,200" fill="none" stroke="#3A3A3A" stroke-width="1.5"/>
+          <!-- trailing-velocity demand line (gentle slope) -->
+          <path d="M0,170 C300,165 600,155 1000,145" fill="none" stroke="#716F70" stroke-width="1.4" stroke-dasharray="3 3"/>
+          <!-- ad-adjusted demand line (steeper slope, navy) -->
+          <path d="M0,170 C300,150 600,110 1000,75" fill="none" stroke="#1B2741" stroke-width="1.8"/>
+          <!-- ad-adjusted area -->
+          <path d="M0,170 C300,150 600,110 1000,75 L1000,230 L0,230 Z" fill="url(#g2)" opacity="0.4"/>
+          <!-- PO arrival markers (sand dashed circles) -->
+          <circle cx="312" cy="90" r="6" fill="#EBE5D5" stroke="#3A3A3A" stroke-dasharray="2 2"/>
+          <circle cx="687" cy="80" r="6" fill="#EBE5D5" stroke="#3A3A3A" stroke-dasharray="2 2"/>
+          <!-- crossover marker — where on-hand meets ad-adjusted demand -->
+          <circle cx="222" cy="140" r="5" fill="#A32D2D"/>
+          <text x="232" y="135" font-size="10" fill="#A32D2D" font-family="Inter">Crossover · W4 (ad-adjusted)</text>
+        </svg>
+      </div>
+    </div>
+    <div class="x-axis">
+      <span>This week</span><span>+2w</span><span>+4w</span><span>+6w</span><span>+8w</span><span>+10w</span><span>+12w</span><span>+14w</span><span>+16w</span>
+    </div>
+    <div class="runway-note">
+      At trailing velocity, on-hand covers through W10 (next PO arrival).
+      Pacing ad spend up 15% pulls the crossover forward to W4 — three styles need air freight or a chase PO this week.
+    </div>
+  </section>
+
+  <!-- DECISIONS ────────────────────────────────────────────────────────── -->
+  <section class="decisions">
+    <div class="card">
+      <h3>Chase now · top 5</h3>
+      <div class="row">
+        <div class="swatch" style="background:#3A3A3A"></div>
+        <div>
+          <div class="style-name">Borderless Basic Hoodie · Slate · L</div>
+          <div class="style-sub">AP-HD-BBHOOD-25-1-SLATE-L</div>
+        </div>
+        <div class="r"><span class="num">2.1w</span><span class="lost">$18k at risk</span></div>
+        <span class="pill bad">Stockout 9d</span>
+      </div>
+      <div class="row">
+        <div class="swatch" style="background:#3A3A3A"></div>
+        <div>
+          <div class="style-name">Borderless Basic Sweatpants · Slate · M</div>
+          <div class="style-sub">AP-PA-BBSWEAT-25-1-SLATE-M</div>
+        </div>
+        <div class="r"><span class="num">3.4w</span><span class="lost">$12k at risk</span></div>
+        <span class="pill warn">Reorder</span>
+      </div>
+      <div class="row">
+        <div class="swatch" style="background:#EBE5D5"></div>
+        <div>
+          <div class="style-name">Eroded Edges Cargo · Sand · W34</div>
+          <div class="style-sub">AP-PA-ECARGO-10-W34-1-SAND</div>
+        </div>
+        <div class="r"><span class="num">0.0w</span><span class="lost">$9k/wk lost</span></div>
+        <span class="pill bad">Out</span>
+      </div>
+      <div class="row">
+        <div class="swatch" style="background:#F5F0E8"></div>
+        <div>
+          <div class="style-name">Borderless Basic Tee · Salt · M</div>
+          <div class="style-sub">AP-TS-BBTEE-25-1-SALT-M</div>
+        </div>
+        <div class="r"><span class="num">5.8w</span><span class="lost">$6k at risk</span></div>
+        <span class="pill warn">Reorder</span>
+      </div>
+      <div class="row">
+        <div class="swatch" style="background:#3A3A3A"></div>
+        <div>
+          <div class="style-name">Nomad Sling Bag · Slate · OS</div>
+          <div class="style-sub">AC-BG-SLING-25-2-SLATE</div>
+        </div>
+        <div class="r"><span class="num">6.2w</span><span class="lost">$3k at risk</span></div>
+        <span class="pill warn">Reorder soon</span>
+      </div>
+      <div style="margin-top: 14px; padding-top: 12px; border-top: 0.5px solid var(--line-soft);">
+        <a style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--slate); border-bottom: 1px solid var(--slate); padding-bottom: 2px; cursor: pointer;">Generate chase PO →</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Markdown candidates · top 5</h3>
+      <div class="row">
+        <div class="swatch" style="background:#EBE5D5"></div>
+        <div>
+          <div class="style-name">Borderless Basic Hoodie · Sand · S</div>
+          <div class="style-sub">AP-HD-BBHOOD-25-1-SAND-S</div>
+        </div>
+        <div class="r"><span class="num">63w</span><span class="save">$7k recover</span></div>
+        <span class="pill warn">−20%</span>
+      </div>
+      <div class="row">
+        <div class="swatch" style="background:#9A816B"></div>
+        <div>
+          <div class="style-name">Passport Holder · Soil · OS</div>
+          <div class="style-sub">AC-BG-PASS-25-2-SOIL</div>
+        </div>
+        <div class="r"><span class="num">52w</span><span class="save">$4k recover</span></div>
+        <span class="pill warn">−25%</span>
+      </div>
+      <div class="row">
+        <div class="swatch" style="background:#3A3A3A"></div>
+        <div>
+          <div class="style-name">Borderless Basic Tee · Slate · M</div>
+          <div class="style-sub">AP-TS-BBTEE-25-1-SLATE-M</div>
+        </div>
+        <div class="r"><span class="num">42w</span><span class="save">$3k recover</span></div>
+        <span class="pill">Watch</span>
+      </div>
+      <div class="row">
+        <div class="swatch" style="background:#716F70"></div>
+        <div>
+          <div class="style-name">Destination Trench · Stone · L</div>
+          <div class="style-sub">AP-OW-DDCOAT-26-1-STONE-L</div>
+        </div>
+        <div class="r"><span class="num">38w</span><span class="save">$3k recover</span></div>
+        <span class="pill">Watch</span>
+      </div>
+      <div class="row">
+        <div class="swatch" style="background:#EBE5D5"></div>
+        <div>
+          <div class="style-name">Borderless Basic Hoodie · Sand · M</div>
+          <div class="style-sub">AP-HD-BBHOOD-25-1-SAND-M</div>
+        </div>
+        <div class="r"><span class="num">35w</span><span class="save">$2k recover</span></div>
+        <span class="pill">Watch</span>
+      </div>
+      <div style="margin-top: 14px; padding-top: 12px; border-top: 0.5px solid var(--line-soft);">
+        <a style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--slate); border-bottom: 1px solid var(--slate); padding-bottom: 2px; cursor: pointer;">Open markdown plan →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- CLASS ROLL-UP ────────────────────────────────────────────────────── -->
+  <section class="rollup">
+    <div class="rollup-head">
+      <div>
+        <div class="eyebrow">By class</div>
+        <h3>Performance roll-up</h3>
+      </div>
+      <div class="muted" style="font-size: 11px; color: var(--stone);">Click a row for style detail · click a style for SKU detail</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Class</th>
+          <th class="r">On-hand $</th>
+          <th class="r">FWOS (ad-adj)</th>
+          <th class="r">Sell-thru 4w</th>
+          <th class="r">Full-price %</th>
+          <th class="r">GMROI</th>
+          <th>4w trend</th>
+          <th class="r">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Hoodies</td>
+          <td class="r num">$842k</td>
+          <td class="r num">7.8w</td>
+          <td class="r num">68%</td>
+          <td class="r num">94%</td>
+          <td class="r num">3.4×</td>
+          <td><svg class="spark" viewBox="0 0 80 22"><path d="M0,16 L13,12 L26,14 L39,8 L52,10 L65,5 L80,3" fill="none" stroke="#3B6D11" stroke-width="1.5"/></svg></td>
+          <td class="r"><span class="pill warn">Restock</span></td>
+        </tr>
+        <tr>
+          <td>Sweatpants</td>
+          <td class="r num">$684k</td>
+          <td class="r num">9.1w</td>
+          <td class="r num">71%</td>
+          <td class="r num">96%</td>
+          <td class="r num">3.7×</td>
+          <td><svg class="spark" viewBox="0 0 80 22"><path d="M0,15 L13,10 L26,12 L39,9 L52,7 L65,4 L80,5" fill="none" stroke="#3B6D11" stroke-width="1.5"/></svg></td>
+          <td class="r"><span class="pill good">Healthy</span></td>
+        </tr>
+        <tr>
+          <td>Tees</td>
+          <td class="r num">$386k</td>
+          <td class="r num">11.4w</td>
+          <td class="r num">58%</td>
+          <td class="r num">88%</td>
+          <td class="r num">2.9×</td>
+          <td><svg class="spark" viewBox="0 0 80 22"><path d="M0,10 L13,12 L26,8 L39,11 L52,9 L65,11 L80,12" fill="none" stroke="#716F70" stroke-width="1.5"/></svg></td>
+          <td class="r"><span class="pill good">Healthy</span></td>
+        </tr>
+        <tr>
+          <td>Cargos</td>
+          <td class="r num">$148k</td>
+          <td class="r num">2.6w</td>
+          <td class="r num">82%</td>
+          <td class="r num">100%</td>
+          <td class="r num">4.8×</td>
+          <td><svg class="spark" viewBox="0 0 80 22"><path d="M0,18 L13,14 L26,11 L39,7 L52,4 L65,2 L80,1" fill="none" stroke="#3B6D11" stroke-width="1.5"/></svg></td>
+          <td class="r"><span class="pill bad">Stocking out</span></td>
+        </tr>
+        <tr>
+          <td>Accessories</td>
+          <td class="r num">$214k</td>
+          <td class="r num">18.6w</td>
+          <td class="r num">38%</td>
+          <td class="r num">82%</td>
+          <td class="r num">2.1×</td>
+          <td><svg class="spark" viewBox="0 0 80 22"><path d="M0,8 L13,9 L26,10 L39,11 L52,13 L65,12 L80,14" fill="none" stroke="#854F0B" stroke-width="1.5"/></svg></td>
+          <td class="r"><span class="pill warn">Slow</span></td>
+        </tr>
+        <tr>
+          <td>Outerwear</td>
+          <td class="r num">$96k</td>
+          <td class="r num">28.4w</td>
+          <td class="r num">22%</td>
+          <td class="r num">78%</td>
+          <td class="r num">1.6×</td>
+          <td><svg class="spark" viewBox="0 0 80 22"><path d="M0,8 L13,10 L26,12 L39,13 L52,14 L65,15 L80,16" fill="none" stroke="#A32D2D" stroke-width="1.5"/></svg></td>
+          <td class="r"><span class="pill bad">Markdown</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer>
+    <span>Foreign Resource Co. · Inventory v1</span>
+    <span>Source: Shopify (orders, on-hand) · Meta (planned spend) · Production POs · Per-SKU lead-time overrides</span>
+  </footer>
+
+</main>
+
+</body>
+</html>
