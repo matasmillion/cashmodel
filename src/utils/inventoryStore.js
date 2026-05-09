@@ -230,6 +230,7 @@ export async function list() {
       retail,
       sold_4w:             sold4w,
       sold_12w:            sold12w,
+      salesByDay,
       tracked,
       first_received:      v.first_received || null,
     });
