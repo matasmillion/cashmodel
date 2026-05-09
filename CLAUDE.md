@@ -87,7 +87,7 @@ Visual decisions are not optional — they are part of the spec.
 
 **Type**
 - Headings, card titles, stat values: Cormorant Garamond
-- Body, UI labels: system sans (Inter / Helvetica Neue fallback)
+- Body, UI labels: General Sans (Inter / Helvetica Neue fallback)
 - IDs, file paths, lot numbers, code: monospace (`ui-monospace`, `SF Mono`, Menlo)
 
 **Components**
@@ -197,4 +197,5 @@ Views: `today | knowledge | pulse | sprints | brief | jobs | production | queue 
 
 - 2026-04-25 — initial conventions established (folder structure, module boundaries, brand system, append-only collections, vendor surface hard rules)
 - 2026-05-06 — Creative Module Conventions added (Creative Engine phase 0)
+- 2026-05-09 — Type system: General Sans is the brand sans for body / UI labels (Cormorant Garamond stays as the heading face).
 - 2026-05-09 — Brand operating principle: never discount. Inventory module phase 0 (variant mapping store + Today/SKU mockups locked).

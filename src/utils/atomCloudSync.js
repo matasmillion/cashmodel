@@ -31,7 +31,10 @@ import { IS_SUPABASE_ENABLED, getAuthedSupabase, refreshAuthedSupabase } from '.
 import { getCurrentOrgIdSync, getCurrentUserIdSync, getJwtOrgId } from '../lib/auth';
 
 const RLS_CODE = '42501';
+const SCHEMA_CACHE_CODE = 'PGRST204';
 const MAX_LOG = 80;
+const MAX_SCHEMA_DROPS = 6;
+const PROTECTED_COLUMNS = new Set(['id', 'organization_id', 'user_id', 'code', 'name', 'updated_at', 'created_at']);
 
 const _syncLog = [];
 const _lastErrorByTable = new Map();
@@ -62,6 +65,43 @@ export function isRlsError(err) {
   const code = String(err.code || '');
   const msg = String(err.message || '').toLowerCase();
   return code === RLS_CODE || /row-level security|row level security/.test(msg);
+}
+
+// PostgREST schema cache miss — Postgres has the column but the API's
+// cached schema doesn't. Most commonly happens when a new column was
+// added by migration and PostgREST didn't reload (Supabase autoreloads,
+// but with a delay). Detected via the PGRST204 code or a textual
+// "Could not find the 'X' column" / "schema cache" message.
+export function isSchemaCacheError(err) {
+  if (!err) return false;
+  const code = String(err.code || '');
+  if (code === SCHEMA_CACHE_CODE) return true;
+  const msg = String(err.message || '') + ' ' + String(err.details || '');
+  return /Could not find the '[^']+' column/i.test(msg)
+    || /column .* (?:does not exist|of relation)/i.test(msg)
+    || /schema cache/i.test(msg);
+}
+
+// Pull the offending column name out of the Postgres / PostgREST error
+// so the caller can drop it from the payload and retry. Returns null
+// when no column name can be parsed (e.g. unrelated error).
+export function extractMissingColumn(err) {
+  if (!err) return null;
+  const msg = String(err.message || '') + ' ' + String(err.details || '');
+  const patterns = [
+    /Could not find the '([^']+)' column/i,
+    /column "?([\w.]+)"? of relation/i,
+    /column "?([\w.]+)"? does not exist/i,
+    /the '([^']+)' column .* schema cache/i,
+  ];
+  for (const pat of patterns) {
+    const m = pat.exec(msg);
+    if (m && m[1]) {
+      // Strip table qualifier if present (e.g. "fabrics.moq_meters" → "moq_meters").
+      return m[1].split('.').pop();
+    }
+  }
+  return null;
 }
 
 // Resolve the org_id we should put in the request body. The JWT's claim
@@ -96,9 +136,52 @@ export async function ensureOrgExists(db, orgId) {
   }
 }
 
-// Robust single-row upsert. Returns { ok, error, retried, skipped }.
+// Run an upsert and, on a PostgREST schema-cache miss (PGRST204 / "column
+// not found"), drop the offending column and retry. Loops until either
+// the upsert succeeds, a non-schema error is returned, or we hit
+// MAX_SCHEMA_DROPS — one column dropped per iteration. Protected columns
+// (id / org / user / code / name / timestamps) are never dropped because
+// without them the row can't be addressed.
+//
+// The set of columns we ended up dropping is returned so the caller can
+// surface it in the diagnostic ring buffer — that's how the user sees
+// "the schema cache was stale, we worked around it by dropping
+// moq_meters" without ever opening DevTools.
+async function tryUpsertWithSchemaRecovery(db, table, payload, upsertOpts) {
+  let working = payload;
+  const dropped = [];
+  for (let i = 0; i <= MAX_SCHEMA_DROPS; i++) {
+    const { error } = await db.from(table).upsert(working, upsertOpts);
+    if (!error) return { ok: true, payload: working, dropped };
+    if (!isSchemaCacheError(error)) return { ok: false, error, payload: working, dropped };
+    const col = extractMissingColumn(error);
+    if (!col || !(col in working) || PROTECTED_COLUMNS.has(col)) {
+      // Couldn't pinpoint the column, or it's something we refuse to
+      // drop. Bail with the original error so the caller surfaces it.
+      return { ok: false, error, payload: working, dropped };
+    }
+    const next = { ...working };
+    delete next[col];
+    working = next;
+    dropped.push(col);
+  }
+  return {
+    ok: false,
+    error: new Error(`Hit MAX_SCHEMA_DROPS (${MAX_SCHEMA_DROPS}) — schema cache severely stale on ${table}. Run NOTIFY pgrst, 'reload schema'; in Supabase SQL Editor.`),
+    payload: working,
+    dropped,
+  };
+}
+
+// Robust single-row upsert. Returns { ok, error, retried, skipped, droppedColumns }.
 // `row` must be a fully-projected payload — column allowlisting happens
 // in the caller (each atom store has its own toXCloudRow filter).
+//
+// Failure modes handled:
+//   1. JWT missing org_id claim → returns a structured NO_JWT_ORG_ID error
+//   2. PGRST204 / column-not-found → drops unknown column and retries
+//   3. RLS rejection (42501) → refreshes JWT, re-derives org_id, retries
+//      once. Schema-cache recovery runs on both attempts.
 export async function robustUpsertAtom(table, row, opts = {}) {
   if (!IS_SUPABASE_ENABLED) {
     return { ok: false, skipped: 'supabase-disabled' };
@@ -121,39 +204,49 @@ export async function robustUpsertAtom(table, row, opts = {}) {
 
   await ensureOrgExists(db, orgId);
 
-  let payload = { ...row, organization_id: orgId, user_id: row?.user_id || userId };
+  const initialPayload = { ...row, organization_id: orgId, user_id: row?.user_id || userId };
   const upsertOpts = opts.onConflict ? { onConflict: opts.onConflict } : undefined;
 
-  const first = await db.from(table).upsert(payload, upsertOpts);
-  if (!first.error) {
-    recordSyncEvent({ table, op: 'upsert', id: row?.id, ok: true });
-    return { ok: true };
+  let result = await tryUpsertWithSchemaRecovery(db, table, initialPayload, upsertOpts);
+  if (result.ok) {
+    recordSyncEvent({
+      table, op: 'upsert', id: row?.id, ok: true,
+      droppedColumns: result.dropped.length ? result.dropped : undefined,
+    });
+    return { ok: true, droppedColumns: result.dropped };
   }
 
   // RLS rejection — refresh the JWT (so a token minted before the
   // active org was set gets replaced) and retry once with the fresh
-  // org_id.
-  if (isRlsError(first.error)) {
+  // org_id. Schema-cache recovery runs on the retry too.
+  if (isRlsError(result.error)) {
     db = await refreshAuthedSupabase();
     const fresh = await getJwtOrgId({ skipCache: true });
-    if (fresh) payload = { ...payload, organization_id: fresh };
-    const second = await db.from(table).upsert(payload, upsertOpts);
-    if (!second.error) {
-      recordSyncEvent({ table, op: 'upsert', id: row?.id, ok: true, retried: true });
-      return { ok: true, retried: true };
+    const retryPayload = fresh
+      ? { ...result.payload, organization_id: fresh }
+      : result.payload;
+    result = await tryUpsertWithSchemaRecovery(db, table, retryPayload, upsertOpts);
+    if (result.ok) {
+      recordSyncEvent({
+        table, op: 'upsert', id: row?.id, ok: true, retried: true,
+        droppedColumns: result.dropped.length ? result.dropped : undefined,
+      });
+      return { ok: true, retried: true, droppedColumns: result.dropped };
     }
     recordSyncEvent({
       table, op: 'upsert', id: row?.id, ok: false, retried: true,
-      error: second.error.message, code: second.error.code,
+      error: result.error.message, code: result.error.code,
+      droppedColumns: result.dropped.length ? result.dropped : undefined,
     });
-    return { ok: false, retried: true, error: second.error };
+    return { ok: false, retried: true, error: result.error, droppedColumns: result.dropped };
   }
 
   recordSyncEvent({
     table, op: 'upsert', id: row?.id, ok: false,
-    error: first.error.message, code: first.error.code, details: first.error.details,
+    error: result.error.message, code: result.error.code, details: result.error.details,
+    droppedColumns: result.dropped.length ? result.dropped : undefined,
   });
-  return { ok: false, error: first.error };
+  return { ok: false, error: result.error, droppedColumns: result.dropped };
 }
 
 // Batch wrapper — iterates per-row so a single bad row doesn't poison

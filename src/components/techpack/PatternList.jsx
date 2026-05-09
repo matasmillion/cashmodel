@@ -25,7 +25,6 @@ import {
 import { PATTERN_CATEGORIES, PATTERN_CATEGORY_LABEL, PATTERN_STATUSES } from '../../utils/patternLibrary';
 import PatternBuilder from './PatternBuilder';
 import CoverThumb from './CoverThumb';
-import SyncDiagnosticsPanel, { SyncDiagnosticsToggle } from './SyncDiagnosticsPanel';
 
 const VIEW_STORAGE_KEY = 'cashmodel_patterns_view';
 
@@ -255,7 +254,6 @@ export default function PatternList() {
     catch { return 'grid'; }
   });
   const [dragOverStatus, setDragOverStatus] = useState(null);
-  const [syncDiagOpen, setSyncDiagOpen] = useState(false);
   const pickerRef = useRef(null);
 
   const switchView = (next) => {
@@ -426,7 +424,6 @@ export default function PatternList() {
               Archived
             </label>
           )}
-          <SyncDiagnosticsToggle open={syncDiagOpen} onToggle={() => setSyncDiagOpen(o => !o)} />
           <button
             disabled={creating}
             onClick={() => setPicker(p => !p)}
@@ -449,8 +446,6 @@ export default function PatternList() {
           )}
         </div>
       </div>
-
-      <SyncDiagnosticsPanel open={syncDiagOpen} atomLabel="Patterns" />
 
       {filtered.length === 0 ? (
         <div style={{ padding: '60px 24px', textAlign: 'center', background: FR.salt, border: `1px dashed ${FR.sand}`, borderRadius: 8 }}>

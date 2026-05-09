@@ -72,8 +72,13 @@ function LibraryPickerModal({ title, subtitle, fetchItems, renderItem, getId, on
       // ?v=updated_at cache buster keeps the browser from showing
       // yesterday's image after the row was edited in the library.
       const resolved = await Promise.all(rows.map(async r => {
-        const url = await resolveCoverPath(r?.cover_image, r?.updated_at);
-        return url && url !== r.cover_image ? { ...r, cover_image: url } : r;
+        // Mirror the slot card / live preview priority: front_image_url first,
+        // cover_image fallback. Without this, fabrics that only have a front
+        // image render an empty tile in the picker even though the library
+        // shows them with a thumbnail.
+        const raw = r?.front_image_url || r?.cover_image;
+        const url = await resolveCoverPath(raw, r?.updated_at);
+        return url && url !== raw ? { ...r, cover_image: url, front_image_url: url } : r;
       }));
       if (!cancelled) setItems(resolved);
     })();
@@ -123,6 +128,54 @@ function LibraryPickerModal({ title, subtitle, fetchItems, renderItem, getId, on
               </button>
             ))}
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Area-of-product picker shown immediately after a fabric is selected.
+// Defaults to the fabric's library default; user can override per-style.
+// Picking an area moves the flow on to the color picker (or commits if
+// the fabric has no color cards).
+function FabricAreaPickerModal({ fabric, defaultArea, onSelect, onClose }) {
+  const [area, setArea] = useState(defaultArea || fabric?.default_garment_area || 'Body');
+  const areas = ['Body', 'Lining', 'Rib', 'Pocket', 'Hood', 'Hood lining',
+                 'Cuff', 'Hem', 'Yoke', 'Sleeve', 'Collar', 'Other'];
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(58,58,58,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+      <div style={{ background: FR.salt, borderRadius: 8, padding: 22, width: 560, maxWidth: '94vw', border: `0.5px solid rgba(58,58,58,0.15)` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 22, color: FR.slate }}>Where on the garment?</div>
+            <div style={{ fontSize: 11, color: FR.stone, marginTop: 4 }}>
+              {fabric?.name || fabric?.mill_fabric_no || 'Selected fabric'} — pick the area this fabric is cut for.
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: FR.stone, lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 18 }}>
+          {areas.map(a => (
+            <button key={a} onClick={() => setArea(a)}
+              style={{
+                padding: '10px 8px',
+                background: area === a ? FR.slate : FR.white,
+                color: area === a ? FR.salt : FR.slate,
+                border: `1px solid ${area === a ? FR.slate : FR.sand}`,
+                borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              }}>
+              {a}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button onClick={onClose} style={{ padding: '7px 14px', background: 'none', border: `0.5px solid ${FR.sand}`, borderRadius: 6, cursor: 'pointer', fontSize: 11, color: FR.stone }}>
+            Cancel
+          </button>
+          <button onClick={() => onSelect(area)}
+            style={{ padding: '7px 18px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+            Continue → {fabric?.color_card_images?.length ? 'pick color' : 'commit'}
+          </button>
         </div>
       </div>
     </div>
@@ -190,9 +243,14 @@ function specOf(componentRow) {
 function fabricSpec(row) {
   const d = row?.data || row?.fabric_data || row || {};
   const tier = (d?.costTiers || [])[0];
+  const gsm = parseFloat(row?.weight_gsm ?? d?.weight_gsm) || 0;
+  const widthCm = parseFloat(row?.width_cm ?? d?.width_cm) || 0;
+  const kgUsd = parseFloat(row?.price_per_kg_usd ?? d?.price_per_kg_usd) || 0;
+  const fromKg = (kgUsd && gsm && widthCm) ? kgUsd * (gsm * widthCm / 100000) : 0;
   const unitCost =
     parseFloat(row?.price_per_meter_usd) ||
     parseFloat(d?.price_per_meter_usd) ||
+    fromKg ||
     parseFloat(tier?.unitCost) ||
     parseFloat(row?.cost_per_unit) ||
     parseFloat(d?.cost_per_unit) ||
@@ -205,7 +263,7 @@ function fabricSpec(row) {
     weight:      weightGsm ? `${weightGsm} GSM` : '—',
     weave:       row?.weave || d?.weave || '—',
     millId:      row?.mill_id || d?.mill_id || d?.supplier || row?.supplier || row?.mill || '',
-    cover:       row?.cover_image || row?.front_image_url || d?.cover_image || d?.front_image_url || null,
+    cover:       row?.front_image_url || row?.cover_image || d?.front_image_url || d?.cover_image || null,
     colors:      row?.color_card_images || d?.color_card_images || [],
     unitCost,
     currency:    d.currency || tier?.currency || 'USD',
@@ -256,15 +314,11 @@ export function StepFabrics({ data, set }) {
   const picked = data.pickedFabrics || [];
   const slots = [0, 1, 2]; // up to 3 fabrics
 
-  // Always re-fetch the picked fabric rows on mount or when the picked
-  // ids change. We don't short-circuit on cached entries — the user may
-  // have edited the fabric in the library and we want those edits to
-  // show up immediately. The cache buster on resolveCoverPath forces a
-  // fresh image load whenever the row's updated_at moves.
-  // After fabric is picked, optionally show a color-card picker
-  // (only if the fabric has color_card_images on it). Stores the
-  // pending fabric until the user makes a color choice or skips.
-  const [colorPickFor, setColorPickFor] = useState(null); // { fabric, slot } | null
+  // After fabric is picked, the flow is fabric → area → (color if any) → commit.
+  // areaPickFor holds the pending fabric while the area-of-product modal is open;
+  // colorPickFor takes over once an area is picked and the fabric has color cards.
+  const [areaPickFor, setAreaPickFor] = useState(null); // { fabric, slot } | null
+  const [colorPickFor, setColorPickFor] = useState(null); // { fabric, slot, area } | null
 
   useEffect(() => {
     let cancelled = false;
@@ -315,20 +369,29 @@ export function StepFabrics({ data, set }) {
   async function pickFabric(item) {
     const slotIdx = pickerSlot;
     setPickerSlot(null);
-    // If the fabric has color cards, prompt for which colorway. Otherwise
-    // commit immediately with no color.
-    const colors = item.color_card_images || [];
+    // Always ask for area of product first — the library default seeds
+    // the modal but we surface the choice explicitly so the user can't
+    // commit the wrong area silently.
+    setAreaPickFor({ fabric: item, slot: slotIdx });
+  }
+
+  function pickArea(area) {
+    const ctx = areaPickFor;
+    setAreaPickFor(null);
+    if (!ctx) return;
+    const colors = ctx.fabric.color_card_images || [];
     if (colors.length > 0) {
-      setColorPickFor({ fabric: item, slot: slotIdx });
+      setColorPickFor({ fabric: ctx.fabric, slot: ctx.slot, area });
     } else {
-      commitFabric(slotIdx, item, null);
+      commitFabric(ctx.slot, ctx.fabric, null, area);
     }
   }
 
-  function commitFabric(slotIdx, item, colorChoice) {
+  function commitFabric(slotIdx, item, colorChoice, area) {
+    const role = area || picked[slotIdx]?.role || item.default_garment_area || FABRIC_ROLES[slotIdx] || '';
     setSlot(slotIdx, {
       fabricId:   item.id,
-      role:       picked[slotIdx]?.role || FABRIC_ROLES[slotIdx] || '',
+      role,
       notes:      '',
       colorIndex: colorChoice?.index ?? null,
       colorLabel: colorChoice?.label || '',
@@ -488,15 +551,23 @@ export function StepFabrics({ data, set }) {
           onClose={() => setPickerSlot(null)}
         />
       )}
+      {areaPickFor && (
+        <FabricAreaPickerModal
+          fabric={areaPickFor.fabric}
+          defaultArea={picked[areaPickFor.slot]?.role || areaPickFor.fabric?.default_garment_area || FABRIC_ROLES[areaPickFor.slot] || 'Body'}
+          onSelect={pickArea}
+          onClose={() => setAreaPickFor(null)}
+        />
+      )}
       {colorPickFor && (
         <FabricColorPickerModal
           fabric={colorPickFor.fabric}
           onSelect={(idx, color) => {
-            commitFabric(colorPickFor.slot, colorPickFor.fabric, { index: idx, ...color });
+            commitFabric(colorPickFor.slot, colorPickFor.fabric, { index: idx, ...color }, colorPickFor.area);
             setColorPickFor(null);
           }}
           onSkip={() => {
-            commitFabric(colorPickFor.slot, colorPickFor.fabric, null);
+            commitFabric(colorPickFor.slot, colorPickFor.fabric, null, colorPickFor.area);
             setColorPickFor(null);
           }}
           onClose={() => setColorPickFor(null)}
@@ -574,7 +645,7 @@ function ComponentSlotCard({ entry, fullData, onClear, onChangeRole, onChangeQty
               style={{ fontSize: 10, color: FR.soil, textDecoration: 'none', borderBottom: `0.5px solid ${FR.soil}`, paddingBottom: 1, whiteSpace: 'nowrap' }}
               title="Open this component pack in the Library"
             >
-              View pack ↗
+              View tech pack ↗
             </a>
           )}
         </div>
@@ -654,7 +725,7 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const ids = picked.map(p => p?.componentId).filter(Boolean);
+      const ids = picked.map(p => p?.componentId || p?.id).filter(Boolean);
       if (!ids.length) { setFullById({}); return; }
       const next = {};
       for (const id of ids) {
@@ -688,7 +759,7 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
       if (!cancelled) setFullById(next);
     })();
     return () => { cancelled = true; };
-  }, [picked.map(p => p?.componentId).join('|'), refreshTick]);
+  }, [picked.map(p => p?.componentId || p?.id).join('|'), refreshTick]);
 
   async function addComponent(item) {
     if (picked.length >= maxSlots) return;
@@ -743,7 +814,7 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
   // beside the page title so the designer always sees what this section
   // contributes to the unit cost.
   const sectionSubtotal = picked.reduce((sum, p) => {
-    const full = fullById[p?.componentId];
+    const full = fullById[p?.componentId || p?.id];
     if (!full) return sum;
     const s = readComponentSpec(full);
     const qtyNum = parseFloat(String(p?.quantity || '').replace(/[^0-9.]/g, '')) || 1;
@@ -759,7 +830,7 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
         </span>
       </div>
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, lineHeight: 1.5 }}>
-        {subtitle} Each card links straight to its component pack — the supplier can click <strong>View pack ↗</strong> to see the full spec.
+        {subtitle} Each card links straight to its component pack — the supplier can click <strong>View tech pack ↗</strong> to see the full spec.
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 22 }}>
@@ -770,9 +841,9 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
           }
           return (
             <ComponentSlotCard
-              key={entry.componentId + ':' + i}
+              key={(entry.componentId || entry.id || '') + ':' + i}
               entry={entry}
-              fullData={fullById[entry.componentId]}
+              fullData={fullById[entry.componentId || entry.id]}
               onClear={() => removeComponent(i)}
               onChangeRole={role => setRole(i, role)}
               onChangeQty={quantity => setQty(i, quantity)}

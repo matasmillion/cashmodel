@@ -215,8 +215,8 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     };
   }, []);
   const componentIdKey = [
-    ...(data.pickedTrims || []).map(p => p?.componentId || ''),
-    ...(data.pickedPackaging || []).map(p => p?.componentId || ''),
+    ...(data.pickedTrims || []).map(p => p?.componentId || p?.id || ''),
+    ...(data.pickedPackaging || []).map(p => p?.componentId || p?.id || ''),
   ].filter(Boolean).join('|');
   useEffect(() => {
     let cancelled = false;
@@ -288,23 +288,27 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
         if (cancelled) return;
         if (!row) continue;
         const v = row.updated_at;
-        // Cover prefers cover_image, falls back to front_image_url so the
-        // BOM live preview shows whatever swatch the designer uploaded.
-        let cover = row.cover_image || row.front_image_url || null;
+        // Match the Fabric library's priority (front_image_url first) so the
+        // BOM card and live preview render the same swatch the library card shows.
+        let cover = row.front_image_url || row.cover_image || null;
         if (cover && !/^(https?:|data:|blob:)/.test(cover)) {
           try { invalidateAssetUrl?.(cover); } catch {}
-          cover = await getAssetUrl(cover).catch(() => null) || row.cover_image;
+          cover = await getAssetUrl(cover).catch(() => null) || row.front_image_url || row.cover_image;
         }
         const tagged = cover ? `${cover}${cover.includes('?') ? '&' : '?'}v=${encodeURIComponent(v || '')}` : null;
         // Vendor contact lookup so the SVG card can show email / phone /
         // primary contact alongside the mill name.
         const vendor = row.mill_id ? getVendor(row.mill_id) : null;
+        // Overwrite both fields with the resolved tagged URL so the live
+        // preview reads the same image regardless of which it checks first.
+        const finalUrl = tagged || cover || row.cover_image;
         next[id] = {
           ...row,
-          cover_image:    tagged || cover || row.cover_image,
-          _vendorEmail:   vendor?.email || '',
-          _vendorPhone:   vendor?.phone || '',
-          _vendorContact: vendor?.primary_contact || '',
+          cover_image:      finalUrl,
+          front_image_url:  finalUrl,
+          _vendorEmail:     vendor?.email || '',
+          _vendorPhone:     vendor?.phone || '',
+          _vendorContact:   vendor?.primary_contact || '',
         };
       }
       if (!cancelled) setFabricsById(next);
@@ -378,10 +382,15 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     if (!row) return 0;
     const d = row.data || row;
     const tier = (d?.costTiers || [])[0];
+    const gsm = parseFloat(row.weight_gsm ?? d?.weight_gsm) || 0;
+    const widthCm = parseFloat(row.width_cm ?? d?.width_cm) || 0;
+    const kgUsd = parseFloat(row.price_per_kg_usd ?? d?.price_per_kg_usd) || 0;
+    const fromKg = (kgUsd && gsm && widthCm) ? kgUsd * (gsm * widthCm / 100000) : 0;
     // fabricStore canonical: price_per_meter_usd. Older shapes covered too.
     return (
       parseFloat(row.price_per_meter_usd) ||
       parseFloat(d?.price_per_meter_usd) ||
+      fromKg ||
       parseFloat(tier?.unitCost) ||
       parseFloat(row.cost_per_unit) ||
       parseFloat(d?.cost_per_unit) ||
@@ -402,11 +411,11 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     return sum + (mpu ? costPerMeter * mpu : costPerMeter);
   }, 0);
   const trimsCost = (data.pickedTrims || []).reduce((sum, p) => {
-    const full = componentsById[p?.componentId];
+    const full = componentsById[p?.componentId || p?.id];
     return sum + componentUnitCost(full) * parseQty(p?.quantity);
   }, 0);
   const packagingCost = (data.pickedPackaging || []).reduce((sum, p) => {
-    const full = componentsById[p?.componentId];
+    const full = componentsById[p?.componentId || p?.id];
     return sum + componentUnitCost(full) * parseQty(p?.quantity);
   }, 0);
 
@@ -456,8 +465,10 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     return (rc.pickPack || 0) + (tier ? (tier.rate || 0) : 0) + (rc.packagingMaterials || 0);
   })();
   const targetRetail = parseFloat(data.targetRetail) || 0;
+  const productWeightKg = parseFloat(data.weightKg ?? data.shippingWeightKg ?? 0) || 0;
+  const seaFreightCost = seaFreightSpot * productWeightKg;
   const maxFOB = targetRetail > 0
-    ? targetRetail * (cogsRate + fulfillmentPercent) - fulfillmentUnitCost + shippingCharge - seaFreightSpot
+    ? targetRetail * (cogsRate + fulfillmentPercent) - fulfillmentUnitCost + shippingCharge - seaFreightCost
     : 0;
   const fobDelta = maxFOB > 0 ? totalUnitCost - maxFOB : null;
 
@@ -760,11 +771,27 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
             <ArrowLeft size={12} /> Back
           </button>
           <div>
-            <div style={{ color: FR.salt, fontSize: 9, letterSpacing: 3, fontWeight: 600 }}>
-              F O R E I G N  R E S O U R C E  C O .
-              {data.parentStyleName && <span style={{ color: FR.stone, letterSpacing: 0, marginLeft: 8, fontWeight: 400, fontSize: 9 }}>variant of {data.parentStyleName}</span>}
+            <div style={{
+              fontFamily: "'Cormorant Garamond', Georgia, serif",
+              color: FR.salt,
+              fontSize: 14,
+              fontWeight: 700,
+              letterSpacing: 0.5,
+            }}>
+              FOREIGN RESOURCE
+              {data.parentStyleName && (
+                <span style={{ fontFamily: "'General Sans', 'Inter', sans-serif", letterSpacing: 0, marginLeft: 8, fontWeight: 400, fontSize: 10, color: FR.stone }}>
+                  variant of {data.parentStyleName}
+                </span>
+              )}
             </div>
-            <div style={{ fontFamily: "'Cormorant Garamond','Georgia',serif", color: FR.salt, fontSize: 16, marginTop: 2 }}>
+            <div style={{
+              fontFamily: "'General Sans', 'Inter', 'Helvetica Neue', sans-serif",
+              color: FR.salt,
+              fontSize: 14,
+              marginTop: 2,
+              letterSpacing: 0.2,
+            }}>
               {data.styleNumber || data.styleName || 'New Tech Pack'}
             </div>
           </div>

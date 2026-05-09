@@ -111,9 +111,50 @@ export function emptyFabric(overrides = {}) {
     cover_image: null,
     zfab_file_url: '',
     notes: '',
+    // Mill finishes — internal addons that adjust the base price. Each entry:
+    // { name, delta_per_meter_usd, delta_per_meter_cny, delta_per_kg_usd,
+    //   delta_per_kg_cny, executed_at, vendor_id }. executed_at ∈
+    //   'mill' | 'secondary' | 'at_treatment'. Picker can override per style.
+    mill_finishes: [],
+    default_garment_area: '',
+    garment_placement_image_url: '',
+    garment_placement_notes: '',
+    // Knit-only: the matched ribbing fabric carried alongside the main mill fabric.
+    ribbing_fabric_no: '',
+    ribbing_image_url: '',
+    // Raw photos of the physical color card and full fabric card — kept for
+    // archival reference, distinct from the per-swatch images in color_card_images.
+    original_images: [],
+    // Misc files attached to this fabric: AI-parser source mill cards (auto-saved
+    // when the user runs AI auto-fill), certifications, vendor chats, PDFs, etc.
+    // Each entry: { path, name, kind?, uploaded_at }
+    documents: [],
     ...overrides,
   };
 }
+
+// Areas a fabric can be cut for. Used by FabricBuilder default + the tech
+// pack picker's area-of-product step. Order matters — body first.
+export const FABRIC_GARMENT_AREAS = [
+  'Body', 'Lining', 'Rib', 'Pocket', 'Hood', 'Hood lining',
+  'Cuff', 'Hem', 'Yoke', 'Sleeve', 'Collar', 'Other',
+];
+
+// Mill finish execution targets. Picker shows the library default; per-style
+// override flips between these without editing the library row.
+export const FINISH_EXECUTED_AT = [
+  { id: 'mill',         label: 'At the mill (default)' },
+  { id: 'secondary',    label: 'Secondary finishing facility' },
+  { id: 'at_treatment', label: 'Bundled with wash-house treatment' },
+];
+
+// A starter catalog of mill finish names. The fabric form lets users add
+// new ones; the catalog grows organically — this just seeds the dropdown.
+export const MILL_FINISH_CATALOG = [
+  'Brushing (interior)', 'Antibacterial', 'Anti-mite', 'UV protection',
+  'Negative ion', 'Anti-odor', 'Anti-pilling', 'Mercerization',
+  'Sanforization', 'Calendering', 'Peaching', 'Singeing',
+];
 
 // Bump v1.0 → v1.1, v1.9 → v2.0, v2 → v2.1, etc. Always returns a "v{maj}.{min}"
 // string. Minor wraps to next major every 10 minor steps.

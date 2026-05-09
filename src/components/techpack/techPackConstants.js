@@ -24,8 +24,10 @@ export const DEFAULT_LIBRARY = { bom: [], fabrics: [], trims: [], labels: [], lo
 
 export const STATUSES = ['Merchandising', 'Design', 'Sampling', 'Testing', 'Pre-Production', 'Production', 'Released'];
 
-// Steps locked until Pre-Production: Compliance (17), Quality (18), Labels (19), Order (20)
-export const LOCKED_STEPS = new Set([17, 18, 19, 20]);
+// Steps locked until Pre-Production: Compliance, Quality, Labels, Order.
+// After inserting 3 embellishments pages + 1 treatments call-outs page these
+// shift from {17,18,19,20} → {21,22,23,24}.
+export const LOCKED_STEPS = new Set([21, 22, 23, 24]);
 export function isStepLocked(stepIndex, status) {
   if (!LOCKED_STEPS.has(stepIndex)) return false;
   const unlockAt = STATUSES.indexOf('Pre-Production');
@@ -61,21 +63,25 @@ export const STEPS = [
   { id: 'fabrics',       title: 'Fabrics',                          icon: '03', phase: 'Bill of Materials' },
   { id: 'trims',         title: 'Trims',                            icon: '04', phase: 'Bill of Materials' },
   { id: 'packaging',     title: 'Packaging',                        icon: '05', phase: 'Bill of Materials', skippable: true },
-  { id: 'flatlays',      title: 'Technical Flat Lay Diagrams',      icon: '06', phase: 'Cut & Sew' },
-  { id: 'sketches',      title: 'Construction Details — Page 1',    icon: '07', phase: 'Cut & Sew' },
-  { id: 'sketches-2',    title: 'Construction Details — Page 2',    icon: '08', phase: 'Cut & Sew' },
-  { id: 'construction',  title: 'Seam & Stitch Specifications',     icon: '09', phase: 'Cut & Sew' },
-  { id: 'pattern',       title: 'Pattern Pieces & Cutting',         icon: '10', phase: 'Cut & Sew' },
-  { id: 'pom',           title: 'Points of Measure (Sample Size)',  icon: '11', phase: 'Cut & Sew' },
-  { id: 'size-matrix',   title: 'Graded Size Matrix',               icon: '12', phase: 'Cut & Sew', skippable: true },
+  { id: 'flatlays',      title: 'Flat Lay',                         icon: '06', phase: 'Cut & Sew' },
+  { id: 'sketches',      title: 'Call Outs',                        icon: '07', phase: 'Cut & Sew' },
+  { id: 'sketches-2',    title: 'Call Outs',                        icon: '08', phase: 'Cut & Sew' },
+  { id: 'construction',  title: 'Stitching',                        icon: '09', phase: 'Cut & Sew' },
+  { id: 'pattern',       title: 'Pattern & Cutting',                icon: '10', phase: 'Cut & Sew' },
+  { id: 'pom',           title: 'POM',                              icon: '11', phase: 'Cut & Sew' },
+  { id: 'size-matrix',   title: 'Size Grading',                     icon: '12', phase: 'Cut & Sew', skippable: true },
   { id: 'color',         title: 'Colorways',                        icon: '13', phase: 'Embellishments' },
   { id: 'artwork',       title: 'Artwork & Placement',              icon: '14', phase: 'Embellishments' },
-  { id: 'treatments',    title: 'Garment Treatments',               icon: '15', phase: 'Treatments' },
-  { id: 'compliance',    title: 'Compliance & Testing',             icon: '16', phase: 'QC' },
-  { id: 'quality',       title: 'Quality Inspection (AQL)',         icon: '17', phase: 'QC' },
-  { id: 'labels',        title: 'Labels & Packaging',               icon: '18', phase: 'Packaging' },
-  { id: 'order',         title: 'Order & Delivery',                 icon: '19', phase: 'Logistics' },
-  { id: 'revision',      title: 'Revision History & Approval',      icon: '20', phase: 'Sign-off' },
+  { id: 'emb-flatlay',   title: 'Flat Lay',                         icon: '15', phase: 'Embellishments' },
+  { id: 'emb-callouts',  title: 'Call Outs',                        icon: '16', phase: 'Embellishments' },
+  { id: 'emb-sizing',    title: 'Sizing & Colors',                  icon: '17', phase: 'Embellishments' },
+  { id: 'treatments',    title: 'Render',                           icon: '18', phase: 'Treatments' },
+  { id: 'treat-callouts',title: 'Call Outs',                        icon: '19', phase: 'Treatments' },
+  { id: 'compliance',    title: 'Compliance & Testing',             icon: '20', phase: 'QC' },
+  { id: 'quality',       title: 'Quality Inspection (AQL)',         icon: '21', phase: 'QC' },
+  { id: 'labels',        title: 'Labels & Packaging',               icon: '22', phase: 'Packaging' },
+  { id: 'order',         title: 'Order & Delivery',                 icon: '23', phase: 'Logistics' },
+  { id: 'revision',      title: 'Revision History & Approval',      icon: '24', phase: 'Sign-off' },
 ];
 
 const todayISO = () => {
@@ -165,6 +171,28 @@ export const DEFAULT_DATA = {
     { num: 7, title: '', description: '' },
     { num: 8, title: '', description: '' },
   ],
+  // Embellishments — Flat Lay (two sketches with print type + process details)
+  embFlatLayNotes: '',
+  embPrintType: '',
+  embProcessDetails: '',
+  // Embellishments — Call Outs (four numbered details, mirrors Cut & Sew page 07)
+  embCalloutDetails: [
+    { num: 1, title: '', description: '' },
+    { num: 2, title: '', description: '' },
+    { num: 3, title: '', description: '' },
+    { num: 4, title: '', description: '' },
+  ],
+  // Embellishments — Sizing & Colors (source files + notes)
+  embSizingNotes: '',
+  // Treatments — wash type list (e.g. Stone Wash, Garment Dye, Enzyme Wash)
+  treatmentWashTypes: [{ name: '', notes: '' }],
+  // Treatments — Call Outs (four numbered details)
+  treatCalloutDetails: [
+    { num: 1, title: '', description: '' },
+    { num: 2, title: '', description: '' },
+    { num: 3, title: '', description: '' },
+    { num: 4, title: '', description: '' },
+  ],
   patternPieces: [{ pieceNum: '', pieceName: '', quantity: '', fabric: '', grain: '', fusing: '', notes: '' }],
   cuttingNotes: '',
   cuttingInstructions: '',
@@ -211,7 +239,10 @@ export const DEFAULT_DATA = {
   },
 };
 
-export const IMG_STEPS = new Set([3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 16]);
+// Same indexes as before, plus the new Embellishments (15, 16) and
+// Treatments call-outs (19) image-heavy pages. Treatments Render (18)
+// already inherited from old index 16.
+export const IMG_STEPS = new Set([3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 18, 19]);
 
 // Initial-load compression. Loads a File at high quality + caps to a
 // generous max dimension (2400px) so the crop modal has detail to work
