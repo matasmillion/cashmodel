@@ -440,17 +440,9 @@
       </div>
 
       <!-- ───── Multi-SKU stockout calendar ──────────────────────── -->
-      <!-- Placed directly above Urgent Reorders so the operator scans the  -->
-      <!-- 6-month risk picture, then jumps straight to the action list.    -->
-      <!-- Filterable: by SKU (variant) or by Product (variants blended).    -->
-      <!-- Star icon is the tracked-toggle — untracked SKUs never appear     -->
-      <!-- here, never trigger Slack alerts, never auto-suggest reorders.    -->
       <div class="card">
-        <div class="section-head">
-          <div>
-            <div class="eyebrow">Inventory cover</div>
-            <div class="title">Top 6 tracked · projected daily cover</div>
-          </div>
+        <div class="section-head" style="margin-bottom: 12px;">
+          <div class="eyebrow">Inventory cover</div>
           <div style="display: flex; gap: 6px; align-items: center;">
             <button class="chip">By SKU</button>
             <button class="chip active">By product</button>
@@ -469,7 +461,6 @@
           <span><i class="swatch" style="background: rgba(168,84,60,0.65);"></i>Stockout</span>
           <span><i class="swatch" style="border: 2px solid var(--sienna); background: transparent;"></i>PO arrival</span>
           <span><i class="swatch" style="border: 1.5px solid var(--slate); background: transparent;"></i>Today</span>
-          <span style="margin-left: auto; color: var(--faded);">★ tracked SKUs only · untracked excluded from alerts &amp; chase suggestions</span>
         </div>
       </div>
 
@@ -990,27 +981,19 @@
         <div class="swatch-lg"></div>
         <div>
           <h1>Borderless Basic Hoodie · Slate · L</h1>
-          <div class="sku-code">AP-HD-BBHOOD-25-1-SLATE-L · gid://shopify/ProductVariant/40291834</div>
-          <div class="meta">
-            <span><b>Vendor</b> Zhejiang Cotton Co · 10w lead</span>
-            <span><b>Class</b> Hoodies · Staple</span>
-            <span><b>Last received</b> Mar 14 · PO-2026-0011</span>
-          </div>
+          <div class="sku-code">AP-HD-BBHOOD-25-1-SLATE-L</div>
         </div>
       </div>
       <div class="sku-quickstats">
         <div class="qs-card"><div class="qs-eyebrow">On hand</div><div class="qs-val num">31</div></div>
-        <div class="qs-card"><div class="qs-eyebrow">FWOS (ad-adj)</div><div class="qs-val num" style="color: var(--bad);">2.6<span style="font-size: 12px; color: var(--faded);">w</span></div></div>
+        <div class="qs-card"><div class="qs-eyebrow">FWOS</div><div class="qs-val num" style="color: var(--bad);">2.6<span style="font-size: 12px; color: var(--faded);">w</span></div></div>
         <div class="qs-card"><div class="qs-eyebrow">Velocity</div><div class="qs-val num">12.0<span style="font-size: 12px; color: var(--faded);">/d</span></div></div>
         <div class="qs-card"><div class="qs-eyebrow">On order</div><div class="qs-val num">200</div></div>
       </div>
     </div>
 
     <div class="decision-strip">
-      <div class="left">
-        <h3>Stockout in 9 days · next PO lands in 17 days</h3>
-        <p>At ad-adjusted velocity on-hand runs out May 18; PO-2026-0024 lands May 28 leaving an 8-day uncovered gap. Air-freight 100u to bridge — ~$640 cost vs. ~$3,200 lost revenue.</p>
-      </div>
+      <h3 style="margin: 0;">Stockout in 9 days · next PO lands in 17 days</h3>
       <div class="actions">
         <button class="btn">Hold</button>
         <button class="btn">Pause reorder</button>
@@ -1018,30 +1001,11 @@
       </div>
     </div>
 
-    <!-- ───── Per-SKU calendar grid ─────────────────────────────────── -->
+    <!-- ───── Per-SKU calendar (no eyebrow, no subtitle — just the chart) ── -->
     <div class="card" style="margin-bottom: 16px;">
-      <div class="section-head">
-        <div>
-          <div class="eyebrow explain">
-            12-month projected cover
-            <span class="info">i</span>
-            <div class="tip">
-              Daily simulation: starting on-hand minus daily velocity, plus PO arrivals on their landing day.
-              <span class="tip-eq">remaining(d) = onHand − Σ velocity·d + Σ POs landed by d</span>
-              <div class="tip-row"><span>Velocity (ad-adj)</span><b>12.0 u/d</b></div>
-              <div class="tip-row"><span>Lift applied</span><b>1.11×</b></div>
-              <div class="tip-source">Same math as the bridge chart on Forecast</div>
-            </div>
-          </div>
-          <div class="title">Cover &amp; inbound · single-SKU view</div>
-        </div>
-      </div>
-
-      <!-- Calendar: horizontal week-grouped strip, scrolls right for full year -->
       <div class="cal-scroll">
         <div class="cal-canvas" id="sku-calendar-grid"></div>
       </div>
-
       <div class="cal-legend">
         <span><i class="swatch" style="background: rgba(107,142,107,0.45);"></i>Healthy</span>
         <span><i class="swatch" style="background: rgba(200,146,74,0.55);"></i>Restock window</span>
@@ -1051,66 +1015,25 @@
       </div>
     </div>
 
-    <!-- Per-PO breakdown -->
+    <!-- Per-PO breakdown — minimal: when, how many, days of cover, status -->
     <div class="po-cards-row">
       <div class="po-mini">
         <div class="po-code">PO-2026-0024</div>
-        <div class="lands">Lands May 28 <span style="color: var(--sienna); font-size: 12px;">+17d</span></div>
+        <div class="lands">Lands May 28</div>
         <div class="units">+1,500 <span class="sienna">+101 days cover</span></div>
-        <div class="meta">Zhejiang Cotton Co · 10w lead<span class="pill inprod">In production</span></div>
+        <div class="meta" style="justify-content: flex-end;"><span class="pill inprod">In production</span></div>
       </div>
       <div class="po-mini">
         <div class="po-code">PO-2026-0031</div>
-        <div class="lands">Lands Aug 6 <span style="color: var(--sienna); font-size: 12px;">+88d</span></div>
+        <div class="lands">Lands Aug 6</div>
         <div class="units">+800 <span class="sienna">+54 days cover</span></div>
-        <div class="meta">Zhejiang Cotton Co · 10w lead<span class="pill placed">Placed</span></div>
+        <div class="meta" style="justify-content: flex-end;"><span class="pill placed">Placed</span></div>
       </div>
       <div class="po-mini suggested">
         <div class="po-code" style="color: var(--faded);">Suggested chase</div>
         <div class="lands" style="color: var(--faded);">Place by May 12</div>
         <div class="units" style="color: var(--faded);">+1,200 <span class="sienna">covers 16w</span></div>
-        <div class="meta" style="border-top-color: var(--line);"><span>Sized to ad-adj velocity</span><button class="btn primary" style="padding: 4px 10px; font-size: 10px;">Draft chase →</button></div>
-      </div>
-    </div>
-
-    <!-- Detail cards -->
-    <div class="two-col">
-      <div>
-        <div class="card" style="margin-bottom: 16px;">
-          <div class="eyebrow" style="margin-bottom: 14px;">Sales velocity</div>
-          <div class="vmatrix">
-            <div class="vcell"><div class="vw">7d</div><div class="vv">15.4 / day</div><div class="vmath">108 / 7</div></div>
-            <div class="vcell"><div class="vw">14d</div><div class="vv">14.1 / day</div><div class="vmath">197 / 14</div></div>
-            <div class="vcell"><div class="vw">30d</div><div class="vv">13.6 / day</div><div class="vmath">408 / 30</div></div>
-            <div class="vcell"><div class="vw">90d</div><div class="vv">12.4 / day</div><div class="vmath">1,116 / 90</div></div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="eyebrow" style="margin-bottom: 14px;">Inventory by location</div>
-          <div class="row-line"><span class="k">Brooklyn DC</span><span class="v">186u</span></div>
-          <div class="row-line"><span class="k">LA Pop-up</span><span class="v">22u</span></div>
-          <div class="row-line"><span class="k">Returns processing</span><span class="v">10u</span></div>
-          <div class="row-line"><span class="k">In transit (returns)</span><span class="v">~15u phantom</span></div>
-        </div>
-      </div>
-
-      <div>
-        <div class="card" style="margin-bottom: 16px;">
-          <div class="eyebrow" style="margin-bottom: 14px;">Mapping</div>
-          <div class="row-line"><span class="k">PLM style</span><span class="v">AP-HD-BBHOOD-25-1</span></div>
-          <div class="row-line"><span class="k">Variant</span><span class="v">Slate / L</span></div>
-          <div class="row-line"><span class="k">Shopify variant</span><span class="v">40291834</span></div>
-          <div class="row-line"><span class="k">Source · confidence</span><span class="v">manual · 1.00</span></div>
-          <div class="row-line"><span class="k">Last verified</span><span class="v">2 min ago</span></div>
-        </div>
-
-        <div class="card">
-          <div class="eyebrow" style="margin-bottom: 14px;">Mapping history</div>
-          <div style="font-size: 11px; color: var(--faded); padding: 6px 0; border-bottom: 1px solid var(--line-soft);"><span class="num">May 9, 11:42</span> · system verified</div>
-          <div style="font-size: 11px; color: var(--faded); padding: 6px 0; border-bottom: 1px solid var(--line-soft);"><span class="num">May 8, 09:14</span> · matas@fr.co created — manual</div>
-          <div style="font-size: 11px; color: var(--faded); padding: 6px 0;"><span class="num">Apr 14, 03:12</span> · system created — auto from fuzzy (0.78)</div>
-        </div>
+        <div class="meta" style="border-top-color: var(--line); justify-content: flex-end;"><button class="btn primary" style="padding: 4px 10px; font-size: 10px;">Draft chase →</button></div>
       </div>
     </div>
   </section>
@@ -1272,19 +1195,15 @@
     row.className = 'multi-row';
     if (opts.dataRoute) row.setAttribute('data-route', opts.dataRoute);
 
-    // Pinned left label
+    // Pinned left label — name + FWOS value only. Variant counts, totals,
+    // and rank-by-revenue are noise on the surface; available on hover/click.
     var lbl = document.createElement('div');
     lbl.className = 'mr-label';
+    lbl.title = opts.sub;
     lbl.innerHTML =
       '<span class="star tracked">★</span>' +
-      '<div style="flex: 1;">' +
-        '<div class="name">' + opts.name + '</div>' +
-        '<div class="sub">' + opts.sub + '</div>' +
-      '</div>' +
-      '<div class="stat">' +
-        '<div class="v ' + (opts.bad ? 'bad' : '') + '">' + opts.fwos + '</div>' +
-        '<div class="l">FWOS</div>' +
-      '</div>';
+      '<div style="flex: 1;" class="name">' + opts.name + '</div>' +
+      '<div class="v ' + (opts.bad ? 'bad' : '') + '" style="font-family: var(--mono); font-size: 12px;">' + opts.fwos + '</div>';
     row.appendChild(lbl);
 
     // Day-cell strip — one continuous flex of 52 week columns
