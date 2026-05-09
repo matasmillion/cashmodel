@@ -434,7 +434,7 @@ export function renameVendor(oldName, newName) {
   // and rewrite. Unknown fields are left alone — better to miss a
   // reference than to corrupt unrelated data.
   let localRefsUpdated = 0;
-  const VENDOR_REF_KEYS = ['cashmodel_techpacks', 'cashmodel_component_packs', 'cashmodel_treatments', 'cashmodel_embellishments', 'cashmodel_fabrics', 'cashmodel_patterns', 'cashmodel_purchase_orders', 'cashmodel_production'];
+  const VENDOR_REF_KEYS = ['cashmodel_techpacks', 'cashmodel_component_packs', 'cashmodel_treatments', 'cashmodel_embellishments', 'cashmodel_fabrics', 'cashmodel_cut_sew', 'cashmodel_purchase_orders', 'cashmodel_production'];
   for (const lsKey of VENDOR_REF_KEYS) {
     let raw;
     try { raw = localStorage.getItem(lsKey); } catch { continue; }

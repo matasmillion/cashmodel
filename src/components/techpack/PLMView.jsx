@@ -17,14 +17,14 @@ import TechPackList from './TechPackList';
 import ComponentPackList from './ComponentPackList';
 import ColorPaletteManager from './ColorPaletteManager';
 import VendorManager from './VendorManager';
-import PatternList from './PatternList';
+import CutSewList from './CutSewList';
 import FabricList from './FabricList';
 import TreatmentList from './TreatmentList';
 import EmbellishmentList from './EmbellishmentList';
 import { parsePLMHash, setPLMHash, normalizeLegacyHash } from '../../utils/plmRouting';
 import { seedTreatmentsIfEmpty } from '../../utils/treatmentStore';
 import { seedProductionIfEmpty } from '../../utils/productionStore';
-import { seedPatternsIfEmpty } from '../../utils/patternStore';
+import { seedCutSewIfEmpty } from '../../utils/cutSewStore';
 import { seedFabricsIfEmpty } from '../../utils/fabricStore';
 import { seedEmbellishmentsIfEmpty } from '../../utils/embellishmentStore';
 import ProductionList from '../production/ProductionList';
@@ -39,7 +39,7 @@ const TOP_TABS = [
 ];
 
 const LIBRARY_TABS = [
-  { id: 'patterns', label: 'Patterns', icon: PenTool },
+  { id: 'cut-sew', label: 'Cut & Sew', icon: PenTool },
   { id: 'fabrics', label: 'Fabrics', icon: Layers },
   { id: 'colors', label: 'Colors', icon: Palette },
   { id: 'trims', label: 'Trims', icon: Boxes },
@@ -74,7 +74,7 @@ export default function PLMView() {
     // so the Treatment detail page lights up with rollup data on first
     // paint. Each call is idempotent — only runs when its store is empty.
     seedTreatmentsIfEmpty()
-      .then(() => seedPatternsIfEmpty())
+      .then(() => seedCutSewIfEmpty())
       .then(() => seedFabricsIfEmpty())
       .then(() => seedEmbellishmentsIfEmpty())
       .then(() => seedProductionIfEmpty())
@@ -102,8 +102,8 @@ export default function PLMView() {
   }, []);
 
   const switchLayer = (layer) => {
-    setRoute({ layer, atom: layer === 'library' ? (route.atom || 'patterns') : null });
-    setPLMHash({ layer, atom: layer === 'library' ? (route.atom || 'patterns') : null });
+    setRoute({ layer, atom: layer === 'library' ? (route.atom || 'cut-sew') : null });
+    setPLMHash({ layer, atom: layer === 'library' ? (route.atom || 'cut-sew') : null });
   };
 
   const switchAtom = (atom) => {
@@ -198,7 +198,7 @@ export default function PLMView() {
         </div>
       )}
 
-      {route.layer === 'library' && route.atom === 'patterns' && <PatternList />}
+      {route.layer === 'library' && route.atom === 'cut-sew' && <CutSewList />}
       {route.layer === 'library' && route.atom === 'fabrics' && <FabricList />}
       {route.layer === 'library' && route.atom === 'colors' && <ColorPaletteManager />}
       {route.layer === 'library' && route.atom === 'trims' && <ComponentPackList />}

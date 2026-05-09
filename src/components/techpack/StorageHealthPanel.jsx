@@ -233,7 +233,7 @@ const SCOPE_MAP = {
   'tech-packs':       { table: 'tech_packs',      imagesCol: 'images', coverCol: 'cover_image', lsKey: 'cashmodel_techpacks' },
   'component-packs':  { table: 'component_packs', imagesCol: 'images', coverCol: 'cover_image', lsKey: 'cashmodel_component_packs' },
   'fabrics':          { table: 'fabrics',         imagesCol: null,     coverCol: 'cover_image', lsKey: 'cashmodel_fabrics' },
-  'patterns':         { table: 'patterns',        imagesCol: null,     coverCol: 'cover_image', lsKey: 'cashmodel_patterns' },
+  'cut-sew':          { table: 'cut_sew',         imagesCol: null,     coverCol: 'cover_image', lsKey: 'cashmodel_cut_sew' },
   'treatments':       { table: 'treatments',      imagesCol: null,     coverCol: 'cover_image', lsKey: 'cashmodel_treatments' },
   'embellishments':   { table: 'embellishments',  imagesCol: null,     coverCol: 'cover_image', lsKey: 'cashmodel_embellishments' },
   'colors':           { table: 'colors',          imagesCol: null,     coverCol: 'card_image',  lsKey: 'cashmodel_fr_colors' },
