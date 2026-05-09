@@ -1464,9 +1464,60 @@
 
       <div class="picker-section">
         <h5>Or check finishes already on this fabric</h5>
-        <div class="checkbox-row"><input type="checkbox" checked><span>Brushing (interior)</span><span class="delta">+¥7.48 / m · +¥22.00 / kg</span></div>
-        <div class="checkbox-row"><input type="checkbox" checked><span>Antibacterial</span><span class="delta">+¥2.90 / m · +¥8.70 / kg</span></div>
-        <div class="checkbox-row"><input type="checkbox"><span>UV protection</span><span class="delta">+¥2.04 / m · +¥5.94 / kg</span></div>
+        <div class="checkbox-row">
+          <input type="checkbox" checked>
+          <div style="flex:1">
+            <div>Brushing (interior)</div>
+            <select class="select" style="font-size:9px;width:auto;padding:2px 6px;margin-top:3px;display:inline-block">
+              <option>Executed at: ZhuFeng Mill (default — MOQ met)</option>
+              <option>Foshan Finishing Co. (secondary, +3d)</option>
+              <option>With Stone Wash treatment (bundle)</option>
+            </select>
+          </div>
+          <span class="delta">+¥7.48 / m · +¥22.00 / kg</span>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" checked>
+          <div style="flex:1">
+            <div>Antibacterial</div>
+            <select class="select" style="font-size:9px;width:auto;padding:2px 6px;margin-top:3px;display:inline-block">
+              <option>Executed at: ZhuFeng Mill (default)</option>
+              <option>Foshan Finishing Co. (secondary)</option>
+              <option>With Stone Wash treatment</option>
+            </select>
+          </div>
+          <span class="delta">+¥2.90 / m · +¥8.70 / kg</span>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" checked>
+          <div style="flex:1">
+            <div>UV protection</div>
+            <select class="select" style="font-size:9px;width:auto;padding:2px 6px;margin-top:3px;display:inline-block">
+              <option selected>Executed at: Foshan Finishing Co. (mill MOQ not met)</option>
+              <option>At ZhuFeng Mill (default)</option>
+              <option>With Stone Wash treatment</option>
+            </select>
+          </div>
+          <span class="delta">+¥2.04 / m · +¥5.94 / kg</span>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox">
+          <div style="flex:1">
+            <div>Anti-pilling</div>
+            <select class="select" style="font-size:9px;width:auto;padding:2px 6px;margin-top:3px;display:inline-block">
+              <option selected>Bundled with Stone Wash treatment (TR-WSH-001)</option>
+              <option>At ZhuFeng Mill</option>
+              <option>Foshan Finishing Co.</option>
+            </select>
+          </div>
+          <span class="delta">+¥1.30 / m · +¥3.78 / kg</span>
+        </div>
+        <div style="font-size:10px;color:var(--stone);margin-top:8px;font-style:italic;line-height:1.5">
+          <strong style="color:var(--good)">Green</strong> = at the mill (default · MOQ met).
+          <strong style="color:var(--warn)">Amber</strong> = secondary finishing facility (extra logistics + lead).
+          <strong style="color:#3a5a8c">Blue</strong> = bundled with a wash-house treatment in this tech pack — vendor inferred from the BOM-T pick.
+          The library default surfaces here; overriding only changes this tech pack.
+        </div>
       </div>
 
       <div class="picker-section">
@@ -1492,61 +1543,190 @@
       </div>
     </div>
 
-    <!-- Result preview -->
+    <!-- Result preview — single fabric -->
     <div class="picker-step" style="background:#fff">
-      <span class="step-tag">RESULT · BOM-F PAGE LIVE PREVIEW</span>
-      <h3>What lands on tech pack page 3 once you commit</h3>
-      <div class="sub">Same SVG component as the Fabric card live preview, with chosenColor + chosenMillFinishes overlay props.</div>
+      <span class="step-tag">RESULT · TECH PACK PAGE 03 · FABRIC 1 OF 1</span>
+      <h3>What lands when you commit one fabric</h3>
+      <div class="sub">Same SVG component as the library Fabric card preview — overlay props: chosenColor=Salt, chosenFinishes=[Brushing@Mill, Antibacterial@Mill, UV@Foshan, Anti-pilling@Treatment], chosenArea=Body.</div>
       <div style="margin-top:14px;border:0.5px solid var(--border);border-radius:6px;overflow:hidden">
-        <svg viewBox="0 0 1123 460" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;font-family:Helvetica,Arial,sans-serif">
-          <rect x="0" y="0" width="1123" height="460" fill="#fff"/>
-          <rect x="0" y="0" width="1123" height="56" fill="#3A3A3A"/>
-          <text x="40" y="22" font-size="8" font-weight="bold" fill="#F5F0E8" letter-spacing="3">FOREIGN RESOURCE CO.</text>
-          <text x="40" y="42" font-size="7" fill="#EBE5D5" letter-spacing="2">MATERIALS — AP-HD-STONE-01</text>
-          <text x="561" y="36" text-anchor="middle" font-family="'Cormorant Garamond',Georgia,serif" font-size="17" fill="#F5F0E8">Fabric BOM Card</text>
-          <text x="1083" y="22" text-anchor="end" font-size="9" font-weight="bold" fill="#F5F0E8" letter-spacing="2" font-family="ui-monospace,Menlo,monospace">FB-FRT-007</text>
-          <text x="1083" y="42" text-anchor="end" font-size="7" fill="#EBE5D5" letter-spacing="2">PAGE BOM-F / 20</text>
-          <rect x="0" y="56" width="1123" height="2" fill="#854F0B"/>
+        <svg viewBox="0 0 1123 794" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;font-family:Helvetica,Arial,sans-serif">
+          <rect x="0" y="0" width="1123" height="794" fill="#F5F0E8"/>
+          <rect x="0" y="0" width="1123" height="70" fill="#3A3A3A"/>
+          <text x="40" y="28" font-size="9" font-weight="bold" fill="#F5F0E8" letter-spacing="3">FOREIGN RESOURCE CO.</text>
+          <text x="40" y="50" font-size="8" fill="#EBE5D5" letter-spacing="2">BILL OF MATERIALS — AP-HD-STONE-01</text>
+          <text x="561" y="44" text-anchor="middle" font-family="'Cormorant Garamond',Georgia,serif" font-size="20" fill="#F5F0E8">Fabrics</text>
+          <text x="1083" y="28" text-anchor="end" font-size="10" font-weight="bold" fill="#F5F0E8" letter-spacing="2" font-family="ui-monospace,Menlo,monospace">FW26-BB-HO-0002</text>
+          <text x="1083" y="50" text-anchor="end" font-size="8" fill="#EBE5D5" letter-spacing="2">PAGE 03 / 24</text>
+          <rect x="0" y="70" width="1123" height="2" fill="#854F0B"/>
+          <text x="561" y="92" text-anchor="middle" font-size="9" fill="#9A9A9A" letter-spacing="1.5">ONE FABRIC PICKED · NO PAGINATION</text>
 
-          <text x="561" y="86" text-anchor="middle" font-family="'Cormorant Garamond',Georgia,serif" font-size="14" fill="#3A3A3A">ZhuFeng French Terry 340 · Salt · Brushing + Antibacterial</text>
+          <rect x="40" y="106" width="1043" height="640" fill="#fff" stroke="rgba(58,58,58,0.15)" stroke-width="0.5"/>
 
-          <!-- Mill finishes chip row -->
-          <rect x="40" y="100" width="170" height="22" rx="3" fill="#EBE5D5"/>
-          <text x="50" y="115" font-size="10" fill="#3A3A3A">Brushing (interior)</text>
-          <text x="200" y="115" text-anchor="end" font-family="ui-monospace,Menlo,monospace" font-size="9" fill="#854F0B">+¥7.48</text>
-          <rect x="218" y="100" width="150" height="22" rx="3" fill="#EBE5D5"/>
-          <text x="228" y="115" font-size="10" fill="#3A3A3A">Antibacterial</text>
-          <text x="358" y="115" text-anchor="end" font-family="ui-monospace,Menlo,monospace" font-size="9" fill="#854F0B">+¥2.90</text>
-          <text x="1083" y="115" text-anchor="end" font-size="9" fill="#9A9A9A">All-in: ¥47.88/m</text>
+          <rect x="60" y="126" width="300" height="300" fill="url(#rfp1)"/>
+          <rect x="60" y="408" width="60" height="18" fill="#3A3A3A"/>
+          <text x="90" y="421" text-anchor="middle" font-size="9" font-weight="bold" fill="#F5F0E8" letter-spacing="2">FRONT</text>
 
-          <!-- selected color callout -->
-          <rect x="40" y="140" width="280" height="280" fill="#F5F0E8" stroke="#854F0B" stroke-width="3"/>
-          <text x="180" y="280" text-anchor="middle" font-family="'Cormorant Garamond',Georgia,serif" font-size="22" fill="#3A3A3A">SALT</text>
-          <text x="180" y="300" text-anchor="middle" font-size="9" fill="#9A9A9A" font-family="ui-monospace,Menlo,monospace">#F5F0E8</text>
+          <text x="380" y="142" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">AREA OF PRODUCT</text>
+          <rect x="380" y="148" width="80" height="22" fill="#3A3A3A"/>
+          <text x="420" y="163" text-anchor="middle" font-size="11" font-weight="bold" fill="#F5F0E8">BODY</text>
+          <text x="380" y="200" font-family="ui-monospace,Menlo,monospace" font-size="22" fill="#3A3A3A">FB-FRT-007</text>
+          <rect x="380" y="216" width="14" height="14" fill="#F5F0E8" stroke="#854F0B" stroke-width="2"/>
+          <text x="402" y="227" font-size="10" fill="#3A3A3A" font-family="ui-monospace,Menlo,monospace">SALT (chosen) · JF-034</text>
+          <text x="380" y="258" font-size="11" fill="#3A3A3A">100% Cotton (combed)</text>
+          <text x="380" y="276" font-size="11" fill="#3A3A3A">340 GSM · french terry · 180 cm</text>
+          <text x="380" y="294" font-size="11" fill="#3A3A3A">Hand: soft, slightly brushed loop</text>
+          <line x1="380" y1="312" x2="760" y2="312" stroke="#EBE5D5" stroke-width="0.5"/>
+          <text x="380" y="332" font-size="11" fill="#3A3A3A" font-weight="bold">ZhuFeng Cloth Industry Ltd.</text>
+          <text x="380" y="350" font-size="10" fill="#9A9A9A" font-family="ui-monospace,Menlo,monospace">zhanxiaoyin@zhufengtextile.com.cn</text>
+          <text x="380" y="368" font-size="10" fill="#9A9A9A" font-family="ui-monospace,Menlo,monospace">+86 18922138369</text>
+          <text x="380" y="392" font-size="10" fill="#9A9A9A">Lead 35 days · MOQ 732 m</text>
 
-          <!-- spec block -->
-          <text x="360" y="160" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">SPEC</text>
-          <rect x="360" y="170" width="723" height="80" fill="#F5F0E8" stroke="#EBE5D5"/>
-          <g font-size="10" fill="#3A3A3A">
-            <text x="376" y="190" font-weight="bold">Composition</text><text x="376" y="208">100% Cotton (combed)</text>
-            <text x="540" y="190" font-weight="bold">Weight / Width</text><text x="540" y="208">340 gsm · 180 cm</text>
-            <text x="720" y="190" font-weight="bold">Hand</text><text x="720" y="208">Soft, brushed loop</text>
-            <text x="900" y="190" font-weight="bold">Vendor</text><text x="900" y="208">ZhuFeng Knits</text>
+          <text x="800" y="142" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">GARMENT PLACEMENT</text>
+          <rect x="800" y="150" width="160" height="240" fill="#F5F0E8" stroke="#EBE5D5"/>
+          <g stroke="#3A3A3A" stroke-width="1" fill="#fff">
+            <path d="M 845 175 L 855 165 L 905 165 L 915 175 L 920 185 L 915 195 L 905 192 L 905 360 L 855 360 L 855 192 L 845 195 L 840 185 Z"/>
+            <path d="M 868 165 Q 880 175 892 165" fill="none"/>
+          </g>
+          <rect x="855" y="200" width="50" height="160" fill="#854F0B" opacity="0.30"/>
+          <text x="880" y="380" text-anchor="middle" font-size="10" fill="#3A3A3A" font-weight="bold">BODY PANELS</text>
+
+          <!-- Color card with selected SALT highlighted -->
+          <text x="60" y="466" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">COLOR CARD · 12 COLORWAYS</text>
+          <text x="1063" y="466" text-anchor="end" font-size="9" fill="#854F0B" font-weight="bold">PICKED: SALT</text>
+          <g stroke="#EBE5D5" stroke-width="0.5">
+            <rect x="60"  y="472" width="76" height="62" fill="#3A3A3A" opacity="0.35"/>
+            <rect x="144" y="472" width="76" height="62" fill="#F5F0E8" stroke="#854F0B" stroke-width="3"/>
+            <rect x="228" y="472" width="76" height="62" fill="#C7B299" opacity="0.35"/>
+            <rect x="312" y="472" width="76" height="62" fill="#854F0B" opacity="0.35"/>
+            <rect x="396" y="472" width="76" height="62" fill="#9F4B2C" opacity="0.35"/>
+            <rect x="480" y="472" width="76" height="62" fill="#3F4938" opacity="0.35"/>
+            <rect x="564" y="472" width="76" height="62" fill="#2B3A55" opacity="0.35"/>
+            <rect x="648" y="472" width="76" height="62" fill="#A5A19A" opacity="0.35"/>
+            <rect x="732" y="472" width="76" height="62" fill="#E8E4D9" opacity="0.35"/>
+            <rect x="816" y="472" width="76" height="62" fill="#5C5751" opacity="0.35"/>
+            <rect x="900" y="472" width="76" height="62" fill="#7A7060" opacity="0.35"/>
+            <rect x="984" y="472" width="76" height="62" fill="#222" opacity="0.35"/>
           </g>
 
-          <text x="360" y="278" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">SOURCING</text>
-          <rect x="360" y="288" width="723" height="80" fill="#F5F0E8" stroke="#EBE5D5"/>
+          <!-- Mill finishes table -->
+          <text x="60" y="578" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">MILL FINISHES &amp; EXECUTION</text>
+          <rect x="60" y="584" width="850" height="118" fill="#F5F0E8" stroke="#EBE5D5"/>
+          <text x="76" y="600" font-size="8" fill="#9A9A9A" letter-spacing="0.5" font-weight="bold">FINISH</text>
+          <text x="380" y="600" font-size="8" fill="#9A9A9A" letter-spacing="0.5" font-weight="bold">+ COST / m</text>
+          <text x="500" y="600" font-size="8" fill="#9A9A9A" letter-spacing="0.5" font-weight="bold">+ COST / kg</text>
+          <text x="620" y="600" font-size="8" fill="#9A9A9A" letter-spacing="0.5" font-weight="bold">EXECUTED BY</text>
+          <line x1="60" y1="606" x2="910" y2="606" stroke="#EBE5D5" stroke-width="0.5"/>
           <g font-size="10" fill="#3A3A3A">
-            <text x="376" y="308" font-weight="bold">Lead time</text><text x="376" y="326" font-family="ui-monospace,Menlo,monospace">35 days</text>
-            <text x="500" y="308" font-weight="bold">MOQ</text><text x="500" y="326" font-family="ui-monospace,Menlo,monospace">732 m</text>
-            <text x="624" y="308" font-weight="bold">Base / m</text><text x="624" y="326" font-family="ui-monospace,Menlo,monospace">¥37.50</text>
-            <text x="772" y="308" font-weight="bold">Finishes / m</text><text x="772" y="326" font-family="ui-monospace,Menlo,monospace">+¥10.38</text>
-            <text x="920" y="308" font-weight="bold">All-in / m</text><text x="920" y="326" font-family="ui-monospace,Menlo,monospace" fill="#854F0B">¥47.88</text>
+            <text x="76" y="624">Brushing (interior)</text>
+            <text x="380" y="624" font-family="ui-monospace,Menlo,monospace">+¥7.48 · $1.03</text>
+            <text x="500" y="624" font-family="ui-monospace,Menlo,monospace">+¥22.00 · $3.02</text>
+            <rect x="620" y="612" width="120" height="16" fill="rgba(99,153,34,0.18)" rx="2"/>
+            <text x="680" y="624" text-anchor="middle" font-size="9" fill="#3B6D11">At ZhuFeng Mill</text>
+            <text x="76" y="644">Antibacterial</text>
+            <text x="380" y="644" font-family="ui-monospace,Menlo,monospace">+¥2.90 · $0.40</text>
+            <text x="500" y="644" font-family="ui-monospace,Menlo,monospace">+¥8.70 · $1.20</text>
+            <rect x="620" y="632" width="120" height="16" fill="rgba(99,153,34,0.18)" rx="2"/>
+            <text x="680" y="644" text-anchor="middle" font-size="9" fill="#3B6D11">At ZhuFeng Mill</text>
+            <text x="76" y="664">UV protection</text>
+            <text x="380" y="664" font-family="ui-monospace,Menlo,monospace">+¥2.04 · $0.28</text>
+            <text x="500" y="664" font-family="ui-monospace,Menlo,monospace">+¥5.94 · $0.82</text>
+            <rect x="620" y="652" width="200" height="16" fill="rgba(133,79,11,0.18)" rx="2"/>
+            <text x="720" y="664" text-anchor="middle" font-size="9" fill="#854F0B">Foshan Finishing (secondary, +3d)</text>
+            <text x="76" y="684">Anti-pilling</text>
+            <text x="380" y="684" font-family="ui-monospace,Menlo,monospace">+¥1.30 · $0.18</text>
+            <text x="500" y="684" font-family="ui-monospace,Menlo,monospace">+¥3.78 · $0.52</text>
+            <rect x="620" y="672" width="220" height="16" fill="rgba(58,90,140,0.18)" rx="2"/>
+            <text x="730" y="684" text-anchor="middle" font-size="9" fill="#3a5a8c">Bundled with Stone Wash treatment</text>
           </g>
 
-          <text x="40" y="445" font-size="8" fill="#9A9A9A">© 2026 Foreign Resource Co.</text>
-          <text x="1083" y="445" text-anchor="end" font-size="8" fill="#9A9A9A">PAGE BOM-F / 20 · auto-populated from FB-FRT-007 v1.2</text>
+          <text x="930" y="578" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">RIBBING</text>
+          <rect x="930" y="584" width="133" height="84" fill="url(#rrib1)" stroke="#EBE5D5"/>
+          <text x="996" y="688" text-anchor="middle" font-size="11" fill="#3A3A3A" font-family="ui-monospace,Menlo,monospace" font-weight="bold">ZF-RIB-340-A</text>
+          <text x="996" y="700" text-anchor="middle" font-size="9" fill="#9A9A9A">2×2 rib · matched</text>
+
+          <line x1="60" y1="712" x2="1063" y2="712" stroke="#EBE5D5" stroke-width="0.5"/>
+          <text x="76" y="728" font-size="8" fill="#9A9A9A" letter-spacing="0.4">BASE</text>
+          <text x="76" y="740" font-size="11" fill="#3A3A3A" font-family="ui-monospace,Menlo,monospace">¥37.50 / m</text>
+          <text x="220" y="728" font-size="8" fill="#9A9A9A" letter-spacing="0.4">+ FINISHES</text>
+          <text x="220" y="740" font-size="11" fill="#3A3A3A" font-family="ui-monospace,Menlo,monospace">+¥13.72 / m</text>
+          <text x="400" y="728" font-size="8" fill="#9A9A9A" letter-spacing="0.4">ALL-IN / m</text>
+          <text x="400" y="740" font-size="12" fill="#854F0B" font-family="ui-monospace,Menlo,monospace" font-weight="bold">¥51.22 · $7.07</text>
+          <text x="640" y="728" font-size="8" fill="#9A9A9A" letter-spacing="0.4">YIELD</text>
+          <text x="640" y="740" font-size="11" fill="#3A3A3A" font-family="ui-monospace,Menlo,monospace">1.9 m / unit</text>
+          <text x="800" y="728" font-size="8" fill="#9A9A9A" letter-spacing="0.4">COST / UNIT (est.)</text>
+          <text x="800" y="740" font-size="13" fill="#854F0B" font-family="ui-monospace,Menlo,monospace" font-weight="bold">$13.43</text>
+
+          <text x="40" y="775" font-size="9" fill="#9A9A9A">© 2026 Foreign Resource Co. — Confidential Tech Pack</text>
+          <text x="1083" y="775" text-anchor="end" font-size="9" fill="#9A9A9A">PAGE 03 / 24</text>
+
+          <defs>
+            <linearGradient id="rfp1" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0" stop-color="#dcd4c2"/><stop offset="1" stop-color="#bda988"/>
+            </linearGradient>
+            <pattern id="rrib1" patternUnits="userSpaceOnUse" width="6" height="84">
+              <rect width="3" height="84" fill="#7a6a55"/>
+              <rect x="3" width="3" height="84" fill="#5e4f3f"/>
+            </pattern>
+          </defs>
         </svg>
+      </div>
+    </div>
+
+    <!-- Multi-fabric pagination demo -->
+    <div class="picker-step" style="background:#fff">
+      <span class="step-tag">MULTI-FABRIC · PAGINATION VIA DROPDOWN</span>
+      <h3>What happens when you pick 2+ fabrics</h3>
+      <div class="sub">Page 03 keeps the same chrome, but the top of the body adds <code>Fabric N of M ▼</code> nav. Each fabric gets its own A4 page. The dropdown lets vendors jump between them; the PDF export emits one page per fabric back-to-back.</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+        <!-- Page 1 mini -->
+        <div style="border:0.5px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
+          <div style="position:absolute;top:8px;right:10px;background:rgba(255,255,255,0.92);border:1px solid var(--soil);border-radius:4px;padding:3px 8px;font-size:9px;color:var(--soil);font-weight:600;z-index:2">Fabric 1 of 2 ▼ · Body</div>
+          <svg viewBox="0 0 1123 794" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;font-family:Helvetica,Arial,sans-serif">
+            <rect x="0" y="0" width="1123" height="794" fill="#F5F0E8"/>
+            <rect x="0" y="0" width="1123" height="70" fill="#3A3A3A"/>
+            <text x="40" y="28" font-size="9" font-weight="bold" fill="#F5F0E8" letter-spacing="3">FOREIGN RESOURCE CO.</text>
+            <text x="40" y="50" font-size="8" fill="#EBE5D5" letter-spacing="2">BILL OF MATERIALS</text>
+            <text x="561" y="44" text-anchor="middle" font-family="'Cormorant Garamond',Georgia,serif" font-size="20" fill="#F5F0E8">Fabrics</text>
+            <text x="1083" y="50" text-anchor="end" font-size="8" fill="#EBE5D5" letter-spacing="2">PAGE 03 / 25</text>
+            <rect x="0" y="70" width="1123" height="2" fill="#854F0B"/>
+            <rect x="40" y="106" width="1043" height="640" fill="#fff" stroke="rgba(58,58,58,0.15)"/>
+            <rect x="60" y="126" width="300" height="300" fill="#bda988"/>
+            <rect x="380" y="148" width="80" height="22" fill="#3A3A3A"/>
+            <text x="420" y="163" text-anchor="middle" font-size="11" font-weight="bold" fill="#F5F0E8">BODY</text>
+            <text x="380" y="200" font-family="ui-monospace,Menlo,monospace" font-size="22" fill="#3A3A3A">FB-FRT-007</text>
+            <text x="380" y="240" font-size="14" fill="#3A3A3A">ZhuFeng FT 340 · Salt</text>
+            <text x="380" y="280" font-size="11" fill="#9A9A9A">+ Brushing, Antibacterial @ Mill</text>
+            <text x="380" y="298" font-size="11" fill="#9A9A9A">+ UV @ Foshan Finishing</text>
+            <text x="380" y="316" font-size="11" fill="#9A9A9A">+ Anti-pilling @ Stone Wash</text>
+            <text x="380" y="700" font-size="13" fill="#854F0B" font-family="ui-monospace,Menlo,monospace" font-weight="bold">$13.43 / unit</text>
+          </svg>
+        </div>
+        <!-- Page 2 mini -->
+        <div style="border:0.5px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
+          <div style="position:absolute;top:8px;right:10px;background:rgba(255,255,255,0.92);border:1px solid var(--soil);border-radius:4px;padding:3px 8px;font-size:9px;color:var(--soil);font-weight:600;z-index:2">Fabric 2 of 2 ▼ · Rib</div>
+          <svg viewBox="0 0 1123 794" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;font-family:Helvetica,Arial,sans-serif">
+            <rect x="0" y="0" width="1123" height="794" fill="#F5F0E8"/>
+            <rect x="0" y="0" width="1123" height="70" fill="#3A3A3A"/>
+            <text x="40" y="28" font-size="9" font-weight="bold" fill="#F5F0E8" letter-spacing="3">FOREIGN RESOURCE CO.</text>
+            <text x="40" y="50" font-size="8" fill="#EBE5D5" letter-spacing="2">BILL OF MATERIALS</text>
+            <text x="561" y="44" text-anchor="middle" font-family="'Cormorant Garamond',Georgia,serif" font-size="20" fill="#F5F0E8">Fabrics</text>
+            <text x="1083" y="50" text-anchor="end" font-size="8" fill="#EBE5D5" letter-spacing="2">PAGE 04 / 25</text>
+            <rect x="0" y="70" width="1123" height="2" fill="#854F0B"/>
+            <rect x="40" y="106" width="1043" height="640" fill="#fff" stroke="rgba(58,58,58,0.15)"/>
+            <rect x="60" y="126" width="300" height="300" fill="url(#mfrib)"/>
+            <rect x="380" y="148" width="80" height="22" fill="#3A3A3A"/>
+            <text x="420" y="163" text-anchor="middle" font-size="11" font-weight="bold" fill="#F5F0E8">RIB</text>
+            <text x="380" y="200" font-family="ui-monospace,Menlo,monospace" font-size="22" fill="#3A3A3A">FB-RIB-005</text>
+            <text x="380" y="240" font-size="14" fill="#3A3A3A">2×2 Rib 280 · Slate</text>
+            <text x="380" y="280" font-size="11" fill="#9A9A9A">No mill finishes</text>
+            <text x="380" y="700" font-size="13" fill="#854F0B" font-family="ui-monospace,Menlo,monospace" font-weight="bold">$2.18 / unit</text>
+            <defs><pattern id="mfrib" patternUnits="userSpaceOnUse" width="8" height="300"><rect width="4" height="300" fill="#5C5751"/><rect x="4" width="4" height="300" fill="#3A3A3A"/></pattern></defs>
+          </svg>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--stone);margin-top:10px;line-height:1.5">
+        Total tech pack length grows by 1 per extra fabric (single fabric = 24 pages, two fabrics = 25, etc.). The dropdown is interactive in the live preview and inert in the PDF export — vendors flip pages instead. <strong>Note:</strong> for body+rib hoodies you'd usually pick a knit fabric whose <em>library card already has the matched ribbing</em> (ZF-RIB-340-A above) — and that ribbing only triggers a separate page if you've intentionally added it as a 2nd BOM line.
       </div>
     </div>
 
