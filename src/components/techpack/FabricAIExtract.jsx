@@ -162,7 +162,10 @@ export default function FabricAIExtract({ onClose, onApply }) {
         url: '', label: c.label || '', hex: c.hex || '',
       }));
     }
-    onApply(patch);
+    // Pass the original mill-card source files up to the builder so they get
+    // archived to the fabric's documents list — the user always wants the
+    // raw card preserved for reference, not just the parsed fields.
+    onApply({ ...patch, _aiSourceFiles: files });
   };
 
   return (

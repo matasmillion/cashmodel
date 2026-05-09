@@ -122,6 +122,13 @@ export function emptyFabric(overrides = {}) {
     // Knit-only: the matched ribbing fabric carried alongside the main mill fabric.
     ribbing_fabric_no: '',
     ribbing_image_url: '',
+    // Raw photos of the physical color card and full fabric card — kept for
+    // archival reference, distinct from the per-swatch images in color_card_images.
+    original_images: [],
+    // Misc files attached to this fabric: AI-parser source mill cards (auto-saved
+    // when the user runs AI auto-fill), certifications, vendor chats, PDFs, etc.
+    // Each entry: { path, name, kind?, uploaded_at }
+    documents: [],
     ...overrides,
   };
 }
