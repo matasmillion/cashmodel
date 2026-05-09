@@ -158,6 +158,61 @@ function ResyncResultBlock({ results }) {
   );
 }
 
+// Detect a stale-PostgREST-cache failure across recent errors. Catches
+// both the PGRST204 code and the "Could not find the 'X' column ... in
+// the schema cache" textual variant.
+function detectSchemaCacheMiss(lastErrorByTable) {
+  const offenders = [];
+  for (const [table, evt] of Object.entries(lastErrorByTable || {})) {
+    const msg = String(evt?.error || '');
+    const code = String(evt?.code || '');
+    if (code === 'PGRST204' || /schema cache|Could not find the '[^']+' column/i.test(msg)) {
+      const m = /'([^']+)' column/i.exec(msg);
+      offenders.push({ table, column: m ? m[1] : null });
+    }
+  }
+  return offenders;
+}
+
+// When PostgREST's schema cache lags behind the actual DB schema (e.g.
+// after a fresh migration), every upsert that includes the not-yet-cached
+// column silently fails with PGRST204. Fix is one SQL statement —
+// surface it in the panel so the user can copy-paste without leaving
+// context. (We also have client-side fallback that drops the unknown
+// column and retries; this banner is for the durable fix.)
+function SchemaCacheBanner({ offenders }) {
+  if (!offenders || offenders.length === 0) return null;
+  const sql = "NOTIFY pgrst, 'reload schema';";
+  const cols = offenders.filter(o => o.column).map(o => `${o.table}.${o.column}`).join(', ');
+  return (
+    <div style={{
+      marginTop: 10,
+      padding: '12px 14px',
+      background: 'rgba(133,79,11,0.08)',
+      border: '0.5px solid rgba(133,79,11,0.30)',
+      borderRadius: 6,
+      color: '#854F0B',
+      fontSize: 12, lineHeight: 1.55,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <AlertTriangle size={14} />
+        <strong style={{ color: '#854F0B' }}>PostgREST schema cache is stale</strong>
+      </div>
+      <div style={{ marginBottom: 8 }}>
+        Postgres has the column{cols ? ` (${cols})` : 's'}, but Supabase&rsquo;s API cached the older schema and rejects every write that references the new column. Refresh the cache by pasting this into your Supabase SQL Editor and pressing Run:
+      </div>
+      <pre style={{
+        margin: '6px 0 8px', padding: '8px 10px',
+        background: '#fff', border: `0.5px solid ${FR.sand}`, borderRadius: 4,
+        fontFamily: MONO, fontSize: 12, color: FR.slate, whiteSpace: 'pre-wrap',
+      }}>{sql}</pre>
+      <div style={{ fontSize: 11, color: FR.stone }}>
+        Refresh is instant. After it lands, click <strong>Re-run</strong> above; counts should converge. Until then, the client drops the unknown column and saves the rest of the row so data isn&rsquo;t lost.
+      </div>
+    </div>
+  );
+}
+
 function LastErrorsBlock({ lastErrorByTable }) {
   const entries = Object.entries(lastErrorByTable || {});
   if (entries.length === 0) return null;
@@ -317,6 +372,8 @@ export default function SyncDiagnosticsPanel({ open, atomLabel = 'Atoms' }) {
           </div>
 
           <IssueList issues={report.issues} />
+
+          <SchemaCacheBanner offenders={detectSchemaCacheMiss(report.lastErrorByTable)} />
 
           {(drifted.length > 0 || errored.length > 0) && (
             <div style={{ marginTop: 10 }}>
