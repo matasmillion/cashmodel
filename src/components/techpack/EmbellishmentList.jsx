@@ -22,7 +22,6 @@ import {
 import { EMBELLISHMENT_TYPES, EMBELLISHMENT_TYPE_LABEL } from '../../utils/embellishmentLibrary';
 import EmbellishmentBuilder from './EmbellishmentBuilder';
 import CoverThumb from './CoverThumb';
-import SyncDiagnosticsPanel, { SyncDiagnosticsToggle } from './SyncDiagnosticsPanel';
 
 const VIEW_STORAGE_KEY = 'cashmodel_embellishments_view';
 
@@ -258,7 +257,6 @@ export default function EmbellishmentList() {
     catch { return 'grid'; }
   });
   const [dragOverStatus, setDragOverStatus] = useState(null);
-  const [syncDiagOpen, setSyncDiagOpen] = useState(false);
   const pickerRef = useRef(null);
 
   const switchView = (next) => {
@@ -429,7 +427,6 @@ export default function EmbellishmentList() {
               Archived
             </label>
           )}
-          <SyncDiagnosticsToggle open={syncDiagOpen} onToggle={() => setSyncDiagOpen(o => !o)} />
           <button
             disabled={creating}
             onClick={() => setPicker(p => !p)}
@@ -452,8 +449,6 @@ export default function EmbellishmentList() {
           )}
         </div>
       </div>
-
-      <SyncDiagnosticsPanel open={syncDiagOpen} atomLabel="Embellishments" />
 
       {filtered.length === 0 ? (
         <div style={{ padding: '60px 24px', textAlign: 'center', background: FR.salt, border: `1px dashed ${FR.sand}`, borderRadius: 8 }}>

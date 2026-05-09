@@ -16,7 +16,6 @@ import { listComponentPacks, createComponentPack, getComponentPack, deleteCompon
 import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
 import { listAllSuppliers, listAllPeople, listAllTrimTypes } from '../../utils/plmDirectory';
 import { resolveCoverImage } from '../../utils/plmAssets';
-import SyncDiagnosticsPanel, { SyncDiagnosticsToggle } from './SyncDiagnosticsPanel';
 
 const VIEW_STORAGE_KEY = 'cashmodel_trims_view';
 
@@ -208,7 +207,6 @@ export default function ComponentPackList() {
   const [dragOverStatus, setDragOverStatus] = useState(null);
   const [duplicatingId, setDuplicatingId] = useState(null);
   const [showTrash, setShowTrash] = useState(false);
-  const [syncDiagOpen, setSyncDiagOpen] = useState(false);
 
   // Default view = grid. Persist the user's choice so the tab remembers it.
   const [view, setView] = useState(() => {
@@ -407,15 +405,12 @@ export default function ComponentPackList() {
             style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', borderRadius: 6, fontSize: 11, background: 'transparent', color: FR.stone, border: `0.5px solid ${FR.sand}`, cursor: 'pointer' }}>
             <Trash2 size={12} /> Trash
           </button>
-          <SyncDiagnosticsToggle open={syncDiagOpen} onToggle={() => setSyncDiagOpen(o => !o)} />
           <button onClick={createNew}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, fontSize: 11, background: FR.slate, color: FR.salt, border: 'none', cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
             <Plus size={14} /> New Trim
           </button>
         </div>
       </div>
-
-      <SyncDiagnosticsPanel open={syncDiagOpen} atomLabel="Trims" />
 
       {packs.length > 0 && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>

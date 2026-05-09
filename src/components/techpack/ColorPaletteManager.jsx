@@ -13,7 +13,6 @@ import { fileToDataUrl } from '../../utils/cropImage';
 import { uploadAsset, deleteAsset, isLegacyDataUrl, dataUrlToBlob } from '../../utils/plmAssets';
 import CoverThumb from './CoverThumb';
 import FileSlot from './FileSlot';
-import SyncDiagnosticsPanel, { SyncDiagnosticsToggle } from './SyncDiagnosticsPanel';
 
 // Pick a readable text color for overlay on a hex swatch.
 function contrastColor(hex) {
@@ -32,7 +31,6 @@ export default function ColorPaletteManager() {
   const [colors, setColors] = useState([]);
   const [activeName, setActiveName] = useState(null);
   const [adding, setAdding] = useState(false);
-  const [syncDiagOpen, setSyncDiagOpen] = useState(false);
 
   const refresh = () => setColors(listFRColors());
   // Hydrate from cloud on mount so colors created on another device land
@@ -74,16 +72,11 @@ export default function ColorPaletteManager() {
             One source of truth. Edits here propagate to every tech pack and trim pack.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <SyncDiagnosticsToggle open={syncDiagOpen} onToggle={() => setSyncDiagOpen(o => !o)} />
-          <button onClick={() => setAdding(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            <Plus size={12} /> Add color
-          </button>
-        </div>
+        <button onClick={() => setAdding(true)}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          <Plus size={12} /> Add color
+        </button>
       </div>
-
-      <SyncDiagnosticsPanel open={syncDiagOpen} atomLabel="Colors" />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 14 }}>
         {colors.map(c => (

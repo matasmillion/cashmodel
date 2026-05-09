@@ -30,6 +30,7 @@ import { seedEmbellishmentsIfEmpty } from '../../utils/embellishmentStore';
 import ProductionList from '../production/ProductionList';
 import ProductionDetail from '../production/ProductionDetail';
 import StorageHealthPanel from './StorageHealthPanel';
+import SyncDiagnosticsPanel, { SyncDiagnosticsToggle } from './SyncDiagnosticsPanel';
 
 const TOP_TABS = [
   { id: 'library', label: 'Library', icon: Library },
@@ -50,6 +51,7 @@ const LIBRARY_TABS = [
 export default function PLMView() {
   const [backingUp, setBackingUp] = useState(false);
   const [backupResult, setBackupResult] = useState(null);
+  const [syncDiagOpen, setSyncDiagOpen] = useState(false);
   const handleBackup = async () => {
     setBackingUp(true);
     setBackupResult(null);
@@ -171,6 +173,7 @@ export default function PLMView() {
             style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 11px', borderRadius: 5, fontSize: 11, background: 'transparent', color: FR.stone, border: `0.5px solid ${FR.sand}`, cursor: backingUp ? 'wait' : 'pointer', letterSpacing: 0.3 }}>
             <Download size={12} /> {backingUp ? 'Backing up…' : 'Backup'}
           </button>
+          <SyncDiagnosticsToggle open={syncDiagOpen} onToggle={() => setSyncDiagOpen(o => !o)} />
           <button onClick={() => switchLayer('storage-health')}
             title="Inspect Storage usage, find ghost references and orphan files, repair inconsistencies."
             style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 11px', borderRadius: 5, fontSize: 11, background: route.layer === 'storage-health' ? FR.slate : 'transparent', color: route.layer === 'storage-health' ? FR.salt : FR.stone, border: `0.5px solid ${route.layer === 'storage-health' ? FR.slate : FR.sand}`, cursor: 'pointer', letterSpacing: 0.3 }}>
@@ -178,6 +181,8 @@ export default function PLMView() {
           </button>
         </div>
       </div>
+
+      <SyncDiagnosticsPanel open={syncDiagOpen} atomLabel="PLM" />
 
       {route.layer === 'library' && (
         <div style={{ display: 'flex', gap: 2, marginBottom: 18, alignItems: 'center', flexWrap: 'wrap', borderBottom: `1px solid ${FR.sand}`, paddingBottom: 4 }}>
