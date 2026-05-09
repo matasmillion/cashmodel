@@ -11,8 +11,9 @@
     2) The Bridge — the chart that makes the founder's insight visible:
        trailing demand vs. ad-adjusted projected demand vs. inventory
        runway, week by week.
-    3) Decisions — two short lists (chase + markdown) that turn red
-       numbers into actions.
+    3) Decisions — two short lists (chase + pause-reorder) that turn red
+       numbers into actions. We never discount; the overstock lever is
+       to stop placing more POs, not to cut price.
     4) Class roll-up — one row per merchandise class, drill to style/SKU.
 
   This file is the canonical visual spec; the React implementation in
@@ -461,15 +462,15 @@
     </div>
 
     <div class="card">
-      <h3>Markdown candidates · top 5</h3>
+      <h3>Pause reorder · top 5</h3>
       <div class="row">
         <div class="swatch" style="background:#EBE5D5"></div>
         <div>
           <div class="style-name">Borderless Basic Hoodie · Sand · S</div>
           <div class="style-sub">AP-HD-BBHOOD-25-1-SAND-S</div>
         </div>
-        <div class="r"><span class="num">63w</span><span class="save">$7k recover</span></div>
-        <span class="pill warn">−20%</span>
+        <div class="r"><span class="num">63w</span><span class="lost" style="color: var(--stone);">14mo to clear</span></div>
+        <span class="pill warn">Pause reorder</span>
       </div>
       <div class="row">
         <div class="swatch" style="background:#9A816B"></div>
@@ -477,8 +478,8 @@
           <div class="style-name">Passport Holder · Soil · OS</div>
           <div class="style-sub">AC-BG-PASS-25-2-SOIL</div>
         </div>
-        <div class="r"><span class="num">52w</span><span class="save">$4k recover</span></div>
-        <span class="pill warn">−25%</span>
+        <div class="r"><span class="num">52w</span><span class="lost" style="color: var(--stone);">12mo to clear</span></div>
+        <span class="pill warn">Pause reorder</span>
       </div>
       <div class="row">
         <div class="swatch" style="background:#3A3A3A"></div>
@@ -486,8 +487,8 @@
           <div class="style-name">Borderless Basic Tee · Slate · M</div>
           <div class="style-sub">AP-TS-BBTEE-25-1-SLATE-M</div>
         </div>
-        <div class="r"><span class="num">42w</span><span class="save">$3k recover</span></div>
-        <span class="pill">Watch</span>
+        <div class="r"><span class="num">42w</span><span class="lost" style="color: var(--stone);">10mo to clear</span></div>
+        <span class="pill">Hold</span>
       </div>
       <div class="row">
         <div class="swatch" style="background:#716F70"></div>
@@ -495,8 +496,8 @@
           <div class="style-name">Destination Trench · Stone · L</div>
           <div class="style-sub">AP-OW-DDCOAT-26-1-STONE-L</div>
         </div>
-        <div class="r"><span class="num">38w</span><span class="save">$3k recover</span></div>
-        <span class="pill">Watch</span>
+        <div class="r"><span class="num">38w</span><span class="lost" style="color: var(--stone);">9mo to clear</span></div>
+        <span class="pill">Hold</span>
       </div>
       <div class="row">
         <div class="swatch" style="background:#EBE5D5"></div>
@@ -504,11 +505,11 @@
           <div class="style-name">Borderless Basic Hoodie · Sand · M</div>
           <div class="style-sub">AP-HD-BBHOOD-25-1-SAND-M</div>
         </div>
-        <div class="r"><span class="num">35w</span><span class="save">$2k recover</span></div>
-        <span class="pill">Watch</span>
+        <div class="r"><span class="num">35w</span><span class="lost" style="color: var(--stone);">8mo to clear</span></div>
+        <span class="pill">Hold</span>
       </div>
       <div style="margin-top: 14px; padding-top: 12px; border-top: 0.5px solid var(--line-soft);">
-        <a style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--slate); border-bottom: 1px solid var(--slate); padding-bottom: 2px; cursor: pointer;">Open markdown plan →</a>
+        <a style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--slate); border-bottom: 1px solid var(--slate); padding-bottom: 2px; cursor: pointer;">Open overstock review →</a>
       </div>
     </div>
   </section>
@@ -594,7 +595,7 @@
           <td class="r num">78%</td>
           <td class="r num">1.6×</td>
           <td><svg class="spark" viewBox="0 0 80 22"><path d="M0,8 L13,10 L26,12 L39,13 L52,14 L65,15 L80,16" fill="none" stroke="#A32D2D" stroke-width="1.5"/></svg></td>
-          <td class="r"><span class="pill bad">Markdown</span></td>
+          <td class="r"><span class="pill bad">Pause reorder</span></td>
         </tr>
       </tbody>
     </table>
