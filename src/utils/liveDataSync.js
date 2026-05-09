@@ -345,9 +345,10 @@ export async function fetchShopifyVariantsWithInventory({ activeOnly = true } = 
             id
             sku
             title
+            price
             inventoryQuantity
             inventoryItem { id unitCost { amount } }
-            product { id title vendor status }
+            product { id title vendor status productType }
           }
         }
       }
@@ -381,7 +382,9 @@ export async function fetchShopifyVariantsWithInventory({ activeOnly = true } = 
         productTitle: n.product?.title || '',
         productVendor: n.product?.vendor || '',
         productStatus: n.product?.status || '',
+        productType: n.product?.productType || '',
         variantTitle: n.title || '',
+        price: n.price != null ? Number(n.price) : null,
         inventoryQuantity: typeof n.inventoryQuantity === 'number' ? n.inventoryQuantity : 0,
         unitCost: unitCostAmount != null ? Number(unitCostAmount) : null,
       });
