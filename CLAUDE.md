@@ -109,6 +109,14 @@ Visual decisions are not optional — they are part of the spec.
 
 If a future product spec or industry-standard report references markdown KPIs (first-markdown rate, markdown depth, terminal markdown rate), translate them to the never-discount equivalents: weeks-to-clear-at-current-velocity, pause-reorder candidate count, archived-without-discount rate.
 
+**Tracked vs untracked SKUs.** Every SKU in the inventory module has a `tracked` flag (default true for staples, default false for drop variants where the plan is to sell out without restock). Untracked SKUs:
+- are excluded from the cockpit Top-6 stockout calendar,
+- never trigger Slack alerts (stockout, low cover, ad-spend-driven demand spikes),
+- don't surface in the urgent reorders list or in any chase-PO suggestions,
+- still appear on the Inventory tab table (faded / opacity 0.45) so the operator can see them and re-track if needed.
+
+The toggle is a star icon (★ tracked / ☆ untracked) on every SKU row. State lives in `inventoryStore.tracked[sku]`. This is how the brand handles drop products that are intentionally one-and-done — the system shouldn't pester the team about a SKU that's expected to die.
+
 ---
 
 ## i18n (vendor portal and any external surface)

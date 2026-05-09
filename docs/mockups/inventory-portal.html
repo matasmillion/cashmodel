@@ -186,28 +186,76 @@
   .assumption .anchor b { color: var(--slate); font-family: var(--mono); font-weight: 500; }
   .assumption .imply { font-size: 11px; color: var(--sienna); margin-top: 2px; }
 
-  /* ─── Stockout calendar grid ─────────────────────────────────────── */
+  /* ─── Stockout calendar (horizontal, week-grouped) ────────────────── */
+  /* Days flow LEFT→RIGHT within a week. Weeks separated by a small gap.   */
+  /* Week numbers labeled above each week. Months labeled above weeks.     */
+  /* Container scrolls horizontally; default pane shows ~3 months at       */
+  /* card width, but 6+ months are always present in the data.             */
   .calendar-controls { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
   .calendar-controls .sku-filter { display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 2px; padding: 6px 10px; min-width: 320px; }
   .calendar-controls .sku-filter input { border: 0; background: transparent; outline: none; font-family: var(--mono); font-size: 11px; color: var(--slate); width: 100%; }
 
-  .cal-grid { display: flex; gap: 12px; align-items: flex-start; }
-  .cal-rows { display: flex; flex-direction: column; gap: 3px; padding-top: 22px; }
-  .cal-rows .day { font-size: 9px; color: var(--faded); height: 12px; line-height: 12px; }
-  .cal-cells-wrap { flex: 1; overflow-x: auto; padding-bottom: 4px; }
-  .cal-cells { display: grid; grid-template-rows: repeat(7, 12px); grid-auto-flow: column; grid-auto-columns: 12px; gap: 3px; }
-  .cal-week-labels { display: grid; grid-template-columns: repeat(52, 12px); gap: 3px; margin-bottom: 6px; font-size: 9px; color: var(--faded); }
-  .cal-week-labels span { text-align: left; line-height: 1; }
-  .cal-cell { width: 12px; height: 12px; border-radius: 2px; background: rgba(58,58,58,0.06); position: relative; cursor: help; }
-  .cal-cell.healthy   { background: rgba(107,142,107,0.45); }
-  .cal-cell.warn      { background: rgba(200,146,74,0.55); }
-  .cal-cell.bad       { background: rgba(168,84,60,0.65); }
-  .cal-cell.po        { box-shadow: inset 0 0 0 2px var(--sienna); }
-  .cal-cell.today     { box-shadow: inset 0 0 0 1.5px var(--slate); }
-  .cal-cell:hover { transform: scale(1.4); transition: transform 100ms ease; z-index: 2; }
+  .cal-scroll { overflow-x: auto; padding-bottom: 12px; }
+  .cal-scroll::-webkit-scrollbar { height: 6px; }
+  .cal-scroll::-webkit-scrollbar-track { background: rgba(58,58,58,0.04); }
+  .cal-scroll::-webkit-scrollbar-thumb { background: rgba(58,58,58,0.18); border-radius: 3px; }
 
-  .cal-legend { display: flex; gap: 18px; margin-top: 18px; font-size: 11px; color: var(--stone); }
+  .cal-canvas { display: inline-block; min-width: max-content; position: relative; padding: 4px 0; }
+
+  .cal-months { position: relative; height: 18px; margin-bottom: 4px; }
+  .cal-months span { position: absolute; top: 0; font-size: 11px; color: var(--faded); letter-spacing: 0.04em; white-space: nowrap; }
+
+  .cal-weeks { display: flex; gap: 5px; }
+  .cal-week { display: flex; flex-direction: column; gap: 4px; }
+  .cal-wnum { font-family: var(--mono); font-size: 8px; color: var(--faded); letter-spacing: 0.02em; text-align: center; height: 10px; line-height: 10px; }
+  .cal-days { display: flex; gap: 1px; }
+  .cal-cell { width: 12px; height: 12px; border-radius: 2px; background: rgba(58,58,58,0.06); cursor: help; flex-shrink: 0; }
+  .cal-cell:hover { transform: scale(1.5); transition: transform 100ms ease; z-index: 2; }
+  .cal-cell.healthy { background: rgba(107,142,107,0.45); }
+  .cal-cell.warn    { background: rgba(200,146,74,0.55); }
+  .cal-cell.bad     { background: rgba(168,84,60,0.65); }
+  .cal-cell.po      { box-shadow: inset 0 0 0 2px var(--sienna); }
+  .cal-cell.today   { box-shadow: inset 0 0 0 1.5px var(--slate); }
+
+  .cal-legend { display: flex; gap: 18px; margin-top: 14px; font-size: 11px; color: var(--stone); flex-wrap: wrap; }
   .cal-legend .swatch { width: 12px; height: 12px; border-radius: 2px; display: inline-block; vertical-align: -2px; margin-right: 6px; }
+
+  /* Compact mode for the cockpit multi-SKU calendar — narrower cells, */
+  /* tighter type. Default mode (12px cells) used on Forecast / SKU.    */
+  .cal-canvas.compact .cal-cell { width: 7px; height: 13px; border-radius: 1px; }
+  .cal-canvas.compact .cal-days { gap: 0; }
+  .cal-canvas.compact .cal-weeks { gap: 3px; }
+  .cal-canvas.compact .cal-wnum { font-size: 7px; height: 9px; line-height: 9px; letter-spacing: 0; }
+  .cal-canvas.compact .cal-months span { font-size: 10px; }
+  .cal-canvas.compact .cal-cell:hover { transform: scale(1.6); }
+
+  /* ─── Multi-row calendar (cockpit) ────────────────────────────────── */
+  .multi-cal { overflow-x: auto; padding-bottom: 12px; }
+  .multi-cal::-webkit-scrollbar { height: 6px; }
+  .multi-cal::-webkit-scrollbar-track { background: rgba(58,58,58,0.04); }
+  .multi-cal::-webkit-scrollbar-thumb { background: rgba(58,58,58,0.18); border-radius: 3px; }
+  .multi-cal-grid { display: inline-block; min-width: max-content; }
+  .multi-row { display: flex; align-items: center; padding: 8px 0; border-top: 1px solid var(--line-soft); cursor: pointer; }
+  .multi-row:hover { background: rgba(235,229,213,0.18); }
+  .multi-row.head { padding: 0 0 6px; border-top: 0; cursor: default; }
+  .multi-row.head:hover { background: transparent; }
+  .multi-row .mr-label { width: 240px; flex-shrink: 0; padding-right: 16px; display: flex; align-items: center; gap: 10px; position: sticky; left: 0; background: var(--card); z-index: 2; }
+  .multi-row .mr-strip { flex-shrink: 0; }
+
+  .mr-label .name { font-size: 12px; color: var(--slate); font-weight: 500; line-height: 1.2; }
+  .mr-label .sub  { font-size: 10px; color: var(--faded); font-family: var(--mono); margin-top: 2px; }
+  .mr-label .stat { margin-left: auto; text-align: right; font-family: var(--mono); }
+  .mr-label .stat .v { font-size: 12px; color: var(--slate); }
+  .mr-label .stat .v.bad { color: var(--bad); font-weight: 600; }
+  .mr-label .stat .l { font-size: 9px; color: var(--faded); letter-spacing: 0.08em; text-transform: uppercase; }
+
+  /* ─── Star / track toggle ─────────────────────────────────────────── */
+  .star { font-size: 14px; cursor: pointer; line-height: 1; user-select: none; transition: color 100ms ease, transform 100ms ease; flex-shrink: 0; }
+  .star.tracked { color: var(--sienna); }
+  .star.untracked { color: rgba(58,58,58,0.22); }
+  .star:hover { transform: scale(1.15); }
+  .untracked-row { opacity: 0.42; }
+  .untracked-row td { color: var(--faded) !important; }
 
   /* ─── SKU detail page bits ───────────────────────────────────────── */
   .crumb { font-size: 11px; color: var(--faded); margin-bottom: 12px; letter-spacing: 0.04em; }
@@ -391,58 +439,41 @@
         </div>
       </div>
 
-      <!-- Revenue chart + Inventory health -->
-      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px;">
-        <div class="card">
-          <div class="section-head">
-            <div>
-              <div class="eyebrow">Revenue and velocity</div>
-              <div class="title">12-week trend</div>
-            </div>
-            <div class="legend-inline">
-              <span><span class="dot" style="background: var(--slate);"></span>Revenue</span>
-              <span><span class="dot" style="background: var(--sienna);"></span>Units</span>
-            </div>
+      <!-- ───── Multi-SKU stockout calendar ──────────────────────── -->
+      <!-- Placed directly above Urgent Reorders so the operator scans the  -->
+      <!-- 6-month risk picture, then jumps straight to the action list.    -->
+      <!-- Filterable: by SKU (variant) or by Product (variants blended).    -->
+      <!-- Star icon is the tracked-toggle — untracked SKUs never appear     -->
+      <!-- here, never trigger Slack alerts, never auto-suggest reorders.    -->
+      <div class="card">
+        <div class="section-head">
+          <div>
+            <div class="eyebrow">Inventory cover</div>
+            <div class="title">Top 6 tracked · projected daily cover</div>
           </div>
-          <svg viewBox="0 0 600 220" preserveAspectRatio="none" style="width:100%; height: 220px;">
-            <defs>
-              <linearGradient id="rev-grad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#3A3A3A" stop-opacity="0.18"/>
-                <stop offset="100%" stop-color="#3A3A3A" stop-opacity="0"/>
-              </linearGradient>
-            </defs>
-            <g stroke="rgba(58,58,58,0.06)" stroke-width="0.5">
-              <line x1="40" y1="40" x2="600" y2="40"/>
-              <line x1="40" y1="90" x2="600" y2="90"/>
-              <line x1="40" y1="140" x2="600" y2="140"/>
-              <line x1="40" y1="190" x2="600" y2="190"/>
-            </g>
-            <text x="36" y="44" font-size="9" fill="rgba(58,58,58,0.6)" text-anchor="end" font-family="Inter">$26k</text>
-            <text x="36" y="94" font-size="9" fill="rgba(58,58,58,0.6)" text-anchor="end" font-family="Inter">$20k</text>
-            <text x="36" y="144" font-size="9" fill="rgba(58,58,58,0.6)" text-anchor="end" font-family="Inter">$13k</text>
-            <text x="36" y="194" font-size="9" fill="rgba(58,58,58,0.6)" text-anchor="end" font-family="Inter">$7k</text>
-            <path d="M 40,90 C 100,80 160,72 220,68 C 280,64 340,68 400,82 C 460,96 520,90 600,75 L 600,200 L 40,200 Z" fill="url(#rev-grad)" stroke="#3A3A3A" stroke-width="1.5"/>
-            <path d="M 40,95 C 100,85 160,77 220,72 C 280,68 340,72 400,86 C 460,98 520,93 600,80" fill="none" stroke="#D4956A" stroke-width="1.5"/>
-            <g font-size="9" fill="rgba(58,58,58,0.6)" font-family="Inter">
-              <text x="40" y="216">W1</text><text x="93" y="216">W2</text><text x="146" y="216">W3</text><text x="199" y="216">W4</text><text x="252" y="216">W5</text><text x="305" y="216">W6</text><text x="358" y="216">W7</text><text x="411" y="216">W8</text><text x="464" y="216">W9</text><text x="513" y="216">W10</text><text x="566" y="216">W11</text>
-            </g>
-          </svg>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button class="chip">By SKU</button>
+            <button class="chip active">By product</button>
+            <span class="select-mock">Top 6 by 90d revenue ▾</span>
+            <span class="select-mock">★ Tracked only</span>
+          </div>
         </div>
 
-        <div class="card">
-          <div class="eyebrow" style="margin-bottom: 16px;">Inventory health</div>
-          <div class="health-list">
-            <div class="row"><div class="label"><span class="dot" style="background: var(--bad);"></span>Stockout</div><div class="count">1</div></div>
-            <div class="row"><div class="label"><span class="dot" style="background: var(--bad);"></span>Critical</div><div class="count">9</div></div>
-            <div class="row"><div class="label"><span class="dot" style="background: var(--warn);"></span>Reorder Now</div><div class="count">1</div></div>
-            <div class="row"><div class="label"><span class="dot" style="background: var(--sienna);"></span>Reorder Soon</div><div class="count">2</div></div>
-            <div class="row"><div class="label"><span class="dot" style="background: var(--good);"></span>Healthy</div><div class="count">2</div></div>
-            <div class="row"><div class="label"><span class="dot" style="background: var(--sea);"></span>Overstock</div><div class="count">4</div></div>
-          </div>
+        <div class="multi-cal">
+          <div class="multi-cal-grid" id="cockpit-calendar"></div>
+        </div>
+
+        <div class="cal-legend">
+          <span><i class="swatch" style="background: rgba(107,142,107,0.45);"></i>Healthy</span>
+          <span><i class="swatch" style="background: rgba(200,146,74,0.55);"></i>Restock window</span>
+          <span><i class="swatch" style="background: rgba(168,84,60,0.65);"></i>Stockout</span>
+          <span><i class="swatch" style="border: 2px solid var(--sienna); background: transparent;"></i>PO arrival</span>
+          <span><i class="swatch" style="border: 1.5px solid var(--slate); background: transparent;"></i>Today</span>
+          <span style="margin-left: auto; color: var(--faded);">★ tracked SKUs only · untracked excluded from alerts &amp; chase suggestions</span>
         </div>
       </div>
 
-      <!-- Action required + Category performance -->
+      <!-- Action required + Inventory health -->
       <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px;">
         <div class="card">
           <div class="section-head">
@@ -499,6 +530,57 @@
         </div>
 
         <div class="card">
+          <div class="eyebrow" style="margin-bottom: 16px;">Inventory health <span style="color: var(--faded); font-weight: 400; text-transform: none; letter-spacing: 0;">· tracked only</span></div>
+          <div class="health-list">
+            <div class="row"><div class="label"><span class="dot" style="background: var(--bad);"></span>Stockout</div><div class="count">1</div></div>
+            <div class="row"><div class="label"><span class="dot" style="background: var(--bad);"></span>Critical</div><div class="count">9</div></div>
+            <div class="row"><div class="label"><span class="dot" style="background: var(--warn);"></span>Reorder Now</div><div class="count">1</div></div>
+            <div class="row"><div class="label"><span class="dot" style="background: var(--sienna);"></span>Reorder Soon</div><div class="count">2</div></div>
+            <div class="row"><div class="label"><span class="dot" style="background: var(--good);"></span>Healthy</div><div class="count">2</div></div>
+            <div class="row" style="opacity: 0.5;"><div class="label"><span class="dot" style="background: var(--sea);"></span>Untracked</div><div class="count">3</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Revenue trend + Category performance (lower priority, below the fold) -->
+      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px;">
+        <div class="card">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Revenue and velocity</div>
+              <div class="title">12-week trend</div>
+            </div>
+            <div class="legend-inline">
+              <span><span class="dot" style="background: var(--slate);"></span>Revenue</span>
+              <span><span class="dot" style="background: var(--sienna);"></span>Units</span>
+            </div>
+          </div>
+          <svg viewBox="0 0 600 220" preserveAspectRatio="none" style="width:100%; height: 220px;">
+            <defs>
+              <linearGradient id="rev-grad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#3A3A3A" stop-opacity="0.18"/>
+                <stop offset="100%" stop-color="#3A3A3A" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <g stroke="rgba(58,58,58,0.06)" stroke-width="0.5">
+              <line x1="40" y1="40" x2="600" y2="40"/>
+              <line x1="40" y1="90" x2="600" y2="90"/>
+              <line x1="40" y1="140" x2="600" y2="140"/>
+              <line x1="40" y1="190" x2="600" y2="190"/>
+            </g>
+            <text x="36" y="44" font-size="9" fill="rgba(58,58,58,0.6)" text-anchor="end" font-family="Inter">$26k</text>
+            <text x="36" y="94" font-size="9" fill="rgba(58,58,58,0.6)" text-anchor="end" font-family="Inter">$20k</text>
+            <text x="36" y="144" font-size="9" fill="rgba(58,58,58,0.6)" text-anchor="end" font-family="Inter">$13k</text>
+            <text x="36" y="194" font-size="9" fill="rgba(58,58,58,0.6)" text-anchor="end" font-family="Inter">$7k</text>
+            <path d="M 40,90 C 100,80 160,72 220,68 C 280,64 340,68 400,82 C 460,96 520,90 600,75 L 600,200 L 40,200 Z" fill="url(#rev-grad)" stroke="#3A3A3A" stroke-width="1.5"/>
+            <path d="M 40,95 C 100,85 160,77 220,72 C 280,68 340,72 400,86 C 460,98 520,93 600,80" fill="none" stroke="#D4956A" stroke-width="1.5"/>
+            <g font-size="9" fill="rgba(58,58,58,0.6)" font-family="Inter">
+              <text x="40" y="216">W1</text><text x="93" y="216">W2</text><text x="146" y="216">W3</text><text x="199" y="216">W4</text><text x="252" y="216">W5</text><text x="305" y="216">W6</text><text x="358" y="216">W7</text><text x="411" y="216">W8</text><text x="464" y="216">W9</text><text x="513" y="216">W10</text><text x="566" y="216">W11</text>
+            </g>
+          </svg>
+        </div>
+
+        <div class="card">
           <div class="eyebrow" style="margin-bottom: 16px;">Category performance</div>
           <div class="cat-row">
             <div class="top"><span class="name">Hoodies</span><span class="val">$60k</span></div>
@@ -546,6 +628,9 @@
 
     <div class="filter-strip">
       <button class="chip active">All <span class="count">19</span></button>
+      <button class="chip">★ Tracked <span class="count">15</span></button>
+      <button class="chip">☆ Untracked <span class="count">4</span></button>
+      <span style="width: 1px; height: 18px; background: var(--line); margin: 0 4px;"></span>
       <button class="chip">Critical <span class="count">9</span></button>
       <button class="chip">Stockout <span class="count">1</span></button>
       <button class="chip">Reorder <span class="count">1</span></button>
@@ -558,6 +643,7 @@
       <div style="overflow-x: auto;">
         <table>
           <thead><tr>
+            <th title="Tracked SKUs trigger Slack alerts and chase suggestions. Untracked SKUs are excluded — used for drop products that should sell out without restock."></th>
             <th></th>
             <th>Style / SKU</th>
             <th>Tier</th>
@@ -572,6 +658,7 @@
           </tr></thead>
           <tbody>
             <tr data-route="sku/AP-PA-ECARGO-10-W34-1-SAND">
+              <td><span class="star tracked" title="Tracked · click to untrack">★</span></td>
               <td><div class="swatch thin" style="background: #EBE5D5;"></div></td>
               <td><div style="color: var(--slate); font-weight: 500;">Eroded Edges Cargo</div><div class="num" style="font-size: 9px; color: var(--faded); margin-top: 2px;">AP-PA-ECARGO-10-W34-1-SAND</div></td>
               <td style="font-size: 9px; color: var(--soil); letter-spacing: 0.1em; text-transform: uppercase;">Drop</td>
@@ -585,6 +672,7 @@
               <td><span class="pill stockout">Stockout</span></td>
             </tr>
             <tr data-route="sku/AP-PA-BBSWEAT-25-1-SLATE-M">
+              <td><span class="star tracked" title="Tracked">★</span></td>
               <td><div class="swatch thin" style="background: #3A3A3A;"></div></td>
               <td><div style="color: var(--slate); font-weight: 500;">Borderless Basic Sweatpants</div><div class="num" style="font-size: 9px; color: var(--faded); margin-top: 2px;">AP-PA-BBSWEAT-25-1-SLATE-M</div></td>
               <td style="font-size: 9px; color: var(--slate); letter-spacing: 0.1em; text-transform: uppercase;">Staple</td>
@@ -598,6 +686,7 @@
               <td><span class="pill critical">Critical</span></td>
             </tr>
             <tr data-route="sku/AP-HD-BBHOOD-25-1-SLATE-L">
+              <td><span class="star tracked" title="Tracked">★</span></td>
               <td><div class="swatch thin" style="background: #3A3A3A;"></div></td>
               <td><div style="color: var(--slate); font-weight: 500;">Borderless Basic Hoodie</div><div class="num" style="font-size: 9px; color: var(--faded); margin-top: 2px;">AP-HD-BBHOOD-25-1-SLATE-L</div></td>
               <td style="font-size: 9px; color: var(--slate); letter-spacing: 0.1em; text-transform: uppercase;">Staple</td>
@@ -610,46 +699,50 @@
               <td class="r mono">3.8×</td>
               <td><span class="pill reorder">Reorder Now</span></td>
             </tr>
-            <tr data-route="sku/AP-HD-BBHOOD-25-1-SAND-S">
+            <tr class="untracked-row" data-route="sku/AP-HD-BBHOOD-25-1-SAND-S">
+              <td><span class="star untracked" title="Untracked · drop product, sell-out plan · no Slack alerts, no chase">☆</span></td>
               <td><div class="swatch thin" style="background: #EBE5D5;"></div></td>
-              <td><div style="color: var(--slate); font-weight: 500;">Borderless Basic Hoodie</div><div class="num" style="font-size: 9px; color: var(--faded); margin-top: 2px;">AP-HD-BBHOOD-25-1-SAND-S</div></td>
-              <td style="font-size: 9px; color: var(--slate); letter-spacing: 0.1em; text-transform: uppercase;">Staple</td>
+              <td><div style="font-weight: 500;">Borderless Basic Hoodie</div><div class="num" style="font-size: 9px; margin-top: 2px;">AP-HD-BBHOOD-25-1-SAND-S</div></td>
+              <td style="font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;">Drop</td>
               <td>Sand / S</td>
               <td class="r mono">218</td>
-              <td class="r faded">—</td>
+              <td class="r">—</td>
               <td class="r mono">3.5</td>
               <td class="r mono">62.3</td>
               <td class="r mono">19%</td>
               <td class="r mono">1.1×</td>
-              <td><span class="pill overstock">Overstock</span></td>
+              <td><span class="pill overstock">Untracked</span></td>
             </tr>
-            <tr data-route="sku/AP-TS-BBTEE-25-1-SLATE-M">
+            <tr class="untracked-row" data-route="sku/AP-TS-BBTEE-25-1-SLATE-M">
+              <td><span class="star untracked" title="Untracked">☆</span></td>
               <td><div class="swatch thin" style="background: #3A3A3A;"></div></td>
-              <td><div style="color: var(--slate); font-weight: 500;">Borderless Basic Tee</div><div class="num" style="font-size: 9px; color: var(--faded); margin-top: 2px;">AP-TS-BBTEE-25-1-SLATE-M</div></td>
-              <td style="font-size: 9px; color: var(--slate); letter-spacing: 0.1em; text-transform: uppercase;">Staple</td>
+              <td><div style="font-weight: 500;">Borderless Basic Tee</div><div class="num" style="font-size: 9px; margin-top: 2px;">AP-TS-BBTEE-25-1-SLATE-M</div></td>
+              <td style="font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;">Staple</td>
               <td>Slate / M</td>
               <td class="r mono">252</td>
-              <td class="r faded">—</td>
+              <td class="r">—</td>
               <td class="r mono">4.5</td>
               <td class="r mono">56.0</td>
               <td class="r mono">20%</td>
               <td class="r mono">1.4×</td>
-              <td><span class="pill overstock">Overstock</span></td>
+              <td><span class="pill overstock">Untracked</span></td>
             </tr>
-            <tr data-route="sku/AC-BG-PASS-25-2-SOIL">
+            <tr class="untracked-row" data-route="sku/AC-BG-PASS-25-2-SOIL">
+              <td><span class="star untracked" title="Untracked · drop product">☆</span></td>
               <td><div class="swatch thin" style="background: #9A816B;"></div></td>
-              <td><div style="color: var(--slate); font-weight: 500;">Passport Holder</div><div class="num" style="font-size: 9px; color: var(--faded); margin-top: 2px;">AC-BG-PASS-25-2-SOIL</div></td>
-              <td style="font-size: 9px; color: var(--soil); letter-spacing: 0.1em; text-transform: uppercase;">Drop</td>
+              <td><div style="font-weight: 500;">Passport Holder</div><div class="num" style="font-size: 9px; margin-top: 2px;">AC-BG-PASS-25-2-SOIL</div></td>
+              <td style="font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;">Drop</td>
               <td>Soil / OS</td>
               <td class="r mono">124</td>
-              <td class="r faded">—</td>
+              <td class="r">—</td>
               <td class="r mono">2.3</td>
               <td class="r mono">53.9</td>
               <td class="r mono">18%</td>
               <td class="r mono">1.6×</td>
-              <td><span class="pill overstock">Overstock</span></td>
+              <td><span class="pill overstock">Untracked</span></td>
             </tr>
             <tr data-route="sku/AC-BG-SLING-25-2-SLATE">
+              <td><span class="star tracked" title="Tracked">★</span></td>
               <td><div class="swatch thin" style="background: #3A3A3A;"></div></td>
               <td><div style="color: var(--slate); font-weight: 500;">Nomad Sling Bag</div><div class="num" style="font-size: 9px; color: var(--faded); margin-top: 2px;">AC-BG-SLING-25-2-SLATE</div></td>
               <td style="font-size: 9px; color: var(--soil); letter-spacing: 0.1em; text-transform: uppercase;">Drop</td>
@@ -870,26 +963,9 @@
           </div>
         </div>
 
-        <!-- Week labels (above the grid) -->
-        <div style="display: flex; gap: 12px; align-items: flex-end;">
-          <div style="width: 32px;"></div>
-          <div style="flex: 1; overflow: hidden;">
-            <div style="display: grid; grid-template-columns: repeat(12, 1fr); gap: 0; font-size: 9px; color: var(--faded); padding-left: 2px; padding-bottom: 6px;">
-              <span>May ’26</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span><span>Jan ’27</span><span>Feb</span><span>Mar</span><span>Apr</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Calendar grid: 7 day rows × 52 week cols -->
-        <div class="cal-grid">
-          <div class="cal-rows">
-            <div class="day">M</div><div class="day">T</div><div class="day">W</div><div class="day">T</div><div class="day">F</div><div class="day">S</div><div class="day">S</div>
-          </div>
-          <div class="cal-cells-wrap">
-            <div class="cal-cells" id="calendar-grid">
-              <!-- Cells injected by JS to keep the markup readable -->
-            </div>
-          </div>
+        <!-- Calendar: months row + week-grouped days flowing right -->
+        <div class="cal-scroll">
+          <div class="cal-canvas" id="calendar-grid"></div>
         </div>
 
         <div class="cal-legend">
@@ -961,24 +1037,9 @@
         </div>
       </div>
 
-      <!-- Month markers -->
-      <div style="display: flex; gap: 12px; align-items: flex-end;">
-        <div style="width: 32px;"></div>
-        <div style="flex: 1; overflow: hidden;">
-          <div style="display: grid; grid-template-columns: repeat(12, 1fr); gap: 0; font-size: 9px; color: var(--faded); padding-left: 2px; padding-bottom: 6px;">
-            <span>May ’26</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span><span>Jan ’27</span><span>Feb</span><span>Mar</span><span>Apr</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Day × week grid -->
-      <div class="cal-grid">
-        <div class="cal-rows">
-          <div class="day">M</div><div class="day">T</div><div class="day">W</div><div class="day">T</div><div class="day">F</div><div class="day">S</div><div class="day">S</div>
-        </div>
-        <div class="cal-cells-wrap">
-          <div class="cal-cells" id="sku-calendar-grid"></div>
-        </div>
+      <!-- Calendar: horizontal week-grouped strip, scrolls right for full year -->
+      <div class="cal-scroll">
+        <div class="cal-canvas" id="sku-calendar-grid"></div>
       </div>
 
       <div class="cal-legend">
@@ -1082,42 +1143,278 @@
   show(routeFromHash());
 })();
 
-/* ─── Calendar grid generation (mockup-only fake data) ────────────── */
+/* ─── Calendar generation ─────────────────────────────────────────── */
+/* Horizontal week-grouped layout: 52 week columns, each column is 7    */
+/* day cells stacked LEFT→RIGHT (Mon to Sun). Week numbers above each   */
+/* week. Month labels span their weeks above the week numbers. Scrolls  */
+/* horizontally past the visible pane.                                  */
 (function () {
-  function fillGrid(elId, opts) {
+  // Day 0 = today (May 9 2026, Sat). Render full 364 days = 52 weeks.
+  // Week 0 starts on Monday before today. Schematic data only — production
+  // will compute from the real velocity + PO landing dates per SKU.
+  var WEEKS = 52;
+
+  // Week-of-year start for May 4 2026 (Mon containing today). For mockup
+  // we just label sequentially from W19 onwards.
+  var START_WEEK = 19;
+
+  // Month layout in weeks (mockup): each entry is { label, weeks }
+  // Used to position the month labels above the week strip.
+  var MONTH_BLOCKS = [
+    { label: "May '26", weeks: 4 },
+    { label: 'Jun',     weeks: 4 },
+    { label: 'Jul',     weeks: 5 },
+    { label: 'Aug',     weeks: 4 },
+    { label: 'Sep',     weeks: 4 },
+    { label: 'Oct',     weeks: 5 },
+    { label: 'Nov',     weeks: 4 },
+    { label: 'Dec',     weeks: 4 },
+    { label: "Jan '27", weeks: 5 },
+    { label: 'Feb',     weeks: 4 },
+    { label: 'Mar',     weeks: 5 },
+    { label: 'Apr',     weeks: 4 },
+  ];
+
+  // Each week column = 7 cells × 12px + 6 gaps × 1px = 90px, plus 5px to next
+  var CELL = 12;
+  var GAP_DAYS = 1;
+  var GAP_WEEKS = 5;
+  var WEEK_WIDTH = 7 * CELL + 6 * GAP_DAYS; // 90
+  var WEEK_PITCH = WEEK_WIDTH + GAP_WEEKS;  // 95
+
+  function build(elId, opts) {
     var el = document.getElementById(elId);
     if (!el) return;
-    var days = 364; // 52w × 7d
-    var stockoutWindows = opts.stockouts || [];
-    var poDays = opts.pos || [];
-    for (var d = 0; d < days; d++) {
-      var cell = document.createElement('div');
-      cell.className = 'cal-cell';
-      // Determine state: by default healthy past 'today' (d=0 is today)
-      var inStockout = stockoutWindows.some(function (r) { return d >= r[0] && d <= r[1]; });
-      var inWarn = opts.warns && opts.warns.some(function (r) { return d >= r[0] && d <= r[1]; });
-      if (inStockout) cell.classList.add('bad');
-      else if (inWarn) cell.classList.add('warn');
-      else cell.classList.add('healthy');
-      if (poDays.indexOf(d) >= 0) cell.classList.add('po');
-      if (d === 0) cell.classList.add('today');
-      cell.title = 'Day +' + d;
-      el.appendChild(cell);
+    el.innerHTML = '';
+
+    // Months row — absolute-positioned above the week strip.
+    var monthsRow = document.createElement('div');
+    monthsRow.className = 'cal-months';
+    var weekCursor = 0;
+    MONTH_BLOCKS.forEach(function (m) {
+      var span = document.createElement('span');
+      span.textContent = m.label;
+      span.style.left = (weekCursor * WEEK_PITCH) + 'px';
+      span.style.width = (m.weeks * WEEK_PITCH - GAP_WEEKS) + 'px';
+      monthsRow.appendChild(span);
+      weekCursor += m.weeks;
+    });
+    el.appendChild(monthsRow);
+
+    // Weeks row — horizontal flex of week columns
+    var weeksRow = document.createElement('div');
+    weeksRow.className = 'cal-weeks';
+
+    var stockouts = opts.stockouts || [];
+    var warns = opts.warns || [];
+    var pos = opts.pos || [];
+
+    for (var w = 0; w < WEEKS; w++) {
+      var weekDiv = document.createElement('div');
+      weekDiv.className = 'cal-week';
+
+      var label = document.createElement('div');
+      label.className = 'cal-wnum';
+      var weekNum = ((START_WEEK - 1 + w) % 52) + 1;
+      label.textContent = 'W' + weekNum;
+      weekDiv.appendChild(label);
+
+      var daysDiv = document.createElement('div');
+      daysDiv.className = 'cal-days';
+      for (var d = 0; d < 7; d++) {
+        var dayIdx = w * 7 + d;
+        var cell = document.createElement('div');
+        cell.className = 'cal-cell';
+        var inStockout = stockouts.some(function (r) { return dayIdx >= r[0] && dayIdx <= r[1]; });
+        var inWarn = warns.some(function (r) { return dayIdx >= r[0] && dayIdx <= r[1]; });
+        if (inStockout) cell.classList.add('bad');
+        else if (inWarn) cell.classList.add('warn');
+        else cell.classList.add('healthy');
+        if (pos.indexOf(dayIdx) >= 0) cell.classList.add('po');
+        if (dayIdx === 0) cell.classList.add('today');
+        cell.title = 'Day +' + dayIdx;
+        daysDiv.appendChild(cell);
+      }
+      weekDiv.appendChild(daysDiv);
+      weeksRow.appendChild(weekDiv);
     }
+
+    el.appendChild(weeksRow);
   }
 
-  // Brand-wide grid (Forecast tab) — clusters of stockout in months 2 and 5
-  fillGrid('calendar-grid', {
+  // Brand-wide grid (Forecast tab) — clusters of risk in months 2 and 5
+  build('calendar-grid', {
     stockouts: [[35, 50], [120, 138], [240, 252]],
     warns: [[12, 34], [101, 119], [220, 239], [310, 330]],
     pos: [25, 88, 165, 200, 280, 340],
   });
 
-  // Single-SKU grid (SKU detail page) — stockout in next 9 days, PO at +17d
-  fillGrid('sku-calendar-grid', {
+  // Single-SKU grid (SKU detail) — stockout in next 9 days, PO at +17d
+  build('sku-calendar-grid', {
     stockouts: [[9, 16], [115, 121]],
     warns: [[0, 8], [85, 114]],
     pos: [17, 88],
+  });
+
+  /* ─── Cockpit multi-row calendar ─────────────────────────────────── */
+  /* Stacked rows of compact day-cell strips, one per top-selling tracked */
+  /* product. Header rows (months + week numbers) sit at the top, then    */
+  /* every product gets its own pinned-left label and day strip below.    */
+  /*                                                                       */
+  /* Sizing: compact mode — 7px cells, 0px gap inside week, 3px gap between */
+  /* weeks. Each week column = 7×7 + 3 = 52px. 12 months ≈ 2700px, scrolls.*/
+  var COCK_CELL = 7, COCK_GAP_DAYS = 0, COCK_GAP_WEEKS = 3;
+  var COCK_WEEK_W = 7 * COCK_CELL + 6 * COCK_GAP_DAYS;
+  var COCK_PITCH  = COCK_WEEK_W + COCK_GAP_WEEKS;
+
+  function buildCockpitRow(opts) {
+    var row = document.createElement('div');
+    row.className = 'multi-row';
+    if (opts.dataRoute) row.setAttribute('data-route', opts.dataRoute);
+
+    // Pinned left label
+    var lbl = document.createElement('div');
+    lbl.className = 'mr-label';
+    lbl.innerHTML =
+      '<span class="star tracked">★</span>' +
+      '<div style="flex: 1;">' +
+        '<div class="name">' + opts.name + '</div>' +
+        '<div class="sub">' + opts.sub + '</div>' +
+      '</div>' +
+      '<div class="stat">' +
+        '<div class="v ' + (opts.bad ? 'bad' : '') + '">' + opts.fwos + '</div>' +
+        '<div class="l">FWOS</div>' +
+      '</div>';
+    row.appendChild(lbl);
+
+    // Day-cell strip — one continuous flex of 52 week columns
+    var strip = document.createElement('div');
+    strip.className = 'mr-strip';
+    var weeks = document.createElement('div');
+    weeks.className = 'cal-weeks';
+    weeks.style.gap = COCK_GAP_WEEKS + 'px';
+
+    var stockouts = opts.stockouts || [];
+    var warns = opts.warns || [];
+    var pos = opts.pos || [];
+
+    for (var w = 0; w < 52; w++) {
+      var weekDiv = document.createElement('div');
+      weekDiv.style.display = 'flex';
+      weekDiv.style.gap = COCK_GAP_DAYS + 'px';
+      for (var d = 0; d < 7; d++) {
+        var dayIdx = w * 7 + d;
+        var cell = document.createElement('div');
+        cell.className = 'cal-cell';
+        cell.style.width = COCK_CELL + 'px';
+        cell.style.height = '13px';
+        cell.style.borderRadius = '1px';
+        var inStockout = stockouts.some(function (r) { return dayIdx >= r[0] && dayIdx <= r[1]; });
+        var inWarn = warns.some(function (r) { return dayIdx >= r[0] && dayIdx <= r[1]; });
+        if (inStockout) cell.classList.add('bad');
+        else if (inWarn) cell.classList.add('warn');
+        else cell.classList.add('healthy');
+        if (pos.indexOf(dayIdx) >= 0) cell.classList.add('po');
+        if (dayIdx === 0) cell.classList.add('today');
+        weekDiv.appendChild(cell);
+      }
+      weeks.appendChild(weekDiv);
+    }
+    strip.appendChild(weeks);
+    row.appendChild(strip);
+    return row;
+  }
+
+  function buildCockpitHeader() {
+    // Header row 1 — months above week strip
+    var monthsRow = document.createElement('div');
+    monthsRow.className = 'multi-row head';
+    var spacerL = document.createElement('div'); spacerL.className = 'mr-label'; spacerL.style.background = 'var(--card)'; spacerL.innerHTML = '&nbsp;';
+    var monthsStrip = document.createElement('div'); monthsStrip.className = 'mr-strip'; monthsStrip.style.position = 'relative'; monthsStrip.style.height = '16px';
+    var weekCursor = 0;
+    MONTH_BLOCKS.forEach(function (m) {
+      var span = document.createElement('span');
+      span.style.position = 'absolute';
+      span.style.left = (weekCursor * COCK_PITCH) + 'px';
+      span.style.fontSize = '10px';
+      span.style.color = 'var(--faded)';
+      span.style.letterSpacing = '0.04em';
+      span.textContent = m.label;
+      monthsStrip.appendChild(span);
+      weekCursor += m.weeks;
+    });
+    monthsRow.appendChild(spacerL);
+    monthsRow.appendChild(monthsStrip);
+
+    // Header row 2 — week numbers
+    var weeksRow = document.createElement('div');
+    weeksRow.className = 'multi-row head';
+    var spacerL2 = document.createElement('div'); spacerL2.className = 'mr-label'; spacerL2.style.background = 'var(--card)'; spacerL2.innerHTML = '&nbsp;';
+    var weeksStrip = document.createElement('div'); weeksStrip.className = 'mr-strip';
+    var wnumWrap = document.createElement('div'); wnumWrap.style.display = 'flex'; wnumWrap.style.gap = COCK_GAP_WEEKS + 'px';
+    for (var w = 0; w < 52; w++) {
+      var wn = document.createElement('div');
+      wn.style.width = COCK_WEEK_W + 'px';
+      wn.style.fontFamily = 'var(--mono)';
+      wn.style.fontSize = '8px';
+      wn.style.color = 'var(--faded)';
+      wn.style.textAlign = 'center';
+      wn.textContent = 'W' + (((19 - 1 + w) % 52) + 1);
+      wnumWrap.appendChild(wn);
+    }
+    weeksStrip.appendChild(wnumWrap);
+    weeksRow.appendChild(spacerL2);
+    weeksRow.appendChild(weeksStrip);
+
+    return [monthsRow, weeksRow];
+  }
+
+  // Top-6 best-selling tracked products (blended-by-product mode active).
+  // Schematic data: each product has its own stockout/warn/PO pattern.
+  var PRODUCTS = [
+    { name: 'Borderless Basic Hoodie',     sub: '5 variants · 412u total · #1 by 90d rev', fwos: '2.6w', bad: true,
+      stockouts: [[8, 16]],   warns: [[0, 7], [80, 110]],     pos: [17, 88], dataRoute: 'sku/AP-HD-BBHOOD-25-1-SLATE-L' },
+    { name: 'Borderless Basic Sweatpants', sub: '4 variants · 124u total · #2 by 90d rev', fwos: '0.8w', bad: true,
+      stockouts: [[5, 22], [165, 175]], warns: [[0, 4], [140, 164]], pos: [23, 176], dataRoute: 'sku/AP-PA-BBSWEAT-25-1-SLATE-M' },
+    { name: 'Eroded Edges Cargo',          sub: '4 variants · 28u total · #3 by 90d rev',  fwos: '0.0w', bad: true,
+      stockouts: [[0, 30]], warns: [[31, 55]], pos: [56], dataRoute: 'sku/AP-PA-ECARGO-10-W34-1-SAND' },
+    { name: 'Borderless Basic Tee',        sub: '6 variants · 532u total · #4 by 90d rev', fwos: '12.4w', bad: false,
+      stockouts: [], warns: [[180, 210], [310, 350]], pos: [42, 230], dataRoute: 'sku/AP-TS-BBTEE-25-1-SALT-M' },
+    { name: 'Nomad Sling Bag',             sub: '2 variants · 76u total · #5 by 90d rev',  fwos: '12.7w', bad: false,
+      stockouts: [], warns: [[210, 240]], pos: [60, 240], dataRoute: 'sku/AC-BG-SLING-25-2-SLATE' },
+    { name: 'Destination Trench',          sub: '3 variants · 20u total · #6 by 90d rev',  fwos: '4.0w', bad: true,
+      stockouts: [[28, 80]], warns: [[14, 27], [81, 120]], pos: [120, 250], dataRoute: 'sku/AP-OW-DDCOAT-26-1-STONE-L' },
+  ];
+
+  var cockpitGrid = document.getElementById('cockpit-calendar');
+  if (cockpitGrid) {
+    var headers = buildCockpitHeader();
+    cockpitGrid.appendChild(headers[0]);
+    cockpitGrid.appendChild(headers[1]);
+    PRODUCTS.forEach(function (p) {
+      cockpitGrid.appendChild(buildCockpitRow(p));
+    });
+  }
+
+  /* ─── Star toggle (mockup interaction) ────────────────────────────── */
+  document.addEventListener('click', function (e) {
+    var s = e.target.closest('.star');
+    if (!s) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (s.classList.contains('tracked')) {
+      s.classList.remove('tracked');
+      s.classList.add('untracked');
+      s.textContent = '☆';
+      var tr = s.closest('tr');
+      if (tr) tr.classList.add('untracked-row');
+    } else {
+      s.classList.remove('untracked');
+      s.classList.add('tracked');
+      s.textContent = '★';
+      var tr2 = s.closest('tr');
+      if (tr2) tr2.classList.remove('untracked-row');
+    }
   });
 })();
 </script>
