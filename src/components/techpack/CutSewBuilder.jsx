@@ -1,7 +1,8 @@
-// Cut & Sew detail / editor — 2-col shell matching EmbellishmentBuilder.
-// Left: spec form with autosave. Right: sticky CutSewBOMPreview live preview.
+// Cut & Sew detail / editor — 7 tabbed sections matching the 7 tech pack pages.
+// Left: tabbed spec form with autosave. Right: sticky CutSewBOMPreview live preview
+// synced to the active tab so the SVG output matches what you're editing.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { saveCutSew, archiveCutSew, restoreCutSew } from '../../utils/cutSewStore';
@@ -25,6 +26,9 @@ const INPUT_STYLE = {
 };
 
 const LABEL_STYLE = { fontSize: 11, color: FR.stone, marginBottom: 4, display: 'block', letterSpacing: 0.2 };
+const SECTION_LABEL = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+const CARD = { background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 };
+const SECTION_HEAD = { fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 };
 
 function Field({ label, children }) {
   return (
@@ -35,10 +39,172 @@ function Field({ label, children }) {
   );
 }
 
+// Simple inline textarea field
+function Textarea({ label, value, onChange, rows = 3, placeholder }) {
+  return (
+    <Field label={label}>
+      <textarea
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        rows={rows}
+        placeholder={placeholder}
+        style={{ ...INPUT_STYLE, resize: 'vertical', fontFamily: "'Inter', sans-serif" }}
+      />
+    </Field>
+  );
+}
+
+// Inline editable table for arrays of objects
+function InlineTable({ headers, rows, onUpdate, onAdd, onRemove, addLabel = '+ Add row' }) {
+  const cellStyle = {
+    border: 'none', background: 'transparent', fontSize: 11, padding: '4px 6px',
+    color: FR.slate, outline: 'none', width: '100%', fontFamily: "'Inter', sans-serif",
+    boxSizing: 'border-box',
+  };
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+        <thead>
+          <tr style={{ background: FR.salt }}>
+            {headers.map(h => (
+              <th key={h.key} style={{ padding: '6px 8px', textAlign: 'left', fontSize: 10, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', borderBottom: `1px solid ${FR.sand}`, whiteSpace: 'nowrap' }}>
+                {h.label}
+              </th>
+            ))}
+            <th style={{ width: 24, borderBottom: `1px solid ${FR.sand}` }} />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i} style={{ borderBottom: `0.5px solid ${FR.sand}` }}>
+              {headers.map(h => (
+                <td key={h.key} style={{ padding: 0 }}>
+                  <input
+                    value={row[h.key] ?? ''}
+                    onChange={e => onUpdate(i, h.key, e.target.value)}
+                    placeholder={h.placeholder || ''}
+                    style={cellStyle}
+                  />
+                </td>
+              ))}
+              <td style={{ padding: '0 4px', textAlign: 'center' }}>
+                <button onClick={() => onRemove(i)} style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 2 }}>×</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button
+        onClick={onAdd}
+        style={{ marginTop: 8, background: 'none', border: `0.5px dashed ${FR.soil}`, borderRadius: 4, padding: '4px 12px', fontSize: 10, color: FR.soil, cursor: 'pointer', fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase' }}
+      >
+        {addLabel}
+      </button>
+    </div>
+  );
+}
+
+// Callout detail card — image + number + title + description
+function CalloutDetailCard({ entry, onChange, ownerId }) {
+  return (
+    <div style={{ background: FR.salt, border: `0.5px solid ${FR.sand}`, borderRadius: 6, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <CoverImagePicker
+        value={entry.image_url || ''}
+        onChange={url => onChange({ ...entry, image_url: url })}
+        label={`Detail ${entry.num} image`}
+        hint="4:3 close-up"
+        assetScope="cut-sew"
+        assetOwnerId={ownerId}
+      />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: '#A32D2D', color: '#fff', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>{entry.num}</span>
+        <input
+          value={entry.title || ''}
+          onChange={e => onChange({ ...entry, title: e.target.value })}
+          placeholder="Title (e.g. Hood Construction)"
+          style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: 12, fontWeight: 600, color: FR.slate, fontFamily: "'Inter', sans-serif" }}
+        />
+      </div>
+      <textarea
+        value={entry.description || ''}
+        onChange={e => onChange({ ...entry, description: e.target.value })}
+        placeholder="Detail description"
+        rows={2}
+        style={{ border: `0.5px dashed ${FR.sand}`, borderRadius: 4, padding: '6px 8px', background: '#fff', fontSize: 11, color: FR.slate, resize: 'vertical', outline: 'none', lineHeight: 1.5, fontFamily: "'Inter', sans-serif", boxSizing: 'border-box', width: '100%' }}
+      />
+    </div>
+  );
+}
+
+// Stitch reference block — image + label input
+function StitchBlock({ block, onChange, ownerId }) {
+  return (
+    <div style={{ background: '#fff', border: `0.5px solid ${FR.sand}`, borderRadius: 6, padding: 10, display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
+      <CoverImagePicker
+        value={block.image_url || ''}
+        onChange={url => onChange({ ...block, image_url: url })}
+        label={`Stitch ${block.num}`}
+        hint="2:3 reference"
+        assetScope="cut-sew"
+        assetOwnerId={ownerId}
+      />
+      <input
+        value={block.label || ''}
+        onChange={e => onChange({ ...block, label: e.target.value })}
+        placeholder={`e.g. 401 Coverstitch`}
+        style={{ ...INPUT_STYLE }}
+      />
+    </div>
+  );
+}
+
+// ── Tab definitions ───────────────────────────────────────────────────────
+const TABS = [
+  { id: 'identity',   label: 'Identity' },
+  { id: 'flatlay',    label: 'Flat Lay' },
+  { id: 'callouts1',  label: 'Call Outs 1' },
+  { id: 'callouts2',  label: 'Call Outs 2' },
+  { id: 'stitching',  label: 'Stitching' },
+  { id: 'pattern',    label: 'Pattern' },
+  { id: 'pom',        label: 'POM & Grading' },
+];
+
+const SEAM_HEADERS = [
+  { key: 'operation',   label: 'Operation',   placeholder: 'Side seam / Hem' },
+  { key: 'seam_type',   label: 'Seam Type',   placeholder: 'Flatlock / French' },
+  { key: 'stitch_type', label: 'Stitch Type', placeholder: '301 / 401' },
+  { key: 'machine',     label: 'Machine',     placeholder: 'Juki MO-6814' },
+  { key: 'spi_spcm',   label: 'SPI/SPCM',    placeholder: '10 SPI' },
+  { key: 'thread_color',label: 'Thread Color',placeholder: 'Match body' },
+  { key: 'thread_type', label: 'Thread Type', placeholder: 'Tex 40 / Poly' },
+  { key: 'notes',       label: 'Notes' },
+];
+
+const PIECE_HEADERS = [
+  { key: 'piece_num',  label: 'Piece #',   placeholder: 'P-01' },
+  { key: 'piece_name', label: 'Name',      placeholder: 'Front Body' },
+  { key: 'quantity',   label: 'Qty',       placeholder: '2' },
+  { key: 'fabric',     label: 'Fabric',    placeholder: 'Shell' },
+  { key: 'grain',      label: 'Grain',     placeholder: 'Lengthwise' },
+  { key: 'fusing',     label: 'Fusing',    placeholder: 'None' },
+  { key: 'notes',      label: 'Notes' },
+];
+
+const POM_HEADERS = [
+  { key: 'name',   label: 'Measurement', placeholder: 'Chest Width' },
+  { key: 's',      label: 'S',           placeholder: '' },
+  { key: 'm',      label: 'M',           placeholder: '' },
+  { key: 'l',      label: 'L',           placeholder: '' },
+  { key: 'xl',     label: 'XL',          placeholder: '' },
+  { key: 'tol',    label: 'Tol (cm)',    placeholder: '1' },
+  { key: 'method', label: 'Method',      placeholder: 'Lay flat' },
+];
+
 export default function CutSewBuilder({ block, onBack }) {
   const [draft, setDraft] = useState(block);
   const [savedSnapshot, setSavedSnapshot] = useState(block);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState('identity');
 
   const draftRef = useRef(draft);
   const savingRef = useRef(false);
@@ -47,7 +213,7 @@ export default function CutSewBuilder({ block, onBack }) {
   useEffect(() => { draftRef.current = draft; }, [draft]);
   useEffect(() => { setDraft(block); setSavedSnapshot(block); savedSnapshotRef.current = block; }, [block.id]);
 
-  // Lazy Storage migration on mount for pre-Phase-3 covers (data: URLs).
+  // Legacy cover migration
   const migratedRef = useRef(false);
   useEffect(() => {
     if (migratedRef.current) return undefined;
@@ -65,7 +231,7 @@ export default function CutSewBuilder({ block, onBack }) {
     return () => { cancelled = true; };
   }, [draft?.id, draft?.cover_image]);
 
-  // Autosave — 1200 ms debounce, flush on unmount.
+  // Autosave — 1200 ms debounce, flush on unmount
   useEffect(() => {
     if (JSON.stringify(draftRef.current) === JSON.stringify(savedSnapshotRef.current)) return;
     const t = setTimeout(async () => {
@@ -99,7 +265,7 @@ export default function CutSewBuilder({ block, onBack }) {
 
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(savedSnapshot), [draft, savedSnapshot]);
 
-  const set = (patch) => setDraft(d => ({ ...d, ...patch }));
+  const set = useCallback((patch) => setDraft(d => ({ ...d, ...patch })), []);
 
   const toggleArchive = async () => {
     if (draft.status === 'archived') {
@@ -113,9 +279,37 @@ export default function CutSewBuilder({ block, onBack }) {
     }
   };
 
+  // ── Array helpers ─────────────────────────────────────────────────────
+  const updSeam = (i, k, v) => set({ seams: draft.seams.map((r, idx) => idx === i ? { ...r, [k]: v } : r) });
+  const addSeam = () => set({ seams: [...(draft.seams || []), { operation: '', seam_type: '', stitch_type: '', machine: '', spi_spcm: '', thread_color: '', thread_type: '', notes: '' }] });
+  const rmSeam  = (i) => set({ seams: (draft.seams || []).filter((_, idx) => idx !== i) });
+
+  const updPiece = (i, k, v) => set({ pattern_pieces: draft.pattern_pieces.map((r, idx) => idx === i ? { ...r, [k]: v } : r) });
+  const addPiece = () => set({ pattern_pieces: [...(draft.pattern_pieces || []), { piece_num: '', piece_name: '', quantity: '', fabric: '', grain: '', fusing: '', notes: '' }] });
+  const rmPiece  = (i) => set({ pattern_pieces: (draft.pattern_pieces || []).filter((_, idx) => idx !== i) });
+
+  const updPom = (i, k, v) => set({ pom_rows: draft.pom_rows.map((r, idx) => idx === i ? { ...r, [k]: v } : r) });
+  const addPom = () => set({ pom_rows: [...(draft.pom_rows || []), { name: '', tol: '1', s: '', m: '', l: '', xl: '', method: '' }] });
+  const rmPom  = (i) => set({ pom_rows: (draft.pom_rows || []).filter((_, idx) => idx !== i) });
+
+  const updCallout = (page, i, next) => {
+    const field = page === 1 ? 'callout_details_page1' : 'callout_details_page2';
+    set({ [field]: (draft[field] || []).map((e, idx) => idx === i ? next : e) });
+  };
+
+  const updStitchBlock = (num, next) => {
+    set({ seam_stitch_blocks: (draft.seam_stitch_blocks || []).map(b => b.num === num ? next : b) });
+  };
+  const toggleStitchBlock = (num, hidden) => {
+    set({ seam_stitch_blocks: (draft.seam_stitch_blocks || []).map(b => b.num === num ? { ...b, hidden } : b) });
+  };
+
   const status = draft.status || 'draft';
   const pill = STATUS_PILL[status] || STATUS_PILL.draft;
   const sizeSetMatch = STANDARD_SIZE_SETS.find(s => s.join(',') === (draft.sizes || []).join(','));
+  const stitchBlocks = draft.seam_stitch_blocks || [1, 2, 3, 4, 5, 6].map(num => ({ num, label: '', hidden: false, image_url: '' }));
+  const visibleStitchBlocks = stitchBlocks.filter(b => !b.hidden);
+  const hiddenStitchCount = stitchBlocks.filter(b => b.hidden).length;
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 1fr)', gap: 24, alignItems: 'start' }}>
@@ -126,6 +320,7 @@ export default function CutSewBuilder({ block, onBack }) {
           <ArrowLeft size={13} /> Cut &amp; Sew
         </button>
 
+        {/* Header row */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 240 }}>
             <input
@@ -158,147 +353,375 @@ export default function CutSewBuilder({ block, onBack }) {
           </div>
         </div>
 
-        {/* Cover + Identity */}
-        <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-          <CoverImagePicker
-            value={draft.cover_image}
-            onChange={pathOrDataUrl => set({ cover_image: pathOrDataUrl })}
-            label="Cover image"
-            hint="Drop a photo of the block"
-            assetScope="cut-sew"
-            assetOwnerId={draft.id}
-          />
-          <div style={{ flex: 1, minWidth: 280 }}>
-            <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Identity</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-              <Field label="Category">
-                <select
-                  value={draft.category}
-                  onChange={e => set({ category: e.target.value })}
-                  style={INPUT_STYLE}
-                >
-                  {CUT_SEW_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                </select>
-              </Field>
-              <Field label="Version">
-                <input
-                  value={draft.version || ''}
-                  onChange={e => set({ version: e.target.value })}
-                  placeholder="v1.0"
-                  style={INPUT_STYLE}
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 14, flexWrap: 'wrap' }}>
+          {TABS.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 11, cursor: 'pointer', fontWeight: 500,
+                background: activeTab === tab.id ? FR.slate : 'transparent',
+                color: activeTab === tab.id ? '#fff' : FR.stone,
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── TAB: Identity ── */}
+        {activeTab === 'identity' && (
+          <>
+            {/* Cover + Identity */}
+            <div style={{ ...CARD, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+              <CoverImagePicker
+                value={draft.cover_image}
+                onChange={pathOrDataUrl => set({ cover_image: pathOrDataUrl })}
+                label="Cover image"
+                hint="Drop a photo of the block"
+                assetScope="cut-sew"
+                assetOwnerId={draft.id}
+              />
+              <div style={{ flex: 1, minWidth: 280 }}>
+                <h4 style={SECTION_HEAD}>Identity</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+                  <Field label="Category">
+                    <select value={draft.category} onChange={e => set({ category: e.target.value })} style={INPUT_STYLE}>
+                      {CUT_SEW_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Version">
+                    <input value={draft.version || ''} onChange={e => set({ version: e.target.value })} placeholder="v1.0" style={INPUT_STYLE} />
+                  </Field>
+                  <Field label="Base block">
+                    <input value={draft.base_block || ''} onChange={e => set({ base_block: e.target.value })} placeholder="FR-MASTER-HD" style={INPUT_STYLE} />
+                  </Field>
+                </div>
+              </div>
+            </div>
+
+            {/* Spec */}
+            <div style={CARD}>
+              <h4 style={SECTION_HEAD}>Spec</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+                <Field label="Size set">
+                  <select
+                    value={sizeSetMatch ? sizeSetMatch.join(',') : 'custom'}
+                    onChange={e => { const v = e.target.value; if (v !== 'custom') set({ sizes: v.split(',') }); }}
+                    style={INPUT_STYLE}
+                  >
+                    {STANDARD_SIZE_SETS.map(s => <option key={s.join(',')} value={s.join(',')}>{s.join(' / ')}</option>)}
+                    <option value="custom">Custom</option>
+                  </select>
+                </Field>
+                <Field label="Sizes (comma-separated)">
+                  <input
+                    value={(draft.sizes || []).join(', ')}
+                    onChange={e => set({ sizes: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+                    placeholder="S, M, L, XL"
+                    style={INPUT_STYLE}
+                  />
+                </Field>
+                <Field label="Grade rule">
+                  <input value={draft.grade_rule || ''} onChange={e => set({ grade_rule: e.target.value })} placeholder="2 cm chest · 1.5 cm length" style={INPUT_STYLE} />
+                </Field>
+                <Field label="Ease at chest (cm)">
+                  <input type="number" step="0.1" value={draft.ease_chest_cm ?? 0} onChange={e => set({ ease_chest_cm: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
+                </Field>
+                <Field label="Drop (cm)">
+                  <input type="number" step="0.1" value={draft.drop_cm ?? 0} onChange={e => set({ drop_cm: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
+                </Field>
+                <Field label="Seam allowance (cm)">
+                  <input type="number" step="0.1" value={draft.seam_allowance_cm ?? 0} onChange={e => set({ seam_allowance_cm: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
+                </Field>
+              </div>
+            </div>
+
+            {/* Files & notes */}
+            <div style={CARD}>
+              <h4 style={SECTION_HEAD}>Files &amp; notes</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+                <Field label="DXF / CAD file">
+                  <FileSlot value={draft.cad_file_url} onChange={v => set({ cad_file_url: v })} accept=".dxf,.dwg,.ai,.pdf" hint="Drop a .dxf / .dwg / .ai pattern file" />
+                </Field>
+                <Field label="Thumbnail">
+                  <FileSlot value={draft.thumbnail_url} onChange={v => set({ thumbnail_url: v })} accept="image/*" hint="Drop a thumbnail image" />
+                </Field>
+              </div>
+              <div style={{ marginTop: 14 }}>
+                <Textarea label="Notes" value={draft.notes} onChange={v => set({ notes: v })} rows={4} placeholder="Construction notes, fit notes, sloper history…" />
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ── TAB: Flat Lay ── */}
+        {activeTab === 'flatlay' && (
+          <div style={CARD}>
+            <h4 style={SECTION_HEAD}>Flat Lay</h4>
+            <p style={{ fontSize: 11, color: FR.stone, marginBottom: 16, fontStyle: 'italic' }}>
+              Front and back technical flats. Each fills an A4 landscape so callouts stay legible when printed.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+              <Field label="Front flat lay">
+                <CoverImagePicker
+                  value={draft.flat_lay_front_url}
+                  onChange={url => set({ flat_lay_front_url: url })}
+                  label="Front flat lay"
+                  hint="Drop front technical flat"
+                  assetScope="cut-sew"
+                  assetOwnerId={`${draft.id}-fl-front`}
                 />
               </Field>
-              <Field label="Base block">
-                <input
-                  value={draft.base_block || ''}
-                  onChange={e => set({ base_block: e.target.value })}
-                  placeholder="FR-MASTER-HD"
-                  style={INPUT_STYLE}
+              <Field label="Back flat lay">
+                <CoverImagePicker
+                  value={draft.flat_lay_back_url}
+                  onChange={url => set({ flat_lay_back_url: url })}
+                  label="Back flat lay"
+                  hint="Drop back technical flat"
+                  assetScope="cut-sew"
+                  assetOwnerId={`${draft.id}-fl-back`}
                 />
               </Field>
             </div>
+            <Textarea label="Flat lay notes" value={draft.flat_lay_notes} onChange={v => set({ flat_lay_notes: v })} rows={3} placeholder="Callouts, annotations, measurement notes…" />
           </div>
-        </div>
+        )}
 
-        {/* Spec */}
-        <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
-          <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Spec</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-            <Field label="Size set">
-              <select
-                value={sizeSetMatch ? sizeSetMatch.join(',') : 'custom'}
-                onChange={e => {
-                  const v = e.target.value;
-                  if (v === 'custom') return;
-                  set({ sizes: v.split(',') });
-                }}
-                style={INPUT_STYLE}
-              >
-                {STANDARD_SIZE_SETS.map(s => <option key={s.join(',')} value={s.join(',')}>{s.join(' / ')}</option>)}
-                <option value="custom">Custom</option>
-              </select>
-            </Field>
-            <Field label="Sizes (comma-separated)">
-              <input
-                value={(draft.sizes || []).join(', ')}
-                onChange={e => set({ sizes: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
-                placeholder="S, M, L, XL"
-                style={INPUT_STYLE}
-              />
-            </Field>
-            <Field label="Grade rule">
-              <input
-                value={draft.grade_rule || ''}
-                onChange={e => set({ grade_rule: e.target.value })}
-                placeholder="2 cm chest · 1.5 cm length"
-                style={INPUT_STYLE}
-              />
-            </Field>
-            <Field label="Ease at chest (cm)">
-              <input
-                type="number" step="0.1"
-                value={draft.ease_chest_cm ?? 0}
-                onChange={e => set({ ease_chest_cm: parseFloat(e.target.value) || 0 })}
-                style={INPUT_STYLE}
-              />
-            </Field>
-            <Field label="Drop (cm)">
-              <input
-                type="number" step="0.1"
-                value={draft.drop_cm ?? 0}
-                onChange={e => set({ drop_cm: parseFloat(e.target.value) || 0 })}
-                style={INPUT_STYLE}
-              />
-            </Field>
-            <Field label="Seam allowance (cm)">
-              <input
-                type="number" step="0.1"
-                value={draft.seam_allowance_cm ?? 0}
-                onChange={e => set({ seam_allowance_cm: parseFloat(e.target.value) || 0 })}
-                style={INPUT_STYLE}
-              />
-            </Field>
+        {/* ── TAB: Call Outs 1 ── */}
+        {activeTab === 'callouts1' && (
+          <div style={CARD}>
+            <h4 style={SECTION_HEAD}>Call Outs — Page 1</h4>
+            <p style={{ fontSize: 11, color: FR.stone, marginBottom: 16, fontStyle: 'italic' }}>
+              Number each callout on the reference image (red dots) and describe the matching detail in the cards below.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 0.55fr) 1.45fr', gap: 18, alignItems: 'start', marginBottom: 16 }}>
+              <div>
+                <label style={SECTION_LABEL}>Reference image (2:3)</label>
+                <CoverImagePicker
+                  value={draft.callout_ref_page1_url}
+                  onChange={url => set({ callout_ref_page1_url: url })}
+                  label="Reference image"
+                  hint="Drop callout reference (numbered red dots overlaid)"
+                  assetScope="cut-sew"
+                  assetOwnerId={`${draft.id}-co1-ref`}
+                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {(draft.callout_details_page1 || []).map((entry, i) => (
+                  <CalloutDetailCard
+                    key={entry.num}
+                    entry={entry}
+                    onChange={next => updCallout(1, i, next)}
+                    ownerId={`${draft.id}-co1-d${entry.num}`}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Files & notes */}
-        <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
-          <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Files &amp; notes</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
-            <Field label="DXF / CAD file">
-              <FileSlot
-                value={draft.cad_file_url}
-                onChange={v => set({ cad_file_url: v })}
-                accept=".dxf,.dwg,.ai,.pdf"
-                hint="Drop a .dxf / .dwg / .ai pattern file"
-              />
-            </Field>
-            <Field label="Thumbnail">
-              <FileSlot
-                value={draft.thumbnail_url}
-                onChange={v => set({ thumbnail_url: v })}
-                accept="image/*"
-                hint="Drop a thumbnail image"
-              />
-            </Field>
+        {/* ── TAB: Call Outs 2 ── */}
+        {activeTab === 'callouts2' && (
+          <div style={CARD}>
+            <h4 style={SECTION_HEAD}>Call Outs — Page 2</h4>
+            <p style={{ fontSize: 11, color: FR.stone, marginBottom: 16, fontStyle: 'italic' }}>
+              Continue callout details for a second page of construction references.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 0.55fr) 1.45fr', gap: 18, alignItems: 'start', marginBottom: 16 }}>
+              <div>
+                <label style={SECTION_LABEL}>Reference image (2:3)</label>
+                <CoverImagePicker
+                  value={draft.callout_ref_page2_url}
+                  onChange={url => set({ callout_ref_page2_url: url })}
+                  label="Reference image"
+                  hint="Drop callout reference page 2"
+                  assetScope="cut-sew"
+                  assetOwnerId={`${draft.id}-co2-ref`}
+                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {(draft.callout_details_page2 || []).map((entry, i) => (
+                  <CalloutDetailCard
+                    key={entry.num}
+                    entry={entry}
+                    onChange={next => updCallout(2, i, next)}
+                    ownerId={`${draft.id}-co2-d${entry.num}`}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
-          <div style={{ marginTop: 14 }}>
-            <Field label="Notes">
-              <textarea
-                value={draft.notes || ''}
-                onChange={e => set({ notes: e.target.value })}
-                rows={4}
-                placeholder="Construction notes, fit notes, sloper history…"
-                style={{ ...INPUT_STYLE, resize: 'vertical', fontFamily: "'Inter', sans-serif" }}
+        )}
+
+        {/* ── TAB: Stitching ── */}
+        {activeTab === 'stitching' && (
+          <div style={CARD}>
+            <h4 style={SECTION_HEAD}>Stitching</h4>
+
+            {/* Stitch reference image blocks */}
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
+                <label style={{ ...SECTION_LABEL, marginBottom: 0 }}>Stitch reference images</label>
+                {hiddenStitchCount > 0 && (
+                  <button
+                    onClick={() => { const next = stitchBlocks.find(b => b.hidden); if (next) toggleStitchBlock(next.num, false); }}
+                    style={{ background: 'none', border: `0.5px dashed ${FR.soil}`, borderRadius: 4, padding: '4px 10px', fontSize: 10, color: FR.soil, cursor: 'pointer', fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase' }}
+                  >
+                    + Add stitch ({hiddenStitchCount} hidden)
+                  </button>
+                )}
+              </div>
+              <p style={{ fontSize: 11, color: FR.stone, marginBottom: 12, fontStyle: 'italic' }}>Up to 6 stitch reference image blocks. Labels cross-reference the Stitch Type column below.</p>
+              {visibleStitchBlocks.length === 0 ? (
+                <div style={{ padding: '24px 16px', textAlign: 'center', border: `0.5px dashed ${FR.sand}`, borderRadius: 6, color: FR.stone, fontStyle: 'italic', fontSize: 11 }}>
+                  All stitch reference blocks hidden — click + Add stitch above.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(visibleStitchBlocks.length, 3)}, 1fr)`, gap: 12 }}>
+                  {visibleStitchBlocks.map(b => (
+                    <div key={b.num} style={{ position: 'relative' }}>
+                      <button
+                        onClick={() => toggleStitchBlock(b.num, true)}
+                        title="Hide"
+                        style={{ position: 'absolute', top: 6, right: 6, zIndex: 5, width: 20, height: 20, borderRadius: 10, background: FR.slate, color: '#fff', border: 'none', fontSize: 13, cursor: 'pointer', lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >×</button>
+                      <StitchBlock
+                        block={b}
+                        onChange={next => updStitchBlock(b.num, next)}
+                        ownerId={`${draft.id}-st-${b.num}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Seam & stitch spec table */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={SECTION_LABEL}>Seam &amp; stitch specification</label>
+              <InlineTable
+                headers={SEAM_HEADERS}
+                rows={draft.seams || []}
+                onUpdate={updSeam}
+                onAdd={addSeam}
+                onRemove={rmSeam}
+                addLabel="+ Add seam"
               />
-            </Field>
+            </div>
+
+            {/* Labor cost */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 14 }}>
+              <Field label="Cut & Sew labor cost (USD)">
+                <input
+                  type="number" step="0.01" min="0"
+                  value={draft.labor_cost_usd ?? 0}
+                  onChange={e => set({ labor_cost_usd: parseFloat(e.target.value) || 0 })}
+                  style={INPUT_STYLE}
+                />
+              </Field>
+              <Textarea label="Labor cost notes" value={draft.labor_cost_notes} onChange={v => set({ labor_cost_notes: v })} rows={2} placeholder="CMT breakdown, efficiency notes…" />
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* ── TAB: Pattern ── */}
+        {activeTab === 'pattern' && (
+          <div style={CARD}>
+            <h4 style={SECTION_HEAD}>Pattern &amp; Cutting</h4>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={SECTION_LABEL}>Pattern pieces layout</label>
+              <CoverImagePicker
+                value={draft.pattern_layout_url}
+                onChange={url => set({ pattern_layout_url: url })}
+                label="Pattern layout"
+                hint="Drop the pattern pieces layout image"
+                assetScope="cut-sew"
+                assetOwnerId={`${draft.id}-pat-layout`}
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={SECTION_LABEL}>Pattern piece index</label>
+              <InlineTable
+                headers={PIECE_HEADERS}
+                rows={draft.pattern_pieces || []}
+                onUpdate={updPiece}
+                onAdd={addPiece}
+                onRemove={rmPiece}
+                addLabel="+ Add piece"
+              />
+            </div>
+
+            <Textarea label="Cutting instructions" value={draft.cutting_instructions} onChange={v => set({ cutting_instructions: v })} rows={3} placeholder="Marker plan, nap direction, utilisation target, shrinkage allowance…" />
+          </div>
+        )}
+
+        {/* ── TAB: POM & Grading ── */}
+        {activeTab === 'pom' && (
+          <div style={CARD}>
+            <h4 style={SECTION_HEAD}>POM &amp; Size Grading</h4>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={SECTION_LABEL}>POM diagram (numbered measurement points)</label>
+              <CoverImagePicker
+                value={draft.pom_diagram_url}
+                onChange={url => set({ pom_diagram_url: url })}
+                label="POM diagram"
+                hint="Drop the POM diagram image"
+                assetScope="cut-sew"
+                assetOwnerId={`${draft.id}-pom-diag`}
+              />
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <Field label="Size type">
+                <select value={draft.pom_size_type || 'apparel'} onChange={e => set({ pom_size_type: e.target.value })} style={INPUT_STYLE}>
+                  <option value="apparel">Apparel (S / M / L / XL)</option>
+                  <option value="waist">Waist (W30 / W32 / W34 / W36)</option>
+                  <option value="one-size">One size</option>
+                </select>
+              </Field>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={SECTION_LABEL}>Graded spec table (cm)</label>
+              <InlineTable
+                headers={POM_HEADERS}
+                rows={draft.pom_rows || []}
+                onUpdate={updPom}
+                onAdd={addPom}
+                onRemove={rmPom}
+                addLabel="+ Add measurement"
+              />
+            </div>
+
+            <Textarea label="Measurement method" value={draft.pom_measurement_method} onChange={v => set({ pom_measurement_method: v })} rows={2} placeholder="Lay garment flat on table. Smooth without stretching. Measure with flexible tape." />
+
+            <div style={{ marginTop: 20, paddingTop: 16, borderTop: `0.5px solid ${FR.sand}` }}>
+              <label style={SECTION_LABEL}>Size grading — base size</label>
+              <p style={{ fontSize: 11, color: FR.stone, marginBottom: 10, lineHeight: 1.5 }}>
+                Select the sample size. Values come from the POM table above. Grading deltas are entered in the tech pack builder.
+              </p>
+              <Field label="Sample / base size">
+                <select
+                  value={draft.graded_size_matrix?.baseSize || 'M'}
+                  onChange={e => set({ graded_size_matrix: { ...(draft.graded_size_matrix || {}), baseSize: e.target.value } })}
+                  style={{ ...INPUT_STYLE, maxWidth: 200 }}
+                >
+                  {(draft.sizes || ['S', 'M', 'L', 'XL']).map(sz => <option key={sz} value={sz}>{sz}</option>)}
+                </select>
+              </Field>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── RIGHT COLUMN: live BOM preview ─────────────────────── */}
       <div style={{ position: 'sticky', top: 16 }}>
-        <CutSewBOMPreview block={draft} />
+        <CutSewBOMPreview block={draft} activePage={activeTab} />
       </div>
     </div>
   );

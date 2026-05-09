@@ -1053,10 +1053,111 @@ export function StepDesignOverview({ data, set, images, onUpload, onRemove }) {
   );
 }
 
-export function StepFlatlays({ data, set, images, onUpload, onRemove }) {
+export function StepFlatlays({ data, set, images, onUpload, onRemove, onSeedImages }) {
+  const [blocks, setBlocks] = useState(null); // null = not loaded yet
+  const [seeding, setSeeding] = useState(false);
+  const [seedOpen, setSeedOpen] = useState(false);
+
+  const loadBlocks = async () => {
+    if (blocks !== null) { setSeedOpen(true); return; }
+    const { listCutSew } = await import('../../utils/cutSewStore');
+    const rows = await listCutSew({ includeArchived: false });
+    setBlocks(rows || []);
+    setSeedOpen(true);
+  };
+
+  const applyBlock = async (block) => {
+    setSeeding(true);
+    setSeedOpen(false);
+    try {
+      // Seed text / table data fields (camelCase = tech pack convention)
+      if (block.flat_lay_notes) set('flatLayNotes', block.flat_lay_notes);
+      if (block.callout_details_page1?.length) set('constructionDetailsPage1', block.callout_details_page1.map(d => ({ num: d.num, title: d.title || '', description: d.description || '' })));
+      if (block.callout_details_page2?.length) set('constructionDetailsPage2', block.callout_details_page2.map(d => ({ num: d.num, title: d.title || '', description: d.description || '' })));
+      if (block.seam_stitch_blocks?.length) set('seamStitchBlocks', block.seam_stitch_blocks.map(b => ({ num: b.num, label: b.label || '', hidden: b.hidden || false })));
+      if (block.seams?.length) set('seams', block.seams.map(s => ({ operation: s.operation || '', seamType: s.seam_type || '', stitchType: s.stitch_type || '', machine: s.machine || '', spiSpcm: s.spi_spcm || '', threadColor: s.thread_color || '', threadType: s.thread_type || '', notes: s.notes || '' })));
+      if (block.labor_cost_usd) set('cutSewLaborCost', String(block.labor_cost_usd));
+      if (block.pattern_pieces?.length) set('patternPieces', block.pattern_pieces.map(p => ({ pieceNum: p.piece_num || '', pieceName: p.piece_name || '', quantity: p.quantity || '', fabric: p.fabric || '', grain: p.grain || '', fusing: p.fusing || '', notes: p.notes || '' })));
+      if (block.cutting_instructions) set('cuttingInstructions', block.cutting_instructions);
+      if (block.pom_rows?.length) set('poms', block.pom_rows.map(r => ({ name: r.name || '', tol: r.tol || '1', s: r.s || '', m: r.m || '', l: r.l || '', xl: r.xl || '', method: r.method || '' })));
+      if (block.pom_size_type) set('sizeType', block.pom_size_type);
+      if (block.pom_measurement_method) set('measurementMethod', block.pom_measurement_method);
+      if (block.graded_size_matrix?.grading?.length) set('gradedSizeMatrix', block.graded_size_matrix);
+      set('pickedCutSewBlockId', block.id);
+
+      // Seed images — inject library asset paths into the tech pack images array
+      if (onSeedImages) {
+        const imageMap = {};
+        if (block.flat_lay_front_url) imageMap['flatlay-front'] = block.flat_lay_front_url;
+        if (block.flat_lay_back_url) imageMap['flatlay-back'] = block.flat_lay_back_url;
+        if (block.callout_ref_page1_url) imageMap['sketch-callout-page1'] = block.callout_ref_page1_url;
+        if (block.callout_ref_page2_url) imageMap['sketch-callout-page2'] = block.callout_ref_page2_url;
+        (block.callout_details_page1 || []).forEach(d => { if (d.image_url) imageMap[`construction-detail-${d.num}`] = d.image_url; });
+        (block.callout_details_page2 || []).forEach(d => { if (d.image_url) imageMap[`construction-detail-${d.num}`] = d.image_url; });
+        (block.seam_stitch_blocks || []).forEach(b => { if (b.image_url) imageMap[`seam-stitch-${b.num}`] = b.image_url; });
+        if (block.pattern_layout_url) imageMap['pattern-layout'] = block.pattern_layout_url;
+        if (block.pom_diagram_url) imageMap['pom-diagram'] = block.pom_diagram_url;
+        onSeedImages(imageMap);
+      }
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const linkedBlockName = data.pickedCutSewBlockId && blocks
+    ? blocks.find(b => b.id === data.pickedCutSewBlockId)?.name || data.pickedCutSewBlockId
+    : null;
+
   return (
     <div>
       <SectionTitle>Flat Lay</SectionTitle>
+
+      {/* Seed from library block */}
+      <div style={{ marginBottom: 16, padding: '10px 14px', background: '#fff', border: `0.5px solid ${FR.sand}`, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: FR.slate, marginBottom: 2 }}>Cut &amp; Sew Library Block</div>
+          {data.pickedCutSewBlockId
+            ? <div style={{ fontSize: 10, color: FR.stone }}>Seeded from: <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', color: FR.slate }}>{linkedBlockName || data.pickedCutSewBlockId}</span></div>
+            : <div style={{ fontSize: 10, color: FR.stone, fontStyle: 'italic' }}>No block linked — data entered manually or seed from library below.</div>
+          }
+        </div>
+        <button
+          onClick={loadBlocks}
+          disabled={seeding}
+          style={{ padding: '6px 14px', background: FR.slate, color: '#fff', border: 'none', borderRadius: 5, fontSize: 11, cursor: seeding ? 'default' : 'pointer', opacity: seeding ? 0.6 : 1, fontWeight: 500, whiteSpace: 'nowrap' }}
+        >
+          {seeding ? 'Seeding…' : 'Seed from block…'}
+        </button>
+      </div>
+
+      {/* Block picker */}
+      {seedOpen && (
+        <div style={{ marginBottom: 16, padding: 12, background: FR.salt, border: `0.5px solid ${FR.sand}`, borderRadius: 6 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: FR.slate }}>Pick a block to seed from:</span>
+            <button onClick={() => setSeedOpen(false)} style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 0 }}>×</button>
+          </div>
+          {(blocks || []).length === 0
+            ? <div style={{ fontSize: 11, color: FR.stone, fontStyle: 'italic' }}>No cut & sew blocks in the library yet.</div>
+            : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 220, overflowY: 'auto' }}>
+                {(blocks || []).map(b => (
+                  <button
+                    key={b.id}
+                    onClick={() => applyBlock(b)}
+                    style={{ textAlign: 'left', padding: '8px 12px', border: `0.5px solid ${FR.sand}`, borderRadius: 4, background: '#fff', cursor: 'pointer', fontSize: 11, color: FR.slate, display: 'flex', gap: 10, alignItems: 'center' }}
+                  >
+                    <span style={{ fontWeight: 600 }}>{b.name || 'Untitled'}</span>
+                    <span style={{ color: FR.stone, fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 10 }}>{b.code}</span>
+                    <span style={{ color: FR.stone, fontSize: 10 }}>{b.version}</span>
+                  </button>
+                ))}
+              </div>
+            )
+          }
+        </div>
+      )}
+
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, fontStyle: 'italic' }}>
         Front and back technical flats. Each maximised to A4 landscape so callouts stay legible on the printed page.
       </p>
