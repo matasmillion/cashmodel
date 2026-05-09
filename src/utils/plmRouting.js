@@ -46,6 +46,7 @@ const ALT_TAB = 'plm'; // short-lived earlier prefix; rewritten on load.
 export const LIBRARY_SECTIONS = [
   'cut-sew', 'fabrics', 'colors', 'trims',
   'treatments', 'embellishments', 'vendors',
+  'variant-mapping',
 ];
 const LIBRARY_SET = new Set(LIBRARY_SECTIONS);
 

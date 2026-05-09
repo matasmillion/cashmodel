@@ -103,6 +103,22 @@ Visual decisions are not optional — they are part of the spec.
 
 ---
 
+## Brand operating principles (hard rules)
+
+**Never discount.** Foreign Resource never marks down, never runs sales, never offers promotional codes that reduce price. This is a permanent brand stance — do not introduce markdown logic, discount engines, sale-price fields, or markdown-trigger automation in any module. The overstock lever is to **pause reorders** and let inventory sell through at full price, or archive / repurpose the stock (creator seeding, sample sale at cost, write-off). The inventory module must surface "pause reorder" and "hold" actions, never "mark down" or "−X%" actions.
+
+If a future product spec or industry-standard report references markdown KPIs (first-markdown rate, markdown depth, terminal markdown rate), translate them to the never-discount equivalents: weeks-to-clear-at-current-velocity, pause-reorder candidate count, archived-without-discount rate.
+
+**Tracked vs untracked SKUs.** Every SKU in the inventory module has a `tracked` flag (default true for staples, default false for drop variants where the plan is to sell out without restock). Untracked SKUs:
+- are excluded from the cockpit Top-6 stockout calendar,
+- never trigger Slack alerts (stockout, low cover, ad-spend-driven demand spikes),
+- don't surface in the urgent reorders list or in any chase-PO suggestions,
+- still appear on the Inventory tab table (faded / opacity 0.45) so the operator can see them and re-track if needed.
+
+The toggle is a star icon (★ tracked / ☆ untracked) on every SKU row. State lives in `inventoryStore.tracked[sku]`. This is how the brand handles drop products that are intentionally one-and-done — the system shouldn't pester the team about a SKU that's expected to die.
+
+---
+
 ## i18n (vendor portal and any external surface)
 
 Every user-facing string on `/vendor/*` and any external surface goes through the i18n layer. No string literals.
@@ -182,3 +198,4 @@ Views: `today | knowledge | pulse | sprints | brief | jobs | production | queue 
 - 2026-04-25 — initial conventions established (folder structure, module boundaries, brand system, append-only collections, vendor surface hard rules)
 - 2026-05-06 — Creative Module Conventions added (Creative Engine phase 0)
 - 2026-05-09 — Type system: General Sans is the brand sans for body / UI labels (Cormorant Garamond stays as the heading face).
+- 2026-05-09 — Brand operating principle: never discount. Inventory module phase 0 (variant mapping store + Today/SKU mockups locked).

@@ -10,7 +10,7 @@
 // was.
 
 import { useEffect, useState } from 'react';
-import { Library, Shirt, Package, Scissors, Palette, Layers, Sparkles, Building2, Boxes, PenTool, Download, ShieldCheck } from 'lucide-react';
+import { Library, Shirt, Package, Scissors, Palette, Layers, Sparkles, Building2, Boxes, PenTool, Download, ShieldCheck, GitMerge } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { exportAllPlmData } from '../../utils/plmBackup';
 import TechPackList from './TechPackList';
@@ -30,6 +30,7 @@ import { seedEmbellishmentsIfEmpty } from '../../utils/embellishmentStore';
 import ProductionList from '../production/ProductionList';
 import ProductionDetail from '../production/ProductionDetail';
 import StorageHealthPanel from './StorageHealthPanel';
+import VariantMapper from './VariantMapper';
 import SyncDiagnosticsPanel, { SyncDiagnosticsToggle } from './SyncDiagnosticsPanel';
 
 const TOP_TABS = [
@@ -46,6 +47,7 @@ const LIBRARY_TABS = [
   { id: 'treatments', label: 'Treatments', icon: Scissors },
   { id: 'embellishments', label: 'Embellishments', icon: Sparkles },
   { id: 'vendors', label: 'Vendors', icon: Building2 },
+  { id: 'variant-mapping', label: 'Variant Mapping', icon: GitMerge },
 ];
 
 export default function PLMView() {
@@ -205,6 +207,7 @@ export default function PLMView() {
       {route.layer === 'library' && route.atom === 'treatments' && <TreatmentList />}
       {route.layer === 'library' && route.atom === 'embellishments' && <EmbellishmentList />}
       {route.layer === 'library' && route.atom === 'vendors' && <VendorManager />}
+      {route.layer === 'library' && route.atom === 'variant-mapping' && <VariantMapper />}
 
       {route.layer === 'styles' && <TechPackList />}
 
