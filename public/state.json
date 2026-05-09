@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-08T14:34:23.653Z",
+  "lastUpdated": "2026-05-09T17:16:37.570Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,54 +1044,54 @@
   ],
   "changelog": [
     {
-      "sha": "4698014",
-      "date": "2026-05-08T16:35:04+03:00",
-      "message": "plm: route atom cloud writes through JWT-reconciled upsert + visible Sync Diagnostics panel (#77)"
+      "sha": "e213658",
+      "date": "2026-05-09T16:51:47+00:00",
+      "message": "cut-sew: 2-col builder with sticky CutSewBOMPreview + autosave"
     },
     {
-      "sha": "979fa2c",
-      "date": "2026-05-08T13:34:30+03:00",
-      "message": "plm: auto-heal local-only atom rows to cloud on every list call (#76)"
+      "sha": "a573c9f",
+      "date": "2026-05-09T15:38:47+00:00",
+      "message": "Merge remote-tracking branch 'origin/main' into claude/continue-plm-development-Vkjqg"
     },
     {
-      "sha": "19686fe",
-      "date": "2026-05-08T13:28:54+03:00",
-      "message": "plm: don't seed defaults if cloud already has rows for this org (#75)"
+      "sha": "8280edb",
+      "date": "2026-05-09T15:38:08+00:00",
+      "message": "Merge origin/main into claude/continue-plm-development-Vkjqg"
     },
     {
-      "sha": "5885fc9",
-      "date": "2026-05-08T13:18:52+03:00",
-      "message": "plm: allowlist columns sent to cloud so unknown fields don't break the upsert (#74)"
+      "sha": "ae6e77c",
+      "date": "2026-05-09T18:36:33+03:00",
+      "message": "Inventory: Shopify sync wiring + parity check + nav dedupe (#97)"
     },
     {
-      "sha": "1774c29",
-      "date": "2026-05-08T13:07:36+03:00",
-      "message": "plm: switch atom save paths to upsert so orphan local rows can heal (#73)"
+      "sha": "2ef4093",
+      "date": "2026-05-09T14:47:18+00:00",
+      "message": "fabric: General Sans name, vendor subtitle, mill finishes in selection flow + BOM exec labels"
     },
     {
-      "sha": "a8ddf21",
-      "date": "2026-05-08T12:18:20+03:00",
-      "message": "db: add sam_rate_usd_per_min column to vendors (silent-fail regression from PR #68) (#72)"
+      "sha": "875509b",
+      "date": "2026-05-09T17:19:21+03:00",
+      "message": "Merge pull request #96 from matasmillion/claude/research-inventory-setup-q65Zf"
     },
     {
-      "sha": "673c759",
-      "date": "2026-05-08T12:11:52+03:00",
-      "message": "db: add missing PLM atom columns so cloud sync stops silently failing (#71)"
+      "sha": "3522dc2",
+      "date": "2026-05-09T17:16:58+03:00",
+      "message": "Merge pull request #95 from matasmillion/claude/editor-slot-spinner"
     },
     {
-      "sha": "968c573",
-      "date": "2026-05-08T12:05:42+03:00",
-      "message": "libraries: vendor + color libraries now hydrate from cloud on mount (#70)"
+      "sha": "5f43703",
+      "date": "2026-05-09T14:16:39+00:00",
+      "message": "techpack: spinner on editor BOM slots while the library row loads"
     },
     {
-      "sha": "07b8097",
-      "date": "2026-05-08T01:01:40+03:00",
-      "message": "treatments: AI auto-fill, spec PDF, send-to-vendor, gate process recipe (#69)"
+      "sha": "49e41d7",
+      "date": "2026-05-09T17:14:00+03:00",
+      "message": "Embellishment: 2-col builder + BOM preview + artwork_swatch_image_url (#93)"
     },
     {
-      "sha": "985da17",
-      "date": "2026-05-08T01:00:24+03:00",
-      "message": "techpack: vendor SAM rate field + two-mode AI labor cost (rate × SAM | CMT fallback) (#68)"
+      "sha": "7c6bb58",
+      "date": "2026-05-09T17:13:55+03:00",
+      "message": "Rename Patterns → Cut & Sew (CS-* codes, /cut-sew route, cut_sew table) (#92)"
     }
   ]
 }
