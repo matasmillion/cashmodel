@@ -477,7 +477,7 @@ function PageFabrics({ d, fabricsById = {} }) {
         const d2 = row?.data || {};
         const x = startX + i * (cardW + 16);
 
-        const cover = row?.cover_image || row?.front_image_url || d2?.cover_image || d2?.front_image_url;
+        const cover = row?.front_image_url || row?.cover_image || d2?.front_image_url || d2?.cover_image;
         const name = row?.code || d2?.name || row?.name || (entry?.fabricId ? 'Loading…' : '—');
         const composition = row?.composition || d2?.composition || '—';
         const weightGsm = row?.weight_gsm || d2?.weight_gsm;

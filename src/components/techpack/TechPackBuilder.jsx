@@ -288,9 +288,9 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
         if (cancelled) return;
         if (!row) continue;
         const v = row.updated_at;
-        // Cover prefers cover_image, falls back to front_image_url so the
-        // BOM live preview shows whatever swatch the designer uploaded.
-        let cover = row.cover_image || row.front_image_url || null;
+        // Match the Fabric library's priority (front_image_url first) so the
+        // BOM card and live preview render the same swatch the library card shows.
+        let cover = row.front_image_url || row.cover_image || null;
         if (cover && !/^(https?:|data:|blob:)/.test(cover)) {
           try { invalidateAssetUrl?.(cover); } catch {}
           cover = await getAssetUrl(cover).catch(() => null) || row.cover_image;
