@@ -339,17 +339,53 @@ function SectionHeading({ x, y, children }) {
   );
 }
 
-function PhotoSlot({ x, y, w, h, label, image, placeholder }) {
+// SMIL-animated spinner — pure SVG so it works inside the live-preview <svg>
+// without any CSS-in-JS plumbing. Stroke arc renders ~3/4 of the circle then
+// rotates indefinitely. Use it whenever a cover image is in flight so the
+// supplier knows the system is working, not stuck.
+function Spinner({ cx, cy, r = 14, color = FR.soil }) {
+  const stroke = Math.max(2, r / 6);
+  const c = 2 * Math.PI * r;
+  return (
+    <g>
+      {/* faint background ring so the spinner reads against any fill */}
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeOpacity={0.18} strokeWidth={stroke} />
+      {/* animated arc */}
+      <circle
+        cx={cx} cy={cy} r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeDasharray={`${c * 0.25} ${c}`}
+        transform={`rotate(-90 ${cx} ${cy})`}
+      >
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from={`0 ${cx} ${cy}`}
+          to={`360 ${cx} ${cy}`}
+          dur="0.9s"
+          repeatCount="indefinite"
+        />
+      </circle>
+    </g>
+  );
+}
+
+function PhotoSlot({ x, y, w, h, label, image, placeholder, loading = false }) {
   return (
     <g>
       <rect x={x} y={y} width={w} height={h} fill={FR.white} stroke={FR.soil} strokeDasharray="5 4" />
-      {image
-        ? <image href={image.data} x={x + 4} y={y + 4} width={w - 8} height={h - 8} preserveAspectRatio="xMidYMid meet" />
-        : (
-          <text x={x + w / 2} y={y + h / 2 + 4} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
-            {placeholder || `Drop ${label.toLowerCase()} here`}
-          </text>
-        )}
+      {image ? (
+        <image href={image.data} x={x + 4} y={y + 4} width={w - 8} height={h - 8} preserveAspectRatio="xMidYMid meet" />
+      ) : loading ? (
+        <Spinner cx={x + w / 2} cy={y + h / 2} r={Math.min(20, Math.max(10, Math.min(w, h) * 0.12))} />
+      ) : (
+        <text x={x + w / 2} y={y + h / 2 + 4} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
+          {placeholder || `Drop ${label.toLowerCase()} here`}
+        </text>
+      )}
       <rect x={x} y={y + h} width={w} height={22} fill={FR.salt} stroke={FR.sand} />
       <text x={x + w / 2} y={y + h + 15} textAnchor="middle" fontSize="9" fontWeight="bold" fill={FR.slate} letterSpacing="1.5">
         {esc((label || '').toUpperCase())}
@@ -481,7 +517,22 @@ function PageFabrics({ d, fabricsById = {} }) {
     );
   }
   const entry = picked[0];
-  const fabric = fabricsById[entry.fabricId] || {};
+  const fabric = fabricsById[entry.fabricId];
+  // Show a spinner card while the fabric library row is still being fetched
+  // (signed cover URL, vendor lookup, color cards). Without it the page
+  // looked frozen for the seconds it takes the loader to resolve everything.
+  if (!fabric) {
+    return (
+      <g>
+        <text x={PAGE_W / 2} y={94} textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="14" fill={FR.stone}>
+          Loading fabric…
+        </text>
+        <rect x={(PAGE_W - 540) / 2} y={240} width="540" height="280"
+          fill={FR.salt} stroke={FR.sand} strokeWidth="0.5" rx="8" />
+        <Spinner cx={PAGE_W / 2} cy={380} r={28} />
+      </g>
+    );
+  }
   const chosenColor = entry.colorLabel || entry.colorHex || entry.colorUrl
     ? { label: entry.colorLabel, hex: entry.colorHex, url: entry.colorUrl }
     : null;
@@ -557,6 +608,10 @@ function ComponentGridPage({ entries, subtitle, componentsById = {} }) {
                   // `meet` so the full image is visible without cropping.
                   <image href={cover} x={x + 4} y={y + 4} width={cardW - 8} height={imgH - 8}
                     preserveAspectRatio="xMidYMid meet" />
+                ) : entryId && !full ? (
+                  // Pack reference exists but the full row hasn't resolved
+                  // yet — spinner so the user sees we're working on it.
+                  <Spinner cx={x + cardW / 2} cy={y + imgH / 2} r={18} />
                 ) : (
                   <text x={x + cardW / 2} y={y + imgH / 2 + 4} textAnchor="middle"
                     fontSize={9} fill={FR.stone} fontStyle="italic">cover image</text>
