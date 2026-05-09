@@ -122,6 +122,12 @@ export async function createPO(input = {}) {
     unit_cost_usd: Number(input.unit_cost_usd) || 0,
     lead_days: Number(input.lead_days) || 0,
     size_break: input.size_break || {},
+    // cashflow / inventory fields
+    payment_schedule: input.payment_schedule || [],
+    expected_landing: input.expected_landing || null,
+    collection_name: input.collection_name || '',
+    freight_method: input.freight_method || 'sea',
+    line_items: input.line_items || [],
     placed_at: null,
     received_at: null,
     closed_at: null,
@@ -149,7 +155,10 @@ export async function createPO(input = {}) {
   return row;
 }
 
-const PO_EDITABLE_FIELDS = new Set(['units', 'unit_cost_usd', 'lead_days', 'notes', 'vendor_id', 'style_id', 'size_break']);
+const PO_EDITABLE_FIELDS = new Set([
+  'units', 'unit_cost_usd', 'lead_days', 'notes', 'vendor_id', 'style_id', 'size_break',
+  'payment_schedule', 'expected_landing', 'collection_name', 'freight_method', 'line_items',
+]);
 
 export async function updatePO(id, patch = {}) {
   if (!id) return null;
@@ -600,4 +609,53 @@ export async function seedProductionIfEmpty() {
   });
 
   return po;
+}
+
+// ── One-time migration shim ────────────────────────────────────────────────
+// Imports legacy `manualPOs` (AppContext cashflow-style) into productionStore.
+// Idempotent — runs only once; stores a completion flag in localStorage.
+// Call from AppContext on mount, before the reducer's state is used.
+// Phase 1H removes the call site and this function together.
+
+const MIGRATION_FLAG = 'cashmodel_manualpos_migrated';
+
+export async function migrateManualPOsToStore(manualPOs = []) {
+  if (localStorage.getItem(MIGRATION_FLAG)) return;
+  if (!manualPOs.length) {
+    localStorage.setItem(MIGRATION_FLAG, '1');
+    return;
+  }
+
+  const existing = readLocal(PO_KEY);
+  const existingIds = new Set(existing.map(r => r.id));
+
+  for (const legacy of manualPOs) {
+    if (!legacy?.id || existingIds.has(legacy.id)) continue;
+
+    // Map cashflow PO fields → productionStore schema.
+    // payment_schedule mirrors the 3 milestone pattern from poScheduler.
+    const totalCost = legacy.fullCost || legacy.totalCost || 0;
+    const paymentSchedule = (legacy.payments || []).map((pmt, i) => ({
+      milestone: i === 0 ? 'deposit' : i === 1 ? 'mid' : 'final',
+      percent: i === 0 ? 30 : i === 1 ? 40 : 30,
+      amount: pmt.amount || 0,
+      due: pmt.date || null,
+      paid_at: null,
+    }));
+
+    await createPO({
+      id: legacy.id,
+      collection_name: legacy.collectionName || '',
+      freight_method: legacy.freightMethod || 'sea',
+      units: legacy.units || 0,
+      unit_cost_usd: legacy.units > 0 ? Math.round((totalCost / legacy.units) * 100) / 100 : 0,
+      expected_landing: legacy.arrivalDate || legacy.deliveryDate || null,
+      placed_at: legacy.orderDate || null,
+      payment_schedule: paymentSchedule,
+      line_items: legacy.lineItems || [],
+      notes: `Migrated from cashflow model on ${new Date().toISOString().slice(0, 10)}`,
+    });
+  }
+
+  localStorage.setItem(MIGRATION_FLAG, '1');
 }
