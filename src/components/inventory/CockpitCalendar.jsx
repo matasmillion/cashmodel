@@ -18,12 +18,15 @@ import CalendarTooltip from './CalendarTooltip';
 
 const WEEKS = 52;
 const HORIZON_DAYS = WEEKS * 7;
+// Wide label column so full SKU codes / "Style · Color · Size" labels
+// aren't clipped. The user can horizontally scroll for the right-side weeks.
+const LABEL_COL_W = 360;
 
 export default function CockpitCalendar() {
   const { state } = useApp();
   const [skus, setSkus] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState('product'); // 'sku' | 'product'
+  const [mode, setMode] = useState('sku'); // 'sku' | 'product'
   const [tip, setTip]   = useState({ visible: false, x: 0, y: 0, date: null, state: null, poArrival: false });
 
   useEffect(() => {
@@ -56,7 +59,7 @@ export default function CockpitCalendar() {
             color: FADE.slate60,
             paddingLeft: 4,
           }}>
-            Top 6 by 90d revenue
+            Sorted by 90d revenue
           </span>
         </div>
       </div>
@@ -68,31 +71,39 @@ export default function CockpitCalendar() {
         paddingLeft: 4,
         paddingRight: 4,
       }}>
-        <div style={{ minWidth: WEEKS * 10 + 220 }}>
-          {/* Header — week numbers above strips */}
+        <div style={{ minWidth: WEEKS * 52 + LABEL_COL_W }}>
+          {/* Header — week numbers above strips. Stays put as the body scrolls. */}
           <HeaderRow weeks={WEEKS} today={today} />
 
-          {/* Body rows */}
-          {loading && <EmptyRow message="Loading…" />}
-          {!loading && rows.length === 0 && <EmptyRow message="No tracked SKUs yet." />}
-          {!loading && rows.map(row => (
-            <CalendarRow
-              key={row.id}
-              row={row}
-              today={today}
-              onCellHover={(e, day, date) => {
-                setTip({
-                  visible: true,
-                  x: e.clientX,
-                  y: e.clientY,
-                  date,
-                  state: day.state,
-                  poArrival: day.poArrival,
-                });
-              }}
-              onCellLeave={() => setTip(t => ({ ...t, visible: false }))}
-            />
-          ))}
+          {/* Body rows — scrollable when more than ~12 SKUs. */}
+          <div style={{
+            maxHeight: 480,
+            overflowY: 'auto',
+            // Keep the horizontal scroll synced with the parent: never
+            // intercept it here.
+            overflowX: 'visible',
+          }}>
+            {loading && <EmptyRow message="Loading…" />}
+            {!loading && rows.length === 0 && <EmptyRow message="No tracked SKUs yet." />}
+            {!loading && rows.map(row => (
+              <CalendarRow
+                key={row.id}
+                row={row}
+                today={today}
+                onCellHover={(e, day, date) => {
+                  setTip({
+                    visible: true,
+                    x: e.clientX,
+                    y: e.clientY,
+                    date,
+                    state: day.state,
+                    poArrival: day.poArrival,
+                  });
+                }}
+                onCellLeave={() => setTip(t => ({ ...t, visible: false }))}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
@@ -108,7 +119,7 @@ export default function CockpitCalendar() {
 function HeaderRow({ weeks, today }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', marginBottom: 6 }}>
-      <div style={{ width: 200, flexShrink: 0 }} />
+      <div style={{ width: LABEL_COL_W, flexShrink: 0 }} />
       <div style={{ display: 'flex', gap: 3, paddingLeft: 12 }}>
         {Array.from({ length: weeks }, (_, w) => {
           const monday = new Date(today);
@@ -118,12 +129,12 @@ function HeaderRow({ weeks, today }) {
             <div key={w} style={{
               width: 49,
               fontSize: 8.5,
-              color: 'rgba(58,58,58,0.45)',
+              color: 'rgba(58,58,58,0.55)',
               fontFamily: "'SF Mono', monospace",
               textAlign: 'center',
               letterSpacing: '0.04em',
             }}>
-              {(w === 0 || wnum % 4 === 1) ? `W${wnum}` : ''}
+              W{wnum}
             </div>
           );
         })}
@@ -147,7 +158,7 @@ function CalendarRow({ row, today, onCellHover, onCellLeave }) {
       }}
     >
       <div style={{
-        width: 200,
+        width: LABEL_COL_W,
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
@@ -163,6 +174,7 @@ function CalendarRow({ row, today, onCellHover, onCellLeave }) {
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
           flex: 1,
+          minWidth: 0,
         }} title={row.label}>
           {row.label}
         </span>
@@ -171,6 +183,7 @@ function CalendarRow({ row, today, onCellHover, onCellLeave }) {
           fontSize: 11,
           fontVariantNumeric: 'tabular-nums',
           color: row.fwosCritical ? INV.bad : INV.stone,
+          flexShrink: 0,
         }}>
           {row.fwos != null ? `${row.fwos.toFixed(1)}w` : '—'}
         </span>
@@ -296,10 +309,10 @@ function buildRows(skus, mode, assumptions) {
   }));
 
   if (mode === 'sku') {
-    // Top 6 SKUs by trailing revenue.
+    // All tracked SKUs, sorted by trailing 90d revenue. The container
+    // adds vertical scroll past ~12 rows.
     return inputs
       .sort((a, b) => b.revenue90 - a.revenue90)
-      .slice(0, 6)
       .map(x => projectionToRow(x.sku, x.label, x.cover, x.weeklyVelocity, lift, x.sku));
   }
 
@@ -330,7 +343,6 @@ function buildRows(skus, mode, assumptions) {
 
   return productRows
     .sort((a, b) => b.revenue90 - a.revenue90)
-    .slice(0, 6)
     .map(x => projectionToRow(x.id, x.label, x.cover, x.weeklyVelocity, lift, x.targetSku));
 }
 
