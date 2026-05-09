@@ -14,6 +14,8 @@ import { parsePLMHash, replacePLMHash } from '../../utils/plmRouting';
 import { getFRColorCost } from '../../utils/colorLibrary';
 import { formatCost } from './TechPackPrimitives';
 import { uploadAsset, dataUrlToBlob, isLegacyDataUrl, useResolvedImageEntries, isGhostImage } from '../../utils/plmAssets';
+import { computePackDiff } from '../../utils/techPackDiff';
+import { listTreatments } from '../../utils/treatmentStore';
 
 function sanitizeFilename(s) {
   return (s || 'techpack').replace(/[^\w\-]+/g, '_').slice(0, 60);
@@ -28,31 +30,63 @@ function downloadBlob(blob, filename) {
 // ─── Revision Panel ──────────────────────────────────────────────────────────
 function RevisionPanel({ revisions, onCreateRevision }) {
   const [showAll, setShowAll] = useState(false);
-  const recent = showAll ? revisions : revisions.slice(0, 3);
+  const [expandedIdx, setExpandedIdx] = useState(null);
+  const allReversed = [...revisions].reverse();
+  const shown = showAll ? allReversed : allReversed.slice(0, 5);
+
   return (
     <div style={{ marginTop: 16, padding: 12, background: FR.salt, border: `1px solid ${FR.sand}`, borderRadius: 6 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: FR.slate }}>
-          <History size={13} /> Revisions ({revisions.length})
+          <History size={13} /> Version History ({revisions.length})
         </div>
         <button onClick={onCreateRevision}
           style={{ padding: '4px 10px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 10, cursor: 'pointer' }}>
-          + Snapshot
+          + Manual Snapshot
         </button>
       </div>
-      {recent.length === 0 ? (
-        <p style={{ fontSize: 10, color: FR.stone, margin: 0 }}>No snapshots yet. Create one before sending to vendor.</p>
+      {shown.length === 0 ? (
+        <p style={{ fontSize: 10, color: FR.stone, margin: 0 }}>No snapshots yet. Snapshots are created automatically on download.</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {recent.map((r, i) => (
-            <div key={i} style={{ fontSize: 10, color: FR.stone, padding: '4px 8px', background: 'white', borderRadius: 4, display: 'flex', justifyContent: 'space-between' }}>
-              <span><strong style={{ color: FR.slate }}>v{r.version}</strong> — {r.status} — {r.note || 'Snapshot'}</span>
-              <span>{new Date(r.date).toLocaleDateString()}</span>
-            </div>
-          ))}
-          {revisions.length > 3 && (
-            <button onClick={() => setShowAll(!showAll)} style={{ fontSize: 10, color: FR.soil, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-              {showAll ? 'Show less' : `Show all ${revisions.length}`}
+          {shown.map((r, i) => {
+            const isExpanded = expandedIdx === i;
+            const changedCount = (r.changedFields || []).length;
+            return (
+              <div key={i} style={{ background: 'white', borderRadius: 4, border: `1px solid ${FR.sand}`, overflow: 'hidden' }}>
+                <div
+                  onClick={() => setExpandedIdx(isExpanded ? null : i)}
+                  style={{ fontSize: 10, color: FR.stone, padding: '5px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: changedCount > 0 ? 'pointer' : 'default' }}>
+                  <span>
+                    <strong style={{ color: FR.slate, fontFamily: 'ui-monospace,monospace', fontSize: 9 }}>v{r.version}</strong>
+                    <span style={{ marginLeft: 6, color: FR.soil }}>{r.status}</span>
+                    {r.triggeredBy === 'download' ? (
+                      <span style={{ marginLeft: 6, padding: '1px 5px', background: FR.sand, borderRadius: 2, fontSize: 9, color: FR.stone }}>download</span>
+                    ) : (
+                      <span style={{ marginLeft: 6, padding: '1px 5px', background: '#f0ede6', borderRadius: 2, fontSize: 9, color: FR.stone }}>manual</span>
+                    )}
+                    {r.note ? <span style={{ marginLeft: 6, color: FR.stone }}>{r.note}</span> : null}
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {changedCount > 0 && (
+                      <span style={{ fontSize: 9, color: FR.soil }}>{changedCount} change{changedCount !== 1 ? 's' : ''} {isExpanded ? '▲' : '▼'}</span>
+                    )}
+                    <span style={{ color: FR.stone }}>{new Date(r.date).toLocaleDateString()}</span>
+                  </span>
+                </div>
+                {isExpanded && changedCount > 0 && (
+                  <div style={{ padding: '4px 8px 6px', borderTop: `1px solid ${FR.sand}`, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {r.changedFields.map(f => (
+                      <span key={f} style={{ fontSize: 9, padding: '2px 6px', background: FR.sand, borderRadius: 2, color: FR.slate }}>{f}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {revisions.length > 5 && (
+            <button onClick={() => setShowAll(!showAll)} style={{ fontSize: 10, color: FR.soil, background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+              {showAll ? 'Show less' : `Show all ${revisions.length} versions`}
             </button>
           )}
         </div>
@@ -138,11 +172,150 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // Initial step comes from the URL so refresh keeps you on the same wizard step.
   const [step, setStep] = useState(() => {
     const { packId, step } = parsePLMHash();
-    return packId === pack.id ? Math.min(step, STEPS.length - 1) : 0;
+    if (packId === pack.id) return Math.min(step, STEPS.length - 1);
+    // Default to Style Overview (cover) on open — designers expect to land
+    // there, not on the pre-tech-pack Merchandising pages.
+    const coverIdx = STEPS.findIndex(s => s.id === 'cover');
+    return coverIdx >= 0 ? coverIdx : 0;
   });
   const [data, setData] = useState(pack.data || DEFAULT_DATA);
   const [images, setImages] = useState(pack.images || []);
   const [library, setLibrary] = useState(pack.library || DEFAULT_LIBRARY);
+  // Treatment library cache, keyed by id, for resolving fabric.treatment_id
+  // selections into name/code/process on the live preview without forcing
+  // PageTreatments to do async work mid-render.
+  const [treatmentsById, setTreatmentsById] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    listTreatments({ includeArchived: true }).then(rows => {
+      if (cancelled) return;
+      const map = {};
+      (rows || []).forEach(t => { if (t.id) map[t.id] = t; });
+      setTreatmentsById(map);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Resolve picked Component Pack rows for the BOM live preview pages —
+  // covers, vendor, color, length, size all come from the library, not from
+  // the pack's own data. Keyed by component pack id.
+  const [componentsById, setComponentsById] = useState({});
+  // Bumps every time the window regains focus or this tab becomes visible.
+  // Library edits typically happen in another tab; when the user comes back
+  // we want every BOM-side resolver to re-fetch so they see the new data.
+  const [refreshTick, setRefreshTick] = useState(0);
+  useEffect(() => {
+    const onFocus = () => setRefreshTick(t => t + 1);
+    const onVis   = () => { if (!document.hidden) setRefreshTick(t => t + 1); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, []);
+  const componentIdKey = [
+    ...(data.pickedTrims || []).map(p => p?.componentId || p?.id || ''),
+    ...(data.pickedPackaging || []).map(p => p?.componentId || p?.id || ''),
+  ].filter(Boolean).join('|');
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ids = componentIdKey.split('|').filter(Boolean);
+      if (!ids.length) { setComponentsById({}); return; }
+      const { getComponentPack } = await import('../../utils/componentPackStore');
+      const { getAssetUrl, invalidateAssetUrl } = await import('../../utils/plmAssets');
+      const next = {};
+      for (const id of ids) {
+        // Always re-fetch — library edits to a component pack must reflect
+        // here on next render, not stay frozen behind a cached row.
+        const row = await getComponentPack(id);
+        if (cancelled) return;
+        if (!row) continue;
+        const v = row.updated_at;
+        // Bypass the signed-URL cache for any path that belongs to this
+        // pack — when the cover changes the path is the same and the
+        // browser would otherwise serve the old image. invalidate forces
+        // a fresh signed URL on the next call.
+        const stripQuery = (s) => (typeof s === 'string' ? s.split('?')[0] : s);
+        const resolveCover = async (path) => {
+          if (!path || typeof path !== 'string') return null;
+          if (/^(https?:|data:|blob:)/.test(path)) return `${path}${path.includes('?') ? '&' : '?'}v=${encodeURIComponent(v || '')}`;
+          try { invalidateAssetUrl?.(stripQuery(path)); } catch {}
+          try {
+            const url = await getAssetUrl(path);
+            return url ? `${url}${url.includes('?') ? '&' : '?'}v=${encodeURIComponent(v || '')}` : null;
+          } catch { return null; }
+        };
+        const top    = await resolveCover(row.cover_image);
+        const nested = await resolveCover(row?.data?.cover_image);
+        // Cover priority: construction-diagram → design-sketch → cover_image
+        const findImage = async (slot) => {
+          const entry = (row.images || []).find(img => img.slot === slot);
+          if (!entry) return null;
+          if (entry.data?.startsWith?.('data:')) return entry.data;
+          if (entry.path) return await resolveCover(entry.path);
+          return null;
+        };
+        const diagramUrl = await findImage('construction-diagram') || await findImage('design-sketch');
+        next[id] = {
+          ...row,
+          cover_image: top || row.cover_image,
+          data: { ...(row.data || {}), cover_image: nested || row?.data?.cover_image },
+          _constructionDiagram: diagramUrl,
+        };
+      }
+      if (!cancelled) setComponentsById(next);
+    })();
+    return () => { cancelled = true; };
+  }, [componentIdKey, refreshTick]);
+
+  // Same idea for picked fabrics — fabric library row + resolved cover.
+  const [fabricsById, setFabricsById] = useState({});
+  const fabricIdKey = (data.pickedFabrics || []).map(p => p?.fabricId || '').filter(Boolean).join('|');
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ids = fabricIdKey.split('|').filter(Boolean);
+      if (!ids.length) { setFabricsById({}); return; }
+      const { getFabric } = await import('../../utils/fabricStore');
+      const { getAssetUrl, invalidateAssetUrl } = await import('../../utils/plmAssets');
+      const { getVendor } = await import('../../utils/vendorLibrary');
+      const next = {};
+      for (const id of ids) {
+        // Always re-fetch — picks up library edits on every render.
+        const row = await getFabric(id);
+        if (cancelled) return;
+        if (!row) continue;
+        const v = row.updated_at;
+        // Match the Fabric library's priority (front_image_url first) so the
+        // BOM card and live preview render the same swatch the library card shows.
+        let cover = row.front_image_url || row.cover_image || null;
+        if (cover && !/^(https?:|data:|blob:)/.test(cover)) {
+          try { invalidateAssetUrl?.(cover); } catch {}
+          cover = await getAssetUrl(cover).catch(() => null) || row.front_image_url || row.cover_image;
+        }
+        const tagged = cover ? `${cover}${cover.includes('?') ? '&' : '?'}v=${encodeURIComponent(v || '')}` : null;
+        // Vendor contact lookup so the SVG card can show email / phone /
+        // primary contact alongside the mill name.
+        const vendor = row.mill_id ? getVendor(row.mill_id) : null;
+        // Overwrite both fields with the resolved tagged URL so the live
+        // preview reads the same image regardless of which it checks first.
+        const finalUrl = tagged || cover || row.cover_image;
+        next[id] = {
+          ...row,
+          cover_image:      finalUrl,
+          front_image_url:  finalUrl,
+          _vendorEmail:     vendor?.email || '',
+          _vendorPhone:     vendor?.phone || '',
+          _vendorContact:   vendor?.primary_contact || '',
+        };
+      }
+      if (!cancelled) setFabricsById(next);
+    })();
+    return () => { cancelled = true; };
+  }, [fabricIdKey, refreshTick]);
+
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -195,12 +368,81 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     };
   }, [step, pack.id]);
 
-  // Derived: full unit-cost roll-up — BOM + colorway library.
-  // Every cash line on the garment contributes a per-unit number; vendors
-  // aren't a line item here (they're the maker, not a part).
-  const bomCost = computeBOMCost(data);
+  // Derived: full unit-cost roll-up — picked fabrics + trims + packaging
+  // + treatments + colorways + cut/sew labor. The garment's design-phase
+  // cost is the entire reason this builder exists, so every line item the
+  // designer adds rolls up into a phase pill in the sidebar and a total
+  // unit cost in the header.
+  const componentUnitCost = (full) => {
+    if (!full) return 0;
+    const tier = (full.data?.costTiers || [])[0];
+    return parseFloat(tier?.unitCost) || parseFloat(full.cost_per_unit) || parseFloat(full.data?.targetUnitCost) || 0;
+  };
+  const fabricUnitCost = (row) => {
+    if (!row) return 0;
+    const d = row.data || row;
+    const tier = (d?.costTiers || [])[0];
+    const gsm = parseFloat(row.weight_gsm ?? d?.weight_gsm) || 0;
+    const widthCm = parseFloat(row.width_cm ?? d?.width_cm) || 0;
+    const kgUsd = parseFloat(row.price_per_kg_usd ?? d?.price_per_kg_usd) || 0;
+    const fromKg = (kgUsd && gsm && widthCm) ? kgUsd * (gsm * widthCm / 100000) : 0;
+    // fabricStore canonical: price_per_meter_usd. Older shapes covered too.
+    return (
+      parseFloat(row.price_per_meter_usd) ||
+      parseFloat(d?.price_per_meter_usd) ||
+      fromKg ||
+      parseFloat(tier?.unitCost) ||
+      parseFloat(row.cost_per_unit) ||
+      parseFloat(d?.cost_per_unit) ||
+      parseFloat(d?.costPerYard) ||
+      parseFloat(d?.costPerMeter) || 0
+    );
+  };
+  const parseQty = (q) => {
+    if (q === null || q === undefined || q === '') return 1;
+    const n = parseFloat(String(q).replace(/[^0-9.]/g, ''));
+    return Number.isFinite(n) && n > 0 ? n : 1;
+  };
+
+  const fabricsCost = (data.pickedFabrics || []).reduce((sum, p) => {
+    const row = fabricsById[p?.fabricId];
+    const costPerMeter = fabricUnitCost(row);
+    const mpu = p?.metersPerUnit;
+    return sum + (mpu ? costPerMeter * mpu : costPerMeter);
+  }, 0);
+  const trimsCost = (data.pickedTrims || []).reduce((sum, p) => {
+    const full = componentsById[p?.componentId || p?.id];
+    return sum + componentUnitCost(full) * parseQty(p?.quantity);
+  }, 0);
+  const packagingCost = (data.pickedPackaging || []).reduce((sum, p) => {
+    const full = componentsById[p?.componentId || p?.id];
+    return sum + componentUnitCost(full) * parseQty(p?.quantity);
+  }, 0);
+
+  const treatmentsCost = (() => {
+    let sum = 0;
+    (data.fabrics || []).forEach(f => {
+      if (!f?.treatment_id) return;
+      const t = treatmentsById[f.treatment_id];
+      sum += parseFloat(t?.target_cost) || parseFloat(t?.cost_per_unit) || 0;
+    });
+    return sum;
+  })();
+
+  const cutSewCost = parseFloat(data.cutSewLaborCost) || 0;
+
+  const bomCost = computeBOMCost(data);  // legacy free-text BOM, kept for old packs
   const colorwayCost = computeColorwayCost(data, getFRColorCost);
-  const totalUnitCost = bomCost + colorwayCost;
+  const billOfMaterialsCost = fabricsCost + trimsCost + packagingCost + bomCost;
+  const totalUnitCost = billOfMaterialsCost + colorwayCost + treatmentsCost + cutSewCost;
+
+  // Per-phase cost subtotals shown as pills in the sidebar phase headers.
+  const phaseCosts = {
+    'Bill of Materials': billOfMaterialsCost,
+    'Cut & Sew': cutSewCost,
+    'Embellishments': colorwayCost,
+    'Treatments': treatmentsCost,
+  };
   const targetFOB = parseFloat(data.targetFOB) || 0;
   const costVariance = targetFOB > 0 ? totalUnitCost - targetFOB : 0;
 
@@ -223,8 +465,10 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     return (rc.pickPack || 0) + (tier ? (tier.rate || 0) : 0) + (rc.packagingMaterials || 0);
   })();
   const targetRetail = parseFloat(data.targetRetail) || 0;
+  const productWeightKg = parseFloat(data.weightKg ?? data.shippingWeightKg ?? 0) || 0;
+  const seaFreightCost = seaFreightSpot * productWeightKg;
   const maxFOB = targetRetail > 0
-    ? targetRetail * (cogsRate + fulfillmentPercent) - fulfillmentUnitCost + shippingCharge - seaFreightSpot
+    ? targetRetail * (cogsRate + fulfillmentPercent) - fulfillmentUnitCost + shippingCharge - seaFreightCost
     : 0;
   const fobDelta = maxFOB > 0 ? totalUnitCost - maxFOB : null;
 
@@ -425,26 +669,33 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   }, []);
 
   // ── Revision snapshots ──
-  const createRevision = useCallback(() => {
-    const revisions = data.revisions || [];
+  const buildSnapshot = useCallback((currentData, triggeredBy = 'manual', noteOverride = undefined) => {
+    const revisions = currentData.revisions || [];
     const version = revisions.length + 1;
-    const note = prompt(`Revision v${version} note (optional):`) || '';
-    const today = new Date().toISOString().slice(0, 10);
-    const snapshot = {
+    const note = noteOverride !== undefined ? noteOverride
+      : (prompt(`Snapshot v${version} note (optional):`) || '');
+    const prevSnapshot = revisions.length > 0 ? revisions[revisions.length - 1].dataSnapshot : null;
+    const changedFields = prevSnapshot ? computePackDiff(prevSnapshot, currentData) : [];
+    return {
       rev: `V${version}.0`,
-      date: today,
+      date: new Date().toISOString().slice(0, 10),
       changedBy: '',
       section: '',
-      description: note || `Snapshot at ${data.status || 'Design'}`,
+      description: note || `${triggeredBy === 'download' ? 'Downloaded' : 'Snapshot'} at ${currentData.status || 'Design'}`,
       approvedBy: '',
-      // keep snapshot metadata for PLM audit trail
       version,
-      status: data.status,
+      status: currentData.status,
       note,
-      dataSnapshot: JSON.parse(JSON.stringify(data)),
+      triggeredBy,
+      changedFields,
+      dataSnapshot: JSON.parse(JSON.stringify(currentData)),
     };
+  }, []);
+
+  const createRevision = useCallback(() => {
+    const snapshot = buildSnapshot(data, 'manual');
     setData(p => ({ ...p, revisions: [...(p.revisions || []), snapshot] }));
-  }, [data]);
+  }, [data, buildSnapshot]);
 
   // ── Sample tracking ──
   const addSample = useCallback((sample) => {
@@ -462,18 +713,24 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     setSubmitting(true);
     setSubmitResult(null);
     try {
-      const filename = sanitizeFilename(data.styleName || data.styleNumber || 'techpack');
-      const fullPack = { ...pack, data, images, library };
+      // Auto-snapshot on every download — no prompt, triggered automatically
+      const snapshot = buildSnapshot(data, 'download', '');
+      const updatedData = { ...data, revisions: [...(data.revisions || []), snapshot] };
+      setData(updatedData);
+
+      const version = snapshot.version;
+      const filename = sanitizeFilename(data.styleNumber || data.styleName || 'techpack');
+      const fullPack = { ...pack, data: updatedData, images, library };
       const pdfBlob = await generateTechPackPDF(fullPack);
-      downloadBlob(pdfBlob, `${filename}_v${(data.revisions || []).length || 1}.pdf`);
+      downloadBlob(pdfBlob, `${filename}_v${version}.pdf`);
       const svgString = await generateTechPackSVGAsync(fullPack);
-      downloadBlob(svgToBlob(svgString), `${filename}_v${(data.revisions || []).length || 1}.svg`);
+      downloadBlob(svgToBlob(svgString), `${filename}_v${version}.svg`);
       const finalSave = await saveTechPack(packIdRef.current, {
-        data, images, library,
-        style_name: data.styleNumber || data.styleName || '',
-        product_category: data.productCategory || '',
-        status: data.status || 'Design',
-        completion_pct: computeCompletion(data),
+        data: updatedData, images, library,
+        style_name: updatedData.styleNumber || updatedData.styleName || '',
+        product_category: updatedData.productCategory || '',
+        status: updatedData.status || 'Design',
+        completion_pct: computeCompletion(updatedData),
       });
       if (finalSave && finalSave.idChanged) {
         packIdRef.current = finalSave.idChanged.to;
@@ -485,7 +742,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       setSubmitResult({ error: err.message || String(err) });
     }
     setSubmitting(false);
-  }, [pack, data, images, library]);
+  }, [pack, data, images, library, buildSnapshot]);
 
   const Comp = STEP_FNS[step];
   const skippedSteps = data.skippedSteps || [];
@@ -501,6 +758,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     bomCost, costVariance,
     existingSuppliers,
     onCreateRevision: createRevision,
+    packId: pack.id,
   };
 
   return (
@@ -513,11 +771,27 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
             <ArrowLeft size={12} /> Back
           </button>
           <div>
-            <div style={{ color: FR.salt, fontSize: 9, letterSpacing: 3, fontWeight: 600 }}>
-              F O R E I G N  R E S O U R C E  C O .
-              {data.parentStyleName && <span style={{ color: FR.stone, letterSpacing: 0, marginLeft: 8, fontWeight: 400, fontSize: 9 }}>variant of {data.parentStyleName}</span>}
+            <div style={{
+              fontFamily: "'Cormorant Garamond', Georgia, serif",
+              color: FR.salt,
+              fontSize: 14,
+              fontWeight: 700,
+              letterSpacing: 0.5,
+            }}>
+              FOREIGN RESOURCE
+              {data.parentStyleName && (
+                <span style={{ fontFamily: "'General Sans', 'Inter', sans-serif", letterSpacing: 0, marginLeft: 8, fontWeight: 400, fontSize: 10, color: FR.stone }}>
+                  variant of {data.parentStyleName}
+                </span>
+              )}
             </div>
-            <div style={{ fontFamily: "'Cormorant Garamond','Georgia',serif", color: FR.salt, fontSize: 16, marginTop: 2 }}>
+            <div style={{
+              fontFamily: "'General Sans', 'Inter', 'Helvetica Neue', sans-serif",
+              color: FR.salt,
+              fontSize: 14,
+              marginTop: 2,
+              letterSpacing: 0.2,
+            }}>
               {data.styleNumber || data.styleName || 'New Tech Pack'}
             </div>
           </div>
@@ -553,21 +827,34 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       <div style={{ display: 'flex' }}>
         {/* Sidebar */}
         <div style={{ width: 220, minWidth: 220, borderRight: `1px solid ${FR.sand}`, background: FR.salt, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '14px 0', flex: 1 }}>
+          <div style={{ padding: '8px 0', flex: 1, overflowY: 'auto' }}>
             {STEPS.map((s, i) => {
               const stepLocked = isStepLocked(i, data.status);
               const stepSkipped = skippedSteps.includes(i);
+              const phaseChanged = i === 0 || STEPS[i - 1].phase !== s.phase;
               return (
-                <button key={s.id} onClick={() => setStep(i)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 16px', border: 'none', cursor: 'pointer', background: i === step ? FR.white : 'transparent', borderLeft: i === step ? `3px solid ${FR.soil}` : '3px solid transparent' }}>
-                  <span style={{ fontSize: 10, color: stepSkipped ? '#C0392B' : (i === step ? FR.soil : FR.stone), fontWeight: 700, width: 18 }}>
-                    {stepSkipped ? '×' : s.icon}
-                  </span>
-                  <span style={{ fontSize: 11, color: i === step ? FR.slate : FR.stone, textAlign: 'left', flex: 1, textDecoration: stepSkipped ? 'line-through' : 'none', opacity: stepSkipped ? 0.55 : (stepLocked ? 0.5 : 1) }}>
-                    {s.title}
-                  </span>
-                  {stepLocked && !stepSkipped && <span style={{ fontSize: 10, color: FR.stone }}>🔒</span>}
-                </button>
+                <div key={s.id}>
+                  {phaseChanged && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: i === 0 ? '10px 16px 6px' : '14px 16px 6px', borderTop: i === 0 ? 'none' : `1px solid ${FR.sand}`, marginTop: i === 0 ? 0 : 6 }}>
+                      <span style={{ fontSize: 8, color: FR.soil, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase' }}>{s.phase}</span>
+                      {phaseCosts[s.phase] > 0 && (
+                        <span style={{ fontSize: 9, color: FR.soil, background: FR.sand, borderRadius: 4, padding: '2px 6px', fontWeight: 600, fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace" }}>
+                          {formatCost(phaseCosts[s.phase])}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <button onClick={() => setStep(i)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 16px', border: 'none', cursor: 'pointer', background: i === step ? FR.white : 'transparent', borderLeft: i === step ? `3px solid ${FR.soil}` : '3px solid transparent' }}>
+                    <span style={{ fontSize: 10, color: stepSkipped ? '#C0392B' : (i === step ? FR.soil : FR.stone), fontWeight: 700, width: 18, fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace" }}>
+                      {stepSkipped ? '×' : s.icon}
+                    </span>
+                    <span style={{ fontSize: 11, color: i === step ? FR.slate : FR.stone, textAlign: 'left', flex: 1, textDecoration: stepSkipped ? 'line-through' : 'none', opacity: stepSkipped ? 0.55 : (stepLocked ? 0.5 : 1) }}>
+                      {s.title}
+                    </span>
+                    {stepLocked && !stepSkipped && <span style={{ fontSize: 10, color: FR.stone }}>🔒</span>}
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -619,7 +906,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
             <div style={{ fontSize: 9, color: FR.stone, letterSpacing: 2, fontWeight: 600, textTransform: 'uppercase' }}>Live Preview</div>
             <div style={{ fontSize: 9, color: FR.stone }}>Page {step + 1} / {STEPS.length}</div>
           </div>
-          <TechPackPagePreview data={data} images={previewImages} step={step} skippedSteps={skippedSteps} />
+          <TechPackPagePreview data={data} images={previewImages} step={step} skippedSteps={skippedSteps} treatmentsById={treatmentsById} componentsById={componentsById} fabricsById={fabricsById} />
         </div>
       </div>
     </div>

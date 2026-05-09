@@ -19,6 +19,7 @@ import RateCardManager from './components/RateCardManager';
 import PLMView from './components/techpack/PLMView';
 import CreativeEngineView from './components/creative/CreativeEngineView';
 import SellThrough from './components/SellThrough';
+import InventoryView from './components/inventory/InventoryView';
 import RequireAuth from './components/auth/RequireAuth';
 import SignInPage from './components/auth/SignInPage';
 import SignUpPage from './components/auth/SignUpPage';
@@ -76,6 +77,7 @@ function Dashboard() {
         {state.activeTab === 'product' && <PLMView />}
         {state.activeTab === 'creative-engine' && <CreativeEngineView />}
         {state.activeTab === 'sell-through' && <SellThrough />}
+        {state.activeTab === 'inventory' && <InventoryView />}
         {state.activeTab === 'fulfillment' && <RateCardManager />}
         {state.activeTab === 'po-schedule' && <POSchedule />}
         {state.activeTab === 'pos' && <POBuilder />}

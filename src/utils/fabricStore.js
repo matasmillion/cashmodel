@@ -9,16 +9,73 @@
 // still resolves.
 
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
-import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
+import { getCurrentOrgIdSync } from '../lib/auth';
 import { emptyFabric, FABRIC_WEAVE_CODE } from './fabricLibrary';
 import { copyCoverImage } from './plmAssets';
+import { robustUpsertAtom, robustUpsertAtomBatch } from './atomCloudSync';
 
 const LOCAL_KEY = 'cashmodel_fabrics';
+
+// Whitelist of columns that exist on the cloud `fabrics` table. Anything
+// outside this set (legacy fields lingering in localStorage, in-memory UI
+// state, computed values) gets dropped before the upsert — Postgres rejects
+// the whole row if a single unknown column is sent, so silently filtering is
+// the only way to keep cloud sync robust as the schema evolves.
+const FABRIC_CLOUD_COLUMNS = new Set([
+  'id', 'code', 'name', 'status', 'version', 'created_at', 'updated_at',
+  'category', 'mill_fabric_no', 'composition', 'weight_gsm', 'weave', 'hand',
+  'width_cm', 'shrinkage_pct', 'stretch_pct', 'mill_id', 'lead_time_days',
+  'moq_meters', 'price_per_meter_usd', 'price_per_meter_cny',
+  'price_per_kg_usd', 'price_per_kg_cny', 'currency',
+  'front_image_url', 'back_image_url', 'color_card_images', 'cover_image',
+  'zfab_file_url', 'color_id', 'notes',
+  'organization_id', 'user_id',
+]);
+
+export function toFabricCloudRow(row) {
+  const out = {};
+  for (const k of Object.keys(row)) {
+    if (FABRIC_CLOUD_COLUMNS.has(k)) out[k] = row[k];
+  }
+  return out;
+}
+
+// 1 yard = 0.9144 meters. Older rows used `moq_yards` / `price_per_yard_usd`;
+// we now store everything in meters because every mill we deal with quotes
+// in metric. Convert in place once on read so existing rows surface with the
+// new field names without losing data.
+const YARDS_TO_METERS = 0.9144;
+let _unitsMigrated = false;
+
+function migrateYardsToMeters(rows) {
+  if (_unitsMigrated) return rows;
+  _unitsMigrated = true;
+  let dirty = false;
+  for (const r of rows) {
+    if (!r || typeof r !== 'object') continue;
+    if (r.moq_yards != null && r.moq_meters == null) {
+      r.moq_meters = Math.round(Number(r.moq_yards) * YARDS_TO_METERS);
+      dirty = true;
+    }
+    if (r.price_per_yard_usd != null && r.price_per_meter_usd == null) {
+      r.price_per_meter_usd = Number((Number(r.price_per_yard_usd) / YARDS_TO_METERS).toFixed(2));
+      dirty = true;
+    }
+    delete r.moq_yards;
+    delete r.price_per_yard_usd;
+  }
+  if (dirty) {
+    try { localStorage.setItem(LOCAL_KEY, JSON.stringify(rows)); }
+    catch (err) { console.error('fabricStore yards→meters migrate:', err); }
+  }
+  return rows;
+}
 
 function readLocal() {
   try {
     const raw = localStorage.getItem(LOCAL_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const rows = raw ? JSON.parse(raw) : [];
+    return migrateYardsToMeters(rows);
   } catch {
     return [];
   }
@@ -65,6 +122,19 @@ function unionByIdLocalFirst(cloudRows, localRows) {
   return out;
 }
 
+// Heal local-only fabrics: any row in localStorage that's not in cloud gets
+// upserted to cloud. Runs on every listFabrics so users don't have to
+// manually re-save anything. Uses the robust upsert path so a stale JWT
+// (the most common reason heal silently failed before) gets refreshed and
+// retried once before giving up — see atomCloudSync.js.
+async function healOrphanFabrics(localRows, cloudRows) {
+  if (!Array.isArray(localRows) || localRows.length === 0) return;
+  const cloudIds = new Set((cloudRows || []).map(r => r.id));
+  const orphans = localRows.filter(r => r && r.id && !cloudIds.has(r.id));
+  if (orphans.length === 0) return;
+  await robustUpsertAtomBatch('fabrics', orphans.map(r => toFabricCloudRow(r)));
+}
+
 export async function listFabrics({ includeArchived = false, status = null, weave = null } = {}) {
   const filterOpts = { includeArchived, status, weave };
   const orgId = getCurrentOrgIdSync();
@@ -78,6 +148,8 @@ export async function listFabrics({ includeArchived = false, status = null, weav
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) cloudRows = data;
     else if (error) console.error('listFabrics:', error);
+    try { await healOrphanFabrics(readLocal(), cloudRows); }
+    catch (err) { console.error('healOrphanFabrics:', err); }
   }
   const merged = unionByIdLocalFirst(cloudRows, readLocal());
   return filterRows(merged, filterOpts)
@@ -123,13 +195,7 @@ export async function createFabric({ weave = 'jersey', ...overrides } = {}) {
   local.push(row);
   writeLocal(local);
 
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('fabrics').insert({ ...row, user_id: userId, organization_id: orgId });
-    if (error) console.error('createFabric:', error);
-  }
+  await robustUpsertAtom('fabrics', toFabricCloudRow(row));
   return row;
 }
 
@@ -151,16 +217,7 @@ export async function saveFabric(id, updates) {
   }
   writeLocal(local);
 
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const db = await getAuthedSupabase();
-    const { error } = await db
-      .from('fabrics')
-      .update({ ...updates, updated_at: now })
-      .eq('id', id)
-      .eq('organization_id', orgId);
-    if (error) console.error('saveFabric:', error);
-  }
+  await robustUpsertAtom('fabrics', toFabricCloudRow({ ...merged, updated_at: now }));
   return merged;
 }
 
@@ -200,13 +257,7 @@ export async function duplicateFabric(id) {
   delete copy.organization_id;
   local.push(copy);
   writeLocal(local);
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('fabrics').insert({ ...copy, user_id: userId, organization_id: orgId });
-    if (error) console.error('duplicateFabric:', error);
-  }
+  await robustUpsertAtom('fabrics', toFabricCloudRow(copy));
   return copy;
 }
 
@@ -214,6 +265,23 @@ export async function seedFabricsIfEmpty() {
   if (localStorage.getItem('cashmodel_seeded')) return [];
   const local = readLocal();
   if (local.length > 0) return [];
+  // Don't seed if cloud already has rows for this org — otherwise a fresh
+  // device signing into an existing org pollutes the shared library with
+  // duplicate defaults.
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { count, error } = await db
+      .from('fabrics')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', orgId);
+    if (error) console.error('seedFabricsIfEmpty count:', error);
+    if ((count || 0) > 0) {
+      // Mark seeded so we don't keep hitting cloud on every page load.
+      localStorage.setItem('cashmodel_seeded', '1');
+      return [];
+    }
+  }
   const now = new Date().toISOString();
   const seeds = [
     {
@@ -230,8 +298,8 @@ export async function seedFabricsIfEmpty() {
       color_id: 'PFD',
       mill_id: 'Lien Hsing Knits (Taipei)',
       lead_time_days: 35,
-      moq_yards: 800,
-      price_per_yard_usd: 6.40,
+      moq_meters: 732,
+      price_per_meter_usd: 7.00,
       currency: 'USD',
       status: 'approved',
       version: 'v1.2',
@@ -253,8 +321,8 @@ export async function seedFabricsIfEmpty() {
       color_id: 'PFD',
       mill_id: 'Lien Hsing Knits (Taipei)',
       lead_time_days: 28,
-      moq_yards: 600,
-      price_per_yard_usd: 4.10,
+      moq_meters: 549,
+      price_per_meter_usd: 4.48,
       currency: 'USD',
       status: 'approved',
       version: 'v2.0',
@@ -276,8 +344,8 @@ export async function seedFabricsIfEmpty() {
       color_id: 'Slate',
       mill_id: 'Kuroki Mills (Okayama)',
       lead_time_days: 56,
-      moq_yards: 300,
-      price_per_yard_usd: 22.0,
+      moq_meters: 274,
+      price_per_meter_usd: 24.06,
       currency: 'USD',
       status: 'testing',
       version: 'v1.0',
@@ -288,14 +356,6 @@ export async function seedFabricsIfEmpty() {
   ];
   const filled = seeds.map(s => ({ ...emptyFabric(s), updated_at: s.updated_at || now, created_at: s.created_at || now }));
   writeLocal(filled);
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('fabrics').insert(
-      filled.map(r => ({ ...r, user_id: userId, organization_id: orgId }))
-    );
-    if (error) console.error('seedFabrics:', error);
-  }
+  await robustUpsertAtomBatch('fabrics', filled.map(r => toFabricCloudRow(r)));
   return filled;
 }

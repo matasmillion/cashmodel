@@ -68,6 +68,62 @@ function deleteColorFromCloud(name) {
   });
 }
 
+// Map a Supabase row (snake_case projection) back into the camelCase
+// shape the rest of the app uses on entries pulled from localStorage.
+function fromSupabaseRow(row) {
+  if (!row) return null;
+  return {
+    name: row.name,
+    hex: row.hex || '',
+    rgb: row.rgb || '',
+    pantoneTCX: row.pantone_tcx || '',
+    pantoneTPG: row.pantone_tpg || '',
+    pantoneC: row.pantone_c || '',
+    cardImage: row.card_image || null,
+    usageNotes: row.usage_notes || '',
+    costPerUnit: row.cost_per_unit || '',
+    currency: row.currency || 'USD',
+    adobeAseUrl: row.adobe_ase_url || '',
+    adobeAceUrl: row.adobe_ace_url || '',
+    clo3dColorUrl: row.clo3d_color_url || '',
+  };
+}
+
+// Pull every color row for the current org from Supabase and merge into
+// the local store (cloud-wins on collisions). Idempotent — safe to call
+// from any UI mount. Returns the resolved store map keyed by name.
+export async function hydrateFRColorsFromCloud() {
+  const orgId = getCurrentOrgIdSync();
+  if (!IS_SUPABASE_ENABLED || !orgId) return null;
+  try {
+    const db = await getAuthedSupabase();
+    if (!db) return null;
+    const { data, error } = await db
+      .from('colors')
+      .select('*')
+      .eq('organization_id', orgId);
+    if (error) {
+      console.error('colorLibrary hydrate:', error);
+      return null;
+    }
+    const cloudByName = {};
+    (data || []).forEach(row => {
+      const camel = fromSupabaseRow(row);
+      if (camel?.name) cloudByName[camel.name] = camel;
+    });
+    const local = readStore();
+    const merged = { ...local };
+    Object.entries(cloudByName).forEach(([name, entry]) => {
+      merged[name] = { ...(local[name] || {}), ...entry };
+    });
+    writeStore(merged);
+    return merged;
+  } catch (err) {
+    console.error('colorLibrary hydrate:', err);
+    return null;
+  }
+}
+
 const emptyEntry = (name, hex) => ({
   name,
   hex: hex || '',

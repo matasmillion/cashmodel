@@ -67,6 +67,12 @@ html.cjk {
 }
 .sync-dot-spin { animation: syncPulse 0.8s ease-in-out infinite; }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.spin { animation: spin 0.9s linear infinite; }
+
 /* FR brand utility classes */
 .font-display { font-family: 'Cormorant Garamond', Georgia, serif; }
 .font-body { font-family: 'Inter', 'General Sans', system-ui, sans-serif; }

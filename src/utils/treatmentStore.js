@@ -14,12 +14,32 @@
 // Restoring just flips the status back.
 
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
-import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
+import { getCurrentOrgIdSync } from '../lib/auth';
 import { emptyTreatment, TREATMENT_TYPE_CODE } from './treatmentLibrary';
 import { addVendor } from './vendorLibrary';
 import { copyCoverImage } from './plmAssets';
+import { robustUpsertAtom, robustUpsertAtomBatch } from './atomCloudSync';
 
 const LOCAL_KEY = 'cashmodel_treatments';
+
+const TREATMENT_CLOUD_COLUMNS = new Set([
+  'id', 'code', 'name', 'status', 'version', 'created_at', 'updated_at',
+  'type', 'base_color_id', 'chemistry', 'duration_minutes', 'temperature_c',
+  'compatible_fabric_ids', 'compatible_pattern_categories',
+  'shrinkage_expected_pct', 'primary_vendor_id', 'backup_vendor_id',
+  'cost_per_unit_usd', 'lead_time_days', 'moq_units', 'notes',
+  'swatch_image_url', 'cover_image', 'digital',
+  'defect_rate_pct', 'units_produced_total',
+  'organization_id', 'user_id',
+]);
+
+export function toTreatmentCloudRow(row) {
+  const out = {};
+  for (const k of Object.keys(row)) {
+    if (TREATMENT_CLOUD_COLUMNS.has(k)) out[k] = row[k];
+  }
+  return out;
+}
 
 function readLocal() {
   try {
@@ -77,6 +97,14 @@ function unionByIdCloudFirst(cloudRows, localRows) {
   return out;
 }
 
+async function healOrphanTreatments(localRows, cloudRows) {
+  if (!Array.isArray(localRows) || localRows.length === 0) return;
+  const cloudIds = new Set((cloudRows || []).map(r => r.id));
+  const orphans = localRows.filter(r => r && r.id && !cloudIds.has(r.id));
+  if (orphans.length === 0) return;
+  await robustUpsertAtomBatch('treatments', orphans.map(r => toTreatmentCloudRow(r)));
+}
+
 export async function listTreatments({ includeArchived = false, status = null, type = null } = {}) {
   const filterOpts = { includeArchived, status, type };
   const orgId = getCurrentOrgIdSync();
@@ -90,6 +118,8 @@ export async function listTreatments({ includeArchived = false, status = null, t
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) cloudRows = data;
     else if (error) console.error('listTreatments:', error);
+    try { await healOrphanTreatments(readLocal(), cloudRows); }
+    catch (err) { console.error('healOrphanTreatments:', err); }
   }
   const merged = unionByIdCloudFirst(cloudRows, readLocal());
   return filterRows(merged, filterOpts)
@@ -133,13 +163,7 @@ export async function createTreatment({ type = 'wash', ...overrides } = {}) {
   local.push(row);
   writeLocal(local);
 
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('treatments').insert({ ...row, user_id: userId, organization_id: orgId });
-    if (error) console.error('createTreatment:', error);
-  }
+  await robustUpsertAtom('treatments', toTreatmentCloudRow(row));
   return row;
 }
 
@@ -161,16 +185,7 @@ export async function saveTreatment(id, updates) {
   }
   writeLocal(local);
 
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const db = await getAuthedSupabase();
-    const { error } = await db
-      .from('treatments')
-      .update({ ...updates, updated_at: now })
-      .eq('id', id)
-      .eq('organization_id', orgId);
-    if (error) console.error('saveTreatment:', error);
-  }
+  await robustUpsertAtom('treatments', toTreatmentCloudRow({ ...merged, updated_at: now }));
   return merged;
 }
 
@@ -245,13 +260,7 @@ export async function duplicateTreatment(id) {
   delete copy.organization_id;
   local.push(copy);
   writeLocal(local);
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('treatments').insert({ ...copy, user_id: userId, organization_id: orgId });
-    if (error) console.error('duplicateTreatment:', error);
-  }
+  await robustUpsertAtom('treatments', toTreatmentCloudRow(copy));
   return copy;
 }
 
@@ -385,6 +394,19 @@ export async function seedTreatmentsIfEmpty() {
   try { seedSeedVendors(); } catch (err) { console.error('seedSeedVendors:', err); }
   const local = readLocal();
   if (local.length > 0) return [];
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { count, error } = await db
+      .from('treatments')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', orgId);
+    if (error) console.error('seedTreatmentsIfEmpty count:', error);
+    if ((count || 0) > 0) {
+      localStorage.setItem('cashmodel_seeded', '1');
+      return [];
+    }
+  }
   const now = new Date().toISOString();
   const seeds = [
     {
@@ -493,14 +515,6 @@ export async function seedTreatmentsIfEmpty() {
   // Use empty defaults for any field a seed left out.
   const filled = seeds.map(s => ({ ...emptyTreatment(s), updated_at: s.updated_at || now, created_at: s.created_at || now }));
   writeLocal(filled);
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('treatments').insert(
-      filled.map(r => ({ ...r, user_id: userId, organization_id: orgId }))
-    );
-    if (error) console.error('seedTreatments:', error);
-  }
+  await robustUpsertAtomBatch('treatments', filled.map(r => toTreatmentCloudRow(r)));
   return filled;
 }

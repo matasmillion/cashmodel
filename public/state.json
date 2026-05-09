@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-09T16:59:46.075Z",
+  "lastUpdated": "2026-05-08T14:34:23.653Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,54 +1044,54 @@
   ],
   "changelog": [
     {
-      "sha": "8b0aaa0",
-      "date": "2026-05-06T18:59:16+00:00",
-      "message": "feat: Creative Engine Phases 6 + 7 — library, scraping, docs"
+      "sha": "4698014",
+      "date": "2026-05-08T16:35:04+03:00",
+      "message": "plm: route atom cloud writes through JWT-reconciled upsert + visible Sync Diagnostics panel (#77)"
     },
     {
-      "sha": "2cc6005",
-      "date": "2026-05-06T18:53:44+00:00",
-      "message": "feat: Creative Engine Phase 5 — evaluation + learning"
+      "sha": "979fa2c",
+      "date": "2026-05-08T13:34:30+03:00",
+      "message": "plm: auto-heal local-only atom rows to cloud on every list call (#76)"
     },
     {
-      "sha": "44b4a58",
-      "date": "2026-05-06T18:47:01+00:00",
-      "message": "feat: Creative Engine Phases 3.5 + 4 — encoder + Meta publish"
+      "sha": "19686fe",
+      "date": "2026-05-08T13:28:54+03:00",
+      "message": "plm: don't seed defaults if cloud already has rows for this org (#75)"
     },
     {
-      "sha": "42f29f3",
-      "date": "2026-05-06T18:34:34+00:00",
-      "message": "feat: Creative Engine Phase 3 — render dispatch"
+      "sha": "5885fc9",
+      "date": "2026-05-08T13:18:52+03:00",
+      "message": "plm: allowlist columns sent to cloud so unknown fields don't break the upsert (#74)"
     },
     {
-      "sha": "96be3c9",
-      "date": "2026-05-06T18:16:38+00:00",
-      "message": "feat: knowledge files upload + AI auto-fill"
+      "sha": "1774c29",
+      "date": "2026-05-08T13:07:36+03:00",
+      "message": "plm: switch atom save paths to upsert so orphan local rows can heal (#73)"
     },
     {
-      "sha": "429f691",
-      "date": "2026-05-06T17:52:26+00:00",
-      "message": "fix: make creative_knowledge migration self-contained"
+      "sha": "a8ddf21",
+      "date": "2026-05-08T12:18:20+03:00",
+      "message": "db: add sam_rate_usd_per_min column to vendors (silent-fail regression from PR #68) (#72)"
     },
     {
-      "sha": "951b057",
-      "date": "2026-05-06T14:01:33+00:00",
-      "message": "feat: knowledge files moved to DB with structured editor"
+      "sha": "673c759",
+      "date": "2026-05-08T12:11:52+03:00",
+      "message": "db: add missing PLM atom columns so cloud sync stops silently failing (#71)"
     },
     {
-      "sha": "58c2000",
-      "date": "2026-05-06T13:41:06+00:00",
-      "message": "chore: regenerate state.json after Phase 2 build"
+      "sha": "968c573",
+      "date": "2026-05-08T12:05:42+03:00",
+      "message": "libraries: vendor + color libraries now hydrate from cloud on mount (#70)"
     },
     {
-      "sha": "9777fd8",
-      "date": "2026-05-06T13:40:37+00:00",
-      "message": "fix: drop supabase.auth.getUser() from creative proxies"
+      "sha": "07b8097",
+      "date": "2026-05-08T01:01:40+03:00",
+      "message": "treatments: AI auto-fill, spec PDF, send-to-vendor, gate process recipe (#69)"
     },
     {
-      "sha": "f06ebf8",
-      "date": "2026-05-06T13:23:10+00:00",
-      "message": "feat: Creative Engine Phase 2 — brief generation"
+      "sha": "985da17",
+      "date": "2026-05-08T01:00:24+03:00",
+      "message": "techpack: vendor SAM rate field + two-mode AI labor cost (rate × SAM | CMT fallback) (#68)"
     }
   ]
 }

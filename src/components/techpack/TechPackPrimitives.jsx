@@ -222,33 +222,50 @@ export function ArrayTable({ headers, rows, onUpdate, onAdd, onRemove }) {
   );
 }
 
-export function PhotoUpload({ label, slotKey, images, onUpload, onRemove }) {
+export function PhotoUpload({ label, slotKey, images, onUpload, onRemove, aspect, single }) {
   const fileRef = useRef(null);
   const [dragging, setDragging] = useState(false);
+  const slotImages = (images || []).filter(img => img.slot === slotKey);
+
   const handleFiles = async (files) => {
     for (const f of files) {
       if (!f.type.startsWith('image/')) continue;
+      // single-image slot — replace the existing image rather than append.
+      if (single && slotImages.length > 0) {
+        for (let i = slotImages.length - 1; i >= 0; i--) onRemove(slotKey, i);
+      }
       onUpload(slotKey, await resizeImage(f), f.name);
+      if (single) break; // only take the first dropped/selected file
     }
   };
-  const slotImages = (images || []).filter(img => img.slot === slotKey);
+  const atCapacity = single && slotImages.length >= 1;
   return (
     <div style={{ marginBottom: 14 }}>
       <label style={labelStyle}>{label}</label>
-      <div onClick={() => fileRef.current?.click()}
-        onDrop={e => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files); }}
-        onDragOver={e => { e.preventDefault(); setDragging(true); }}
+      <div onClick={() => { if (!atCapacity) fileRef.current?.click(); }}
+        onDrop={e => { e.preventDefault(); setDragging(false); if (!atCapacity) handleFiles(e.dataTransfer.files); }}
+        onDragOver={e => { e.preventDefault(); if (!atCapacity) setDragging(true); }}
         onDragLeave={() => setDragging(false)}
-        style={{ border: `2px dashed ${dragging ? FR.soil : FR.sand}`, borderRadius: 6, padding: slotImages.length ? 10 : 24, textAlign: 'center', cursor: 'pointer', background: dragging ? FR.sand : FR.white, transition: 'all 0.2s', minHeight: 50 }}>
-        <input ref={fileRef} type="file" accept="image/*" multiple onChange={e => { if (e.target.files.length) handleFiles(e.target.files); e.target.value = ''; }} style={{ display: 'none' }} />
+        style={{
+          border: `2px dashed ${dragging ? FR.soil : FR.sand}`,
+          borderRadius: 6,
+          padding: aspect ? 10 : (slotImages.length ? 10 : 24),
+          textAlign: 'center',
+          cursor: atCapacity ? 'default' : 'pointer',
+          background: dragging ? FR.sand : FR.white,
+          transition: 'all 0.2s',
+          minHeight: 50,
+          ...(aspect ? { aspectRatio: aspect, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' } : null),
+        }}>
+        <input ref={fileRef} type="file" accept="image/*" multiple={!single} onChange={e => { if (e.target.files.length) handleFiles(e.target.files); e.target.value = ''; }} style={{ display: 'none' }} />
         {slotImages.length === 0 ? (
           <>
             <div style={{ fontSize: 20, color: FR.sand }}>+</div>
-            <div style={{ fontSize: 11, color: FR.stone }}>Click or drag photos here</div>
+            <div style={{ fontSize: 11, color: FR.stone }}>Click or drag {single ? 'a photo' : 'photos'} here</div>
             <div style={{ fontSize: 9, color: FR.sand, marginTop: 2 }}>JPG, PNG — auto-resized</div>
           </>
         ) : (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: aspect ? 'center' : 'flex-start' }}>
             {slotImages.map((img, i) => (
               <div key={i} style={{ position: 'relative', width: 100, height: 100, borderRadius: 4, overflow: 'hidden', border: `1px solid ${FR.sand}` }}>
                 <AssetImage image={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -257,7 +274,9 @@ export function PhotoUpload({ label, slotKey, images, onUpload, onRemove }) {
                 <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(58,58,58,0.7)', padding: '2px 4px', fontSize: 8, color: FR.salt, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{img.name || `Photo ${i + 1}`}</div>
               </div>
             ))}
-            <div style={{ width: 100, height: 100, borderRadius: 4, border: `2px dashed ${FR.sand}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: FR.stone, fontSize: 24 }}>+</div>
+            {!single && (
+              <div style={{ width: 100, height: 100, borderRadius: 4, border: `2px dashed ${FR.sand}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: FR.stone, fontSize: 24 }}>+</div>
+            )}
           </div>
         )}
       </div>
@@ -313,7 +332,7 @@ export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height 
           position: 'relative',
           border: `2px dashed ${dragging ? FR.soil : FR.sand}`,
           borderRadius: 8,
-          ...(portrait ? { aspectRatio: '2 / 3', height: 'auto' } : { height }),
+          ...(portrait ? { aspectRatio: '2 / 3', height: 'auto', maxWidth: 220, width: '100%' } : { height }),
           cursor: 'pointer',
           background: current ? 'transparent' : (dragging ? FR.sand : FR.salt),
           transition: 'all 0.2s',
@@ -328,7 +347,7 @@ export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height 
         {current ? (
           <>
             <AssetImage image={current} alt={current.name || 'Cover'}
-              style={{ width: '100%', height: '100%', objectFit: 'contain', background: FR.white }} />
+              style={{ width: '100%', height: '100%', objectFit: portrait ? 'cover' : 'contain', background: FR.white }} />
             <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
               <button onClick={e => { e.stopPropagation(); handleAutoCropExisting(); }} disabled={cropping}
                 title="Auto-crop to subject"
@@ -551,6 +570,110 @@ export function EditableSelect({ label, value, onChange, options = [], onAddOpti
         </select>
       )}
     </div>
+  );
+}
+
+// FilesPanel — upload + list non-image source documents (PDF, AI, PSD, ZIP).
+// Stores entries in data.attachments[]. Requires packId for storage path.
+// Falls back to a download link that resolves the stored path to a signed URL.
+export function FilesPanel({ attachments, onAdd, onRemove, packId }) {
+  const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const safe = Array.isArray(attachments) ? attachments : [];
+
+  const ACCEPTED = '.pdf,.ai,.psd,.eps,.zip,.svg,.png,.jpg,.jpeg,.xlsx,.docx';
+
+  const handleFiles = async (files) => {
+    if (!packId) { setError('Save the pack first to enable file uploads.'); return; }
+    setError('');
+    setUploading(true);
+    try {
+      const { uploadFile } = await import('../../utils/plmAssets');
+      for (const file of files) {
+        const ref = await uploadFile({ packId, file });
+        onAdd(ref);
+      }
+    } catch (e) {
+      setError(e.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const fmt = (bytes) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          style={{ padding: '6px 14px', background: FR.slate, border: 'none', borderRadius: 3, fontSize: 11, color: FR.salt, cursor: uploading ? 'wait' : 'pointer', opacity: uploading ? 0.6 : 1 }}>
+          {uploading ? 'Uploading…' : '+ Attach File'}
+        </button>
+        <span style={{ fontSize: 10, color: FR.stone }}>PDF · AI · PSD · EPS · ZIP · SVG · XLSX</span>
+        <input ref={fileRef} type="file" accept={ACCEPTED} multiple
+          onChange={e => { if (e.target.files.length) handleFiles(Array.from(e.target.files)); e.target.value = ''; }}
+          style={{ display: 'none' }} />
+      </div>
+      {error && <div style={{ fontSize: 11, color: '#A32D2D', marginBottom: 6 }}>{error}</div>}
+      {safe.length === 0 ? (
+        <div style={{ fontSize: 11, color: FR.stone, padding: '10px 0', fontStyle: 'italic' }}>No source documents attached.</div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+          <thead>
+            <tr>
+              {['File Name', 'Type', 'Size', 'Uploaded', ''].map(h => (
+                <th key={h} style={{ textAlign: 'left', padding: '4px 8px', background: FR.slate, color: FR.salt, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {safe.map((att, i) => (
+              <tr key={att.id || i} style={{ background: i % 2 === 0 ? FR.salt : FR.white }}>
+                <td style={{ padding: '5px 8px', borderBottom: `1px solid ${FR.sand}`, fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 10 }}>{att.name || '—'}</td>
+                <td style={{ padding: '5px 8px', borderBottom: `1px solid ${FR.sand}`, color: FR.stone }}>{(att.type || '').split('/').pop()?.toUpperCase() || '—'}</td>
+                <td style={{ padding: '5px 8px', borderBottom: `1px solid ${FR.sand}`, color: FR.stone }}>{fmt(att.size)}</td>
+                <td style={{ padding: '5px 8px', borderBottom: `1px solid ${FR.sand}`, color: FR.stone }}>{att.uploaded_at ? att.uploaded_at.slice(0, 10) : '—'}</td>
+                <td style={{ padding: '5px 8px', borderBottom: `1px solid ${FR.sand}`, textAlign: 'right' }}>
+                  {att.path && (
+                    <DownloadLink path={att.path} name={att.name} />
+                  )}
+                  <button onClick={() => onRemove(i)}
+                    style={{ marginLeft: 8, background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 13 }}>×</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function DownloadLink({ path, name }) {
+  const [url, setUrl] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    import('../../utils/plmAssets').then(({ getAssetUrl }) => {
+      getAssetUrl(path).then(u => { if (!cancelled) setUrl(u || ''); });
+    });
+    return () => { cancelled = true; };
+  }, [path]);
+  if (!url) return <span style={{ fontSize: 10, color: FR.stone }}>resolving…</span>;
+  return (
+    <a href={url} download={name || 'download'} target="_blank" rel="noreferrer"
+      onClick={e => e.stopPropagation()}
+      style={{ fontSize: 10, color: FR.soil, textDecoration: 'none', fontWeight: 600 }}>
+      ↓ Download
+    </a>
   );
 }
 

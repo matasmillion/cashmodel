@@ -1,10 +1,13 @@
-// Patterns library — schema constants the store and builder both reach for.
-// Persistence lives in `patternStore.js`; this file is the schema of record.
+// Cut & Sew library — schema constants the store and builder both reach for.
+// Persistence lives in `cutSewStore.js`; this file is the schema of record.
 //
-// A Pattern is the geometric skeleton inherited by every Style: the DXF
-// blocks, the sloper version, the grading rules, the seam allowances.
+// A Cut & Sew block is the geometric skeleton a Style inherits from: the DXF
+// pieces, the sloper version, the grading rules, the seam allowances.
 // Each one carries a category (Hoodie, Tee, Sweatpant, …), the size set
 // it grades to, ease + drop measurements, and an optional CAD asset URL.
+//
+// Replaces the old patternLibrary.js / patternStore.js ("Pattern" was the
+// working name; "Cut & Sew" is the production term used on the factory floor).
 //
 // Records are JSDoc-typed for editor completion only — runtime is plain
 // JSON in localStorage with an optional Supabase mirror.
@@ -24,10 +27,10 @@ import * as _atomTypes from '../types/atoms';
  *   cad_file_url: string,
  *   thumbnail_url: string,
  *   notes: string
- * }} Pattern
+ * }} CutSew
  */
 
-export const PATTERN_CATEGORIES = [
+export const CUT_SEW_CATEGORIES = [
   { id: 'hoodie',    label: 'Hoodie',    code: 'HD' },
   { id: 'tee',       label: 'Tee',       code: 'TE' },
   { id: 'sweatpant', label: 'Sweatpant', code: 'SP' },
@@ -40,15 +43,15 @@ export const PATTERN_CATEGORIES = [
   { id: 'other',     label: 'Other',     code: 'GEN' },
 ];
 
-export const PATTERN_CATEGORY_LABEL = Object.fromEntries(
-  PATTERN_CATEGORIES.map(c => [c.id, c.label])
+export const CUT_SEW_CATEGORY_LABEL = Object.fromEntries(
+  CUT_SEW_CATEGORIES.map(c => [c.id, c.label])
 );
 
-export const PATTERN_CATEGORY_CODE = Object.fromEntries(
-  PATTERN_CATEGORIES.map(c => [c.id, c.code])
+export const CUT_SEW_CATEGORY_CODE = Object.fromEntries(
+  CUT_SEW_CATEGORIES.map(c => [c.id, c.code])
 );
 
-export const PATTERN_STATUSES = ['draft', 'testing', 'approved', 'archived'];
+export const CUT_SEW_STATUSES = ['draft', 'testing', 'approved', 'archived'];
 
 export const STANDARD_SIZE_SETS = [
   ['XS', 'S', 'M', 'L', 'XL'],
@@ -57,7 +60,7 @@ export const STANDARD_SIZE_SETS = [
   ['28', '30', '32', '34', '36'],
 ];
 
-export function emptyPattern(overrides = {}) {
+export function emptyCutSew(overrides = {}) {
   const now = new Date().toISOString();
   return {
     id: '',
@@ -76,7 +79,7 @@ export function emptyPattern(overrides = {}) {
     seam_allowance_cm: 1.0,
     cad_file_url: '',
     thumbnail_url: '',
-    cover_image: null, // base64 data URL of a 2:3 portrait crop
+    cover_image: null,
     notes: '',
     ...overrides,
   };

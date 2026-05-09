@@ -1,13 +1,14 @@
 // Live A4-landscape page preview for the Tech Pack builder.
-// 14 pages matching FR_TechPack_Template_Blank.pdf. Page 1 is fully rendered;
-// pages 2–14 render a "coming soon" placeholder with the correct title until
-// later prompts fill them in.
+// 21 pages total: two Merchandising pages (000, 00) up front, then the 19
+// numbered tech pack pages. The denominator stays 19 — merchandising pages
+// are pre-pack strategy and aren't counted toward the numbered total.
 
-import { FR } from './techPackConstants';
+import { FR, STEPS } from './techPackConstants';
+import { FabricBOMPreviewBody } from './FabricBOMPreview';
 
 const PAGE_W = 1123;
 const PAGE_H = 794;
-const TOTAL_PAGES = 14;
+const TOTAL_PAGES = 24;
 
 function esc(s) { return String(s ?? ''); }
 function clampLine(s, maxW, charW = 6.5) {
@@ -16,14 +17,20 @@ function clampLine(s, maxW, charW = 6.5) {
   return s.slice(0, Math.max(1, max - 1)) + '…';
 }
 
-function PageFrame({ title, pageNum, styleInfo, children }) {
+function PageFrame({ title, phase, pageNum, styleInfo, styleNumber, children }) {
   return (
     <g>
       <rect x="0" y="0" width={PAGE_W} height={PAGE_H} fill={FR.white} />
       <rect x="0" y="0" width={PAGE_W} height={70} fill={FR.slate} />
       <text x="40" y="28" fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="3">FOREIGN RESOURCE CO.</text>
+      {phase && (
+        <text x="40" y="50" fontSize="8" fill={FR.sand} letterSpacing="2">{esc(phase.toUpperCase())}</text>
+      )}
       <text x={PAGE_W / 2} y="44" textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="20" fill={FR.salt}>{title}</text>
-      <text x={PAGE_W - 40} y="28" textAnchor="end" fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="2">PAGE {pageNum} / {TOTAL_PAGES}</text>
+      {styleNumber && (
+        <text x={PAGE_W - 40} y="28" textAnchor="end" fontSize="10" fontWeight="bold" fill={FR.salt} letterSpacing="2" fontFamily="ui-monospace,Menlo,monospace">{esc(styleNumber)}</text>
+      )}
+      <text x={PAGE_W - 40} y="50" textAnchor="end" fontSize="8" fill={FR.sand} letterSpacing="2">PAGE {pageNum} / {TOTAL_PAGES}</text>
       <rect x="0" y="70" width={PAGE_W} height={2} fill={FR.soil} />
       <text x="40" y="775" fontSize="9" fill={FR.stone}>{styleInfo}</text>
       <text x={PAGE_W - 40} y="775" textAnchor="end" fontSize="9" fill={FR.stone}>PAGE {pageNum} / {TOTAL_PAGES}</text>
@@ -43,28 +50,154 @@ function MetaRow({ x, y, label, value, w = 400 }) {
   );
 }
 
+// Compact stat block: small uppercase label above a larger value. Used to
+// build the grouped info bands on the cover page.
+function StatBlock({ x, y, label, value, valueSize = 13, mono = false }) {
+  return (
+    <g>
+      <text x={x} y={y} fontSize="7.5" fontWeight="bold" fill={FR.soil} letterSpacing="1.2">{esc((label || '').toUpperCase())}</text>
+      <text x={x} y={y + 18} fontSize={valueSize} fill={FR.slate}
+        fontFamily={mono ? "ui-monospace, 'SF Mono', Menlo, monospace" : "Helvetica, Arial, sans-serif"}>
+        {esc(value || '—')}
+      </text>
+    </g>
+  );
+}
+
+// ─── Page 000 — Competitor Landscape ───────────────────────────────────────
+function PageCompetitorLandscape({ d }) {
+  const competitors = (d?.competitors || []).filter(c => c.brand || c.product || c.price);
+  const cols = [
+    { key: 'brand',    label: 'Brand',          w: 130 },
+    { key: 'product',  label: 'Product',        w: 220 },
+    { key: 'price',    label: 'Price',          w: 100 },
+    { key: 'currency', label: 'Currency',       w: 70  },
+    { key: 'features', label: 'Key Features',   w: 320 },
+    { key: 'notes',    label: 'Notes',          w: 203 },
+  ];
+  const positioning = (d?.competitivePositioning || '').trim();
+
+  return (
+    <g>
+      <text x={PAGE_W / 2} y={108} textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="16" fill={FR.slate}>
+        Competitive Pricing & Feature Analysis
+      </text>
+
+      <SectionHeading x={40} y={148}>Pricing & Features</SectionHeading>
+      <GridTable x={40} y={160} cols={cols} rows={competitors} bodyRows={10} />
+
+      <SectionHeading x={40} y={460}>Competitive Landscape — FR Positioning</SectionHeading>
+      {positioning ? positioning.split('\n').slice(0, 14).map((line, i) => (
+        <text key={i} x={40} y={482 + i * 14} fontSize={11} fill={FR.slate} fontFamily="Helvetica, Arial, sans-serif">{line}</text>
+      )) : (
+        <text x={40} y={482} fontSize={11} fill={FR.stone} fontStyle="italic" fontFamily="Helvetica, Arial, sans-serif">No positioning notes yet.</text>
+      )}
+    </g>
+  );
+}
+
+// ─── Page 00 — Merchandising Preview (desktop + iPhone frames) ─────────────
+function PageMerchandisingPreview({ d }) {
+  void d;
+  // Desktop frame: 16:10 — sits left, takes more horizontal room.
+  const deskW = 620;
+  const deskH = deskW * (10 / 16); // 387.5
+  const deskX = 80;
+  const deskY = 200;
+
+  // Phone frame: 9:19.5 — sits right.
+  const phoneW = 130;
+  const phoneH = phoneW * (19.5 / 9); // 281.7
+  const phoneX = deskX + deskW + 60;
+  const phoneY = 200;
+
+  // Browser chrome inside the desktop frame
+  const chromeH = 28;
+  const dot = (cx, cy, fill) => <circle cx={cx} cy={cy} r={4.5} fill={fill} />;
+
+  return (
+    <g>
+      <text x={PAGE_W / 2} y={108} textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="16" fill={FR.slate}>
+        Storefront Visualization — Desktop & Mobile
+      </text>
+      <text x={PAGE_W / 2} y={130} textAnchor="middle" fontSize={10} fill={FR.stone} fontStyle="italic">
+        Live PDP preview will replace these frames once the product preview engine ships.
+      </text>
+
+      {/* Section labels above each device */}
+      <text x={deskX + deskW / 2} y={deskY - 14} textAnchor="middle"
+        fontSize={9} fontWeight={600} fill={FR.soil} letterSpacing={1.5}>DESKTOP · 16:10</text>
+      <text x={phoneX + phoneW / 2} y={phoneY - 14} textAnchor="middle"
+        fontSize={9} fontWeight={600} fill={FR.soil} letterSpacing={1.5}>iPHONE · 9:19.5</text>
+
+      {/* Desktop frame */}
+      <rect x={deskX} y={deskY} width={deskW} height={deskH}
+        fill={FR.white} stroke={FR.sand} strokeWidth={0.5} rx={10} />
+      {/* Browser chrome bar */}
+      <rect x={deskX} y={deskY} width={deskW} height={chromeH} fill={FR.salt} rx={10} />
+      <rect x={deskX} y={deskY + chromeH - 6} width={deskW} height={6} fill={FR.salt} />
+      <line x1={deskX} y1={deskY + chromeH} x2={deskX + deskW} y2={deskY + chromeH}
+        stroke={FR.sand} strokeWidth={0.5} />
+      {dot(deskX + 14, deskY + 14, '#FF5F57')}
+      {dot(deskX + 28, deskY + 14, '#FEBC2E')}
+      {dot(deskX + 42, deskY + 14, '#28C840')}
+      {/* Address bar */}
+      <rect x={deskX + 70} y={deskY + 6} width={deskW - 80} height={16}
+        fill={FR.white} stroke={FR.sand} strokeWidth={0.5} rx={3} />
+      <text x={deskX + 80} y={deskY + 17} fontSize={9} fill={FR.stone}
+        fontFamily="ui-monospace,Menlo,monospace">foreignresource.co/products/{'{style-slug}'}</text>
+      {/* Empty viewport */}
+      <text x={deskX + deskW / 2} y={deskY + chromeH + (deskH - chromeH) / 2 - 6}
+        textAnchor="middle" fontSize={9} fontWeight={600}
+        fill={FR.stone} letterSpacing={1.5}>COMING SOON</text>
+      <text x={deskX + deskW / 2} y={deskY + chromeH + (deskH - chromeH) / 2 + 14}
+        textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif"
+        fontSize={18} fill={FR.slate}>PDP Layout</text>
+
+      {/* iPhone frame — outer slate body */}
+      <rect x={phoneX} y={phoneY} width={phoneW} height={phoneH}
+        fill={FR.slate} rx={18} />
+      {/* Inner screen */}
+      <rect x={phoneX + 5} y={phoneY + 5} width={phoneW - 10} height={phoneH - 10}
+        fill={FR.white} rx={14} />
+      {/* Dynamic Island */}
+      <rect x={phoneX + phoneW / 2 - 18} y={phoneY + 12} width={36} height={11}
+        fill={FR.slate} rx={6} />
+      {/* Bottom home indicator */}
+      <rect x={phoneX + phoneW / 2 - 22} y={phoneY + phoneH - 11} width={44} height={2.5}
+        fill={FR.slate} opacity={0.4} rx={1.5} />
+      {/* Inner copy */}
+      <text x={phoneX + phoneW / 2} y={phoneY + phoneH / 2 - 6}
+        textAnchor="middle" fontSize={8} fontWeight={600}
+        fill={FR.stone} letterSpacing={1.5}>COMING SOON</text>
+      <text x={phoneX + phoneW / 2} y={phoneY + phoneH / 2 + 10}
+        textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif"
+        fontSize={13} fill={FR.slate}>Mobile PDP</text>
+    </g>
+  );
+}
+
 function PageCover({ d, images }) {
   const cover = (images || []).find(img => img.slot === 'cover');
-  const colorways = (d.colorways || []).filter(c => c && c.name).map(c => c.name).join(', ') || '—';
-  const sizeRange = Array.isArray(d.sizeRange) ? d.sizeRange.join(' / ') : (d.sizeRange || '—');
-  const maxFOB = d.maxFOB != null && d.maxFOB !== '' ? parseFloat(d.maxFOB).toFixed(2) : '—';
+  const colorways = (d.colorways || []).filter(c => c && c.name).map(c => c.name);
+  const colorwaysText = colorways.length ? colorways.join(' · ') : '—';
+  const sizeRange = Array.isArray(d.sizeRange) ? d.sizeRange.join(' · ') : (d.sizeRange || '—');
+  const maxFOB = d.maxFOB != null && d.maxFOB !== '' ? `$${parseFloat(d.maxFOB).toFixed(2)}` : '—';
+  const targetRetail = d.targetRetail ? `$${parseFloat(d.targetRetail).toFixed(2)}` : '—';
 
   // Cover image: 2:3 portrait, right column
   const imgW = 280;
   const imgH = imgW * 3 / 2; // 420
   const imgX = PAGE_W - imgW - 40;
-  const imgY = 85;
-  const leftW = imgX - 60; // width of left content column
-
-  // Quote tier stat strip dimensions
-  const tierStripY = 640;
-  const tierStripH = 36;
+  const imgY = 100;
+  const leftX = 40;
+  const leftW = imgX - 60; // ≈ 743 px
 
   return (
     <g>
-      {/* Large 2:3 cover image — right column */}
+      {/* ── Right column: 2:3 cover image ─────────────────────────────────── */}
       {cover
-        ? <image href={cover.data} x={imgX} y={imgY} width={imgW} height={imgH} preserveAspectRatio="xMidYMid meet" />
+        ? <image href={cover.data} x={imgX} y={imgY} width={imgW} height={imgH} preserveAspectRatio="xMidYMid slice" />
         : (
           <g>
             <rect x={imgX} y={imgY} width={imgW} height={imgH} fill={FR.salt} stroke={FR.sand} strokeDasharray="6 6" />
@@ -72,68 +205,90 @@ function PageCover({ d, images }) {
           </g>
         )}
 
-      {/* Tech Pack wordmark — left column */}
-      <text x={40} y={120} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="44" fill={FR.slate}>Tech Pack</text>
-      <rect x={40} y={132} width="100" height="2" fill={FR.soil} />
-      <text x={40} y={160} fontSize="15" fill={FR.stone}>
-        {clampLine(d.styleNumber || d.styleName || 'Untitled Style', 600, 8.5)}
+      {/* ── Hero: Tech Pack wordmark + style number ──────────────────────── */}
+      <text x={leftX} y={140} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="46" fill={FR.slate}>Tech Pack</text>
+      <rect x={leftX} y={150} width="60" height="2" fill={FR.soil} />
+      <text x={leftX} y={188} fontFamily="ui-monospace, 'SF Mono', Menlo, monospace" fontSize="20" fill={FR.slate} letterSpacing="2">
+        {clampLine(d.styleNumber || 'Untitled Style', leftW, 11)}
+      </text>
+      <text x={leftX} y={208} fontSize="11" fill={FR.stone} letterSpacing="0.5">
+        {[d.collection, d.productType, d.season].filter(Boolean).join('  ·  ') || '—'}
       </text>
 
-      {/* Section divider */}
-      <rect x="40" y="188" width={leftW} height="1" fill={FR.sand} />
-      <text x={40} y={206} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="2">STYLE SUMMARY</text>
-
-      {/* Two-column metadata — left of the image */}
+      {/* ── Band 1: IDENTITY (vendor, version, status) ──────────────────── */}
       {(() => {
-        const lx = 40;
-        const rx = 40 + leftW / 2 + 10;
-        const cw = leftW / 2 - 10;
-        const startY = 228;
-        const gap = 44;
-        const left = [
-          { label: 'Style #',      value: d.styleNumber },
-          { label: 'Collection',   value: d.collection },
-          { label: 'Product Type', value: d.productType },
-          { label: 'Season',       value: d.season },
-          { label: 'Version',      value: d.revision },
-        ];
-        const right = [
-          { label: 'Vendor',            value: d.vendor },
-          { label: 'Colorways',         value: colorways },
-          { label: 'Size Range',        value: sizeRange },
-          { label: 'Target Retail ($)', value: d.targetRetail },
-          { label: 'Maximum FOB ($)',   value: maxFOB },
-          { label: 'Status',            value: d.status },
-        ];
+        const bandY = 250;
+        const bandH = 70;
         return (
-          <>
-            {left.map((f, i)  => <MetaRow key={`L${i}`} x={lx} y={startY + i * gap} label={f.label} value={f.value} w={cw} />)}
-            {right.map((f, i) => <MetaRow key={`R${i}`} x={rx} y={startY + i * gap} label={f.label} value={f.value} w={cw} />)}
-          </>
+          <g>
+            <rect x={leftX} y={bandY} width={leftW} height={bandH} fill={FR.salt} />
+            <rect x={leftX} y={bandY} width="3" height={bandH} fill={FR.soil} />
+            <text x={leftX + 16} y={bandY + 18} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="2">IDENTITY</text>
+            <StatBlock x={leftX + 16}              y={bandY + 38} label="Vendor"  value={d.vendor} />
+            <StatBlock x={leftX + leftW * 0.55}    y={bandY + 38} label="Version" value={d.revision} mono />
+            <StatBlock x={leftX + leftW * 0.78}    y={bandY + 38} label="Status"  value={d.status} />
+          </g>
         );
       })()}
 
-      {/* Quote stat strip */}
+      {/* ── Band 2: PRODUCTION (colorways + size range) ─────────────────── */}
+      {(() => {
+        const bandY = 340;
+        const bandH = 70;
+        return (
+          <g>
+            <rect x={leftX} y={bandY} width={leftW} height={bandH} fill={FR.salt} />
+            <rect x={leftX} y={bandY} width="3" height={bandH} fill={FR.soil} />
+            <text x={leftX + 16} y={bandY + 18} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="2">PRODUCTION</text>
+            <StatBlock x={leftX + 16}              y={bandY + 38} label="Colorways"  value={clampLine(colorwaysText, leftW * 0.5, 6.5)} />
+            <StatBlock x={leftX + leftW * 0.55}    y={bandY + 38} label="Size Range" value={sizeRange} />
+          </g>
+        );
+      })()}
+
+      {/* ── Band 3: PRICING (target retail + maximum FOB) ───────────────── */}
+      {(() => {
+        const bandY = 430;
+        const bandH = 80;
+        return (
+          <g>
+            <rect x={leftX} y={bandY} width={leftW} height={bandH} fill={FR.salt} />
+            <rect x={leftX} y={bandY} width="3" height={bandH} fill={FR.soil} />
+            <text x={leftX + 16} y={bandY + 18} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="2">PRICING</text>
+            <text x={leftX + 16}              y={bandY + 42} fontSize="8" fontWeight="bold" fill={FR.stone} letterSpacing="1.2">TARGET RETAIL</text>
+            <text x={leftX + 16}              y={bandY + 66} fontFamily="ui-monospace, 'SF Mono', Menlo, monospace" fontSize="22" fill={FR.slate}>{targetRetail}</text>
+            <text x={leftX + leftW * 0.55}    y={bandY + 42} fontSize="8" fontWeight="bold" fill={FR.stone} letterSpacing="1.2">MAXIMUM FOB</text>
+            <text x={leftX + leftW * 0.55}    y={bandY + 66} fontFamily="ui-monospace, 'SF Mono', Menlo, monospace" fontSize="22" fill={FR.soil}>{maxFOB}</text>
+          </g>
+        );
+      })()}
+
+      {/* ── Quote strip — large, prominent, full-width below the image ───── */}
       {(() => {
         const tiers = d.costTiers || [];
         const moq = tiers[0];
-        const statCells = [
-          { label: 'MOQ',              value: moq ? `${moq.quantity || '—'} units` : '—' },
-          { label: 'MOQ Unit Cost',    value: moq && moq.unitCost ? `$${moq.unitCost}` : '—' },
-          { label: 'Lead Time',        value: d.leadTimeDays ? `${d.leadTimeDays} days` : '—' },
-          { label: 'Sample Lead',      value: d.sampleLeadTimeDays ? `${d.sampleLeadTimeDays} days` : '—' },
-          { label: 'Sample Cost',      value: d.sampleCost ? `$${d.sampleCost}` : '—' },
+        const stripY = 555;
+        const stripH = 110;
+        const stripW = PAGE_W - 80;
+        const cells = [
+          { label: 'MOQ',           value: moq && moq.quantity ? `${moq.quantity}` : '—', sub: 'units' },
+          { label: 'Unit Cost',     value: moq && moq.unitCost ? `$${moq.unitCost}` : '—', sub: 'at MOQ' },
+          { label: 'Lead Time',     value: d.leadTimeDays ? `${d.leadTimeDays}` : '—',  sub: 'days' },
+          { label: 'Sample Lead',   value: d.sampleLeadTimeDays ? `${d.sampleLeadTimeDays}` : '—', sub: 'days' },
+          { label: 'Sample Cost',   value: d.sampleCost ? `$${d.sampleCost}` : '—', sub: 'per unit' },
         ];
-        const cw = leftW / statCells.length;
+        const cw = stripW / cells.length;
         return (
           <g>
-            <rect x={40} y={tierStripY - 16} width={leftW} height={1} fill={FR.sand} />
-            <text x={40} y={tierStripY - 4} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="2">QUOTE</text>
-            <rect x={40} y={tierStripY + 4} width={leftW} height={tierStripH} fill={FR.salt} stroke={FR.sand} />
-            {statCells.map((c, i) => (
+            <rect x={40} y={stripY} width={stripW} height={stripH} fill={FR.slate} />
+            <text x={40 + 16} y={stripY + 22} fontSize="8" fontWeight="bold" fill={FR.sand} letterSpacing="2">QUOTE  ·  {esc((d.quoteProviderLink || 'Quote provider TBD').toUpperCase())}</text>
+            <rect x={40 + 16} y={stripY + 30} width="40" height="1.5" fill={FR.soil} />
+            {cells.map((c, i) => (
               <g key={i}>
-                <text x={40 + i * cw + 8} y={tierStripY + 4 + 14} fontSize="7" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">{esc(c.label.toUpperCase())}</text>
-                <text x={40 + i * cw + 8} y={tierStripY + 4 + 28} fontSize="10" fill={FR.slate}>{esc(c.value)}</text>
+                {i > 0 && <line x1={40 + i * cw} y1={stripY + 50} x2={40 + i * cw} y2={stripY + stripH - 14} stroke="rgba(245,240,232,0.18)" />}
+                <text x={40 + i * cw + 16} y={stripY + 60} fontSize="8" fontWeight="bold" fill={FR.sand} letterSpacing="1.5">{esc(c.label.toUpperCase())}</text>
+                <text x={40 + i * cw + 16} y={stripY + 88} fontFamily="ui-monospace, 'SF Mono', Menlo, monospace" fontSize="22" fill={FR.salt}>{esc(c.value)}</text>
+                <text x={40 + i * cw + 16} y={stripY + 102} fontSize="9" fill={FR.sand} fontStyle="italic">{esc(c.sub)}</text>
               </g>
             ))}
           </g>
@@ -184,17 +339,53 @@ function SectionHeading({ x, y, children }) {
   );
 }
 
-function PhotoSlot({ x, y, w, h, label, image, placeholder }) {
+// SMIL-animated spinner — pure SVG so it works inside the live-preview <svg>
+// without any CSS-in-JS plumbing. Stroke arc renders ~3/4 of the circle then
+// rotates indefinitely. Use it whenever a cover image is in flight so the
+// supplier knows the system is working, not stuck.
+function Spinner({ cx, cy, r = 14, color = FR.soil }) {
+  const stroke = Math.max(2, r / 6);
+  const c = 2 * Math.PI * r;
+  return (
+    <g>
+      {/* faint background ring so the spinner reads against any fill */}
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeOpacity={0.18} strokeWidth={stroke} />
+      {/* animated arc */}
+      <circle
+        cx={cx} cy={cy} r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeDasharray={`${c * 0.25} ${c}`}
+        transform={`rotate(-90 ${cx} ${cy})`}
+      >
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from={`0 ${cx} ${cy}`}
+          to={`360 ${cx} ${cy}`}
+          dur="0.9s"
+          repeatCount="indefinite"
+        />
+      </circle>
+    </g>
+  );
+}
+
+function PhotoSlot({ x, y, w, h, label, image, placeholder, loading = false }) {
   return (
     <g>
       <rect x={x} y={y} width={w} height={h} fill={FR.white} stroke={FR.soil} strokeDasharray="5 4" />
-      {image
-        ? <image href={image.data} x={x + 4} y={y + 4} width={w - 8} height={h - 8} preserveAspectRatio="xMidYMid meet" />
-        : (
-          <text x={x + w / 2} y={y + h / 2 + 4} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
-            {placeholder || `Drop ${label.toLowerCase()} here`}
-          </text>
-        )}
+      {image ? (
+        <image href={image.data} x={x + 4} y={y + 4} width={w - 8} height={h - 8} preserveAspectRatio="xMidYMid meet" />
+      ) : loading ? (
+        <Spinner cx={x + w / 2} cy={y + h / 2} r={Math.min(20, Math.max(10, Math.min(w, h) * 0.12))} />
+      ) : (
+        <text x={x + w / 2} y={y + h / 2 + 4} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
+          {placeholder || `Drop ${label.toLowerCase()} here`}
+        </text>
+      )}
       <rect x={x} y={y + h} width={w} height={22} fill={FR.salt} stroke={FR.sand} />
       <text x={x + w / 2} y={y + h + 15} textAnchor="middle" fontSize="9" fontWeight="bold" fill={FR.slate} letterSpacing="1.5">
         {esc((label || '').toUpperCase())}
@@ -210,104 +401,55 @@ function PageDesignOverview({ d, images }) {
   const back  = imgs.find(i => i.slot === 'design-back');
   const side  = imgs.find(i => i.slot === 'design-side');
 
-  const notes = (d.keyDesignNotes || []).filter(n => n.detail || n.description || n.reference);
-
-  // Info row: Vendor / Contact / Fabric Type
-  const infoY = 155;
-  // Photo slots
-  const drawY = 210;
-  const drawH = 250;
-  const drawGap = 16;
-  const drawW = (PAGE_W - 80 - drawGap * 2) / 3;
-  // Table
-  const tableY = 520;
-  const tableW = PAGE_W - 80;
+  // Three 2:3 portrait slots, centered on the available canvas. Canvas
+  // height between the InfoStrip and the page footer is ~600px; we cap
+  // each slot's height so it fits while staying as large as possible.
+  const drawGap = 24;
+  const maxW = (PAGE_W - 80 - drawGap * 2) / 3;
+  const maxH = 560;
+  // Fit by whichever dimension binds first.
+  const wByH = (maxH * 2) / 3;
+  const drawW = Math.min(maxW, wByH);
+  const drawH = drawW * 1.5;
+  const totalW = drawW * 3 + drawGap * 2;
+  const startX = (PAGE_W - totalW) / 2;
+  const drawY = 170;
 
   return (
     <g>
       <InfoStrip d={d} />
 
-      {/* Vendor row */}
-      <MetaRow x={40}                          y={infoY} label="Vendor"          value={d.vendor}        w={(PAGE_W - 80 - 20) / 3} />
-      <MetaRow x={40 + (PAGE_W - 80) / 3}      y={infoY} label="Vendor Contact"  value={d.vendorContact} w={(PAGE_W - 80 - 20) / 3} />
-      <MetaRow x={40 + (PAGE_W - 80) * 2 / 3}  y={infoY} label="Fabric Type"     value={d.fabricType}     w={(PAGE_W - 80 - 20) / 3} />
-
-      {/* Three photo slots */}
-      <PhotoSlot x={40}                         y={drawY} w={drawW} h={drawH} label="Front View" image={front} />
-      <PhotoSlot x={40 + drawW + drawGap}       y={drawY} w={drawW} h={drawH} label="Back View"  image={back} />
-      <PhotoSlot x={40 + (drawW + drawGap) * 2} y={drawY} w={drawW} h={drawH} label="Side View"  image={side} />
-
-      {/* Key Design Notes table */}
-      <SectionHeading x={40} y={tableY}>Key Design Notes</SectionHeading>
-      {(() => {
-        const cols = [
-          { key: '#',           label: '#',            w: 40 },
-          { key: 'detail',      label: 'Detail',       w: 200 },
-          { key: 'description', label: 'Description',  w: 533 },
-          { key: 'reference',   label: 'Reference',    w: 270 },
-        ];
-        const headerY = tableY + 12;
-        const rowH = 22;
-        const tableW2 = cols.reduce((a, c) => a + c.w, 0);
-        let cx = 40;
-        const colX = cols.map(c => { const x = cx; cx += c.w; return x; });
-        return (
-          <g>
-            <rect x={40} y={headerY} width={tableW2} height={rowH} fill={FR.slate} />
-            {cols.map((c, i) => (
-              <text key={c.key} x={colX[i] + 8} y={headerY + 15} fontSize="9" fontWeight="bold" fill={FR.salt} letterSpacing="0.5">{esc(c.label.toUpperCase())}</text>
-            ))}
-            {Array.from({ length: 5 }).map((_, ri) => {
-              const ry = headerY + rowH + ri * rowH;
-              const row = notes[ri];
-              return (
-                <g key={ri}>
-                  {ri % 2 === 0 && <rect x={40} y={ry} width={tableW2} height={rowH} fill={FR.salt} />}
-                  <line x1={40} y1={ry + rowH} x2={40 + tableW2} y2={ry + rowH} stroke={FR.sand} />
-                  <text x={colX[0] + 8} y={ry + 15} fontSize="10" fill={FR.stone}>{ri + 1}</text>
-                  {row && (
-                    <>
-                      <text x={colX[1] + 8} y={ry + 15} fontSize="10" fill={FR.slate}>{clampLine(esc(row.detail || ''),      cols[1].w - 16, 5.8)}</text>
-                      <text x={colX[2] + 8} y={ry + 15} fontSize="10" fill={FR.slate}>{clampLine(esc(row.description || ''), cols[2].w - 16, 5.8)}</text>
-                      <text x={colX[3] + 8} y={ry + 15} fontSize="10" fill={FR.slate}>{clampLine(esc(row.reference || ''),   cols[3].w - 16, 5.8)}</text>
-                    </>
-                  )}
-                </g>
-              );
-            })}
-          </g>
-        );
-      })()}
+      <PhotoSlot x={startX}                         y={drawY} w={drawW} h={drawH} label="Front View" image={front} />
+      <PhotoSlot x={startX + drawW + drawGap}       y={drawY} w={drawW} h={drawH} label="Back View"  image={back} />
+      <PhotoSlot x={startX + (drawW + drawGap) * 2} y={drawY} w={drawW} h={drawH} label="Side View"  image={side} />
     </g>
   );
 }
 
 // ─── Page 3 — Technical Flat Lay Diagrams ────────────────────────────────────
-function PageFlatlays({ d, images }) {
+function PageFlatlays({ d, images, frontSlot = 'flatlay-front', backSlot = 'flatlay-back', subtitle = 'Front and back annotated flat lay diagrams.', frontLabel = 'Front', backLabel = 'Back' }) {
   const imgs = images || [];
-  const tl = imgs.find(i => i.slot === 'flatlay-tl');
-  const tr = imgs.find(i => i.slot === 'flatlay-tr');
-  const bl = imgs.find(i => i.slot === 'flatlay-bl');
-  const br = imgs.find(i => i.slot === 'flatlay-br');
+  const front = imgs.find(i => i.slot === frontSlot);
+  const back  = imgs.find(i => i.slot === backSlot);
 
-  // Grid layout
-  const gridY = 170;
+  // Two side-by-side cells maximised to fill the content area below the
+  // info strip. Each cell is A4-landscape so the in-app preview matches
+  // what lands on the printed page.
+  const gridY   = 170;
   const gridGap = 18;
-  const cellW = (PAGE_W - 80 - gridGap) / 2;
-  const cellH = (PAGE_H - gridY - 90 - gridGap) / 2;
+  const cellW   = (PAGE_W - 80 - gridGap) / 2;
+  const cellH   = PAGE_H - gridY - 70;
 
   return (
     <g>
       <InfoStrip d={d} />
 
       <text x={PAGE_W / 2} y={152} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
-        Place annotated flat lay diagrams below. Front, back, and detail views.
+        {subtitle}
       </text>
 
-      <PhotoSlot x={40}                  y={gridY}                    w={cellW} h={cellH} label="Top Left"     image={tl} />
-      <PhotoSlot x={40 + cellW + gridGap} y={gridY}                    w={cellW} h={cellH} label="Top Right"    image={tr} />
-      <PhotoSlot x={40}                  y={gridY + cellH + gridGap}  w={cellW} h={cellH} label="Bottom Left"  image={bl} />
-      <PhotoSlot x={40 + cellW + gridGap} y={gridY + cellH + gridGap}  w={cellW} h={cellH} label="Bottom Right" image={br} />
+      <PhotoSlot x={40}                   y={gridY} w={cellW} h={cellH} label={frontLabel} image={front} />
+      <PhotoSlot x={40 + cellW + gridGap} y={gridY} w={cellW} h={cellH} label={backLabel}  image={back} />
     </g>
   );
 }
@@ -351,10 +493,166 @@ function GridTable({ x, y, cols, rows, bodyRows = 4, rowH = 22, headerH = 22, re
 }
 
 // ─── Page 4 — Bill of Materials ─────────────────────────────────────────────
+// ─── Page 03 — Fabrics (live preview reads pickedFabrics references) ────────
+// Page 03 now renders the same `FabricBOMPreviewBody` the library card
+// uses, so the tech pack live preview cannot drift from the fabric card.
+// Single-fabric mode for now — the picker still allows up to three
+// fabrics, but the live preview shows the first picked fabric on its
+// dedicated page. Multi-fabric pagination (one A4 per fabric, dropdown
+// nav) is the follow-up.
+function PageFabrics({ d, fabricsById = {} }) {
+  const picked = (d?.pickedFabrics || []).filter(p => p?.fabricId);
+  if (picked.length === 0) {
+    return (
+      <g>
+        <text x={PAGE_W / 2} y={94} textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="14" fill={FR.stone}>
+          Pick fabrics in the BOM step to populate this page.
+        </text>
+        <rect x={(PAGE_W - 540) / 2} y={300} width="540" height="180"
+          fill={FR.salt} stroke={FR.sand} strokeWidth="0.5" rx="8" />
+        <text x={PAGE_W / 2} y={395} textAnchor="middle" fontSize="13" fill={FR.stone} fontStyle="italic">
+          No fabric picked
+        </text>
+      </g>
+    );
+  }
+  const entry = picked[0];
+  const fabric = fabricsById[entry.fabricId];
+  // Show a spinner card while the fabric library row is still being fetched
+  // (signed cover URL, vendor lookup, color cards). Without it the page
+  // looked frozen for the seconds it takes the loader to resolve everything.
+  if (!fabric) {
+    return (
+      <g>
+        <text x={PAGE_W / 2} y={94} textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="14" fill={FR.stone}>
+          Loading fabric…
+        </text>
+        <rect x={(PAGE_W - 540) / 2} y={240} width="540" height="280"
+          fill={FR.salt} stroke={FR.sand} strokeWidth="0.5" rx="8" />
+        <Spinner cx={PAGE_W / 2} cy={380} r={28} />
+      </g>
+    );
+  }
+  const chosenColor = entry.colorLabel || entry.colorHex || entry.colorUrl
+    ? { label: entry.colorLabel, hex: entry.colorHex, url: entry.colorUrl }
+    : null;
+  return (
+    <FabricBOMPreviewBody
+      fabric={fabric}
+      chosenColor={chosenColor}
+      chosenArea={entry.role || null}
+      chosenFinishes={entry.chosenFinishes || null}
+      yieldM={entry.metersPerUnit || null}
+    />
+  );
+}
+
+// ─── Page 04 — Trims (image-first 6-card grid) ──────────────────────────────
+function PageTrims({ d, componentsById = {} }) {
+  return <ComponentGridPage entries={(d?.pickedTrims || []).slice(0, 6)} subtitle="Image-first detail of every trim and hardware component, picked from the Component Pack library." componentsById={componentsById} />;
+}
+
+// ─── Page 05 — Packaging ────────────────────────────────────────────────────
+function PagePackaging({ d, componentsById = {} }) {
+  return <ComponentGridPage entries={(d?.pickedPackaging || []).slice(0, 6)} subtitle="Polybags, hang tags, stickers, branded boxes — every packaging component." componentsById={componentsById} />;
+}
+
+function ComponentGridPage({ entries, subtitle, componentsById = {} }) {
+  const cols = 3, rows = 2;
+  const cardW = 320;
+  const cardH = 250;
+  const gap = 14;
+  const totalW = cardW * cols + gap * (cols - 1);
+  const startX = (PAGE_W - totalW) / 2;
+  const startY = 130;
+  const imgH = cardH * 0.5;
+
+  return (
+    <g>
+      <text x={PAGE_W / 2} y={108} textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="14" fill={FR.stone}>
+        {subtitle}
+      </text>
+      {Array.from({ length: cols * rows }).map((_, i) => {
+        const c = i % cols;
+        const r = Math.floor(i / cols);
+        const x = startX + c * (cardW + gap);
+        const y = startY + r * (cardH + gap);
+        const entry = entries[i];
+        const entryId = entry?.componentId || entry?.id || null;
+        const full = entryId ? componentsById[entryId] : null;
+        const cd = full?.data || {};
+        const tier = (cd.costTiers || [])[0];
+        const unitCost = parseFloat(tier?.unitCost) || parseFloat(full?.cost_per_unit) || parseFloat(cd?.targetUnitCost) || 0;
+        const qtyNum = parseFloat(String(entry?.quantity || '').replace(/[^0-9.]/g, '')) || 1;
+        const lineCost = unitCost * qtyNum;
+        const formatM = (n) => n > 0 ? `$${n.toFixed(2)}` : '$0.00';
+        const cover  = full?.cover_image || cd.cover_image;
+        const name   = full?.component_name || cd.componentName || (full ? (entry?.role || 'Untitled') : (entry ? 'Loading…' : ''));
+        const type   = cd.componentType || full?.component_category || (entry?.role || '');
+        const qty    = entry?.quantity || '—';
+        const packHref = entry?.componentId
+          ? `${(typeof window !== 'undefined' ? window.location.origin : '')}/#plm/library/trims/${entry.componentId}`
+          : null;
+        return (
+          <g key={i}>
+            <rect x={x} y={y} width={cardW} height={cardH}
+              fill={FR.white} stroke={FR.sand} strokeWidth={0.5} rx={6} />
+            {!entry && (
+              <text x={x + cardW / 2} y={y + cardH / 2} textAnchor="middle"
+                fontSize={11} fill={FR.stone} fontStyle="italic">Empty slot</text>
+            )}
+            {entry && (
+              <>
+                <rect x={x} y={y} width={cardW} height={imgH} fill={FR.salt} rx={6} />
+                {cover ? (
+                  // `meet` so the full image is visible without cropping.
+                  <image href={cover} x={x + 4} y={y + 4} width={cardW - 8} height={imgH - 8}
+                    preserveAspectRatio="xMidYMid meet" />
+                ) : entryId && !full ? (
+                  // Pack reference exists but the full row hasn't resolved
+                  // yet — spinner so the user sees we're working on it.
+                  <Spinner cx={x + cardW / 2} cy={y + imgH / 2} r={18} />
+                ) : (
+                  <text x={x + cardW / 2} y={y + imgH / 2 + 4} textAnchor="middle"
+                    fontSize={9} fill={FR.stone} fontStyle="italic">cover image</text>
+                )}
+                <text x={x + 14} y={y + imgH + 22}
+                  fontSize={9} fontWeight={600} fill={FR.soil} letterSpacing={1}>
+                  {String(type || `Slot ${i + 1}`).toUpperCase()}
+                </text>
+                <text x={x + 14} y={y + imgH + 44}
+                  fontSize={14} fill={FR.slate} fontFamily="'Cormorant Garamond', Georgia, serif">
+                  {name}
+                </text>
+                {packHref && (
+                  <a href={packHref} target="_blank" rel="noopener">
+                    <text x={x + cardW - 14} y={y + imgH + 44} textAnchor="end"
+                      fontSize={10} fill={FR.soil}
+                      style={{ textDecoration: 'underline', cursor: 'pointer' }}>
+                      View tech pack ↗
+                    </text>
+                  </a>
+                )}
+                <text x={x + 14} y={y + cardH - 32} fontSize={9} fill={FR.stone}>
+                  Quantity · {qty}    Unit · {formatM(unitCost)}
+                </text>
+                <text x={cardW + x - 14} y={y + cardH - 14} textAnchor="end"
+                  fontSize={12} fontWeight={700} fill={FR.slate}
+                  fontFamily="ui-monospace, Menlo, monospace">
+                  {formatM(lineCost)}
+                </text>
+              </>
+            )}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 function PageBOM({ d }) {
   const fabrics = (d.fabrics || []).filter(r => r.component || r.fabricType || r.composition);
   const trims   = (d.trimsAccessories || []).filter(r => r.component || r.type || r.material);
-  const labels  = (d.labelsBranding || []).filter(r => r.labelType || r.material || r.placement);
 
   const fabCols = [
     { key: 'component',    label: 'Component',    w: 120 },
@@ -376,6 +674,24 @@ function PageBOM({ d }) {
     { key: 'qtyPerGarment', label: 'Qty/Garment', w: 163 },
   ];
 
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <SectionHeading x={40} y={158}>Fabrics</SectionHeading>
+      <GridTable x={40} y={170} cols={fabCols} rows={fabrics} bodyRows={5} />
+
+      <SectionHeading x={40} y={320}>Trims &amp; Accessories</SectionHeading>
+      <GridTable x={40} y={332} cols={trimCols} rows={trims} bodyRows={6} />
+    </g>
+  );
+}
+
+// ─── Page 5 — BOM Labels & Files ────────────────────────────────────────────
+function PageBOMTrims({ d }) {
+  const labels = (d.labelsBranding || []).filter(r => r.labelType || r.material || r.placement);
+  const attachments = (d.attachments || []).filter(a => a.name);
+
   const labelCols = [
     { key: 'labelType',  label: 'Label Type',  w: 160 },
     { key: 'material',   label: 'Material',    w: 140 },
@@ -389,26 +705,28 @@ function PageBOM({ d }) {
     <g>
       <InfoStrip d={d} />
 
-      <SectionHeading x={40} y={158}>Fabrics</SectionHeading>
-      <GridTable x={40} y={170} cols={fabCols} rows={fabrics} bodyRows={3} />
+      <SectionHeading x={40} y={158}>Labels &amp; Branding</SectionHeading>
+      <GridTable x={40} y={170} cols={labelCols} rows={labels} bodyRows={5} />
 
-      <SectionHeading x={40} y={280}>Trims &amp; Accessories</SectionHeading>
-      <GridTable x={40} y={292} cols={trimCols} rows={trims} bodyRows={4} />
-
-      <SectionHeading x={40} y={424}>Labels &amp; Branding</SectionHeading>
-      <GridTable x={40} y={436} cols={labelCols} rows={labels} bodyRows={4} />
+      <SectionHeading x={40} y={320}>Source Documents &amp; Attachments</SectionHeading>
+      {attachments.length === 0 ? (
+        <text x={40} y={345} fontSize={11} fill={FR.stone} fontFamily="Helvetica, Arial, sans-serif" fontStyle="italic">No source documents attached.</text>
+      ) : attachments.slice(0, 8).map((att, i) => (
+        <g key={att.id || i} transform={`translate(40 ${338 + i * 22})`}>
+          <rect x={0} y={0} width={1043} height={20} fill={i % 2 === 0 ? FR.salt : '#FFFFFF'} />
+          <text x={6} y={14} fontSize={10} fill={FR.slate} fontFamily="ui-monospace,Menlo,monospace">{att.name || '—'}</text>
+          <text x={320} y={14} fontSize={10} fill={FR.stone} fontFamily="Helvetica, Arial, sans-serif">{(att.type || '').split('/').pop()?.toUpperCase() || '—'}</text>
+          <text x={440} y={14} fontSize={10} fill={FR.stone} fontFamily="Helvetica, Arial, sans-serif">{att.size ? `${Math.round(att.size / 1024)} KB` : '—'}</text>
+          <text x={560} y={14} fontSize={10} fill={FR.stone} fontFamily="Helvetica, Arial, sans-serif">{att.uploaded_at ? att.uploaded_at.slice(0, 10) : '—'}</text>
+        </g>
+      ))}
     </g>
   );
 }
 
-// ─── Page 5 — Color & Artwork ────────────────────────────────────────────────
-function PageColor({ d, images }) {
-  const imgs = images || [];
-  const front = imgs.find(i => i.slot === 'artwork-front');
-  const back  = imgs.find(i => i.slot === 'artwork-back');
-
+// ─── Embellishments — Colorways ──────────────────────────────────────────────
+function PageColorways({ d }) {
   const colorways = (d.colorways || []).filter(c => c && (c.name || c.frColor || c.pantone || c.hex));
-  const placements = (d.artworkPlacements || []).filter(r => r.placement || r.artworkFile || r.method || r.sizeCm || r.positionFrom || r.color);
 
   const cwCols = [
     { key: 'name',           label: 'Colorway Name',   w: 180 },
@@ -417,16 +735,6 @@ function PageColor({ d, images }) {
     { key: 'hex',            label: 'Hex',             w: 120 },
     { key: 'fabricSwatch',   label: 'Fabric Swatch',   w: 293 },
     { key: 'approvalStatus', label: 'Approval',        w: 160 },
-  ];
-
-  const plCols = [
-    { key: 'placement',    label: 'Placement',     w: 150 },
-    { key: 'artworkFile',  label: 'Artwork File',  w: 160 },
-    { key: 'method',       label: 'Method',        w: 150 },
-    { key: 'sizeCm',       label: 'Size (cm)',     w: 110 },
-    { key: 'positionFrom', label: 'Position From', w: 170 },
-    { key: 'color',        label: 'Color',         w: 130 },
-    { key: 'notes',        label: 'Notes',         w: 173 },
   ];
 
   const renderCWCell = (key, row, x, y, w) => {
@@ -442,94 +750,220 @@ function PageColor({ d, images }) {
     return null;
   };
 
-  // Layout
-  const cwY = 158;
-  const artY = 315;
-  const artH = 170;
-  const plY = 540;
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <SectionHeading x={40} y={158}>Colorway Specification</SectionHeading>
+      <GridTable x={40} y={170} cols={cwCols} rows={colorways} bodyRows={12} renderCell={renderCWCell} />
+    </g>
+  );
+}
+
+// ─── Embellishments — Artwork & Placement ────────────────────────────────────
+function PageArtwork({ d, images }) {
+  const imgs = images || [];
+  const front = imgs.find(i => i.slot === 'artwork-front');
+  const back  = imgs.find(i => i.slot === 'artwork-back');
+
+  const placements = (d.artworkPlacements || []).filter(r => r.placement || r.artworkFile || r.method || r.sizeCm || r.positionFrom || r.color);
+
+  const plCols = [
+    { key: 'placement',    label: 'Placement',     w: 150 },
+    { key: 'artworkFile',  label: 'Artwork File',  w: 160 },
+    { key: 'method',       label: 'Method',        w: 150 },
+    { key: 'sizeCm',       label: 'Size (cm)',     w: 110 },
+    { key: 'positionFrom', label: 'Position From', w: 170 },
+    { key: 'color',        label: 'Color',         w: 130 },
+    { key: 'notes',        label: 'Notes',         w: 173 },
+  ];
+
+  const logoY = 158;
+  const artY = 230;
+  const artH = 200;
+  const plY = 470;
 
   return (
     <g>
       <InfoStrip d={d} />
 
-      <SectionHeading x={40} y={cwY}>Colorway Specification</SectionHeading>
-      <GridTable x={40} y={cwY + 12} cols={cwCols} rows={colorways} bodyRows={4} renderCell={renderCWCell} />
+      <SectionHeading x={40} y={logoY}>Logo &amp; Method</SectionHeading>
+      <text x={40}  y={logoY + 30} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">FRONT LOGO</text>
+      <text x={40}  y={logoY + 46} fontSize="11" fill={FR.slate}>{esc(d.logoFront || '—')}</text>
+      <text x={400} y={logoY + 30} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">BACK LOGO</text>
+      <text x={400} y={logoY + 46} fontSize="11" fill={FR.slate}>{esc(d.logoBack || '—')}</text>
+      <text x={760} y={logoY + 30} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">METHOD</text>
+      <text x={760} y={logoY + 46} fontSize="11" fill={FR.slate}>{esc(d.logoMethod || '—')}</text>
 
-      <SectionHeading x={40} y={artY}>Artwork &amp; Logo Placement</SectionHeading>
-      <PhotoSlot x={40}                                 y={artY + 20} w={(PAGE_W - 80 - 16) / 2} h={artH} label="Front Artwork" image={front} />
-      <PhotoSlot x={40 + (PAGE_W - 80 - 16) / 2 + 16}  y={artY + 20} w={(PAGE_W - 80 - 16) / 2} h={artH} label="Back Artwork"  image={back} />
+      <SectionHeading x={40} y={artY}>Artwork References</SectionHeading>
+      <PhotoSlot x={40}                                y={artY + 20} w={(PAGE_W - 80 - 16) / 2} h={artH} label="Front Artwork" image={front} />
+      <PhotoSlot x={40 + (PAGE_W - 80 - 16) / 2 + 16} y={artY + 20} w={(PAGE_W - 80 - 16) / 2} h={artH} label="Back Artwork"  image={back} />
 
-      <SectionHeading x={40} y={plY}>Placement</SectionHeading>
-      <GridTable x={40} y={plY + 12} cols={plCols} rows={placements} bodyRows={5} />
+      <SectionHeading x={40} y={plY}>Placement Detail</SectionHeading>
+      <GridTable x={40} y={plY + 12} cols={plCols} rows={placements} bodyRows={8} />
     </g>
   );
 }
 
-// ─── Page 6 — Construction Details ───────────────────────────────────────────
-function PageConstruction({ d }) {
-  const seams = (d.seams || []).filter(r => r.operation || r.seamType || r.stitchType || r.threadColor);
-  const notes = (d.constructionNotesTable || []).filter(r => r.area || r.description || r.reference);
+// ─── Page 6 — Seam & Stitch Specifications ──────────────────────────────────
+function PageConstruction({ d, images }) {
+  const imgs = images || [];
+  const seams = (d.seams || []).filter(r => r.operation || r.seamType || r.stitchType || r.threadColor || r.machine);
+  const allBlocks = (d.seamStitchBlocks && d.seamStitchBlocks.length)
+    ? d.seamStitchBlocks
+    : [1, 2, 3, 4, 5, 6].map(num => ({ num, label: '', hidden: false }));
+  const stitchBlocks = allBlocks.filter(b => !b.hidden).slice(0, 6);
 
   const seamCols = [
-    { key: 'operation',   label: 'Operation',     w: 180 },
-    { key: 'seamType',    label: 'Seam Type',     w: 150 },
-    { key: 'stitchType',  label: 'Stitch Type',   w: 120 },
-    { key: 'spiSpcm',     label: 'SPI / SPCM',    w: 110 },
-    { key: 'threadColor', label: 'Thread Color',  w: 130 },
-    { key: 'threadType',  label: 'Thread Type',   w: 160 },
-    { key: 'notes',       label: 'Notes',         w: 193 },
+    { key: 'operation',   label: 'Operation',     w: 150 },
+    { key: 'seamType',    label: 'Seam Type',     w: 130 },
+    { key: 'stitchType',  label: 'Stitch Type',   w: 100 },
+    { key: 'machine',     label: 'Machine',       w: 170 },
+    { key: 'spiSpcm',     label: 'SPI/SPCM',      w: 90  },
+    { key: 'threadColor', label: 'Thread Color',  w: 110 },
+    { key: 'threadType',  label: 'Thread Type',   w: 130 },
+    { key: 'notes',       label: 'Notes',         w: 163 },
   ];
 
-  const noteCols = [
-    { key: '#',           label: 'Detail #',    w: 70  },
-    { key: 'area',        label: 'Area',        w: 180 },
-    { key: 'description', label: 'Description', w: 540 },
-    { key: 'reference',   label: 'Reference',   w: 253 },
-  ];
+  // Strip layout: visible cells span the full content width (1043px).
+  // Each cell is 2:3 vertical; the height grows with cell width but is
+  // capped so a single cell doesn't blow up the page. Table sits
+  // immediately below the strip + label row.
+  const stripY    = 170;
+  const stripGap  = 12;
+  const labelH    = 24;
+  const N         = stitchBlocks.length;
+  const contentW  = PAGE_W - 80;
+  const cellW     = N > 0 ? (contentW - stripGap * Math.max(N - 1, 0)) / N : 0;
+  const imgHCap   = 380; // ~half the page height
+  const imgH      = N > 0 ? Math.min(cellW * 1.5, imgHCap) : 0;
+  const stripBottom = N > 0 ? (stripY + imgH + labelH) : stripY;
+
+  // Body rows derived from remaining vertical space below the table header.
+  const tableY        = stripBottom + 30;
+  const footerReserve = 60;
+  const headerH       = 22;
+  const rowH          = 22;
+  const bodyRows      = Math.max(4, Math.floor((PAGE_H - footerReserve - tableY - headerH) / rowH));
 
   return (
     <g>
       <InfoStrip d={d} />
 
-      <SectionHeading x={40} y={158}>Seam &amp; Stitch Specification</SectionHeading>
-      <GridTable x={40} y={170} cols={seamCols} rows={seams} bodyRows={5} />
+      <SectionHeading x={40} y={158}>Stitch Reference</SectionHeading>
+      {N === 0 && (
+        <text x={PAGE_W / 2} y={stripY + 30} textAnchor="middle" fontSize={11} fill={FR.stone} fontStyle="italic">
+          All stitch reference blocks hidden — restore one in the editor to populate this strip.
+        </text>
+      )}
+      {stitchBlocks.map((b, i) => {
+        const cx = 40 + i * (cellW + stripGap);
+        const img = imgs.find(im => im.slot === `seam-stitch-${b.num}`);
+        return (
+          <g key={b.num}>
+            <PhotoSlot x={cx} y={stripY} w={cellW} h={imgH} label={`Stitch ${b.num}`} image={img} />
+            <text x={cx + cellW / 2} y={stripY + imgH + 16} textAnchor="middle"
+              fontSize={11} fontWeight={600} fill={FR.slate} fontFamily="ui-monospace, Menlo, monospace">
+              {(b.label || '—').slice(0, 24)}
+            </text>
+          </g>
+        );
+      })}
 
-      <SectionHeading x={40} y={338}>Construction Notes</SectionHeading>
-      <GridTable x={40} y={350} cols={noteCols} rows={notes} bodyRows={6} />
+      <SectionHeading x={40} y={stripBottom + 18}>Seam &amp; Stitch Specification</SectionHeading>
+      <GridTable x={40} y={tableY} cols={seamCols} rows={seams} bodyRows={bodyRows} />
     </g>
   );
 }
 
-// ─── Page 7 — Construction Detail Sketches ──────────────────────────────────
-function PageSketches({ d, images }) {
+// ─── Page 7 — Construction Notes ────────────────────────────────────────────
+// ─── Construction Details Pages (1 of 2) ────────────────────────────────────
+// Construction Details — page 1 or page 2 depending on `pageKey`. Layout:
+// 9:16 reference image on the left (designer adds red-dot callouts in
+// Photoshop), 2x2 grid of A4-landscape detail cards on the right. Each card
+// has a red-numbered circle at the top + translatable title + description.
+function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey }) {
   const imgs = images || [];
-  const slots = [1, 2, 3, 4, 5, 6].map(n => imgs.find(i => i.slot === `sketch-${n}`));
+  const resolvedField = fieldName || (pageKey === 'page2' ? 'constructionDetailsPage2' : 'constructionDetailsPage1');
+  const resolvedSlot  = slotKey  || `sketch-callout-${pageKey}`;
+  const entries = ((d?.[resolvedField]) || []).slice(0, 4);
+  const callout = imgs.find(i => i.slot === resolvedSlot);
 
-  const gridY = 160;
-  const gridGap = 14;
-  const cols = 3;
-  const rows = 2;
-  const cellW = (PAGE_W - 80 - gridGap * (cols - 1)) / cols;
-  const cellH = (PAGE_H - gridY - 90 - gridGap * (rows - 1)) / rows;
+  const topY    = 158;
+  const padX    = 40;
+  const colGap  = 18;
+  const refW    = 240;
+  const refH    = refW * (3 / 2); // 2:3 vertical (taller than wide)
+  const refY    = 170;
+
+  const rightX  = padX + refW + colGap;
+  const rightW  = PAGE_W - padX - rightX;
+  const rowGap  = 12;
+  const colGap2 = 12;
+  const cardCols = 2;
+  const cardRows = 2;
+  const cardW   = (rightW - colGap2 * (cardCols - 1)) / cardCols;
+  // Card height matches the reference image total height so the right
+  // column reads as a single block. Image fills ~55% of the card.
+  const cardH   = (refH - rowGap) / cardRows;
+  const imageH  = cardH * 0.55;
 
   return (
     <g>
       <InfoStrip d={d} />
 
-      <text x={PAGE_W / 2} y={152} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
-        Detailed construction sketches: seam closeups, pocket assembly, cuff detail, collar build, etc.
+      <text x={PAGE_W / 2} y={topY - 6} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
+        Number each callout on the reference image (red dots). Each detail card carries its own close-up image, title, and description.
       </text>
 
-      {slots.map((img, i) => {
-        const col = i % cols;
-        const row = Math.floor(i / cols);
+      {/* 2:3 reference image on the left */}
+      <PhotoSlot
+        x={padX} y={refY}
+        w={refW} h={refH}
+        label="Reference"
+        image={callout}
+      />
+
+      {/* 2x2 grid of detail cards on the right; each card has its own image */}
+      {entries.map((entry, i) => {
+        const col = i % cardCols;
+        const row = Math.floor(i / cardCols);
+        const cx  = rightX + col * (cardW + colGap2);
+        const cy  = refY   + row * (cardH + rowGap);
+        const detailImg = imgs.find(im => im.slot === `construction-detail-${entry.num}`);
+        const titleY = cy + imageH + 18;
+        const descY  = titleY + 8;
+        const numCx  = cx + 18;
         return (
-          <PhotoSlot key={i}
-            x={40 + col * (cellW + gridGap)}
-            y={gridY + row * (cellH + gridGap)}
-            w={cellW} h={cellH - 22}
-            label={`Detail ${i + 1}`}
-            image={img} />
+          <g key={entry.num}>
+            {/* card border */}
+            <rect x={cx} y={cy} width={cardW} height={cardH}
+              fill={FR.white} stroke={FR.sand} strokeWidth={0.5} rx={4} />
+            {/* image area at the top */}
+            <PhotoSlot
+              x={cx} y={cy}
+              w={cardW} h={imageH}
+              label={`Detail ${entry.num}`}
+              image={detailImg}
+            />
+            {/* red numbered circle at the start of the title row */}
+            <circle cx={numCx} cy={titleY - 4} r={9} fill="#A32D2D" />
+            <text x={numCx} y={titleY} textAnchor="middle"
+              fontSize="10" fontWeight="600" fill="#FFFFFF">
+              {entry.num}
+            </text>
+            {/* title */}
+            <text x={cx + 34} y={titleY} fontSize="11" fontWeight="600" fill={FR.slate}>
+              {entry.title || `Detail ${entry.num}`}
+            </text>
+            {/* description body */}
+            <foreignObject x={cx + 12} y={descY} width={cardW - 24} height={cy + cardH - descY - 8}>
+              <div xmlns="http://www.w3.org/1999/xhtml"
+                style={{ fontSize: 9, color: FR.slate, lineHeight: 1.4, fontFamily: "'Helvetica Neue', sans-serif", whiteSpace: 'pre-wrap' }}>
+                {entry.description || ''}
+              </div>
+            </foreignObject>
+          </g>
         );
       })}
     </g>
@@ -540,6 +974,9 @@ function PageSketches({ d, images }) {
 function PagePattern({ d, images }) {
   const layout = (images || []).find(i => i.slot === 'pattern-layout');
   const pieces = (d.patternPieces || []).filter(r => r.pieceName || r.pieceNum || r.fabric);
+  const pickedFabrics = (d?.pickedFabrics || []).filter(p => p?.fabricId);
+  const yieldCols = Math.max(pickedFabrics.length, 1);
+  const yieldColW = (PAGE_W - 80) / yieldCols;
 
   const cols = [
     { key: 'pieceNum',  label: 'Piece #',            w: 90  },
@@ -559,10 +996,40 @@ function PagePattern({ d, images }) {
       <PhotoSlot x={40} y={175} w={PAGE_W - 80} h={200} label="Pattern Layout" image={layout} />
 
       <SectionHeading x={40} y={420}>Pattern Piece Index</SectionHeading>
-      <GridTable x={40} y={432} cols={cols} rows={pieces} bodyRows={5} />
+      {/* bodyRows=4 frees ~22px for the yield strip below */}
+      <GridTable x={40} y={432} cols={cols} rows={pieces} bodyRows={4} />
 
-      <SectionHeading x={40} y={580}>Cutting Instructions</SectionHeading>
-      <foreignObject x="40" y="594" width={PAGE_W - 80} height="160">
+      {/* Fabric Yield — compact 3-column strip, one cell per picked fabric */}
+      <SectionHeading x={40} y={545}>Fabric Yield</SectionHeading>
+      {pickedFabrics.length === 0 && (
+        <text x={50} y={568} fontSize={10} fill={FR.stone} fontStyle="italic">
+          No fabrics picked yet — set garment type in the BOM step.
+        </text>
+      )}
+      {pickedFabrics.map((entry, i) => {
+        const fx = 40 + i * yieldColW;
+        const hasMpu = entry.metersPerUnit != null;
+        return (
+          <g key={i}>
+            <text x={fx + 10} y={562} fontSize={8} fontWeight={600} fill={FR.soil} letterSpacing={0.4}>
+              {(entry.role || `FABRIC ${i + 1}`).toUpperCase()}
+            </text>
+            <text x={fx + 10} y={578} fontSize={12} fontWeight={600} fill={hasMpu ? FR.slate : FR.stone}
+              fontFamily="ui-monospace, Menlo, monospace">
+              {hasMpu ? `${entry.metersPerUnit}m` : '— TBD'}
+            </text>
+            <text x={fx + 10} y={592} fontSize={8}
+              fill={hasMpu ? (entry.yieldIsActual ? '#3B6D11' : '#854F0B') : '#854F0B'}>
+              {hasMpu
+                ? (entry.yieldIsActual ? 'CLO3D actual' : 'std. estimate')
+                : 'set garment type in BOM step'}
+            </text>
+          </g>
+        );
+      })}
+
+      <SectionHeading x={40} y={615}>Cutting Instructions</SectionHeading>
+      <foreignObject x="40" y="630" width={PAGE_W - 80} height="130">
         <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: 11, color: FR.slate, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
           {d.cuttingInstructions || '—'}
         </div>
@@ -622,46 +1089,148 @@ function PagePom({ d, images }) {
   );
 }
 
-// ─── Page 10 — Garment Treatments ───────────────────────────────────────────
+// ─── Page 11 — Graded Size Matrix ───────────────────────────────────────────
+function PageSizeMatrix({ d }) {
+  const matrix = d.gradedSizeMatrix || { baseSize: 'M', grading: [] };
+  const rawSizes = Array.isArray(d.sizeRange)
+    ? d.sizeRange
+    : (d.sizeRange ? String(d.sizeRange).split(/[/,]+/).map(s => s.trim()).filter(Boolean) : []);
+  const sizes = rawSizes.length ? rawSizes : ['S', 'M', 'L', 'XL'];
+  const baseSize = sizes.includes(matrix.baseSize) ? matrix.baseSize : sizes[0];
+  const poms = (d.poms || []).filter(p => p && p.name);
+
+  const baseValue = (pom) => {
+    const v = pom[baseSize.toLowerCase()];
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const cellFor = (pom, size) => {
+    const base = baseValue(pom);
+    if (size === baseSize) return base !== null ? base.toFixed(1) : '—';
+    const g = (matrix.grading || []).find(x => x.pomName === pom.name);
+    const d2 = g?.perSizeDelta?.[size];
+    if (d2 === undefined || d2 === null || base === null) return '—';
+    return (base + Number(d2)).toFixed(1);
+  };
+
+  const tableX = 40;
+  const tableW = PAGE_W - 80;
+  const labelW = 240;
+  const sizeColW = (tableW - labelW) / sizes.length;
+  const rowH = 22;
+  const headerH = 28;
+  const startY = 180;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+      <SectionHeading x={40} y={158}>Graded Size Matrix (cm)</SectionHeading>
+
+      <g transform={`translate(${tableX} ${startY})`}>
+        <rect x={0} y={0} width={tableW} height={headerH} fill={FR.slate} />
+        <text x={10} y={18} fontSize={9} fontWeight={600} fill={FR.salt} letterSpacing={0.5}>MEASUREMENT</text>
+        {sizes.map((s, i) => (
+          <g key={s}>
+            <rect x={labelW + i * sizeColW} y={0} width={sizeColW} height={headerH} fill={s === baseSize ? FR.soil : FR.slate} />
+            <line x1={labelW + i * sizeColW} y1={0} x2={labelW + i * sizeColW} y2={headerH} stroke={FR.salt} strokeOpacity={0.2} />
+            <text x={labelW + i * sizeColW + sizeColW / 2} y={18} fontSize={10} fontWeight={600} fill={FR.salt} textAnchor="middle" letterSpacing={1}>
+              {s}{s === baseSize ? ' · SAMPLE' : ''}
+            </text>
+          </g>
+        ))}
+        {poms.slice(0, 14).map((pom, ri) => (
+          <g key={ri} transform={`translate(0 ${headerH + ri * rowH})`}>
+            <rect x={0} y={0} width={tableW} height={rowH} fill={ri % 2 === 0 ? FR.salt : '#FFFFFF'} />
+            <text x={10} y={15} fontSize={11} fill={FR.slate}>{pom.name}</text>
+            {sizes.map((s, i) => (
+              <g key={s}>
+                <line x1={labelW + i * sizeColW} y1={0} x2={labelW + i * sizeColW} y2={rowH} stroke={FR.sand} />
+                <text x={labelW + i * sizeColW + sizeColW / 2} y={15} fontSize={11} fill={s === baseSize ? FR.soil : FR.slate} fontWeight={s === baseSize ? 600 : 400} textAnchor="middle" fontFamily="ui-monospace,Menlo,monospace">
+                  {cellFor(pom, s)}
+                </text>
+              </g>
+            ))}
+          </g>
+        ))}
+      </g>
+
+      <text x={40} y={680} fontSize={10} fill={FR.stone} fontStyle="italic">
+        Per-size values derived as <tspan fontFamily="ui-monospace,Menlo,monospace">base + delta</tspan>. Base column comes from Points of Measure.
+      </text>
+    </g>
+  );
+}
+
+// ─── Treatments — Render (three-angle photos + wash types) ──────────────────
 function PageTreatments({ d, images }) {
   const imgs = images || [];
-  const before = imgs.find(i => i.slot === 'treatment-before');
-  const after  = imgs.find(i => i.slot === 'treatment-after');
+  const front = imgs.find(i => i.slot === 'treatment-front');
+  const back  = imgs.find(i => i.slot === 'treatment-back');
+  const side  = imgs.find(i => i.slot === 'treatment-side');
 
-  const treatments  = (d.treatments  || []).filter(r => r.step || r.treatment || r.process);
-  const distressing = (d.distressing || []).filter(r => r.area || r.technique || r.intensity);
+  const washTypes = (d.treatmentWashTypes || []).filter(r => r.name || r.notes);
 
-  const tCols = [
-    { key: 'step',        label: 'Step',                 w: 60  },
-    { key: 'treatment',   label: 'Treatment',            w: 180 },
-    { key: 'process',     label: 'Process',              w: 180 },
-    { key: 'temperature', label: 'Temp',                 w: 90  },
-    { key: 'duration',    label: 'Duration',             w: 100 },
-    { key: 'chemicals',   label: 'Chemicals or Agents',  w: 230 },
-    { key: 'notes',       label: 'Notes',                w: 203 },
-  ];
+  const gridY   = 152;
+  const gridGap = 14;
+  const cellW   = (PAGE_W - 80 - gridGap * 2) / 3;
+  const cellH   = 380;
+  const tableY  = gridY + cellH + 26;
 
-  const dCols = [
-    { key: 'area',           label: 'Area',            w: 180 },
-    { key: 'technique',      label: 'Technique',       w: 210 },
-    { key: 'intensity',      label: 'Intensity (1-5)', w: 140 },
-    { key: 'referenceImage', label: 'Reference Image', w: 260 },
-    { key: 'notes',          label: 'Notes',           w: 253 },
+  const wCols = [
+    { key: 'name',  label: 'Wash Type', w: 320 },
+    { key: 'notes', label: 'Notes',     w: PAGE_W - 80 - 320 },
   ];
 
   return (
     <g>
       <InfoStrip d={d} />
 
-      <SectionHeading x={40} y={158}>Wash &amp; Dye Treatments</SectionHeading>
-      <GridTable x={40} y={170} cols={tCols} rows={treatments} bodyRows={4} />
+      <PhotoSlot x={40}                            y={gridY} w={cellW} h={cellH} label="Front" image={front} />
+      <PhotoSlot x={40 + cellW + gridGap}          y={gridY} w={cellW} h={cellH} label="Back"  image={back} />
+      <PhotoSlot x={40 + (cellW + gridGap) * 2}    y={gridY} w={cellW} h={cellH} label="Side"  image={side} />
 
-      <SectionHeading x={40} y={306}>Distressing &amp; Special Finishes</SectionHeading>
-      <GridTable x={40} y={318} cols={dCols} rows={distressing} bodyRows={4} />
+      <SectionHeading x={40} y={tableY}>Wash Types</SectionHeading>
+      <GridTable x={40} y={tableY + 12} cols={wCols} rows={washTypes} bodyRows={4} />
+    </g>
+  );
+}
 
-      <SectionHeading x={40} y={454}>Before / After Reference</SectionHeading>
-      <PhotoSlot x={40}                                 y={475} w={(PAGE_W - 80 - 16) / 2} h={230} label="Before Treatment" image={before} />
-      <PhotoSlot x={40 + (PAGE_W - 80 - 16) / 2 + 16}  y={475} w={(PAGE_W - 80 - 16) / 2} h={230} label="After Treatment"  image={after} />
+// ─── Embellishments — Sizing & Colors ───────────────────────────────────────
+function PageEmbSizing({ d, images }) {
+  const imgs = images || [];
+  const ref  = imgs.find(i => i.slot === 'emb-sizing-reference');
+  const s1   = imgs.find(i => i.slot === 'emb-sizing-source-1');
+  const s2   = imgs.find(i => i.slot === 'emb-sizing-source-2');
+  const s3   = imgs.find(i => i.slot === 'emb-sizing-source-3');
+
+  const refY    = 152;
+  const refH    = 320;
+  const refW    = (PAGE_W - 80 - 14) / 2;
+  const sourceX = 40 + refW + 14;
+  const sourceCellH = (refH - 12 * 2) / 3;
+
+  const notes = (d.embSizingNotes || '').trim();
+  const notesY = refY + refH + 22;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <PhotoSlot x={40} y={refY} w={refW} h={refH} label="Sizing & Color Reference" image={ref} />
+      <PhotoSlot x={sourceX} y={refY}                                w={refW} h={sourceCellH} label="Source File 1" image={s1} />
+      <PhotoSlot x={sourceX} y={refY + sourceCellH + 12}             w={refW} h={sourceCellH} label="Source File 2" image={s2} />
+      <PhotoSlot x={sourceX} y={refY + (sourceCellH + 12) * 2}       w={refW} h={sourceCellH} label="Source File 3" image={s3} />
+
+      {notes && (
+        <g>
+          <SectionHeading x={40} y={notesY}>Sizing &amp; Color Notes</SectionHeading>
+          <foreignObject x={40} y={notesY + 14} width={PAGE_W - 80} height={Math.max(60, PAGE_H - notesY - 80)}>
+            <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontSize: 10.5, color: FR.slate, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+              {notes}
+            </div>
+          </foreignObject>
+        </g>
+      )}
     </g>
   );
 }
@@ -839,7 +1408,7 @@ function PageOrder({ d }) {
   );
 }
 
-// ─── Page 13 — Compliance & Quality ──────────────────────────────────────────
+// ─── QC — Compliance & Testing ───────────────────────────────────────────────
 function PageCompliance({ d }) {
   const shipping = (d.shippingReqs || []).filter(r => r.requirement || r.specification || r.notes);
   const tests    = (d.testingStandards || []).filter(r => r.test || r.standard || r.requirement);
@@ -872,11 +1441,51 @@ function PageCompliance({ d }) {
       <SectionHeading x={40} y={158}>Shipping Requirements</SectionHeading>
       <GridTable x={40} y={170} cols={shipCols} rows={shipping} bodyRows={3} />
 
-      <SectionHeading x={40} y={290}>Quality &amp; Testing Standards</SectionHeading>
+      <SectionHeading x={40} y={290}>Testing Standards</SectionHeading>
       <GridTable x={40} y={302} cols={testCols} rows={tests} bodyRows={4} />
 
       <SectionHeading x={40} y={434}>Barcode &amp; SKU Matrix</SectionHeading>
       <GridTable x={40} y={446} cols={matrixCols} rows={matrix} bodyRows={10} />
+    </g>
+  );
+}
+
+// ─── QC — Quality Inspection (AQL) ───────────────────────────────────────────
+function PageQuality({ d }) {
+  const qi = d.qualityInspection || { aqlMajor: '2.5', aqlMinor: '4.0', inspectionStage: 'During Production', checklist: [], photoRequirements: '' };
+  const checklist = (qi.checklist || []).filter(r => r.area || r.criterion);
+
+  const cCols = [
+    { key: 'area',      label: 'Area',      w: 240 },
+    { key: 'criterion', label: 'Criterion', w: 600 },
+    { key: 'severity',  label: 'Severity',  w: 203 },
+  ];
+
+  const aqlY = 158;
+  const listY = 270;
+  const photoY = 590;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <SectionHeading x={40} y={aqlY}>AQL Standard</SectionHeading>
+      <text x={40}  y={aqlY + 30} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">MAJOR (AQL)</text>
+      <text x={40}  y={aqlY + 50} fontSize="14" fill={FR.slate}>{esc(qi.aqlMajor || '—')}</text>
+      <text x={300} y={aqlY + 30} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">MINOR (AQL)</text>
+      <text x={300} y={aqlY + 50} fontSize="14" fill={FR.slate}>{esc(qi.aqlMinor || '—')}</text>
+      <text x={560} y={aqlY + 30} fontSize="9" fontWeight="bold" fill={FR.soil} letterSpacing="0.5">INSPECTION STAGE</text>
+      <text x={560} y={aqlY + 50} fontSize="14" fill={FR.slate}>{esc(qi.inspectionStage || '—')}</text>
+
+      <SectionHeading x={40} y={listY}>Inspection Checklist</SectionHeading>
+      <GridTable x={40} y={listY + 12} cols={cCols} rows={checklist} bodyRows={14} />
+
+      <SectionHeading x={40} y={photoY}>Photo Requirements</SectionHeading>
+      <foreignObject x="40" y={photoY + 14} width={PAGE_W - 80} height="120">
+        <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: 11, color: FR.slate, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+          {qi.photoRequirements || '—'}
+        </div>
+      </foreignObject>
     </g>
   );
 }
@@ -956,21 +1565,44 @@ function ComingSoon({ pageNum, title }) {
   );
 }
 
+// Page order mirrors STEPS in techPackConstants.js (manufacturing stage).
+// Index parity is required — TechPackPagePreview indexes into PAGE_FNS by
+// `step` directly, so a misaligned slot here means the wrong page renders
+// for the wrong sidebar entry (the bug from PR #83).
 const PAGE_FNS = [
-  { title: 'Style Overview',                body: ({ d, images }) => <PageCover d={d} images={images} /> },
-  { title: 'Design Overview',              body: ({ d, images }) => <PageDesignOverview d={d} images={images} /> },
-  { title: 'Technical Flat Lay Diagrams',  body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
-  { title: 'Bill of Materials',            body: ({ d }) => <PageBOM d={d} /> },
-  { title: 'Color & Artwork',              body: ({ d, images }) => <PageColor d={d} images={images} /> },
-  { title: 'Construction Details',         body: ({ d }) => <PageConstruction d={d} /> },
-  { title: 'Construction Detail Sketches', body: ({ d, images }) => <PageSketches d={d} images={images} /> },
-  { title: 'Pattern Pieces & Cutting',     body: ({ d, images }) => <PagePattern d={d} images={images} /> },
-  { title: 'Points of Measure',            body: ({ d, images }) => <PagePom d={d} images={images} /> },
-  { title: 'Garment Treatments',           body: ({ d, images }) => <PageTreatments d={d} images={images} /> },
-  { title: 'Labels & Packaging',           body: ({ d, images }) => <PageLabels d={d} images={images} /> },
-  { title: 'Order & Delivery',             body: ({ d }) => <PageOrder d={d} /> },
-  { title: 'Compliance & Quality',         body: ({ d }) => <PageCompliance d={d} /> },
-  { title: 'Revision History & Approval',  body: ({ d }) => <PageRevision d={d} /> },
+  // 00, 01 — Merchandising
+  { title: 'Competitor Landscape',              phase: 'Merchandising',     body: ({ d }) => <PageCompetitorLandscape d={d} /> },
+  { title: 'Merchandising Preview',             phase: 'Merchandising',     body: ({ d }) => <PageMerchandisingPreview d={d} /> },
+  // 02, 03 — Design
+  { title: 'Style Overview',                    phase: 'Design',            body: ({ d, images }) => <PageCover d={d} images={images} /> },
+  { title: 'Design Overview',                   phase: 'Design',            body: ({ d, images }) => <PageDesignOverview d={d} images={images} /> },
+  // 04, 05, 06 — Bill of Materials
+  { title: 'Fabrics',                           phase: 'Bill of Materials', body: ({ d, fabricsById }) => <PageFabrics d={d} fabricsById={fabricsById} /> },
+  { title: 'Trims',                             phase: 'Bill of Materials', body: ({ d, componentsById }) => <PageTrims d={d} componentsById={componentsById} /> },
+  { title: 'Packaging',                         phase: 'Bill of Materials', body: ({ d, componentsById }) => <PagePackaging d={d} componentsById={componentsById} /> },
+  // 07–13 — Cut & Sew
+  { title: 'Flat Lay',                          phase: 'Cut & Sew',         body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
+  { title: 'Call Outs',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page1" /> },
+  { title: 'Call Outs',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page2" /> },
+  { title: 'Stitching',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageConstruction d={d} images={images} /> },
+  { title: 'Pattern & Cutting',                 phase: 'Cut & Sew',         body: ({ d, images }) => <PagePattern d={d} images={images} /> },
+  { title: 'POM',                               phase: 'Cut & Sew',         body: ({ d, images }) => <PagePom d={d} images={images} /> },
+  { title: 'Size Grading',                      phase: 'Cut & Sew',         body: ({ d }) => <PageSizeMatrix d={d} /> },
+  // 14–18 — Embellishments
+  { title: 'Colorways',                         phase: 'Embellishments',    body: ({ d }) => <PageColorways d={d} /> },
+  { title: 'Artwork & Placement',               phase: 'Embellishments',    body: ({ d, images }) => <PageArtwork d={d} images={images} /> },
+  { title: 'Flat Lay',                          phase: 'Embellishments',    body: ({ d, images }) => <PageFlatlays d={d} images={images} frontSlot="emb-flatlay-front" backSlot="emb-flatlay-back" subtitle="Front and back embellishment placement flats." frontLabel="Front (with embellishment)" backLabel="Back (with embellishment)" /> },
+  { title: 'Call Outs',                         phase: 'Embellishments',    body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="emb-callouts" fieldName="embCalloutDetails" slotKey="sketch-callout-emb-callouts" /> },
+  { title: 'Sizing & Colors',                   phase: 'Embellishments',    body: ({ d, images }) => <PageEmbSizing d={d} images={images} /> },
+  // 19, 20 — Treatments
+  { title: 'Render',                            phase: 'Treatments',        body: ({ d, images }) => <PageTreatments d={d} images={images} /> },
+  { title: 'Call Outs',                         phase: 'Treatments',        body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="treat-callouts" fieldName="treatCalloutDetails" slotKey="sketch-callout-treat-callouts" /> },
+  // 21–25 — QC, Packaging, Logistics, Sign-off
+  { title: 'Compliance & Testing',              phase: 'QC',                body: ({ d }) => <PageCompliance d={d} /> },
+  { title: 'Quality Inspection (AQL)',          phase: 'QC',                body: ({ d }) => <PageQuality d={d} /> },
+  { title: 'Labels & Packaging',                phase: 'Packaging',         body: ({ d, images }) => <PageLabels d={d} images={images} /> },
+  { title: 'Order & Delivery',                  phase: 'Logistics',         body: ({ d }) => <PageOrder d={d} /> },
+  { title: 'Revision History & Approval',       phase: 'Sign-off',          body: ({ d }) => <PageRevision d={d} /> },
 ];
 
 function SkipOverlay() {
@@ -987,10 +1619,12 @@ function SkipOverlay() {
   );
 }
 
-export default function TechPackPagePreview({ data, images, step, skippedSteps }) {
+export default function TechPackPagePreview({ data, images, step, skippedSteps, treatmentsById, componentsById = {}, fabricsById = {} }) {
   const d = data || {};
   const styleInfo = `© 2026 Foreign Resource Co. — Confidential Tech Pack`;
-  const pageNum = Math.min(Math.max((step ?? 0) + 1, 1), TOTAL_PAGES);
+  // Page number uses STEPS[step].icon — '000', '00', '01' … '19'.
+  const stepEntry = STEPS[step] || STEPS[0];
+  const pageNum = stepEntry.icon || String((step ?? 0) + 1);
   const current = PAGE_FNS[step] || PAGE_FNS[0];
   const Body = current.body;
   const isSkipped = Array.isArray(skippedSteps) && skippedSteps.includes(step);
@@ -1000,8 +1634,8 @@ export default function TechPackPagePreview({ data, images, step, skippedSteps }
       viewBox={`0 0 ${PAGE_W} ${PAGE_H}`}
       preserveAspectRatio="xMidYMin meet"
       style={{ width: '100%', height: 'auto', background: FR.white, boxShadow: '0 2px 14px rgba(0,0,0,0.12)', borderRadius: 6, fontFamily: 'Helvetica, Arial, sans-serif' }}>
-      <PageFrame title={current.title} pageNum={pageNum} styleInfo={styleInfo}>
-        <Body d={d} images={images} />
+      <PageFrame title={current.title} phase={current.phase} pageNum={pageNum} styleInfo={styleInfo} styleNumber={d.styleNumber}>
+        <Body d={d} images={images} treatmentsById={treatmentsById} componentsById={componentsById} fabricsById={fabricsById} />
       </PageFrame>
       {isSkipped && <SkipOverlay />}
     </svg>

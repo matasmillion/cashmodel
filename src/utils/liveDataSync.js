@@ -271,38 +271,97 @@ export async function syncShopifyActuals(/* creds unused — proxy holds creds *
 // ─── Shopify variants + per-day sales (Sell-Through page) ────────────────────
 
 /**
+ * High-level wrapper used by the inventory module's auto-sync. Pulls active
+ * variants + their on-hand + last-90-day sales, joins them, and writes the
+ * sell-through snapshot that inventoryStore reads from.
+ *
+ * Logs a parity report (variantCount, totalOnHand, soldL90) so the operator
+ * can sanity-check against Shopify Admin → Products at the same time.
+ *
+ * @returns {Promise<{ variantCount, totalOnHand, soldL90, oversold, syncedAt }>}
+ */
+export async function syncShopifyInventory({ days = 90 } = {}) {
+  const stStore = await import('./sellThroughStore');
+
+  const [variants, salesByVariant] = await Promise.all([
+    fetchShopifyVariantsWithInventory({ activeOnly: true }),
+    fetchShopifyVariantSalesByDay({ days }),
+  ]);
+
+  const merged = variants.map(v => ({
+    ...v,
+    salesByDay: salesByVariant[v.variantId] || {},
+  }));
+
+  const syncedAt = new Date().toISOString();
+  stStore.writeLocal({ syncedAt, variants: merged });
+
+  // Parity report — compare against Shopify Admin counts.
+  const totalOnHand = merged.reduce((s, v) => s + Math.max(0, v.inventoryQuantity || 0), 0);
+  const oversold   = merged.filter(v => (v.inventoryQuantity || 0) < 0).length;
+  const soldL90    = merged.reduce((s, v) => {
+    let n = 0;
+    for (const k in v.salesByDay) n += v.salesByDay[k];
+    return s + n;
+  }, 0);
+
+  console.info(
+    `[shopify-sync] ${merged.length} active variants · ` +
+    `${totalOnHand.toLocaleString()} on-hand · ` +
+    `${soldL90.toLocaleString()} units sold L${days}d · ` +
+    `${oversold} oversold`,
+  );
+
+  return {
+    variantCount: merged.length,
+    totalOnHand,
+    soldL90,
+    oversold,
+    syncedAt,
+  };
+}
+
+/**
  * Pulls every product variant with its current on-hand inventory.
  * Paginates 250-per-page via cursor.
  *
  * Requires `read_products` (and `read_inventory` if you later want to split
  * by location — `inventoryQuantity` is already total on-hand across locations).
  *
- * Returns: [{ variantId, sku, productTitle, variantTitle, inventoryQuantity }]
+ * @param {{ activeOnly?: boolean }} opts
+ *   activeOnly (default true): filter to product_status:active so deprecated
+ *   / archived products don't bloat the inventory model. Pass false to pull
+ *   everything (used by the variant mapper backfill UI).
+ *
+ * Returns: [{ variantId, sku, productTitle, variantTitle, inventoryQuantity, productStatus }]
  */
-export async function fetchShopifyVariantsWithInventory() {
+export async function fetchShopifyVariantsWithInventory({ activeOnly = true } = {}) {
   const gqlQuery = `
-    query FetchVariants($cursor: String) {
-      productVariants(first: 250, after: $cursor) {
+    query FetchVariants($cursor: String, $q: String) {
+      productVariants(first: 250, after: $cursor, query: $q) {
         pageInfo { hasNextPage endCursor }
         edges {
           node {
             id
             sku
             title
+            price
             inventoryQuantity
-            product { id title }
+            inventoryItem { id unitCost { amount } }
+            product { id title vendor status productType }
           }
         }
       }
     }
   `;
+  const queryFilter = activeOnly ? 'product_status:active' : null;
 
   const out = [];
   let cursor = null;
   for (let page = 0; page < 40; page++) {  // 40 * 250 = 10k variants
     const data = await callShopifyProxy('graphql.json', null, {
       query: gqlQuery,
-      variables: { cursor },
+      variables: { cursor, q: queryFilter },
     });
 
     if (data.errors?.length) {
@@ -314,12 +373,20 @@ export async function fetchShopifyVariantsWithInventory() {
 
     for (const edge of conn.edges) {
       const n = edge.node;
+      const unitCostAmount = n.inventoryItem?.unitCost?.amount;
       out.push({
         variantId: n.id,
+        inventoryItemId: n.inventoryItem?.id || '',
         sku: n.sku || '',
+        productId: n.product?.id || '',
         productTitle: n.product?.title || '',
+        productVendor: n.product?.vendor || '',
+        productStatus: n.product?.status || '',
+        productType: n.product?.productType || '',
         variantTitle: n.title || '',
+        price: n.price != null ? Number(n.price) : null,
         inventoryQuantity: typeof n.inventoryQuantity === 'number' ? n.inventoryQuantity : 0,
+        unitCost: unitCostAmount != null ? Number(unitCostAmount) : null,
       });
     }
     if (!conn.pageInfo.hasNextPage) break;
@@ -1063,8 +1130,42 @@ export async function deleteSlackCredentials() {
   await db.from('user_integrations').delete().eq('org_id', orgId).eq('provider', 'slack');
 }
 
-export async function callSlackProxy({ method = 'POST', path, body, query }) {
-  return await callEdgeFunction('slack-proxy', { method, path, body, query });
+export async function callSlackProxy({ method = 'POST', path, body, query, provider }) {
+  return await callEdgeFunction('slack-proxy', { method, path, body, query, provider });
+}
+
+// ─── Slack inventory bot (separate app for sell-through alerts) ───────────────
+
+export async function saveSlackInventoryCredentials({ token, channelId }) {
+  if (!IS_SUPABASE_ENABLED) throw new Error('Supabase not configured');
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) throw new Error('No active organization');
+  const db = await getAuthedSupabase();
+  const { error } = await db
+    .from('user_integrations')
+    .upsert(
+      {
+        org_id: orgId,
+        provider: 'slack_inventory',
+        token,
+        metadata: { channel_id: channelId },
+      },
+      { onConflict: 'org_id,provider' },
+    );
+  if (error) throw new Error(`Failed to save credentials: ${error.message}`);
+}
+
+export async function deleteSlackInventoryCredentials() {
+  if (!IS_SUPABASE_ENABLED) return;
+  const orgId = getCurrentOrgIdSync();
+  if (!orgId) return;
+  const db = await getAuthedSupabase();
+  await db.from('user_integrations').delete().eq('org_id', orgId).eq('provider', 'slack_inventory');
+}
+
+/** Manually trigger sell-through-alert for the current org. */
+export async function callSellThroughAlert() {
+  return await callEdgeFunction('sell-through-alert', {});
 }
 
 /** Manually trigger evaluate-daily for the current org (cron also runs nightly). */
@@ -1243,13 +1344,25 @@ async function callProxyEndpoint(name, body, opts = {}) {
 
   // 401/404 from the proxy itself = real failure. Anything past the
   // proxy (e.g. 4xx/5xx returned by fal/higgsfield because /health
-  // isn't a real path) means the proxy + key combo is wired up.
+  // isn't a real path) means the proxy + key combo is wired up. Both
+  // upstream and proxy share status codes, so we sniff the error
+  // message to distinguish — proxy errors include phrases like
+  // "not connected", "Sign in", or "Credential lookup".
   if (res.status === 401 || res.status === 404) {
     const text = await res.text();
     let data;
     try { data = JSON.parse(text); } catch { data = { raw: text }; }
-    const msg = data?.error || `${res.status} ${res.statusText}`;
-    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    const errorStr = typeof data?.error === 'string'
+      ? data.error
+      : (data?.error?.message || '');
+    const isProxyFailure = res.status === 401
+      || /not connected|sign in|credential lookup/i.test(errorStr);
+    if (isProxyFailure) {
+      const msg = errorStr || `${res.status} ${res.statusText}`;
+      throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    }
+    // Otherwise: upstream returned 404 (e.g. /health) — proxy + key works.
+    if (opts.allowAnyStatus) return { ok: true, status: res.status };
   }
 
   if (!opts.allowAnyStatus && !res.ok) {

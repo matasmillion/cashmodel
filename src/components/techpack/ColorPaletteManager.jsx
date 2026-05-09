@@ -8,7 +8,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Upload, Plus, Trash2 } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { Input, Row, labelStyle, inputBase, CostPill, formatCost } from './TechPackPrimitives';
-import { listFRColors, getFRColor, updateFRColor, clearFRColorField, addFRColor, deleteFRColor, isSeededFRColor } from '../../utils/colorLibrary';
+import { listFRColors, getFRColor, updateFRColor, clearFRColorField, addFRColor, deleteFRColor, isSeededFRColor, hydrateFRColorsFromCloud } from '../../utils/colorLibrary';
 import { fileToDataUrl } from '../../utils/cropImage';
 import { uploadAsset, deleteAsset, isLegacyDataUrl, dataUrlToBlob } from '../../utils/plmAssets';
 import CoverThumb from './CoverThumb';
@@ -33,7 +33,15 @@ export default function ColorPaletteManager() {
   const [adding, setAdding] = useState(false);
 
   const refresh = () => setColors(listFRColors());
-  useEffect(() => { refresh(); }, []);
+  // Hydrate from cloud on mount so colors created on another device land
+  // here. The hydrate writes to localStorage; the subsequent refresh()
+  // picks them up via the sync read.
+  useEffect(() => {
+    let cancelled = false;
+    refresh();
+    hydrateFRColorsFromCloud().then(() => { if (!cancelled) refresh(); });
+    return () => { cancelled = true; };
+  }, []);
 
   const handleClose = (openName) => {
     setActiveName(null);

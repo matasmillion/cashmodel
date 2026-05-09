@@ -1,7 +1,8 @@
 import { createContext, useContext, useReducer, useMemo, useEffect, useRef, useState } from 'react';
 import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, OPEX_WAREHOUSE, CREDIT_CARDS, LOANS, AD_UNIT_TYPES, DEFAULT_EVENTS } from '../data/seedData';
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
-import { syncShopifyActuals, syncMetaActuals, syncMercuryActuals, syncPlaidActuals, listPlaidItems } from '../utils/liveDataSync';
+import { syncShopifyActuals, syncShopifyInventory, syncMetaActuals, syncMercuryActuals, syncPlaidActuals, listPlaidItems } from '../utils/liveDataSync';
+import { migrateManualPOsToStore } from '../utils/productionStore';
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { useCurrentUser, useCurrentOrg } from '../lib/auth';
 import { bucketDepositoryAccounts, classifyCreditAccount, cardIdFromMask } from '../utils/bankAccountMap';
@@ -49,7 +50,18 @@ async function runAutoSync(dispatch) {
         changed = true;
       }).catch(err => {
         errors.shopify = err.message;
-        console.warn('[auto-sync] Shopify:', err.message);
+        console.warn('[auto-sync] Shopify revenue:', err.message);
+      }),
+    );
+
+    // Inventory snapshot (variants + on-hand + L90 sales by day). Runs
+    // alongside the revenue pull so the inventory module has live data
+    // on first paint without requiring a manual sync from Sell-Through.
+    sources.push('shopify-inventory');
+    tasks.push(
+      syncShopifyInventory().catch(err => {
+        errors['shopify-inventory'] = err.message;
+        console.warn('[auto-sync] Shopify inventory:', err.message);
       }),
     );
   }
@@ -170,7 +182,6 @@ const initialState = {
   adUnitTypes: AD_UNIT_TYPES,
   scheduledAdUnits: [],
   events: DEFAULT_EVENTS,
-  manualPOs: [],
   rateCard: null,
   scenarios: [
     { id: 'base', name: 'Base Case', assumptions: { ...DEFAULT_ASSUMPTIONS }, isActive: true },
@@ -182,13 +193,13 @@ const initialState = {
 const PERSISTED_KEYS = [
   'products', 'seed', 'assumptions', 'subscriptions', 'warehouse',
   'creditCards', 'loans', 'adUnitTypes', 'scheduledAdUnits', 'events',
-  'manualPOs', 'rateCard', 'scenarios', 'activeScenarioId',
+  'rateCard', 'scenarios', 'activeScenarioId',
 ];
 
 const VALID_TABS = new Set([
   'dashboard', 'revenue', 'cashflow', 'ad-units', 'unit-economics',
   'product', 'sell-through', 'fulfillment', 'po-schedule', 'pos', 'opex', 'scenarios', 'integrations',
-  'org-settings', 'creative-engine',
+  'org-settings', 'creative-engine', 'inventory',
 ]);
 
 function readTabFromHash() {
@@ -271,11 +282,6 @@ function reducer(state, action) {
       const { collectionId, productId } = action.payload;
       return { ...state, products: { ...state.products, [collectionId]: { ...state.products[collectionId], products: state.products[collectionId].products.filter(p => p.id !== productId) } } };
     }
-
-    case 'ADD_PO':
-      return { ...state, manualPOs: [...state.manualPOs, action.payload] };
-    case 'REMOVE_PO':
-      return { ...state, manualPOs: state.manualPOs.filter(po => po.id !== action.payload) };
 
     case 'ADD_EVENT':
       return { ...state, events: [...state.events, action.payload] };
@@ -428,6 +434,19 @@ export function AppProvider({ children }) {
     } else {
       triggerAutoSync();
     }
+
+    // One-time migration: import any legacy manualPOs from localStorage into
+    // productionStore. The shim is idempotent and self-disables after first run.
+    const legacyPOs = (() => {
+      try {
+        const raw = localStorage.getItem('cashmodel_state');
+        return JSON.parse(raw || '{}')?.manualPOs || [];
+      } catch { return []; }
+    })();
+    migrateManualPOsToStore(legacyPOs).catch(err =>
+      console.error('migrateManualPOsToStore:', err)
+    );
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId]);
 
@@ -460,8 +479,8 @@ export function AppProvider({ children }) {
   }, [state]);
 
   const projections = useMemo(() =>
-    generateWeeklyProjections(state.assumptions, state.seed, state.manualPOs, state.scheduledAdUnits, state.events, state.creditCards, state.loans),
-    [state.assumptions, state.seed, state.manualPOs, state.scheduledAdUnits, state.events, state.creditCards, state.loans]
+    generateWeeklyProjections(state.assumptions, state.seed, [], state.scheduledAdUnits, state.events, state.creditCards, state.loans),
+    [state.assumptions, state.seed, state.scheduledAdUnits, state.events, state.creditCards, state.loans]
   );
 
   const autoPOs = useMemo(() =>

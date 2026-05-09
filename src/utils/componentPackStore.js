@@ -4,6 +4,40 @@
 import { IS_SUPABASE_ENABLED, getAuthedSupabase, refreshAuthedSupabase } from '../lib/supabase';
 import { getCurrentUserIdSync, getCurrentOrgIdSync, getJwtOrgId } from '../lib/auth';
 import { persistableImages, deleteAssets, copyAsset, scheduleOrphanDeletion, cancelOrphanDeletion } from './plmAssets';
+import { robustUpsertAtomBatch } from './atomCloudSync';
+
+// Cloud column allow-list. Anything outside this set (transient UI state,
+// legacy fields) gets stripped before going to Supabase — Postgres rejects
+// the whole row if a single unknown column is sent, which is exactly how
+// trim packs silently failed to sync to the second device.
+const COMPONENT_PACK_CLOUD_COLUMNS = new Set([
+  'id', 'component_name', 'component_category', 'status', 'supplier',
+  'cost_per_unit', 'currency', 'cover_image', 'data', 'images',
+  'created_at', 'updated_at', 'deleted_at',
+  'organization_id', 'user_id',
+]);
+
+function toComponentPackCloudRow(row) {
+  const out = {};
+  for (const k of Object.keys(row || {})) {
+    if (COMPONENT_PACK_CLOUD_COLUMNS.has(k)) out[k] = row[k];
+  }
+  return out;
+}
+
+// Push every local-only component pack to cloud on each list call. Mirrors
+// fabricStore.healOrphanFabrics — without this, a trim created on Mac that
+// silently failed its initial cloud insert (RLS, schema-cache miss, network
+// blip) stays local-only forever and never reaches the second device.
+async function healOrphanComponentPacks(localRows, cloudRows) {
+  if (!Array.isArray(localRows) || localRows.length === 0) return;
+  const cloudIds = new Set((cloudRows || []).map(r => r.id));
+  const orphans = localRows.filter(r => r && r.id && !cloudIds.has(r.id));
+  if (orphans.length === 0) return;
+  const userId = getCurrentUserIdSync();
+  const payload = orphans.map(r => toComponentPackCloudRow({ ...r, user_id: userId }));
+  await robustUpsertAtomBatch('component_packs', payload);
+}
 
 const LOCAL_KEY = 'cashmodel_component_packs';
 
@@ -165,6 +199,12 @@ export async function listComponentPacks() {
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) cloudRows = data;
     else if (error) console.error('listComponentPacks:', error);
+    // Fire-and-forget self-heal — push any local-only packs (typically
+    // trims that failed their initial cloud insert on the source device)
+    // through the robust upsert pipeline so the second device sees them
+    // on the next list call. Never blocks the read.
+    try { await healOrphanComponentPacks(readLocal().filter(p => !p?.deleted_at), cloudRows); }
+    catch (err) { console.error('healOrphanComponentPacks:', err); }
   }
 
   const local = readLocal().filter(p => !p?.deleted_at);
@@ -273,9 +313,12 @@ export async function createComponentPack(defaultData) {
   const orgId = getCurrentOrgIdSync();
   if (IS_SUPABASE_ENABLED && orgId) {
     const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('component_packs').insert({ ...row, user_id: userId, organization_id: orgId });
-    if (error) console.error('createComponentPack:', error);
+    // Use robustUpsert so transient failures (stale JWT, schema-cache miss,
+    // network blip) get a refreshed-token retry instead of a silent log.
+    const result = await robustUpsertAtomBatch('component_packs', [
+      toComponentPackCloudRow({ ...row, user_id: userId }),
+    ]);
+    if (result?.ok === false) console.error('createComponentPack:', result.error);
   }
   return row;
 }

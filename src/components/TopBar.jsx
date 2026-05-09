@@ -16,6 +16,7 @@ import { Link } from 'react-router-dom';
 import { Settings, ChevronDown, LogOut, Sparkles } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useCurrentOrg, useSignOut, useCurrentUser } from '../lib/auth';
+import { setInventoryHash } from '../utils/inventoryRouting';
 import SyncIndicator from './SyncIndicator';
 
 const FR = {
@@ -42,9 +43,18 @@ const PRIMARY_NAV = [
     children: [
       { tabId: 'unit-economics', label: 'Unit Economics' },
       { tabId: 'product', label: 'PLM' },
-      { tabId: 'sell-through', label: 'Sell-Through' },
-      { tabId: 'po-schedule', label: 'PO Schedule' },
-      { tabId: 'pos', label: 'New PO' },
+    ],
+  },
+  {
+    id: 'inventory',
+    label: 'Inventory',
+    children: [
+      { tabId: 'inventory', label: 'Cockpit', subView: 'cockpit' },
+      { tabId: 'inventory', label: 'Inventory', subView: 'inventory' },
+      { tabId: 'inventory', label: 'Sell-Through', subView: 'sell-through' },
+      { tabId: 'inventory', label: 'Open-to-Buy', subView: 'otb' },
+      { tabId: 'inventory', label: 'POs', subView: 'pos' },
+      { tabId: 'inventory', label: 'Forecast', subView: 'forecast' },
     ],
   },
   {
@@ -317,10 +327,14 @@ export default function TopBar() {
                 >
                   {({ close }) => item.children.map(child => (
                     <MenuItem
-                      key={child.tabId}
+                      key={`${child.tabId}-${child.subView || ''}-${child.label}`}
                       tabId={child.tabId}
                       active={state.activeTab === child.tabId}
-                      onClick={() => { setTab(child.tabId); close(); }}
+                      onClick={() => {
+                        setTab(child.tabId);
+                        if (child.subView) setInventoryHash({ view: child.subView });
+                        close();
+                      }}
                     >
                       {child.icon
                         ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><child.icon size={11} strokeWidth={1.5} />{child.label}</span>

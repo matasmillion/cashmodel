@@ -8,11 +8,30 @@
 // it still resolves.
 
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
-import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
+import { getCurrentOrgIdSync } from '../lib/auth';
 import { emptyEmbellishment, EMBELLISHMENT_TYPE_CODE } from './embellishmentLibrary';
 import { copyCoverImage } from './plmAssets';
+import { robustUpsertAtom, robustUpsertAtomBatch } from './atomCloudSync';
 
 const LOCAL_KEY = 'cashmodel_embellishments';
+
+const EMBELLISHMENT_CLOUD_COLUMNS = new Set([
+  'id', 'code', 'name', 'status', 'version', 'created_at', 'updated_at',
+  'type', 'technique', 'artwork_file_url', 'placement', 'placement_image_url',
+  'size_w_cm', 'size_h_cm', 'color_count', 'thread_color_ids',
+  'primary_vendor_id', 'backup_vendor_id', 'cost_per_unit_usd', 'currency',
+  'lead_time_days', 'moq_units', 'cover_image',
+  'adobe_ai_url', 'adobe_psd_url', 'digitizing_file_url', 'notes',
+  'organization_id', 'user_id',
+]);
+
+export function toEmbellishmentCloudRow(row) {
+  const out = {};
+  for (const k of Object.keys(row)) {
+    if (EMBELLISHMENT_CLOUD_COLUMNS.has(k)) out[k] = row[k];
+  }
+  return out;
+}
 
 function readLocal() {
   try {
@@ -63,6 +82,14 @@ function unionByIdCloudFirst(cloudRows, localRows) {
   return out;
 }
 
+async function healOrphanEmbellishments(localRows, cloudRows) {
+  if (!Array.isArray(localRows) || localRows.length === 0) return;
+  const cloudIds = new Set((cloudRows || []).map(r => r.id));
+  const orphans = localRows.filter(r => r && r.id && !cloudIds.has(r.id));
+  if (orphans.length === 0) return;
+  await robustUpsertAtomBatch('embellishments', orphans.map(r => toEmbellishmentCloudRow(r)));
+}
+
 export async function listEmbellishments({ includeArchived = false, status = null, type = null } = {}) {
   const filterOpts = { includeArchived, status, type };
   const orgId = getCurrentOrgIdSync();
@@ -76,6 +103,8 @@ export async function listEmbellishments({ includeArchived = false, status = nul
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) cloudRows = data;
     else if (error) console.error('listEmbellishments:', error);
+    try { await healOrphanEmbellishments(readLocal(), cloudRows); }
+    catch (err) { console.error('healOrphanEmbellishments:', err); }
   }
   const merged = unionByIdCloudFirst(cloudRows, readLocal());
   return filterRows(merged, filterOpts)
@@ -117,13 +146,7 @@ export async function createEmbellishment({ type = 'embroidery', ...overrides } 
   local.push(row);
   writeLocal(local);
 
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('embellishments').insert({ ...row, user_id: userId, organization_id: orgId });
-    if (error) console.error('createEmbellishment:', error);
-  }
+  await robustUpsertAtom('embellishments', toEmbellishmentCloudRow(row));
   return row;
 }
 
@@ -142,16 +165,7 @@ export async function saveEmbellishment(id, updates) {
   }
   writeLocal(local);
 
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const db = await getAuthedSupabase();
-    const { error } = await db
-      .from('embellishments')
-      .update({ ...updates, updated_at: now })
-      .eq('id', id)
-      .eq('organization_id', orgId);
-    if (error) console.error('saveEmbellishment:', error);
-  }
+  await robustUpsertAtom('embellishments', toEmbellishmentCloudRow({ ...merged, updated_at: now }));
   return merged;
 }
 
@@ -188,13 +202,7 @@ export async function duplicateEmbellishment(id) {
   delete copy.organization_id;
   local.push(copy);
   writeLocal(local);
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('embellishments').insert({ ...copy, user_id: userId, organization_id: orgId });
-    if (error) console.error('duplicateEmbellishment:', error);
-  }
+  await robustUpsertAtom('embellishments', toEmbellishmentCloudRow(copy));
   return copy;
 }
 
@@ -202,6 +210,19 @@ export async function seedEmbellishmentsIfEmpty() {
   if (localStorage.getItem('cashmodel_seeded')) return [];
   const local = readLocal();
   if (local.length > 0) return [];
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    const db = await getAuthedSupabase();
+    const { count, error } = await db
+      .from('embellishments')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', orgId);
+    if (error) console.error('seedEmbellishmentsIfEmpty count:', error);
+    if ((count || 0) > 0) {
+      localStorage.setItem('cashmodel_seeded', '1');
+      return [];
+    }
+  }
   const now = new Date().toISOString();
   const seeds = [
     {
@@ -247,14 +268,6 @@ export async function seedEmbellishmentsIfEmpty() {
   ];
   const filled = seeds.map(s => ({ ...emptyEmbellishment(s), updated_at: s.updated_at || now, created_at: s.created_at || now }));
   writeLocal(filled);
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const userId = getCurrentUserIdSync();
-    const db = await getAuthedSupabase();
-    const { error } = await db.from('embellishments').insert(
-      filled.map(r => ({ ...r, user_id: userId, organization_id: orgId }))
-    );
-    if (error) console.error('seedEmbellishments:', error);
-  }
+  await robustUpsertAtomBatch('embellishments', filled.map(r => toEmbellishmentCloudRow(r)));
   return filled;
 }

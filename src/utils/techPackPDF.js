@@ -173,8 +173,100 @@ export async function generateTechPackPDF(pack) {
     }
   }
 
-  // ─── Page 1: Cover ───
-  newPage('Tech Pack', `Rev. ${new Date().toISOString().slice(0, 10)}`, 0);
+  // Construction Details page renderer — 2:3 reference image on the left
+  // plus a 2x2 grid of detail cards on the right. Each card has its own
+  // image, red number, title, and description so the factory sees the
+  // close-up alongside the instruction.
+  function drawConstructionDetailsPage(title, stepIdx, entries) {
+    newPage(title, null, stepIdx);
+    const margin = 10;
+    const top = 26;
+    const colGap = 6;
+    const refW = 80;
+    const refH = refW * 1.5; // 2:3 vertical
+    const callout = images.find(i => i.slot === `sketch-callout-${title.endsWith('Page 2') ? 'page2' : 'page1'}`);
+    if (callout) {
+      try { doc.addImage(callout.data, 'JPEG', margin, top, refW, refH, undefined, 'FAST'); }
+      catch (err) { console.error('callout embed:', err); }
+    } else {
+      doc.setDrawColor(...hex(FR.sand));
+      doc.setLineDashPattern([1, 1], 0);
+      doc.rect(margin, top, refW, refH);
+      doc.setLineDashPattern([], 0);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(...hex(FR.stone));
+      doc.text('(reference)', margin + refW / 2, top + refH / 2, { align: 'center' });
+    }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(...hex(FR.soil));
+    doc.text('REFERENCE (2:3)', margin, top + refH + 4);
+
+    const rightX = margin + refW + colGap;
+    const rightW = W - margin - rightX;
+    const rowGap = 4;
+    const cellW = (rightW - colGap) / 2;
+    const cellH = (refH - rowGap) / 2;
+    const imgH  = cellH * 0.55;
+    (entries || []).slice(0, 4).forEach((entry, i) => {
+      const cx = rightX + (i % 2) * (cellW + colGap);
+      const cy = top    + Math.floor(i / 2) * (cellH + rowGap);
+      doc.setDrawColor(...hex(FR.sand));
+      doc.setLineWidth(0.2);
+      doc.roundedRect(cx, cy, cellW, cellH, 1, 1);
+      addImage(`construction-detail-${entry.num}`, cx + 1, cy + 1, cellW - 2, imgH - 1);
+      // Red number circle
+      doc.setFillColor(163, 45, 45);
+      doc.circle(cx + 5, cy + imgH + 5, 3, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.text(String(entry.num), cx + 5, cy + imgH + 6.5, { align: 'center' });
+      // Title
+      doc.setTextColor(...hex(FR.slate));
+      doc.setFontSize(8);
+      doc.text(String(entry.title || `Detail ${entry.num}`).slice(0, 28), cx + 10, cy + imgH + 6.5);
+      // Description
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(...hex(FR.slate));
+      const descY = cy + imgH + 11;
+      doc.text(String(entry.description || ''), cx + 2, descY, { maxWidth: cellW - 4 });
+    });
+  }
+
+  // ─── Page 000: Competitor Landscape (Merchandising) ───
+  newPage('Competitor Landscape', null, 0);
+  let y = 28;
+  sectionHeading('Pricing & Features', y); y += 8;
+  const compRows = (d.competitors || []).filter(c => c.brand || c.product || c.price).map(c =>
+    [c.brand, c.product, c.price, c.currency, c.features, c.notes]);
+  table(['Brand', 'Product', 'Price', 'Currency', 'Key Features', 'Notes'], compRows, 10, y, [40, 60, 28, 22, 80, 47]);
+  y += 18 + compRows.length * 6;
+  sectionHeading('Competitive Landscape — FR Positioning', y); y += 8;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...hex(FR.slate));
+  (d.competitivePositioning || '').split('\n').forEach((line, i) => doc.text(line, 10, y + i * 5, { maxWidth: W - 20 }));
+
+  // ─── Page 00: Merchandising Preview placeholder ───
+  newPage('Merchandising Preview', null, 1);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(...hex(FR.stone));
+  doc.text('COMING SOON', W / 2, 80, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(20);
+  doc.setTextColor(...hex(FR.slate));
+  doc.text('Storefront Visualization', W / 2, 100, { align: 'center' });
+  doc.setFontSize(9);
+  doc.setTextColor(...hex(FR.stone));
+  doc.text('Visualize this product on the live storefront before sampling — prototype', W / 2, 115, { align: 'center' });
+  doc.text('merchandising, hero imagery, and PDP copy at the design phase.', W / 2, 122, { align: 'center' });
+
+  // ─── Page 01: Cover ───
+  newPage('Tech Pack', `Rev. ${new Date().toISOString().slice(0, 10)}`, 2);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(38);
   doc.setTextColor(...hex(FR.slate));
@@ -193,8 +285,8 @@ export async function generateTechPackPDF(pack) {
   doc.text((d.status || 'DEVELOPMENT').toUpperCase(), W / 2, 131, { align: 'center' });
 
   // ─── Page 2: Identity & Classification ───
-  newPage('Identity & Classification', null, 0);
-  let y = 28;
+  newPage('Identity & Classification', null, 2);
+  y = 28;
   sectionHeading('Product', y); y += 8;
   field('Style Name', d.styleName, 10, y);
   field('Category', d.productCategory, 100, y);
@@ -215,7 +307,7 @@ export async function generateTechPackPDF(pack) {
   field('Fabric Type', d.fabricType, 10, y);
 
   // ─── Page 3: Design ───
-  newPage('Design & Construction', null, 1);
+  newPage('Design & Construction', null, 3);
   y = 28;
   sectionHeading('Fit & Features', y); y += 8;
   field('Fit', d.fit, 10, y); y += 12;
@@ -223,62 +315,299 @@ export async function generateTechPackPDF(pack) {
   field('Design Notes', d.designNotes, 10, y); y += 6;
   addImage('design-refs', 180, 28, 100, 80);
 
-  // ─── Page 4: Flat Lays ───
-  newPage('Flat Lay Diagrams', null, 2);
-  addImage('flatlay-front', 10, 28, 85, 90);
-  addImage('flatlay-back', 105, 28, 85, 90);
-  addImage('flatlay-detail', 200, 28, 85, 90);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7);
-  doc.setTextColor(...hex(FR.soil));
-  doc.text('FRONT', 10, 125);
-  doc.text('BACK', 105, 125);
-  doc.text('DETAIL', 200, 125);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(...hex(FR.slate));
-  doc.text(d.flatLayNotes || '', 10, 140, { maxWidth: W - 20 });
+  // ─── Resolve picked Component Packs + Fabrics for the BOM pages ─────
+  // Mirrors what TechPackBuilder does for the live preview — fetches
+  // each picked row from the library, then resolves its cover_image
+  // (Storage path → signed URL → inline data URL) so jsPDF.addImage()
+  // can embed it synchronously below.
+  const { getComponentPack } = await import('./componentPackStore');
+  const { getFabric } = await import('./fabricStore');
+  const { getAssetUrl } = await import('./plmAssets');
 
-  // ─── Page 5: Bill of Materials ───
-  newPage('Bill of Materials', null, 3);
+  async function resolvePathToDataUrl(path) {
+    if (!path || typeof path !== 'string') return null;
+    if (path.startsWith('data:')) return path;
+    let url = path;
+    if (!/^https?:/.test(path)) {
+      try { url = await getAssetUrl(path); } catch { return null; }
+    }
+    if (!url) return null;
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      return await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload  = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsDataURL(blob);
+      });
+    } catch { return null; }
+  }
+
+  async function loadComponents(picks) {
+    const out = [];
+    for (const p of (picks || [])) {
+      if (!p?.componentId) continue;
+      const row = await getComponentPack(p.componentId);
+      if (!row) { out.push({ entry: p, row: null, coverData: null }); continue; }
+      const coverData = await resolvePathToDataUrl(row.cover_image || row?.data?.cover_image);
+      out.push({ entry: p, row, coverData });
+    }
+    return out;
+  }
+  async function loadFabrics(picks) {
+    const out = [];
+    for (const p of (picks || [])) {
+      if (!p?.fabricId) continue;
+      const row = await getFabric(p.fabricId);
+      if (!row) { out.push({ entry: p, row: null, coverData: null }); continue; }
+      const coverData = await resolvePathToDataUrl(row.cover_image || row.front_image_url);
+      out.push({ entry: p, row, coverData });
+    }
+    return out;
+  }
+
+  // Public-facing absolute base URL so View-pack links open the right
+  // place when the PDF is opened from email, Slack, or a factory's
+  // computer rather than this browser session.
+  const ORIGIN = (typeof window !== 'undefined' ? window.location.origin : '') || '';
+
+  function bomCard({ x, y: cy, w, h, title, type, name, packHref, qty, unitCost, lineCost, coverData }) {
+    // Card frame
+    doc.setDrawColor(...hex(FR.sand));
+    doc.setLineWidth(0.2);
+    doc.roundedRect(x, cy, w, h, 1.5, 1.5);
+    // Image area — top 55% of the card.
+    const imgH = h * 0.55;
+    doc.setFillColor(...hex(FR.salt));
+    doc.rect(x + 0.5, cy + 0.5, w - 1, imgH - 1, 'F');
+    if (coverData) {
+      try { doc.addImage(coverData, 'JPEG', x + 2, cy + 2, w - 4, imgH - 4, undefined, 'FAST'); }
+      catch (e) { console.error('[PDF] addImage failed:', e); }
+    }
+    // Type pill
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6);
+    doc.setTextColor(...hex(FR.soil));
+    doc.text(String(type || title).toUpperCase(), x + 3, cy + imgH + 5);
+    // Name
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(...hex(FR.slate));
+    doc.text(String(name || '—').slice(0, 28), x + 3, cy + imgH + 11);
+    // View pack link — right-aligned on the name row
+    if (packHref) {
+      doc.setFontSize(7);
+      doc.setTextColor(...hex(FR.soil));
+      const linkText = 'View pack ↗';
+      const tw = doc.getTextWidth(linkText);
+      const lx = x + w - tw - 3;
+      const ly = cy + imgH + 11;
+      doc.textWithLink(linkText, lx, ly, { url: packHref });
+    }
+    // Cost row
+    doc.setDrawColor(...hex(FR.sand));
+    doc.setLineWidth(0.15);
+    doc.line(x + 3, cy + h - 8, x + w - 3, cy + h - 8);
+    doc.setFontSize(6);
+    doc.setTextColor(...hex(FR.stone));
+    const costLeft = `Qty · ${qty || '—'}    Unit · ${unitCost > 0 ? '$' + unitCost.toFixed(2) : '$0.00'}`;
+    doc.text(costLeft, x + 3, cy + h - 4);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...hex(FR.slate));
+    const lineText = `$${(lineCost || 0).toFixed(2)}`;
+    const ltw = doc.getTextWidth(lineText);
+    doc.text(lineText, x + w - ltw - 3, cy + h - 4);
+    doc.setFont('helvetica', 'normal');
+  }
+
+  function laidOutGrid({ items, cols, cardW, cardH, gap, startX, startY, render }) {
+    items.forEach((item, idx) => {
+      const c = idx % cols;
+      const r = Math.floor(idx / cols);
+      const x = startX + c * (cardW + gap);
+      const cy = startY + r * (cardH + gap);
+      render(item, x, cy);
+    });
+  }
+
+  // ─── Bill of Materials → Fabrics (stepIdx 4) ───
+  newPage('Fabrics', null, 4);
+  const pickedFabricsResolved = await loadFabrics(d.pickedFabrics);
+  laidOutGrid({
+    items: pickedFabricsResolved,
+    cols: 3,
+    cardW: 85, cardH: 90, gap: 6,
+    startX: 12, startY: 26,
+    render: ({ entry, row, coverData }, x, cy) => {
+      if (!row) return;
+      const tier = (row.data?.costTiers || [])[0];
+      const unitCost =
+        parseFloat(row.price_per_meter_usd) ||
+        parseFloat(row.data?.price_per_meter_usd) ||
+        parseFloat(tier?.unitCost) || 0;
+      const mpu = entry.metersPerUnit;
+      bomCard({
+        x, y: cy, w: 85, h: 90,
+        title: 'Fabric',
+        type:  entry.role || row.weave || '',
+        name:  row.code || row.name || row.data?.name || '—',
+        packHref: ORIGIN + '/#plm/library/fabrics/' + row.id,
+        qty: mpu ? `${mpu}m/unit${entry.yieldIsActual ? '' : ' est.'}` : 'yield TBD',
+        unitCost,
+        lineCost: mpu ? unitCost * mpu : 0,
+        coverData,
+      });
+    },
+  });
+
+  // ─── Bill of Materials → Trims (stepIdx 5) ───
+  newPage('Trims', null, 5);
+  const pickedTrimsResolved = await loadComponents(d.pickedTrims);
+  laidOutGrid({
+    items: pickedTrimsResolved,
+    cols: 3,
+    cardW: 85, cardH: 90, gap: 6,
+    startX: 12, startY: 26,
+    render: ({ entry, row, coverData }, x, cy) => {
+      if (!row) return;
+      const tier = (row.data?.costTiers || [])[0];
+      const unitCost = parseFloat(tier?.unitCost) || parseFloat(row.cost_per_unit) || parseFloat(row.data?.targetUnitCost) || 0;
+      const qtyNum = parseFloat(String(entry.quantity || '').replace(/[^0-9.]/g, '')) || 1;
+      bomCard({
+        x, y: cy, w: 85, h: 90,
+        title: 'Trim',
+        type:  row.data?.componentType || entry.role || '',
+        name:  row.component_name || row.data?.componentName || '—',
+        packHref: ORIGIN + '/#plm/library/trims/' + row.id,
+        qty: entry.quantity || '—',
+        unitCost,
+        lineCost: unitCost * qtyNum,
+        coverData,
+      });
+    },
+  });
+
+  // ─── Bill of Materials → Packaging (stepIdx 6) ───
+  newPage('Packaging', null, 6);
+  const pickedPackagingResolved = await loadComponents(d.pickedPackaging);
+  laidOutGrid({
+    items: pickedPackagingResolved,
+    cols: 3,
+    cardW: 85, cardH: 90, gap: 6,
+    startX: 12, startY: 26,
+    render: ({ entry, row, coverData }, x, cy) => {
+      if (!row) return;
+      const tier = (row.data?.costTiers || [])[0];
+      const unitCost = parseFloat(tier?.unitCost) || parseFloat(row.cost_per_unit) || parseFloat(row.data?.targetUnitCost) || 0;
+      const qtyNum = parseFloat(String(entry.quantity || '').replace(/[^0-9.]/g, '')) || 1;
+      bomCard({
+        x, y: cy, w: 85, h: 90,
+        title: 'Packaging',
+        type:  row.data?.componentType || entry.role || '',
+        name:  row.component_name || row.data?.componentName || '—',
+        packHref: ORIGIN + '/#plm/library/trims/' + row.id,
+        qty: entry.quantity || '—',
+        unitCost,
+        lineCost: unitCost * qtyNum,
+        coverData,
+      });
+    },
+  });
+
+  // ─── Cut & Sew → Flat Lay Diagrams (stepIdx 7) ───
+  // A4 landscape page is 297×210mm. Two side-by-side cells maximised to
+  // fill the printable area: ~138×125mm each at 10mm margin / 5mm gutter.
+  newPage('Flat Lay Diagrams', null, 7);
+  {
+    const top = 28;
+    const margin = 10;
+    const gutter = 5;
+    const cellW = (W - margin * 2 - gutter) / 2;
+    const cellH = 125;
+    addImage('flatlay-front', margin,                top, cellW, cellH);
+    addImage('flatlay-back',  margin + cellW + gutter, top, cellW, cellH);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(...hex(FR.soil));
+    doc.text('FRONT', margin, top + cellH + 6);
+    doc.text('BACK',  margin + cellW + gutter, top + cellH + 6);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(...hex(FR.slate));
+    doc.text(d.flatLayNotes || '', margin, top + cellH + 16, { maxWidth: W - margin * 2 });
+  }
+
+  // ─── Cut & Sew → Construction Details Page 1 (stepIdx 5) ───
+  drawConstructionDetailsPage('Construction Details — Page 1', 8, d.constructionDetailsPage1);
+  // ─── Cut & Sew → Construction Details Page 2 (stepIdx 6) ───
+  drawConstructionDetailsPage('Construction Details — Page 2', 9, d.constructionDetailsPage2);
+
+  // ─── Cut & Sew → Seam & Stitch (now stepIdx 7) ───
+  newPage('Seam & Stitch Specifications', null, 10);
+  {
+    // Stitch reference strip — visible cells span the printable width.
+    // Each cell is 2:3 vertical; height capped so a single cell doesn't
+    // blow up the page. Table sits immediately below the strip.
+    const margin   = 10;
+    const stripTop = 24;
+    const gap      = 3;
+    const labelH   = 8;
+    const allBlocks = (d.seamStitchBlocks && d.seamStitchBlocks.length)
+      ? d.seamStitchBlocks
+      : [1, 2, 3, 4, 5, 6].map(num => ({ num, label: '', hidden: false }));
+    const stitchBlocks = allBlocks.filter(b => !b.hidden).slice(0, 6);
+    const N = stitchBlocks.length;
+    const contentW = W - margin * 2;
+    const cellW = N > 0 ? (contentW - gap * Math.max(N - 1, 0)) / N : 0;
+    const imgHCap = 100; // mm — leaves ~70mm for the table + label below
+    const imgH = N > 0 ? Math.min(cellW * 1.5, imgHCap) : 0;
+    stitchBlocks.forEach((b, i) => {
+      const cx = margin + i * (cellW + gap);
+      addImage(`seam-stitch-${b.num}`, cx, stripTop, cellW, imgH);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6);
+      doc.setTextColor(...hex(FR.soil));
+      doc.text(`STITCH ${b.num}`, cx, stripTop + imgH + 4);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(...hex(FR.slate));
+      doc.text(String(b.label || '—').slice(0, 28), cx, stripTop + imgH + 8);
+    });
+    y = stripTop + imgH + labelH + 8;
+    sectionHeading('Seam Specifications', y); y += 6;
+    const seamRows = (d.seams || []).filter(s => s.operation).map(s =>
+      [s.operation, s.seamType, s.stitchType, s.machine, s.spiSpcm, s.threadColor, s.notes]);
+    table(['Operation', 'Seam Type', 'Stitch', 'Machine', 'SPI', 'Thread', 'Notes'],
+      seamRows, 10, y, [40, 35, 25, 50, 18, 35, 74]);
+  }
+
+  // ─── Cut & Sew → Pattern & Cutting ───
+  newPage('Pattern Pieces & Cutting', null, 11);
   y = 28;
-  sectionHeading('Components', y); y += 8;
-  const bomItems = d.bom || d.trims || [];
-  const bomRows = bomItems.filter(b => b.component || b.type).map(b =>
-    [b.component, b.type, b.material, b.color, b.weight || '', b.supplier || '', b.costPerUnit || '', b.notes]);
-  table(['Component', 'Type / Spec', 'Material', 'Color', 'Weight', 'Supplier', 'Cost/Unit', 'Notes'], bomRows, 10, y, [30, 40, 35, 25, 20, 35, 25, 67]);
+  const ppRows = (d.patternPieces || []).filter(p => p.name || p.pieceName).map(p =>
+    [p.pieceName || p.name, p.quantity || p.qty, p.fabric, p.grain, p.fusing, p.notes]);
+  y = table(['Piece', 'Qty', 'Fabric', 'Grain', 'Fusing', 'Notes'], ppRows, 10, y, [50, 20, 40, 40, 30, 97]);
+  y += 8;
+  // Fabric Yield sub-table
+  const yieldRows = (d.pickedFabrics || [])
+    .filter(p => p?.fabricId)
+    .map(p => [
+      p.role || '—',
+      p.metersPerUnit != null ? `${p.metersPerUnit}m/unit` : '— TBD',
+      p.metersPerUnit != null ? (p.yieldIsActual ? 'CLO3D actual' : 'Std. estimate') : 'Not set',
+    ]);
+  if (yieldRows.length) {
+    sectionHeading('Fabric Yield', y);
+    y += 8;
+    y = table(['Fabric Area', 'Yield', 'Source'], yieldRows, 10, y, [70, 50, 57]);
+    y += 8;
+  }
+  field('Cutting Notes', d.cuttingNotes || d.cuttingInstructions, 10, y);
 
-  // ─── Page 6: Color & Artwork ───
-  newPage('Color & Artwork', null, 4);
-  y = 28;
-  sectionHeading('Colorways', y); y += 8;
-  const cwRows = (d.colorways || []).filter(c => c.name).map(c => [c.name, c.frColor, c.pantone, c.hex]);
-  table(['Name', 'FR Color', 'Pantone', 'Hex'], cwRows, 10, y, [70, 50, 60, 50]);
-  y += 30 + cwRows.length * 6;
-  sectionHeading('Logo Placement', y); y += 8;
-  field('Front Logo', d.logoFront, 10, y);
-  field('Back Logo', d.logoBack, 100, y);
-  field('Method', d.logoMethod, 200, y);
-
-  // ─── Page 7: Construction ───
-  newPage('Construction Details', null, 5);
-  y = 28;
-  sectionHeading('Seam Specifications', y); y += 8;
-  const seamRows = (d.seams || []).filter(s => s.operation).map(s =>
-    [s.operation, s.seamType, s.stitchType, s.spiSpcm, s.threadColor, s.notes]);
-  table(['Operation', 'Seam Type', 'Stitch', 'SPI', 'Thread', 'Notes'], seamRows, 10, y, [50, 40, 30, 20, 40, 97]);
-
-  // ─── Page 8: Pattern & Cutting ───
-  newPage('Pattern Pieces & Cutting', null, 7);
-  y = 28;
-  const ppRows = (d.patternPieces || []).filter(p => p.name).map(p =>
-    [p.name, p.qty, p.fabric, p.grain, p.fusing, p.notes]);
-  table(['Piece', 'Qty', 'Fabric', 'Grain', 'Fusing', 'Notes'], ppRows, 10, y, [50, 20, 40, 40, 30, 97]);
-  y += 30 + ppRows.length * 6;
-  field('Cutting Notes', d.cuttingNotes, 10, y);
-
-  // ─── Page 9: POM ───
-  newPage('Points of Measure (cm)', null, 8);
+  // ─── Cut & Sew → Points of Measure ───
+  newPage('Points of Measure (cm)', null, 12);
   y = 28;
   field('Size Type', d.sizeType, 10, y); y += 14;
   const sz = d.sizeType === 'waist' ? ['W30', 'W32', 'W34', 'W36'] : ['S', 'M', 'L', 'XL'];
@@ -286,8 +615,50 @@ export async function generateTechPackPDF(pack) {
     [p.name, p.tol, p.s, p.m, p.l, p.xl]);
   table(['Measurement', 'Tol ±', ...sz], pomRows, 10, y, [70, 25, 30, 30, 30, 30]);
 
-  // ─── Page 10: Treatments ───
-  newPage('Garment Treatments', null, 9);
+  // ─── Cut & Sew → Graded Size Matrix ───
+  newPage('Graded Size Matrix (cm)', null, 13);
+  y = 28;
+  const matrix = d.gradedSizeMatrix || { baseSize: 'M', grading: [] };
+  const rawMSizes = Array.isArray(d.sizeRange)
+    ? d.sizeRange
+    : (d.sizeRange ? String(d.sizeRange).split(/[/,]+/).map(s => s.trim()).filter(Boolean) : []);
+  const matrixSizes = rawMSizes.length ? rawMSizes : ['S', 'M', 'L', 'XL'];
+  const baseSize = matrixSizes.includes(matrix.baseSize) ? matrix.baseSize : matrixSizes[0];
+  const computeCell = (pom, s) => {
+    const base = parseFloat(pom[baseSize.toLowerCase()]);
+    if (!Number.isFinite(base)) return '—';
+    if (s === baseSize) return base.toFixed(1);
+    const g = (matrix.grading || []).find(x => x.pomName === pom.name);
+    const dv = g?.perSizeDelta?.[s];
+    if (dv === undefined || dv === null || Number.isNaN(dv)) return '—';
+    return (base + Number(dv)).toFixed(1);
+  };
+  const matrixRows = (d.poms || []).filter(p => p.name).map(p => [p.name, ...matrixSizes.map(s => computeCell(p, s))]);
+  const sizeColW = Math.floor((W - 20 - 70) / matrixSizes.length);
+  table(['Measurement', ...matrixSizes], matrixRows, 10, y, [70, ...matrixSizes.map(() => sizeColW)]);
+
+  // ─── Embellishments → Colorways ───
+  newPage('Colorways', null, 14);
+  y = 28;
+  sectionHeading('Colorway Specification', y); y += 8;
+  const cwRows = (d.colorways || []).filter(c => c.name).map(c =>
+    [c.name, c.frColor, c.pantone, c.hex, c.fabricSwatch, c.approvalStatus]);
+  table(['Name', 'FR Color', 'Pantone', 'Hex', 'Fabric Swatch', 'Approval'], cwRows, 10, y, [55, 45, 50, 40, 60, 27]);
+
+  // ─── Embellishments → Artwork & Placement ───
+  newPage('Artwork & Placement', null, 15);
+  y = 28;
+  sectionHeading('Logo & Method', y); y += 8;
+  field('Front Logo', d.logoFront, 10, y);
+  field('Back Logo', d.logoBack, 100, y);
+  field('Method', d.logoMethod, 200, y); y += 18;
+  sectionHeading('Placement Detail', y); y += 8;
+  const apRows = (d.artworkPlacements || []).filter(p => p.placement || p.artworkFile).map(p =>
+    [p.placement, p.artworkFile, p.method, p.sizeCm, p.positionFrom, p.color, p.notes]);
+  table(['Placement', 'Artwork File', 'Method', 'Size (cm)', 'Position From', 'Color', 'Notes'], apRows, 10, y, [40, 45, 40, 25, 40, 30, 57]);
+
+  // ─── Treatments → Garment Treatments ───
+  newPage('Garment Treatments', null, 16);
   y = 28;
   sectionHeading('Wash & Dye', y); y += 8;
   const trtRows = (d.treatments || []).filter(t => t.treatment).map(t =>
@@ -299,8 +670,40 @@ export async function generateTechPackPDF(pack) {
     [dd.area, dd.technique, dd.intensity, dd.notes]);
   table(['Area', 'Technique', 'Intensity', 'Notes'], distRows, 10, y, [50, 50, 30, 147]);
 
-  // ─── Page 11: Labels & Packaging ───
-  newPage('Labels & Packaging', null, 10);
+  // ─── QC → Compliance & Testing ───
+  newPage('Compliance & Testing', null, 17);
+  y = 28;
+  sectionHeading('Shipping Requirements', y); y += 8;
+  const shipRows = (d.shippingReqs || []).filter(r => r.requirement || r.specification).map(r =>
+    [r.requirement, r.specification, r.notes]);
+  table(['Requirement', 'Specification', 'Notes'], shipRows, 10, y, [70, 130, 77]);
+  y += 24 + shipRows.length * 6;
+  sectionHeading('Testing Standards', y); y += 8;
+  const testRows = (d.testingStandards || []).filter(t => t.test || t.standard).map(t =>
+    [t.test, t.standard, t.requirement, t.testMethod, t.passFail]);
+  table(['Test', 'Standard', 'Requirement', 'Test Method', 'Pass-Fail'], testRows, 10, y, [55, 55, 55, 60, 52]);
+
+  // ─── QC → Quality Inspection (AQL) ───
+  newPage('Quality Inspection (AQL)', null, 18);
+  y = 28;
+  const qi = d.qualityInspection || { aqlMajor: '2.5', aqlMinor: '4.0', inspectionStage: 'During Production', checklist: [], photoRequirements: '' };
+  sectionHeading('AQL Standard', y); y += 8;
+  field('Major (AQL)', qi.aqlMajor, 10, y);
+  field('Minor (AQL)', qi.aqlMinor, 80, y);
+  field('Inspection Stage', qi.inspectionStage, 150, y); y += 18;
+  sectionHeading('Inspection Checklist', y); y += 8;
+  const cqRows = (qi.checklist || []).filter(c => c.area || c.criterion).map(c =>
+    [c.area, c.criterion, c.severity]);
+  table(['Area', 'Criterion', 'Severity'], cqRows, 10, y, [55, 180, 42]);
+  y += 24 + cqRows.length * 6;
+  sectionHeading('Photo Requirements', y); y += 8;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...hex(FR.slate));
+  (qi.photoRequirements || '—').split('\n').forEach((line, i) => doc.text(line, 10, y + i * 5, { maxWidth: W - 20 }));
+
+  // ─── Packaging → Labels & Packaging ───
+  newPage('Labels & Packaging', null, 19);
   y = 28;
   field('Packaging', d.packaging, 10, y); y += 14;
   field('Packaging Notes', d.packagingNotes, 10, y); y += 14;
@@ -311,8 +714,8 @@ export async function generateTechPackPDF(pack) {
   const careLines = (d.careInstructions || '').split('\n');
   careLines.forEach((line, i) => doc.text(line, 10, y + i * 5));
 
-  // ─── Page 12: Order & Delivery ───
-  newPage('Order & Delivery', null, 11);
+  // ─── Logistics → Order & Delivery ───
+  newPage('Order & Delivery', null, 20);
   y = 28;
   sectionHeading('Quantity Per Size', y); y += 8;
   const qRows = (d.quantities || []).filter(q => q.colorway).map(q =>
@@ -327,15 +730,15 @@ export async function generateTechPackPDF(pack) {
   field('Target Ship', d.targetShipDate, 100, y);
   field('Target Arrival', d.targetArrivalDate, 200, y);
 
-  // ─── Page 13: Packing List ───
-  newPage('Packing List', null, 11);
+  // ─── Logistics → Packing List ───
+  newPage('Packing List', null, 20);
   y = 28;
   const pkRows = (d.cartons || []).filter(c => c.cartonNum).map(c =>
     [c.cartonNum, c.colorway, c.sizeBreakdown, c.qtyPerCarton, c.dims, c.grossWeight, c.netWeight]);
   table(['#', 'Colorway', 'Size Breakdown', 'Qty', 'Dims (cm)', 'Gross kg', 'Net kg'], pkRows, 10, y, [15, 40, 60, 25, 40, 30, 67]);
 
-  // ─── Page 14: Review & Revision ───
-  newPage('Review & Revision', null, 13);
+  // ─── Sign-off → Review & Revision ───
+  newPage('Review & Revision', null, 21);
   y = 40;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);

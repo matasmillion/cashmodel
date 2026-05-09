@@ -55,6 +55,72 @@ function migrateLegacyIfNeeded() {
   }
 }
 
+// Map a Supabase row (snake_case projection) back into the camelCase
+// shape the rest of the app uses on entries pulled from localStorage.
+function fromSupabaseRow(row) {
+  if (!row) return null;
+  return {
+    name: row.name,
+    country: row.country || '',
+    city: row.city || '',
+    primaryContact: row.primary_contact || '',
+    email: row.email || '',
+    phone: row.phone || '',
+    website: row.website || '',
+    moq: row.moq || '',
+    leadTimeDays: row.lead_time_days != null ? String(row.lead_time_days) : '',
+    specialties: row.specialties || '',
+    notes: row.notes || '',
+    logoImage: row.logo_image || null,
+    capabilities: Array.isArray(row.capabilities) ? row.capabilities : [],
+    moq_units: Number(row.moq_units) || 0,
+    lead_time_days: Number(row.lead_time_days) || 0,
+    payment_terms: row.payment_terms || '',
+    rating: Number(row.rating) || 0,
+    samRateUsdPerMin: row.sam_rate_usd_per_min != null && row.sam_rate_usd_per_min !== 0
+      ? String(row.sam_rate_usd_per_min)
+      : '',
+    archivedAt: row.archived_at || null,
+  };
+}
+
+// Pull every vendor row for the current org from Supabase and merge into
+// the local store (cloud-wins on collisions, since cloud is the source
+// of truth across devices). Idempotent — safe to call on every mount.
+// Returns the hydrated vendor map keyed by name.
+async function hydrateVendorsFromCloud() {
+  const orgId = getCurrentOrgIdSync();
+  if (!IS_SUPABASE_ENABLED || !orgId) return null;
+  try {
+    const db = await getAuthedSupabase();
+    if (!db) return null;
+    const { data, error } = await db
+      .from('vendors')
+      .select('*')
+      .eq('organization_id', orgId);
+    if (error) {
+      console.error('vendorLibrary hydrate:', error);
+      return null;
+    }
+    const cloudByName = {};
+    (data || []).forEach(row => {
+      const camel = fromSupabaseRow(row);
+      if (camel?.name) cloudByName[camel.name] = camel;
+    });
+    // Cloud-wins merge into local store.
+    const local = readStore();
+    const merged = { ...local };
+    Object.entries(cloudByName).forEach(([name, entry]) => {
+      merged[name] = { ...(local[name] || {}), ...entry };
+    });
+    writeStore(merged);
+    return merged;
+  } catch (err) {
+    console.error('vendorLibrary hydrate:', err);
+    return null;
+  }
+}
+
 function readStore() {
   migrateLegacyIfNeeded();
   try {
@@ -92,6 +158,8 @@ function syncVendorToCloud(name, entry) {
       capabilities: entry.capabilities || [],
       payment_terms: entry.payment_terms || '',
       rating: Number(entry.rating) || 0,
+      sam_rate_usd_per_min: Number(entry.samRateUsdPerMin) || 0,
+      archived_at: entry.archivedAt || null,
     }, { onConflict: 'organization_id,name' })
     .then(({ error }) => { if (error) console.error('vendorLibrary sync:', error); });
   });
@@ -126,31 +194,58 @@ const emptyEntry = (name) => ({
   lead_time_days: 0,
   payment_terms: '',
   rating: 0,
+  // Fully-loaded SAM (Standard Allowed Minute) billing rate the factory
+  // charges for cut & sew, in USD per minute. Optional — only set on
+  // vendors that are cut & sew manufacturers. The AI labor cost
+  // estimator uses this rate × estimated SAM minutes when present, and
+  // falls back to regional CMT benchmarks when blank.
+  samRateUsdPerMin: '',
+  // Soft-archive timestamp. NULL/empty = active and shown in the
+  // Vendors directory. Non-null = archived; hidden by default but
+  // visible behind the "Show archived" toggle. Restore by clearing.
+  archivedAt: null,
 });
 
-// Synchronous snapshot of every library record. VendorManager shows these
-// immediately on mount, then augments with `listAllSuppliers()` in the
-// background to include names that appear in packs but have no rich entry.
-export function listVendorsLocal() {
+// Synchronous snapshot of library records. By default returns active
+// vendors only; pass { includeArchived: true } to include archived ones.
+// VendorManager shows this immediately on mount, then augments with
+// `listAllSuppliers()` in the background to include names that appear
+// in packs but have no rich entry.
+export function listVendorsLocal({ includeArchived = false } = {}) {
   const store = readStore();
   return Object.keys(store)
     .map(name => ({ ...emptyEntry(name), ...store[name], _hasRecord: true }))
+    .filter(v => includeArchived || !v.archivedAt)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // Full async list — library store + every name pulled from supplier
 // aggregation. Names that aren't in the store are returned as empty
-// records with `_hasRecord: false` so the UI can badge them.
-export async function listVendors() {
-  const store = readStore();
+// records with `_hasRecord: false` so the UI can badge them. Archived
+// vendors are filtered unless `includeArchived: true` is passed.
+export async function listVendors({ includeArchived = false } = {}) {
+  // Hydrate from cloud first so a fresh device sees vendors created on
+  // another laptop. Cloud-wins merge into localStorage; subsequent sync
+  // reads (getVendor, listVendorsLocal) then return the merged set.
+  const hydrated = await hydrateVendorsFromCloud();
+  const store = hydrated || readStore();
   const fromStore = Object.keys(store)
-    .map(name => ({ ...emptyEntry(name), ...store[name], _hasRecord: true }));
+    .map(name => ({ ...emptyEntry(name), ...store[name], _hasRecord: true }))
+    .filter(v => includeArchived || !v.archivedAt);
   let fromDirectory = [];
   try {
     const names = await listAllSuppliers();
     const seen = new Set(fromStore.map(f => f.name));
+    // Names archived in the library are also hidden from the directory-
+    // backed entries — otherwise an archived vendor that's still
+    // referenced in a pack would reappear as a `_hasRecord: false` row.
+    const archivedSet = new Set(
+      Object.values(store)
+        .filter(v => v && v.archivedAt)
+        .map(v => v.name)
+    );
     fromDirectory = names
-      .filter(n => n && !seen.has(n))
+      .filter(n => n && !seen.has(n) && (includeArchived || !archivedSet.has(n)))
       .map(name => ({ ...emptyEntry(name), _hasRecord: false }));
   } catch (err) {
     console.error('listVendors directory lookup:', err);
@@ -239,17 +334,66 @@ export function addVendor(name, patch = {}) {
   return { ok: true };
 }
 
-// Drop the library entry. If the name is still referenced by a pack it
-// will keep showing up in listVendors() via the plmDirectory fallback,
-// just with an empty record. That's intentional — deleting the vendor
-// metadata should never silently rename anything in a pack.
+// Drop the library entry. Idempotent — succeeds even when the vendor
+// only ever existed via plmDirectory (i.e. a name in a pack with no
+// rich record yet). In that case there's nothing in the library store
+// to delete, but we still scrub the manually-added supplier list so
+// the name doesn't reappear from there. Pack references are intentionally
+// left alone — deleting vendor metadata must never silently rewrite a
+// pack's data. If the user wants the name fully gone, they should
+// archive the vendor instead (archive hides it from the directory even
+// when packs still reference it).
 export function deleteVendor(name) {
   if (!name) return { ok: false, reason: 'Name required.' };
   const store = readStore();
+  if (store[name]) {
+    const { [name]: _, ...rest } = store;
+    writeStore(rest);
+    deleteVendorFromCloud(name);
+  }
+  // Also scrub the manually-added supplier list (cashmodel_plm_suppliers)
+  // so a directory-only vendor disappears for real after delete.
+  try {
+    const customRaw = localStorage.getItem('cashmodel_plm_suppliers');
+    if (customRaw) {
+      const arr = JSON.parse(customRaw);
+      if (Array.isArray(arr) && arr.includes(name)) {
+        localStorage.setItem(
+          'cashmodel_plm_suppliers',
+          JSON.stringify(arr.filter(s => s !== name))
+        );
+      }
+    }
+  } catch {/* ignore */}
+  return { ok: true };
+}
+
+// Archive a vendor — hides it from the default Vendors directory but
+// keeps the record so it can be restored. Unlike delete, archive holds
+// over directory-only fallbacks too: archived names don't reappear in
+// listVendors() even if a pack still references them. If the vendor
+// has no library record yet, archive establishes one so we have somewhere
+// to stamp the archivedAt timestamp.
+export function archiveVendor(name) {
+  if (!name) return { ok: false, reason: 'Name required.' };
+  const store = readStore();
+  const current = store[name] || {};
+  const next = { ...current, archivedAt: new Date().toISOString() };
+  store[name] = next;
+  writeStore(store);
+  syncVendorToCloud(name, next);
+  return { ok: true };
+}
+
+// Restore an archived vendor.
+export function restoreVendor(name) {
+  if (!name) return { ok: false, reason: 'Name required.' };
+  const store = readStore();
   if (!store[name]) return { ok: false, reason: 'No such vendor.' };
-  const { [name]: _, ...rest } = store;
-  writeStore(rest);
-  deleteVendorFromCloud(name);
+  const { archivedAt: _, ...rest } = store[name];
+  store[name] = rest;
+  writeStore(store);
+  syncVendorToCloud(name, rest);
   return { ok: true };
 }
 
@@ -290,7 +434,7 @@ export function renameVendor(oldName, newName) {
   // and rewrite. Unknown fields are left alone — better to miss a
   // reference than to corrupt unrelated data.
   let localRefsUpdated = 0;
-  const VENDOR_REF_KEYS = ['cashmodel_techpacks', 'cashmodel_component_packs', 'cashmodel_treatments', 'cashmodel_embellishments', 'cashmodel_fabrics', 'cashmodel_patterns', 'cashmodel_purchase_orders', 'cashmodel_production'];
+  const VENDOR_REF_KEYS = ['cashmodel_techpacks', 'cashmodel_component_packs', 'cashmodel_treatments', 'cashmodel_embellishments', 'cashmodel_fabrics', 'cashmodel_cut_sew', 'cashmodel_purchase_orders', 'cashmodel_production'];
   for (const lsKey of VENDOR_REF_KEYS) {
     let raw;
     try { raw = localStorage.getItem(lsKey); } catch { continue; }

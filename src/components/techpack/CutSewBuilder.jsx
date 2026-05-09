@@ -1,0 +1,305 @@
+// Cut & Sew detail / editor — 2-col shell matching EmbellishmentBuilder.
+// Left: spec form with autosave. Right: sticky CutSewBOMPreview live preview.
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, Trash2 } from 'lucide-react';
+import { FR } from './techPackConstants';
+import { saveCutSew, archiveCutSew, restoreCutSew } from '../../utils/cutSewStore';
+import { CUT_SEW_CATEGORIES, CUT_SEW_CATEGORY_LABEL, CUT_SEW_STATUSES, STANDARD_SIZE_SETS } from '../../utils/cutSewLibrary';
+import CoverImagePicker from './CoverImagePicker';
+import FileSlot from './FileSlot';
+import { migrateLegacyCoverIfNeeded, isLegacyDataUrl } from '../../utils/plmAssets';
+import CutSewBOMPreview from './CutSewBOMPreview';
+
+const STATUS_PILL = {
+  draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
+  testing:  { bg: 'rgba(133,79,11,0.12)',   fg: '#854F0B', label: 'Testing' },
+  approved: { bg: 'rgba(99,153,34,0.12)',   fg: '#3B6D11', label: 'Approved' },
+  archived: { bg: 'rgba(58,58,58,0.06)',    fg: '#9A9A9A', label: 'Archived' },
+};
+
+const INPUT_STYLE = {
+  width: '100%', padding: '6px 8px', border: `1px solid ${FR.sand}`,
+  borderRadius: 4, fontSize: 12, color: FR.slate, background: '#fff',
+  fontFamily: "'Inter', sans-serif", outline: 'none', boxSizing: 'border-box',
+};
+
+const LABEL_STYLE = { fontSize: 11, color: FR.stone, marginBottom: 4, display: 'block', letterSpacing: 0.2 };
+
+function Field({ label, children }) {
+  return (
+    <div>
+      <label style={LABEL_STYLE}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+export default function CutSewBuilder({ block, onBack }) {
+  const [draft, setDraft] = useState(block);
+  const [savedSnapshot, setSavedSnapshot] = useState(block);
+  const [saving, setSaving] = useState(false);
+
+  const draftRef = useRef(draft);
+  const savingRef = useRef(false);
+  const savedSnapshotRef = useRef(block);
+
+  useEffect(() => { draftRef.current = draft; }, [draft]);
+  useEffect(() => { setDraft(block); setSavedSnapshot(block); savedSnapshotRef.current = block; }, [block.id]);
+
+  // Lazy Storage migration on mount for pre-Phase-3 covers (data: URLs).
+  const migratedRef = useRef(false);
+  useEffect(() => {
+    if (migratedRef.current) return undefined;
+    if (!isLegacyDataUrl(draft?.cover_image)) return undefined;
+    if (!draft?.id) return undefined;
+    migratedRef.current = true;
+    let cancelled = false;
+    (async () => {
+      const newPath = await migrateLegacyCoverIfNeeded(draft.cover_image, { scope: 'cut-sew', ownerId: draft.id });
+      if (cancelled || !newPath) return;
+      setDraft(d => ({ ...d, cover_image: newPath }));
+      try { await saveCutSew(draft.id, { cover_image: newPath }); }
+      catch (err) { console.error('CutSewBuilder lazy migration save:', err); }
+    })();
+    return () => { cancelled = true; };
+  }, [draft?.id, draft?.cover_image]);
+
+  // Autosave — 1200 ms debounce, flush on unmount.
+  useEffect(() => {
+    if (JSON.stringify(draftRef.current) === JSON.stringify(savedSnapshotRef.current)) return;
+    const t = setTimeout(async () => {
+      if (savingRef.current) return;
+      savingRef.current = true;
+      setSaving(true);
+      try {
+        const d = draftRef.current;
+        const { id, code, created_at, ...updates } = d;
+        await saveCutSew(id, updates);
+        setSavedSnapshot({ ...d });
+        savedSnapshotRef.current = { ...d };
+      } finally {
+        savingRef.current = false;
+        setSaving(false);
+      }
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [draft]);
+
+  useEffect(() => {
+    return () => {
+      if (JSON.stringify(draftRef.current) === JSON.stringify(savedSnapshotRef.current)) return;
+      if (savingRef.current) return;
+      savingRef.current = true;
+      const d = draftRef.current;
+      const { id, code, created_at, ...updates } = d;
+      saveCutSew(id, updates).catch(() => {});
+    };
+  }, []);
+
+  const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(savedSnapshot), [draft, savedSnapshot]);
+
+  const set = (patch) => setDraft(d => ({ ...d, ...patch }));
+
+  const toggleArchive = async () => {
+    if (draft.status === 'archived') {
+      await restoreCutSew(draft.id);
+      set({ status: 'draft' });
+    } else {
+      const ok = confirm(`Archive "${draft.name || draft.code}"? It will hide from default lists; you can restore it any time.`);
+      if (!ok) return;
+      await archiveCutSew(draft.id);
+      set({ status: 'archived' });
+    }
+  };
+
+  const status = draft.status || 'draft';
+  const pill = STATUS_PILL[status] || STATUS_PILL.draft;
+  const sizeSetMatch = STANDARD_SIZE_SETS.find(s => s.join(',') === (draft.sizes || []).join(','));
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 1fr)', gap: 24, alignItems: 'start' }}>
+      {/* ── LEFT COLUMN: form ─────────────────────────────────── */}
+      <div>
+        <button onClick={onBack}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', color: FR.stone, fontSize: 12, cursor: 'pointer', padding: 0, marginBottom: 12 }}>
+          <ArrowLeft size={13} /> Cut &amp; Sew
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <input
+              value={draft.name || ''}
+              onChange={e => set({ name: e.target.value })}
+              placeholder="Untitled cut & sew"
+              style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 28, color: FR.slate, border: 'none', outline: 'none', background: 'transparent', width: '100%' }}
+            />
+            <div style={{ fontSize: 11, color: FR.stone, marginTop: 2, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+              {draft.code} · {CUT_SEW_CATEGORY_LABEL[draft.category] || draft.category} · {draft.version}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            {saving && <span style={{ fontSize: 10, color: FR.stone }}>Saving…</span>}
+            {!saving && !dirty && <span style={{ fontSize: 10, color: FR.stone }}>Saved</span>}
+            <select
+              value={status}
+              onChange={e => set({ status: e.target.value })}
+              style={{ background: pill.bg, color: pill.fg, padding: '6px 10px', borderRadius: 5, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, border: 'none', cursor: 'pointer' }}
+            >
+              {CUT_SEW_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <button
+              onClick={toggleArchive}
+              title={status === 'archived' ? 'Restore' : 'Archive'}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 10px', background: 'transparent', color: FR.stone, border: `1px solid ${FR.sand}`, borderRadius: 6, fontSize: 11, cursor: 'pointer' }}
+            >
+              <Trash2 size={12} /> {status === 'archived' ? 'Restore' : 'Archive'}
+            </button>
+          </div>
+        </div>
+
+        {/* Cover + Identity */}
+        <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+          <CoverImagePicker
+            value={draft.cover_image}
+            onChange={pathOrDataUrl => set({ cover_image: pathOrDataUrl })}
+            label="Cover image"
+            hint="Drop a photo of the block"
+            assetScope="cut-sew"
+            assetOwnerId={draft.id}
+          />
+          <div style={{ flex: 1, minWidth: 280 }}>
+            <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Identity</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+              <Field label="Category">
+                <select
+                  value={draft.category}
+                  onChange={e => set({ category: e.target.value })}
+                  style={INPUT_STYLE}
+                >
+                  {CUT_SEW_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
+              </Field>
+              <Field label="Version">
+                <input
+                  value={draft.version || ''}
+                  onChange={e => set({ version: e.target.value })}
+                  placeholder="v1.0"
+                  style={INPUT_STYLE}
+                />
+              </Field>
+              <Field label="Base block">
+                <input
+                  value={draft.base_block || ''}
+                  onChange={e => set({ base_block: e.target.value })}
+                  placeholder="FR-MASTER-HD"
+                  style={INPUT_STYLE}
+                />
+              </Field>
+            </div>
+          </div>
+        </div>
+
+        {/* Spec */}
+        <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
+          <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Spec</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+            <Field label="Size set">
+              <select
+                value={sizeSetMatch ? sizeSetMatch.join(',') : 'custom'}
+                onChange={e => {
+                  const v = e.target.value;
+                  if (v === 'custom') return;
+                  set({ sizes: v.split(',') });
+                }}
+                style={INPUT_STYLE}
+              >
+                {STANDARD_SIZE_SETS.map(s => <option key={s.join(',')} value={s.join(',')}>{s.join(' / ')}</option>)}
+                <option value="custom">Custom</option>
+              </select>
+            </Field>
+            <Field label="Sizes (comma-separated)">
+              <input
+                value={(draft.sizes || []).join(', ')}
+                onChange={e => set({ sizes: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+                placeholder="S, M, L, XL"
+                style={INPUT_STYLE}
+              />
+            </Field>
+            <Field label="Grade rule">
+              <input
+                value={draft.grade_rule || ''}
+                onChange={e => set({ grade_rule: e.target.value })}
+                placeholder="2 cm chest · 1.5 cm length"
+                style={INPUT_STYLE}
+              />
+            </Field>
+            <Field label="Ease at chest (cm)">
+              <input
+                type="number" step="0.1"
+                value={draft.ease_chest_cm ?? 0}
+                onChange={e => set({ ease_chest_cm: parseFloat(e.target.value) || 0 })}
+                style={INPUT_STYLE}
+              />
+            </Field>
+            <Field label="Drop (cm)">
+              <input
+                type="number" step="0.1"
+                value={draft.drop_cm ?? 0}
+                onChange={e => set({ drop_cm: parseFloat(e.target.value) || 0 })}
+                style={INPUT_STYLE}
+              />
+            </Field>
+            <Field label="Seam allowance (cm)">
+              <input
+                type="number" step="0.1"
+                value={draft.seam_allowance_cm ?? 0}
+                onChange={e => set({ seam_allowance_cm: parseFloat(e.target.value) || 0 })}
+                style={INPUT_STYLE}
+              />
+            </Field>
+          </div>
+        </div>
+
+        {/* Files & notes */}
+        <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
+          <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Files &amp; notes</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+            <Field label="DXF / CAD file">
+              <FileSlot
+                value={draft.cad_file_url}
+                onChange={v => set({ cad_file_url: v })}
+                accept=".dxf,.dwg,.ai,.pdf"
+                hint="Drop a .dxf / .dwg / .ai pattern file"
+              />
+            </Field>
+            <Field label="Thumbnail">
+              <FileSlot
+                value={draft.thumbnail_url}
+                onChange={v => set({ thumbnail_url: v })}
+                accept="image/*"
+                hint="Drop a thumbnail image"
+              />
+            </Field>
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <Field label="Notes">
+              <textarea
+                value={draft.notes || ''}
+                onChange={e => set({ notes: e.target.value })}
+                rows={4}
+                placeholder="Construction notes, fit notes, sloper history…"
+                style={{ ...INPUT_STYLE, resize: 'vertical', fontFamily: "'Inter', sans-serif" }}
+              />
+            </Field>
+          </div>
+        </div>
+      </div>
+
+      {/* ── RIGHT COLUMN: live BOM preview ─────────────────────── */}
+      <div style={{ position: 'sticky', top: 16 }}>
+        <CutSewBOMPreview block={draft} />
+      </div>
+    </div>
+  );
+}
