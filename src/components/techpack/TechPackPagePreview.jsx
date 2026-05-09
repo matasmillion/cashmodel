@@ -489,9 +489,14 @@ function PageFabrics({ d, fabricsById = {} }) {
         const vendorContact = row?._vendorContact || '';
 
         const tier = (d2?.costTiers || [])[0];
+        const gsm = parseFloat(row?.weight_gsm ?? d2?.weight_gsm) || 0;
+        const widthCm = parseFloat(row?.width_cm ?? d2?.width_cm) || 0;
+        const kgUsd = parseFloat(row?.price_per_kg_usd ?? d2?.price_per_kg_usd) || 0;
+        const fromKg = (kgUsd && gsm && widthCm) ? kgUsd * (gsm * widthCm / 100000) : 0;
         const unitCost =
           parseFloat(row?.price_per_meter_usd) ||
           parseFloat(d2?.price_per_meter_usd) ||
+          fromKg ||
           parseFloat(tier?.unitCost) ||
           parseFloat(row?.cost_per_unit) ||
           parseFloat(d2?.cost_per_unit) || 0;
@@ -626,7 +631,8 @@ function ComponentGridPage({ entries, subtitle, componentsById = {} }) {
         const x = startX + c * (cardW + gap);
         const y = startY + r * (cardH + gap);
         const entry = entries[i];
-        const full = entry ? componentsById[entry.componentId] : null;
+        const entryId = entry?.componentId || entry?.id || null;
+        const full = entryId ? componentsById[entryId] : null;
         const cd = full?.data || {};
         const tier = (cd.costTiers || [])[0];
         const unitCost = parseFloat(tier?.unitCost) || parseFloat(full?.cost_per_unit) || parseFloat(cd?.targetUnitCost) || 0;
@@ -634,7 +640,7 @@ function ComponentGridPage({ entries, subtitle, componentsById = {} }) {
         const lineCost = unitCost * qtyNum;
         const formatM = (n) => n > 0 ? `$${n.toFixed(2)}` : '$0.00';
         const cover  = full?.cover_image || cd.cover_image;
-        const name   = full?.component_name || cd.componentName || (entry ? 'Loading…' : '');
+        const name   = full?.component_name || cd.componentName || (full ? (entry?.role || 'Untitled') : (entry ? 'Loading…' : ''));
         const type   = cd.componentType || full?.component_category || (entry?.role || '');
         const qty    = entry?.quantity || '—';
         const packHref = entry?.componentId
@@ -672,7 +678,7 @@ function ComponentGridPage({ entries, subtitle, componentsById = {} }) {
                     <text x={x + cardW - 14} y={y + imgH + 44} textAnchor="end"
                       fontSize={10} fill={FR.soil}
                       style={{ textDecoration: 'underline', cursor: 'pointer' }}>
-                      View pack ↗
+                      View tech pack ↗
                     </text>
                   </a>
                 )}

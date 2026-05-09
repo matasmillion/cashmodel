@@ -190,9 +190,14 @@ function specOf(componentRow) {
 function fabricSpec(row) {
   const d = row?.data || row?.fabric_data || row || {};
   const tier = (d?.costTiers || [])[0];
+  const gsm = parseFloat(row?.weight_gsm ?? d?.weight_gsm) || 0;
+  const widthCm = parseFloat(row?.width_cm ?? d?.width_cm) || 0;
+  const kgUsd = parseFloat(row?.price_per_kg_usd ?? d?.price_per_kg_usd) || 0;
+  const fromKg = (kgUsd && gsm && widthCm) ? kgUsd * (gsm * widthCm / 100000) : 0;
   const unitCost =
     parseFloat(row?.price_per_meter_usd) ||
     parseFloat(d?.price_per_meter_usd) ||
+    fromKg ||
     parseFloat(tier?.unitCost) ||
     parseFloat(row?.cost_per_unit) ||
     parseFloat(d?.cost_per_unit) ||
@@ -574,7 +579,7 @@ function ComponentSlotCard({ entry, fullData, onClear, onChangeRole, onChangeQty
               style={{ fontSize: 10, color: FR.soil, textDecoration: 'none', borderBottom: `0.5px solid ${FR.soil}`, paddingBottom: 1, whiteSpace: 'nowrap' }}
               title="Open this component pack in the Library"
             >
-              View pack ↗
+              View tech pack ↗
             </a>
           )}
         </div>
@@ -654,7 +659,7 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const ids = picked.map(p => p?.componentId).filter(Boolean);
+      const ids = picked.map(p => p?.componentId || p?.id).filter(Boolean);
       if (!ids.length) { setFullById({}); return; }
       const next = {};
       for (const id of ids) {
@@ -688,7 +693,7 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
       if (!cancelled) setFullById(next);
     })();
     return () => { cancelled = true; };
-  }, [picked.map(p => p?.componentId).join('|'), refreshTick]);
+  }, [picked.map(p => p?.componentId || p?.id).join('|'), refreshTick]);
 
   async function addComponent(item) {
     if (picked.length >= maxSlots) return;
@@ -743,7 +748,7 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
   // beside the page title so the designer always sees what this section
   // contributes to the unit cost.
   const sectionSubtotal = picked.reduce((sum, p) => {
-    const full = fullById[p?.componentId];
+    const full = fullById[p?.componentId || p?.id];
     if (!full) return sum;
     const s = readComponentSpec(full);
     const qtyNum = parseFloat(String(p?.quantity || '').replace(/[^0-9.]/g, '')) || 1;
@@ -759,7 +764,7 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
         </span>
       </div>
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, lineHeight: 1.5 }}>
-        {subtitle} Each card links straight to its component pack — the supplier can click <strong>View pack ↗</strong> to see the full spec.
+        {subtitle} Each card links straight to its component pack — the supplier can click <strong>View tech pack ↗</strong> to see the full spec.
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 22 }}>
@@ -770,9 +775,9 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
           }
           return (
             <ComponentSlotCard
-              key={entry.componentId + ':' + i}
+              key={(entry.componentId || entry.id || '') + ':' + i}
               entry={entry}
-              fullData={fullById[entry.componentId]}
+              fullData={fullById[entry.componentId || entry.id]}
               onClear={() => removeComponent(i)}
               onChangeRole={role => setRole(i, role)}
               onChangeQty={quantity => setQty(i, quantity)}
