@@ -16,6 +16,12 @@
 import * as _atomTypes from '../types/atoms';
 
 /**
+ * @typedef {{ num: number, title: string, description: string, image_url: string }} CalloutDetail
+ * @typedef {{ num: number, label: string, hidden: boolean, image_url: string }} StitchBlock
+ * @typedef {{ piece_num: string, piece_name: string, quantity: string, fabric: string, grain: string, fusing: string, notes: string }} PatternPiece
+ * @typedef {{ name: string, tol: string, s: string, m: string, l: string, xl: string, method: string }} PomRow
+ * @typedef {{ operation: string, seam_type: string, stitch_type: string, machine: string, spi_spcm: string, thread_color: string, thread_type: string, notes: string }} SeamSpec
+ *
  * @typedef {import('../types/atoms').AtomBase & {
  *   category: 'hoodie'|'tee'|'sweatpant'|'cargo'|'jacket'|'shirt'|'shorts'|'skirt'|'dress'|'other',
  *   base_block: string,
@@ -26,7 +32,26 @@ import * as _atomTypes from '../types/atoms';
  *   seam_allowance_cm: number,
  *   cad_file_url: string,
  *   thumbnail_url: string,
- *   notes: string
+ *   notes: string,
+ *   flat_lay_front_url: string,
+ *   flat_lay_back_url: string,
+ *   flat_lay_notes: string,
+ *   callout_ref_page1_url: string,
+ *   callout_details_page1: CalloutDetail[],
+ *   callout_ref_page2_url: string,
+ *   callout_details_page2: CalloutDetail[],
+ *   seam_stitch_blocks: StitchBlock[],
+ *   seams: SeamSpec[],
+ *   labor_cost_usd: number,
+ *   labor_cost_notes: string,
+ *   pattern_layout_url: string,
+ *   pattern_pieces: PatternPiece[],
+ *   cutting_instructions: string,
+ *   pom_diagram_url: string,
+ *   pom_rows: PomRow[],
+ *   pom_size_type: 'apparel'|'waist'|'one-size',
+ *   pom_measurement_method: string,
+ *   graded_size_matrix: { baseSize: string, sizes: string[], grading: Array<{ pomName: string, perSizeDelta: Record<string,number|null> }> }
  * }} CutSew
  */
 
@@ -63,6 +88,7 @@ export const STANDARD_SIZE_SETS = [
 export function emptyCutSew(overrides = {}) {
   const now = new Date().toISOString();
   return {
+    // ── Identity ──────────────────────────────────────────────────
     id: '',
     code: '',
     name: '',
@@ -72,15 +98,63 @@ export function emptyCutSew(overrides = {}) {
     updated_at: now,
     category: 'hoodie',
     base_block: '',
+    cover_image: null,
+    notes: '',
+
+    // ── Spec ──────────────────────────────────────────────────────
     sizes: ['S', 'M', 'L', 'XL'],
     grade_rule: '',
     ease_chest_cm: 0,
     drop_cm: 0,
     seam_allowance_cm: 1.0,
+
+    // ── Files ──────────────────────────────────────────────────────
     cad_file_url: '',
     thumbnail_url: '',
-    cover_image: null,
-    notes: '',
+
+    // ── Flat Lay (page 07) ────────────────────────────────────────
+    flat_lay_front_url: '',
+    flat_lay_back_url: '',
+    flat_lay_notes: '',
+
+    // ── Call Outs page 1 (page 08) ────────────────────────────────
+    callout_ref_page1_url: '',
+    callout_details_page1: [
+      { num: 1, title: '', description: '', image_url: '' },
+      { num: 2, title: '', description: '', image_url: '' },
+      { num: 3, title: '', description: '', image_url: '' },
+      { num: 4, title: '', description: '', image_url: '' },
+    ],
+
+    // ── Call Outs page 2 (page 09) ────────────────────────────────
+    callout_ref_page2_url: '',
+    callout_details_page2: [
+      { num: 5, title: '', description: '', image_url: '' },
+      { num: 6, title: '', description: '', image_url: '' },
+      { num: 7, title: '', description: '', image_url: '' },
+      { num: 8, title: '', description: '', image_url: '' },
+    ],
+
+    // ── Stitching (page 10) ───────────────────────────────────────
+    seam_stitch_blocks: [1, 2, 3, 4, 5, 6].map(num => ({ num, label: '', hidden: false, image_url: '' })),
+    seams: [],
+    labor_cost_usd: 0,
+    labor_cost_notes: '',
+
+    // ── Pattern & Cutting (page 11) ───────────────────────────────
+    pattern_layout_url: '',
+    pattern_pieces: [],
+    cutting_instructions: '',
+
+    // ── POM (page 12) ────────────────────────────────────────────
+    pom_diagram_url: '',
+    pom_rows: [],
+    pom_size_type: 'apparel',
+    pom_measurement_method: '',
+
+    // ── Size Grading (page 13) ───────────────────────────────────
+    graded_size_matrix: { baseSize: 'M', sizes: [], grading: [] },
+
     ...overrides,
   };
 }

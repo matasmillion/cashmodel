@@ -587,6 +587,25 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     });
   }, []);
 
+  // Seed images from a library atom (e.g. Cut & Sew block). Only injects
+  // entries for slots that are currently empty — never overwrites user uploads.
+  const handleSeedImages = useCallback((imageMap) => {
+    setImages(prev => {
+      const next = [...(prev || [])];
+      for (const [slot, pathOrUrl] of Object.entries(imageMap || {})) {
+        if (!pathOrUrl) continue;
+        const alreadyHas = next.some(img => img && img.slot === slot);
+        if (alreadyHas) continue;
+        if (/^(data:|blob:|https?:)/i.test(pathOrUrl)) {
+          next.push({ slot, data: pathOrUrl, name: 'from-library' });
+        } else {
+          next.push({ slot, path: pathOrUrl, name: 'from-library' });
+        }
+      }
+      return next;
+    });
+  }, []);
+
   // Lazy migration of legacy base64 image entries → Supabase Storage.
   // Runs once per pack mount; user can keep editing while it works in the
   // background. AssetImage renders both shapes so nothing flickers.
@@ -753,6 +772,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   const previewImages = useResolvedImageEntries(images);
   const stepProps = {
     data, set, images, onUpload: handleImgUpload, onRemove: handleImgRemove,
+    onSeedImages: handleSeedImages,
     library, saveToLibrary,
     onSubmit: handleSubmit, submitting, submitResult,
     bomCost, costVariance,
