@@ -68,6 +68,24 @@
   .nav a.active { color: var(--slate); font-weight: 500; border-bottom: 1.5px solid var(--slate); padding-bottom: 4px; }
   .brandmark { font-size: 11px; letter-spacing: 0.18em; font-weight: 600; }
 
+  /* Top-bar dropdown: hover Inventory → reveal sub-tab links so the */
+  /* user can jump straight to a sub-view without landing on Today first. */
+  .nav .has-dropdown { position: relative; }
+  .nav .has-dropdown .caret { font-size: 9px; margin-left: 3px; vertical-align: 1px; }
+  .nav .dropdown { position: absolute; top: 24px; left: -16px; min-width: 280px; background: #fff; border: 0.5px solid var(--line); border-radius: 6px; padding: 8px 0; box-shadow: 0 8px 24px rgba(58,58,58,0.12); opacity: 0; pointer-events: none; transform: translateY(-4px); transition: opacity 140ms ease, transform 140ms ease; z-index: 20; }
+  .nav .has-dropdown:hover .dropdown { opacity: 1; pointer-events: auto; transform: translateY(0); }
+  .nav .dropdown a { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 16px; color: var(--slate); font-size: 13px; border-bottom: none; }
+  .nav .dropdown a:hover { background: var(--salt); }
+  .nav .dropdown a .desc { font-size: 11px; color: var(--stone); }
+  .nav .dropdown a.active-sub { background: rgba(58,58,58,0.05); font-weight: 500; }
+
+  /* In-page sub-tabs — same destinations as the dropdown, visible inside */
+  /* the page so the user can switch tabs without going back to the top.  */
+  .subtabs { display: flex; gap: 4px; padding: 0 0 24px; border-bottom: 0.5px solid var(--line); margin-bottom: 28px; }
+  .subtabs a { padding: 8px 14px; font-size: 12px; letter-spacing: 0.04em; color: var(--stone); text-decoration: none; border-radius: 6px; }
+  .subtabs a.active { background: var(--slate); color: var(--salt); font-weight: 500; }
+  .subtabs a:hover:not(.active) { background: var(--sand); color: var(--slate); }
+
   /* Page */
   main { max-width: 1320px; margin: 0 auto; padding: 32px; }
   .pagehead { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 28px; }
@@ -161,7 +179,17 @@
       <a>Cash</a>
       <a>Marketing</a>
       <a>Product</a>
-      <a class="active">Inventory</a>
+      <span class="has-dropdown">
+        <a class="active">Inventory<span class="caret">▾</span></a>
+        <div class="dropdown">
+          <a class="active-sub" href="#inventory/today">Today<span class="desc">Hero · decisions</span></a>
+          <a href="#inventory/skus">SKUs<span class="desc">Master table</span></a>
+          <a href="#inventory/sell-through">Sell-Through<span class="desc">Velocity matrix</span></a>
+          <a href="#inventory/pos">Purchase Orders<span class="desc">PO list · status</span></a>
+          <a href="#inventory/otb">Open-to-Buy<span class="desc">Quarterly plan</span></a>
+          <a href="#inventory/forecast">Forecast<span class="desc">16-week projection</span></a>
+        </div>
+      </span>
       <a>Operations</a>
     </nav>
   </div>
@@ -170,9 +198,20 @@
 
 <main>
 
+  <!-- In-page sub-tab nav — same destinations as the top-bar dropdown.   -->
+  <!-- Default landing is Today; every other tab is one click away.       -->
+  <nav class="subtabs">
+    <a class="active" href="#inventory/today">Today</a>
+    <a href="#inventory/skus">SKUs</a>
+    <a href="#inventory/sell-through">Sell-Through</a>
+    <a href="#inventory/pos">Purchase Orders</a>
+    <a href="#inventory/otb">Open-to-Buy</a>
+    <a href="#inventory/forecast">Forecast</a>
+  </nav>
+
   <div class="pagehead">
     <div>
-      <h1>Inventory · Today</h1>
+      <h1>Today</h1>
       <div class="muted">Fri, May 9 · all numbers projected at planned ad spend pacing (+15% over next 30d)</div>
     </div>
     <div class="muted">Lead time 10w · Safety 4w · Horizon 16w</div>
