@@ -541,7 +541,7 @@ function PageFabrics({ d, fabricsById = {} }) {
       fabric={fabric}
       chosenColor={chosenColor}
       chosenArea={entry.role || null}
-      chosenFinishes={entry.finishes || null}
+      chosenFinishes={entry.chosenFinishes || null}
       yieldM={entry.metersPerUnit || null}
     />
   );

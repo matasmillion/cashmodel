@@ -74,9 +74,9 @@ function Swatch({ x, y, w, h, entry, picked }) {
 }
 
 function execBadge(executedAt) {
-  if (executedAt === 'secondary') return { fill: 'rgba(133,79,11,0.18)', stroke: '#854F0B' };
-  if (executedAt === 'at_treatment') return { fill: 'rgba(58,90,140,0.18)', stroke: '#3a5a8c' };
-  return { fill: 'rgba(99,153,34,0.18)', stroke: '#3B6D11' };
+  if (executedAt === 'secondary') return { fill: 'rgba(133,79,11,0.18)', stroke: '#854F0B', label: 'SECONDARY FACILITY' };
+  if (executedAt === 'at_treatment') return { fill: 'rgba(58,90,140,0.18)', stroke: '#3a5a8c', label: 'WASH HOUSE' };
+  return { fill: 'rgba(99,153,34,0.18)', stroke: '#3B6D11', label: 'AT MILL' };
 }
 
 function PageBody(props) { return <FabricBOMPreviewBody {...props} />; }
@@ -104,8 +104,11 @@ export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFi
   return (
     <g>
       {/* Title row */}
-      <text x="40" y="118" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="32" fill={FR.slate}>
+      <text x="40" y="114" fontSize="30" fontWeight="600" fill={FR.slate}>
         {clamp(esc(fabric.name || fabric.mill_fabric_no || 'Untitled fabric'), 48)}
+      </text>
+      <text x="40" y="134" fontSize="10" fill={FR.stone}>
+        {clamp(esc([fabric.mill_id, fabric.composition, fabric.weight_gsm ? `${fabric.weight_gsm} GSM` : null].filter(Boolean).join(' · ') || '—'), 80)}
       </text>
       {/* Area chip top-right of title */}
       <rect x={PAGE_W - 40 - 110} y="92" width="110" height="26" fill={FR.slate} rx="3" />
@@ -192,10 +195,10 @@ export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFi
         </g>
       )}
 
-      {/* MILL FINISHES — single chip line */}
-      <text x="40" y="582" fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="1.2">MILL FINISHES</text>
+      {/* MILL FINISHES — chip line with execution location label */}
+      <text x="40" y="580" fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="1.2">MILL FINISHES</text>
       {finishes.length === 0 ? (
-        <text x="40" y="608" fontSize="11" fill={FR.stone} fontStyle="italic">— none specified</text>
+        <text x="40" y="606" fontSize="11" fill={FR.stone} fontStyle="italic">— none specified</text>
       ) : (
         <g>
           {finishes.slice(0, 5).map((f, i) => {
@@ -203,16 +206,19 @@ export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFi
             const xStart = 40 + i * 200;
             return (
               <g key={i}>
-                <rect x={xStart} y={590} width={186} height={24} fill={badge.fill} rx="3" />
-                <text x={xStart + 10} y={606} fontSize="11" fill={FR.slate}>{clamp(esc(f.name || 'Finish'), 22)}</text>
-                <text x={xStart + 178} y={606} textAnchor="end" fontSize="9" fill={badge.stroke} fontFamily="ui-monospace, Menlo, monospace">
+                <rect x={xStart} y={588} width={186} height={38} fill={badge.fill} rx="3" />
+                <text x={xStart + 10} y={604} fontSize="11" fill={FR.slate}>{clamp(esc(f.name || 'Finish'), 22)}</text>
+                <text x={xStart + 176} y={604} textAnchor="end" fontSize="9" fill={badge.stroke} fontFamily="ui-monospace, Menlo, monospace">
                   {f.delta_per_meter_cny ? `+¥${parseFloat(f.delta_per_meter_cny).toFixed(2)}` : ''}
+                </text>
+                <text x={xStart + 10} y={620} fontSize="8" fill={badge.stroke} fontFamily="ui-monospace, Menlo, monospace" letterSpacing="0.5">
+                  {badge.label}
                 </text>
               </g>
             );
           })}
           {finishes.length > 5 && (
-            <text x={40 + 5 * 200 + 10} y={606} fontSize="10" fill={FR.stone} fontStyle="italic">
+            <text x={40 + 5 * 200 + 10} y={604} fontSize="10" fill={FR.stone} fontStyle="italic">
               +{finishes.length - 5} more
             </text>
           )}
