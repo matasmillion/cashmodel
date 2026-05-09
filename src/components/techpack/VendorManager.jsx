@@ -21,11 +21,13 @@ import { uploadAsset, deleteAsset, isLegacyDataUrl, dataUrlToBlob } from '../../
 import CoverThumb from './CoverThumb';
 import VendorPortalAccessPanel from './VendorPortalAccessPanel';
 import VendorNotificationLog from './VendorNotificationLog';
+import SyncDiagnosticsPanel, { SyncDiagnosticsToggle } from './SyncDiagnosticsPanel';
 
 export default function VendorManager() {
   const [vendors, setVendors] = useState(() => listVendorsLocal());
   const [activeName, setActiveName] = useState(null);
   const [adding, setAdding] = useState(false);
+  const [syncDiagOpen, setSyncDiagOpen] = useState(false);
 
   // Quick synchronous refresh from library store.
   const refresh = () => setVendors(listVendorsLocal());
@@ -70,11 +72,16 @@ export default function VendorManager() {
             One place for every vendor — contact, MOQ, lead time, specialties.
           </p>
         </div>
-        <button onClick={() => setAdding(true)}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-          <Plus size={12} /> Add vendor
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <SyncDiagnosticsToggle open={syncDiagOpen} onToggle={() => setSyncDiagOpen(o => !o)} />
+          <button onClick={() => setAdding(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            <Plus size={12} /> Add vendor
+          </button>
+        </div>
       </div>
+
+      <SyncDiagnosticsPanel open={syncDiagOpen} atomLabel="Vendors" />
 
       {vendors.length === 0 ? (
         <div style={{ padding: '36px 24px', textAlign: 'center', background: FR.salt, border: `1px dashed ${FR.sand}`, borderRadius: 8 }}>
