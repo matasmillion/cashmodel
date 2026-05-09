@@ -215,8 +215,8 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     };
   }, []);
   const componentIdKey = [
-    ...(data.pickedTrims || []).map(p => p?.componentId || ''),
-    ...(data.pickedPackaging || []).map(p => p?.componentId || ''),
+    ...(data.pickedTrims || []).map(p => p?.componentId || p?.id || ''),
+    ...(data.pickedPackaging || []).map(p => p?.componentId || p?.id || ''),
   ].filter(Boolean).join('|');
   useEffect(() => {
     let cancelled = false;
@@ -378,10 +378,15 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     if (!row) return 0;
     const d = row.data || row;
     const tier = (d?.costTiers || [])[0];
+    const gsm = parseFloat(row.weight_gsm ?? d?.weight_gsm) || 0;
+    const widthCm = parseFloat(row.width_cm ?? d?.width_cm) || 0;
+    const kgUsd = parseFloat(row.price_per_kg_usd ?? d?.price_per_kg_usd) || 0;
+    const fromKg = (kgUsd && gsm && widthCm) ? kgUsd * (gsm * widthCm / 100000) : 0;
     // fabricStore canonical: price_per_meter_usd. Older shapes covered too.
     return (
       parseFloat(row.price_per_meter_usd) ||
       parseFloat(d?.price_per_meter_usd) ||
+      fromKg ||
       parseFloat(tier?.unitCost) ||
       parseFloat(row.cost_per_unit) ||
       parseFloat(d?.cost_per_unit) ||
@@ -402,11 +407,11 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     return sum + (mpu ? costPerMeter * mpu : costPerMeter);
   }, 0);
   const trimsCost = (data.pickedTrims || []).reduce((sum, p) => {
-    const full = componentsById[p?.componentId];
+    const full = componentsById[p?.componentId || p?.id];
     return sum + componentUnitCost(full) * parseQty(p?.quantity);
   }, 0);
   const packagingCost = (data.pickedPackaging || []).reduce((sum, p) => {
-    const full = componentsById[p?.componentId];
+    const full = componentsById[p?.componentId || p?.id];
     return sum + componentUnitCost(full) * parseQty(p?.quantity);
   }, 0);
 
@@ -456,8 +461,10 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     return (rc.pickPack || 0) + (tier ? (tier.rate || 0) : 0) + (rc.packagingMaterials || 0);
   })();
   const targetRetail = parseFloat(data.targetRetail) || 0;
+  const productWeightKg = parseFloat(data.weightKg ?? data.shippingWeightKg ?? 0) || 0;
+  const seaFreightCost = seaFreightSpot * productWeightKg;
   const maxFOB = targetRetail > 0
-    ? targetRetail * (cogsRate + fulfillmentPercent) - fulfillmentUnitCost + shippingCharge - seaFreightSpot
+    ? targetRetail * (cogsRate + fulfillmentPercent) - fulfillmentUnitCost + shippingCharge - seaFreightCost
     : 0;
   const fobDelta = maxFOB > 0 ? totalUnitCost - maxFOB : null;
 
@@ -760,11 +767,27 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
             <ArrowLeft size={12} /> Back
           </button>
           <div>
-            <div style={{ color: FR.salt, fontSize: 9, letterSpacing: 3, fontWeight: 600 }}>
-              F O R E I G N  R E S O U R C E  C O .
-              {data.parentStyleName && <span style={{ color: FR.stone, letterSpacing: 0, marginLeft: 8, fontWeight: 400, fontSize: 9 }}>variant of {data.parentStyleName}</span>}
+            <div style={{
+              fontFamily: "'Cormorant Garamond', Georgia, serif",
+              color: FR.salt,
+              fontSize: 14,
+              fontWeight: 700,
+              letterSpacing: 0.5,
+            }}>
+              FOREIGN RESOURCE
+              {data.parentStyleName && (
+                <span style={{ fontFamily: "'General Sans', 'Inter', sans-serif", letterSpacing: 0, marginLeft: 8, fontWeight: 400, fontSize: 10, color: FR.stone }}>
+                  variant of {data.parentStyleName}
+                </span>
+              )}
             </div>
-            <div style={{ fontFamily: "'Cormorant Garamond','Georgia',serif", color: FR.salt, fontSize: 16, marginTop: 2 }}>
+            <div style={{
+              fontFamily: "'General Sans', 'Inter', 'Helvetica Neue', sans-serif",
+              color: FR.salt,
+              fontSize: 14,
+              marginTop: 2,
+              letterSpacing: 0.2,
+            }}>
               {data.styleNumber || data.styleName || 'New Tech Pack'}
             </div>
           </div>

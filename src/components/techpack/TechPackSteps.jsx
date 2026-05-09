@@ -378,8 +378,10 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
   const seaFreightSpot = parseFloat(packAssumptions.seaFreightSpot ?? 4);
   const shippingCharge = parseFloat(packAssumptions.shippingCharge ?? 0);
   const retail = parseFloat(data.targetRetail) || 0;
+  const productWeightKg = parseFloat(data.weightKg ?? data.shippingWeightKg ?? 0) || 0;
+  const seaFreightCost = seaFreightSpot * productWeightKg;
   const maxFOB = retail > 0
-    ? retail * (cogsRate + fulfillmentPercent) - (fulfillmentCost || 0) + shippingCharge - seaFreightSpot
+    ? retail * (cogsRate + fulfillmentPercent) - (fulfillmentCost || 0) + shippingCharge - seaFreightCost
     : null;
 
   return (
@@ -518,11 +520,11 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
               <Row cols="1fr 1fr">
                 <Input label="Shipping Revenue Offset ($)" value={packAssumptions.shippingCharge ?? '0'}
                   onChange={v => set('assumptions', { ...packAssumptions, shippingCharge: v })} placeholder="0" />
-                <Input label="Sea Freight Spot ($)" value={packAssumptions.seaFreightSpot ?? '4'}
+                <Input label="Sea Freight Spot ($/kg)" value={packAssumptions.seaFreightSpot ?? '4'}
                   onChange={v => set('assumptions', { ...packAssumptions, seaFreightSpot: v })} placeholder="4" />
               </Row>
               <p style={{ fontSize: 10, color: FR.stone, margin: 0, lineHeight: 1.5 }}>
-                Max FOB = Retail × (COGS% + Fulfillment%) − Fulfillment Cost + Shipping Offset − Sea Freight.
+                Max FOB = Retail × (COGS% + Fulfillment%) − Fulfillment Cost + Shipping Offset − (Sea Freight $/kg × Product Weight).
                 COGS% and Fulfillment% are set in the Cash tab.
               </p>
             </div>
