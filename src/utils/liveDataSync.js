@@ -271,18 +271,74 @@ export async function syncShopifyActuals(/* creds unused — proxy holds creds *
 // ─── Shopify variants + per-day sales (Sell-Through page) ────────────────────
 
 /**
+ * High-level wrapper used by the inventory module's auto-sync. Pulls active
+ * variants + their on-hand + last-90-day sales, joins them, and writes the
+ * sell-through snapshot that inventoryStore reads from.
+ *
+ * Logs a parity report (variantCount, totalOnHand, soldL90) so the operator
+ * can sanity-check against Shopify Admin → Products at the same time.
+ *
+ * @returns {Promise<{ variantCount, totalOnHand, soldL90, oversold, syncedAt }>}
+ */
+export async function syncShopifyInventory({ days = 90 } = {}) {
+  const stStore = await import('./sellThroughStore');
+
+  const [variants, salesByVariant] = await Promise.all([
+    fetchShopifyVariantsWithInventory({ activeOnly: true }),
+    fetchShopifyVariantSalesByDay({ days }),
+  ]);
+
+  const merged = variants.map(v => ({
+    ...v,
+    salesByDay: salesByVariant[v.variantId] || {},
+  }));
+
+  const syncedAt = new Date().toISOString();
+  stStore.writeLocal({ syncedAt, variants: merged });
+
+  // Parity report — compare against Shopify Admin counts.
+  const totalOnHand = merged.reduce((s, v) => s + Math.max(0, v.inventoryQuantity || 0), 0);
+  const oversold   = merged.filter(v => (v.inventoryQuantity || 0) < 0).length;
+  const soldL90    = merged.reduce((s, v) => {
+    let n = 0;
+    for (const k in v.salesByDay) n += v.salesByDay[k];
+    return s + n;
+  }, 0);
+
+  console.info(
+    `[shopify-sync] ${merged.length} active variants · ` +
+    `${totalOnHand.toLocaleString()} on-hand · ` +
+    `${soldL90.toLocaleString()} units sold L${days}d · ` +
+    `${oversold} oversold`,
+  );
+
+  return {
+    variantCount: merged.length,
+    totalOnHand,
+    soldL90,
+    oversold,
+    syncedAt,
+  };
+}
+
+/**
  * Pulls every product variant with its current on-hand inventory.
  * Paginates 250-per-page via cursor.
  *
  * Requires `read_products` (and `read_inventory` if you later want to split
  * by location — `inventoryQuantity` is already total on-hand across locations).
  *
- * Returns: [{ variantId, sku, productTitle, variantTitle, inventoryQuantity }]
+ * @param {{ activeOnly?: boolean }} opts
+ *   activeOnly (default true): filter to product_status:active so deprecated
+ *   / archived products don't bloat the inventory model. Pass false to pull
+ *   everything (used by the variant mapper backfill UI).
+ *
+ * Returns: [{ variantId, sku, productTitle, variantTitle, inventoryQuantity, productStatus }]
  */
-export async function fetchShopifyVariantsWithInventory() {
+export async function fetchShopifyVariantsWithInventory({ activeOnly = true } = {}) {
   const gqlQuery = `
-    query FetchVariants($cursor: String) {
-      productVariants(first: 250, after: $cursor) {
+    query FetchVariants($cursor: String, $q: String) {
+      productVariants(first: 250, after: $cursor, query: $q) {
         pageInfo { hasNextPage endCursor }
         edges {
           node {
@@ -290,20 +346,21 @@ export async function fetchShopifyVariantsWithInventory() {
             sku
             title
             inventoryQuantity
-            inventoryItem { unitCost { amount } }
-            product { id title vendor }
+            inventoryItem { id unitCost { amount } }
+            product { id title vendor status }
           }
         }
       }
     }
   `;
+  const queryFilter = activeOnly ? 'product_status:active' : null;
 
   const out = [];
   let cursor = null;
   for (let page = 0; page < 40; page++) {  // 40 * 250 = 10k variants
     const data = await callShopifyProxy('graphql.json', null, {
       query: gqlQuery,
-      variables: { cursor },
+      variables: { cursor, q: queryFilter },
     });
 
     if (data.errors?.length) {
@@ -318,10 +375,12 @@ export async function fetchShopifyVariantsWithInventory() {
       const unitCostAmount = n.inventoryItem?.unitCost?.amount;
       out.push({
         variantId: n.id,
+        inventoryItemId: n.inventoryItem?.id || '',
         sku: n.sku || '',
         productId: n.product?.id || '',
         productTitle: n.product?.title || '',
         productVendor: n.product?.vendor || '',
+        productStatus: n.product?.status || '',
         variantTitle: n.title || '',
         inventoryQuantity: typeof n.inventoryQuantity === 'number' ? n.inventoryQuantity : 0,
         unitCost: unitCostAmount != null ? Number(unitCostAmount) : null,
