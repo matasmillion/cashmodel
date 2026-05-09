@@ -1,22 +1,15 @@
-// Cut & Sew detail / editor — single-page form. Loaded via the
-// `#product/library/cut-sew/:id` deep link or by clicking a card in
-// CutSewList. All edits write back through cutSewStore.saveCutSew,
-// which auto-stamps updated_at.
-//
-// Layout matches the visual rhythm of the rest of the PLM atom detail
-// pages: breadcrumb back · header with name + status · two-column spec
-// grid · notes box. Status pill is editable inline. Identity fields
-// (code) are read-only — codes are issued at create time and never
-// regenerated.
+// Cut & Sew detail / editor — 2-col shell matching EmbellishmentBuilder.
+// Left: spec form with autosave. Right: sticky CutSewBOMPreview live preview.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Trash2 } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { saveCutSew, archiveCutSew, restoreCutSew } from '../../utils/cutSewStore';
 import { CUT_SEW_CATEGORIES, CUT_SEW_CATEGORY_LABEL, CUT_SEW_STATUSES, STANDARD_SIZE_SETS } from '../../utils/cutSewLibrary';
 import CoverImagePicker from './CoverImagePicker';
 import FileSlot from './FileSlot';
 import { migrateLegacyCoverIfNeeded, isLegacyDataUrl } from '../../utils/plmAssets';
+import CutSewBOMPreview from './CutSewBOMPreview';
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
@@ -44,10 +37,15 @@ function Field({ label, children }) {
 
 export default function CutSewBuilder({ block, onBack }) {
   const [draft, setDraft] = useState(block);
-  const [savedAt, setSavedAt] = useState(null);
+  const [savedSnapshot, setSavedSnapshot] = useState(block);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { setDraft(block); }, [block.id]);
+  const draftRef = useRef(draft);
+  const savingRef = useRef(false);
+  const savedSnapshotRef = useRef(block);
+
+  useEffect(() => { draftRef.current = draft; }, [draft]);
+  useEffect(() => { setDraft(block); setSavedSnapshot(block); savedSnapshotRef.current = block; }, [block.id]);
 
   // Lazy Storage migration on mount for pre-Phase-3 covers (data: URLs).
   const migratedRef = useRef(false);
@@ -67,20 +65,41 @@ export default function CutSewBuilder({ block, onBack }) {
     return () => { cancelled = true; };
   }, [draft?.id, draft?.cover_image]);
 
-  const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(block), [draft, block]);
+  // Autosave — 1200 ms debounce, flush on unmount.
+  useEffect(() => {
+    if (JSON.stringify(draftRef.current) === JSON.stringify(savedSnapshotRef.current)) return;
+    const t = setTimeout(async () => {
+      if (savingRef.current) return;
+      savingRef.current = true;
+      setSaving(true);
+      try {
+        const d = draftRef.current;
+        const { id, code, created_at, ...updates } = d;
+        await saveCutSew(id, updates);
+        setSavedSnapshot({ ...d });
+        savedSnapshotRef.current = { ...d };
+      } finally {
+        savingRef.current = false;
+        setSaving(false);
+      }
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [draft]);
+
+  useEffect(() => {
+    return () => {
+      if (JSON.stringify(draftRef.current) === JSON.stringify(savedSnapshotRef.current)) return;
+      if (savingRef.current) return;
+      savingRef.current = true;
+      const d = draftRef.current;
+      const { id, code, created_at, ...updates } = d;
+      saveCutSew(id, updates).catch(() => {});
+    };
+  }, []);
+
+  const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(savedSnapshot), [draft, savedSnapshot]);
 
   const set = (patch) => setDraft(d => ({ ...d, ...patch }));
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const { id, code, created_at, ...updates } = draft;
-      await saveCutSew(id, updates);
-      setSavedAt(new Date());
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const toggleArchive = async () => {
     if (draft.status === 'archived') {
@@ -96,191 +115,190 @@ export default function CutSewBuilder({ block, onBack }) {
 
   const status = draft.status || 'draft';
   const pill = STATUS_PILL[status] || STATUS_PILL.draft;
-
   const sizeSetMatch = STANDARD_SIZE_SETS.find(s => s.join(',') === (draft.sizes || []).join(','));
 
   return (
-    <div>
-      <button onClick={onBack}
-        style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', color: FR.stone, fontSize: 12, cursor: 'pointer', padding: 0, marginBottom: 12 }}>
-        <ArrowLeft size={13} /> Cut &amp; Sew
-      </button>
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 1fr)', gap: 24, alignItems: 'start' }}>
+      {/* ── LEFT COLUMN: form ─────────────────────────────────── */}
+      <div>
+        <button onClick={onBack}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', color: FR.stone, fontSize: 12, cursor: 'pointer', padding: 0, marginBottom: 12 }}>
+          <ArrowLeft size={13} /> Cut &amp; Sew
+        </button>
 
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 240 }}>
-          <input
-            value={draft.name || ''}
-            onChange={e => set({ name: e.target.value })}
-            placeholder="Untitled cut & sew"
-            style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 28, color: FR.slate, border: 'none', outline: 'none', background: 'transparent', width: '100%' }}
-          />
-          <div style={{ fontSize: 11, color: FR.stone, marginTop: 2, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-            {draft.code} · {CUT_SEW_CATEGORY_LABEL[draft.category] || draft.category} · {draft.version}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <input
+              value={draft.name || ''}
+              onChange={e => set({ name: e.target.value })}
+              placeholder="Untitled cut & sew"
+              style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 28, color: FR.slate, border: 'none', outline: 'none', background: 'transparent', width: '100%' }}
+            />
+            <div style={{ fontSize: 11, color: FR.stone, marginTop: 2, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+              {draft.code} · {CUT_SEW_CATEGORY_LABEL[draft.category] || draft.category} · {draft.version}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            {saving && <span style={{ fontSize: 10, color: FR.stone }}>Saving…</span>}
+            {!saving && !dirty && <span style={{ fontSize: 10, color: FR.stone }}>Saved</span>}
+            <select
+              value={status}
+              onChange={e => set({ status: e.target.value })}
+              style={{ background: pill.bg, color: pill.fg, padding: '6px 10px', borderRadius: 5, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, border: 'none', cursor: 'pointer' }}
+            >
+              {CUT_SEW_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <button
+              onClick={toggleArchive}
+              title={status === 'archived' ? 'Restore' : 'Archive'}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 10px', background: 'transparent', color: FR.stone, border: `1px solid ${FR.sand}`, borderRadius: 6, fontSize: 11, cursor: 'pointer' }}
+            >
+              <Trash2 size={12} /> {status === 'archived' ? 'Restore' : 'Archive'}
+            </button>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <select
-            value={status}
-            onChange={e => set({ status: e.target.value })}
-            style={{ background: pill.bg, color: pill.fg, padding: '6px 10px', borderRadius: 5, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, border: 'none', cursor: 'pointer' }}
-          >
-            {CUT_SEW_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <button
-            onClick={toggleArchive}
-            title={status === 'archived' ? 'Restore' : 'Archive'}
-            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 10px', background: 'transparent', color: FR.stone, border: `1px solid ${FR.sand}`, borderRadius: 6, fontSize: 11, cursor: 'pointer' }}
-          >
-            <Trash2 size={12} /> {status === 'archived' ? 'Restore' : 'Archive'}
-          </button>
-          <button
-            onClick={save}
-            disabled={!dirty || saving}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: dirty ? FR.slate : FR.sand, color: dirty ? FR.salt : FR.stone, border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: dirty && !saving ? 'pointer' : 'not-allowed', opacity: saving ? 0.6 : 1 }}
-          >
-            <Save size={13} /> {saving ? 'Saving…' : dirty ? 'Save' : 'Saved'}
-          </button>
-        </div>
-      </div>
 
-      {savedAt && !dirty && (
-        <div style={{ fontSize: 10, color: FR.stone, marginBottom: 12 }}>
-          Saved {savedAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+        {/* Cover + Identity */}
+        <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+          <CoverImagePicker
+            value={draft.cover_image}
+            onChange={pathOrDataUrl => set({ cover_image: pathOrDataUrl })}
+            label="Cover image"
+            hint="Drop a photo of the block"
+            assetScope="cut-sew"
+            assetOwnerId={draft.id}
+          />
+          <div style={{ flex: 1, minWidth: 280 }}>
+            <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Identity</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+              <Field label="Category">
+                <select
+                  value={draft.category}
+                  onChange={e => set({ category: e.target.value })}
+                  style={INPUT_STYLE}
+                >
+                  {CUT_SEW_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
+              </Field>
+              <Field label="Version">
+                <input
+                  value={draft.version || ''}
+                  onChange={e => set({ version: e.target.value })}
+                  placeholder="v1.0"
+                  style={INPUT_STYLE}
+                />
+              </Field>
+              <Field label="Base block">
+                <input
+                  value={draft.base_block || ''}
+                  onChange={e => set({ base_block: e.target.value })}
+                  placeholder="FR-MASTER-HD"
+                  style={INPUT_STYLE}
+                />
+              </Field>
+            </div>
+          </div>
         </div>
-      )}
 
-      <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-        <CoverImagePicker
-          value={draft.cover_image}
-          onChange={pathOrDataUrl => set({ cover_image: pathOrDataUrl })}
-          label="Cover image"
-          hint="Drop a photo of the block"
-          assetScope="cut-sew"
-          assetOwnerId={draft.id}
-        />
-        <div style={{ flex: 1, minWidth: 280 }}>
-          <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Identity</h4>
+        {/* Spec */}
+        <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
+          <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Spec</h4>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-            <Field label="Category">
+            <Field label="Size set">
               <select
-                value={draft.category}
-                onChange={e => set({ category: e.target.value })}
+                value={sizeSetMatch ? sizeSetMatch.join(',') : 'custom'}
+                onChange={e => {
+                  const v = e.target.value;
+                  if (v === 'custom') return;
+                  set({ sizes: v.split(',') });
+                }}
                 style={INPUT_STYLE}
               >
-                {CUT_SEW_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                {STANDARD_SIZE_SETS.map(s => <option key={s.join(',')} value={s.join(',')}>{s.join(' / ')}</option>)}
+                <option value="custom">Custom</option>
               </select>
             </Field>
-            <Field label="Version">
+            <Field label="Sizes (comma-separated)">
               <input
-                value={draft.version || ''}
-                onChange={e => set({ version: e.target.value })}
-                placeholder="v1.0"
+                value={(draft.sizes || []).join(', ')}
+                onChange={e => set({ sizes: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+                placeholder="S, M, L, XL"
                 style={INPUT_STYLE}
               />
             </Field>
-            <Field label="Base block">
+            <Field label="Grade rule">
               <input
-                value={draft.base_block || ''}
-                onChange={e => set({ base_block: e.target.value })}
-                placeholder="FR-MASTER-HD"
+                value={draft.grade_rule || ''}
+                onChange={e => set({ grade_rule: e.target.value })}
+                placeholder="2 cm chest · 1.5 cm length"
                 style={INPUT_STYLE}
+              />
+            </Field>
+            <Field label="Ease at chest (cm)">
+              <input
+                type="number" step="0.1"
+                value={draft.ease_chest_cm ?? 0}
+                onChange={e => set({ ease_chest_cm: parseFloat(e.target.value) || 0 })}
+                style={INPUT_STYLE}
+              />
+            </Field>
+            <Field label="Drop (cm)">
+              <input
+                type="number" step="0.1"
+                value={draft.drop_cm ?? 0}
+                onChange={e => set({ drop_cm: parseFloat(e.target.value) || 0 })}
+                style={INPUT_STYLE}
+              />
+            </Field>
+            <Field label="Seam allowance (cm)">
+              <input
+                type="number" step="0.1"
+                value={draft.seam_allowance_cm ?? 0}
+                onChange={e => set({ seam_allowance_cm: parseFloat(e.target.value) || 0 })}
+                style={INPUT_STYLE}
+              />
+            </Field>
+          </div>
+        </div>
+
+        {/* Files & notes */}
+        <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
+          <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Files &amp; notes</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+            <Field label="DXF / CAD file">
+              <FileSlot
+                value={draft.cad_file_url}
+                onChange={v => set({ cad_file_url: v })}
+                accept=".dxf,.dwg,.ai,.pdf"
+                hint="Drop a .dxf / .dwg / .ai pattern file"
+              />
+            </Field>
+            <Field label="Thumbnail">
+              <FileSlot
+                value={draft.thumbnail_url}
+                onChange={v => set({ thumbnail_url: v })}
+                accept="image/*"
+                hint="Drop a thumbnail image"
+              />
+            </Field>
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <Field label="Notes">
+              <textarea
+                value={draft.notes || ''}
+                onChange={e => set({ notes: e.target.value })}
+                rows={4}
+                placeholder="Construction notes, fit notes, sloper history…"
+                style={{ ...INPUT_STYLE, resize: 'vertical', fontFamily: "'Inter', sans-serif" }}
               />
             </Field>
           </div>
         </div>
       </div>
 
-      <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
-        <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Spec</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-          <Field label="Size set">
-            <select
-              value={sizeSetMatch ? sizeSetMatch.join(',') : 'custom'}
-              onChange={e => {
-                const v = e.target.value;
-                if (v === 'custom') return;
-                set({ sizes: v.split(',') });
-              }}
-              style={INPUT_STYLE}
-            >
-              {STANDARD_SIZE_SETS.map(s => <option key={s.join(',')} value={s.join(',')}>{s.join(' / ')}</option>)}
-              <option value="custom">Custom</option>
-            </select>
-          </Field>
-          <Field label="Sizes (comma-separated)">
-            <input
-              value={(draft.sizes || []).join(', ')}
-              onChange={e => set({ sizes: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
-              placeholder="S, M, L, XL"
-              style={INPUT_STYLE}
-            />
-          </Field>
-          <Field label="Grade rule">
-            <input
-              value={draft.grade_rule || ''}
-              onChange={e => set({ grade_rule: e.target.value })}
-              placeholder="2 cm chest · 1.5 cm length"
-              style={INPUT_STYLE}
-            />
-          </Field>
-          <Field label="Ease at chest (cm)">
-            <input
-              type="number" step="0.1"
-              value={draft.ease_chest_cm ?? 0}
-              onChange={e => set({ ease_chest_cm: parseFloat(e.target.value) || 0 })}
-              style={INPUT_STYLE}
-            />
-          </Field>
-          <Field label="Drop (cm)">
-            <input
-              type="number" step="0.1"
-              value={draft.drop_cm ?? 0}
-              onChange={e => set({ drop_cm: parseFloat(e.target.value) || 0 })}
-              style={INPUT_STYLE}
-            />
-          </Field>
-          <Field label="Seam allowance (cm)">
-            <input
-              type="number" step="0.1"
-              value={draft.seam_allowance_cm ?? 0}
-              onChange={e => set({ seam_allowance_cm: parseFloat(e.target.value) || 0 })}
-              style={INPUT_STYLE}
-            />
-          </Field>
-        </div>
-      </div>
-
-      <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
-        <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Files &amp; notes</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
-          <Field label="DXF / CAD file">
-            <FileSlot
-              value={draft.cad_file_url}
-              onChange={v => set({ cad_file_url: v })}
-              accept=".dxf,.dwg,.ai,.pdf"
-              hint="Drop a .dxf / .dwg / .ai pattern file"
-            />
-          </Field>
-          <Field label="Thumbnail">
-            <FileSlot
-              value={draft.thumbnail_url}
-              onChange={v => set({ thumbnail_url: v })}
-              accept="image/*"
-              hint="Drop a thumbnail image"
-            />
-          </Field>
-        </div>
-        <div style={{ marginTop: 14 }}>
-          <Field label="Notes">
-            <textarea
-              value={draft.notes || ''}
-              onChange={e => set({ notes: e.target.value })}
-              rows={4}
-              placeholder="Construction notes, fit notes, sloper history…"
-              style={{ ...INPUT_STYLE, resize: 'vertical', fontFamily: "'Inter', sans-serif" }}
-            />
-          </Field>
-        </div>
+      {/* ── RIGHT COLUMN: live BOM preview ─────────────────────── */}
+      <div style={{ position: 'sticky', top: 16 }}>
+        <CutSewBOMPreview block={draft} />
       </div>
     </div>
   );
