@@ -5,11 +5,13 @@
 //   4. Revenue trend + categories  (Phase 2E)
 
 import CockpitKPIs from './CockpitKPIs';
+import CockpitCalendar from './CockpitCalendar';
 
 export default function InventoryCockpit() {
   return (
     <div>
       <CockpitKPIs />
+      <CockpitCalendar />
     </div>
   );
 }
