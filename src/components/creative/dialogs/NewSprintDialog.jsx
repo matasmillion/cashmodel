@@ -6,10 +6,12 @@ const FR = { slate: '#3A3A3A', salt: '#F5F0E8', sand: '#EBE5D5', stone: '#716F70
 
 const LANE_LABEL = { ai: 'AI', high_production: 'High Production', creator: 'Creator', founder: 'Founder' };
 
-export default function NewSprintDialog({ onClose, onCreate, seedConstraint = '' }) {
-  const [lane, setLane] = useState(LANES.AI);
-  const [hypothesisType, setHypothesisType] = useState('');
-  const [constraintText, setConstraintText] = useState(seedConstraint);
+const isLane = (s) => LANE_VALUES.includes(s);
+
+export default function NewSprintDialog({ onClose, onCreate, seed = null }) {
+  const [lane, setLane] = useState(seed && isLane(seed.lane) ? seed.lane : LANES.AI);
+  const [hypothesisType, setHypothesisType] = useState(seed?.hypothesis_type || '');
+  const [constraintText, setConstraintText] = useState(seed?.constraint_text || '');
   const [cpaTarget, setCpaTarget] = useState('');
   const [saving, setSaving] = useState(false);
 

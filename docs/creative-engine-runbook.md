@@ -213,6 +213,28 @@ bot token in **Integrations → Slack**.
    `SLACK_SIGNING_SECRET` in the Supabase Edge Functions environment.
 5. Install the app to your workspace, copy the **Bot User OAuth Token**
    (`xoxb-…`), paste into the app's Slack integration card.
+6. **Set the destination channel** so weekly synthesis posts know where
+   to land. Invite the bot to the channel first (`/invite @yourapp` in
+   Slack), then run:
+
+   ```sql
+   update public.user_integrations
+   set metadata = jsonb_set(
+     coalesce(metadata, '{}'::jsonb),
+     '{channel_id}',
+     to_jsonb('CXXXXXXXX'::text)  -- channel id, not name; right-click channel → Copy link, the suffix is the id
+   )
+   where provider = 'slack'
+     and organization_id = 'YOUR_ORG_ID';
+   ```
+7. **Set `APP_BASE_URL`** in Edge Functions → Secrets so the [Discuss]
+   button in the synthesis Slack post links back to the app:
+
+   ```
+   APP_BASE_URL=https://app.foreignresource.com
+   ```
+
+   Without this the Slack post still goes out, just without the button.
 
 ---
 

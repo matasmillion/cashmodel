@@ -21,7 +21,9 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
+const APP_BASE_URL = Deno.env.get('APP_BASE_URL') || '';
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
+const SLACK_API = 'https://slack.com/api/chat.postMessage';
 const MODEL = 'claude-sonnet-4-6';
 const MAX_TOKENS = 2048;
 
@@ -50,6 +52,70 @@ async function getCredential(db: SupabaseClient, orgId: string, provider: string
     .eq('provider', provider)
     .maybeSingle();
   return (data?.token as string) || null;
+}
+
+async function getSlackTarget(db: SupabaseClient, orgId: string): Promise<{ token: string; channel: string } | null> {
+  const { data } = await db
+    .from('user_integrations')
+    .select('token, metadata')
+    .eq('org_id', orgId)
+    .eq('provider', 'slack')
+    .maybeSingle();
+  const token = (data?.token as string) || '';
+  const md = (data?.metadata as Record<string, unknown>) || {};
+  const channel = (md.channel_id as string) || '';
+  if (!token || !channel) return null;
+  return { token, channel };
+}
+
+async function postDiscussionToSlack(target: { token: string; channel: string }, opts: {
+  sprintNumber: string | number;
+  discussionId: string;
+  preview: string;
+}): Promise<void> {
+  const url = APP_BASE_URL ? `${APP_BASE_URL.replace(/\/+$/, '')}/#creative-engine/learnings/${opts.discussionId}` : null;
+  const previewText = opts.preview.replace(/\s+/g, ' ').slice(0, 280);
+  const blocks: Record<string, unknown>[] = [
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: `*Sprint S${opts.sprintNumber} — weekly synthesis*\n\n_${previewText}${opts.preview.length > 280 ? '…' : ''}_` },
+    },
+  ];
+  if (url) {
+    blocks.push({
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Discuss & finalize' },
+          url,
+          style: 'primary',
+        },
+      ],
+    });
+  }
+  try {
+    const res = await fetch(SLACK_API, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Authorization': `Bearer ${target.token}`,
+      },
+      body: JSON.stringify({
+        channel: target.channel,
+        text: `Weekly synthesis ready for sprint S${opts.sprintNumber}`,
+        blocks,
+      }),
+    });
+    if (!res.ok) {
+      console.warn('synthesize-weekly slack post failed:', res.status, await res.text());
+    } else {
+      const j = await res.json();
+      if (!j.ok) console.warn('synthesize-weekly slack api error:', j.error);
+    }
+  } catch (err) {
+    console.warn('synthesize-weekly slack post threw:', err);
+  }
 }
 
 async function callAnthropic(apiKey: string, system: string, prompt: string): Promise<string> {
@@ -88,6 +154,7 @@ async function synthesizeForOrg(db: SupabaseClient, orgId: string): Promise<{ di
   const apiKey = await getCredential(db, orgId, 'anthropic');
   if (!apiKey) return closedSprints.map(s => ({ sprint_id: s.id as string, error: 'Anthropic not connected' }));
 
+  const slackTarget = await getSlackTarget(db, orgId);
   const results: { discussion_id?: string; sprint_id: string; error?: string }[] = [];
 
   // Voice-consistency context: last 10 finalized discussions
@@ -159,6 +226,13 @@ Write the synthesis paragraph now.`;
       results.push({ sprint_id: sprint.id as string, error: insErr.message });
     } else {
       results.push({ discussion_id: newId, sprint_id: sprint.id as string });
+      if (slackTarget) {
+        await postDiscussionToSlack(slackTarget, {
+          sprintNumber: sprint.sprint_number as string | number,
+          discussionId: newId,
+          preview: synthesis,
+        });
+      }
     }
   }
 

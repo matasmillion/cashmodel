@@ -31,11 +31,31 @@ const LANE_LABEL = {
   founder: 'Founder',
 };
 
+const SEED_KEY = 'cashmodel_creative_sprint_seed';
+
+function readSeed() {
+  try {
+    const raw = localStorage.getItem(SEED_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function clearSeed() {
+  try { localStorage.removeItem(SEED_KEY); } catch { /* best-effort */ }
+}
+
 export default function SprintList() {
   const [sprints, setSprints] = useState(null);
-  const [showNew, setShowNew] = useState(false);
+  const [seed, setSeed] = useState(() => readSeed());
+  const [showNew, setShowNew] = useState(() => seed !== null);
 
   useEffect(() => { listSprints().then(setSprints); }, []);
+
+  const handleCloseDialog = () => {
+    setShowNew(false);
+    setSeed(null);
+    clearSeed();
+  };
 
   const grouped = STATUS_ORDER.reduce((acc, s) => {
     acc[s] = (sprints || []).filter(sp => sp.status === s);
@@ -95,10 +115,11 @@ export default function SprintList() {
 
       {showNew && (
         <NewSprintDialog
-          onClose={() => setShowNew(false)}
+          seed={seed}
+          onClose={handleCloseDialog}
           onCreate={(sprint) => {
             setSprints(prev => [sprint, ...(prev || [])]);
-            setShowNew(false);
+            handleCloseDialog();
             setCreativeHash({ view: 'brief', id: sprint.id });
           }}
         />
