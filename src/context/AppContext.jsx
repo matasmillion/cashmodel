@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useMemo, useEffect, useRef, useState } from 'react';
 import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, OPEX_WAREHOUSE, CREDIT_CARDS, LOANS, AD_UNIT_TYPES, DEFAULT_EVENTS } from '../data/seedData';
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
-import { syncShopifyActuals, syncMetaActuals, syncMercuryActuals, syncPlaidActuals, listPlaidItems } from '../utils/liveDataSync';
+import { syncShopifyActuals, syncShopifyInventory, syncMetaActuals, syncMercuryActuals, syncPlaidActuals, listPlaidItems } from '../utils/liveDataSync';
 import { migrateManualPOsToStore } from '../utils/productionStore';
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { useCurrentUser, useCurrentOrg } from '../lib/auth';
@@ -50,7 +50,18 @@ async function runAutoSync(dispatch) {
         changed = true;
       }).catch(err => {
         errors.shopify = err.message;
-        console.warn('[auto-sync] Shopify:', err.message);
+        console.warn('[auto-sync] Shopify revenue:', err.message);
+      }),
+    );
+
+    // Inventory snapshot (variants + on-hand + L90 sales by day). Runs
+    // alongside the revenue pull so the inventory module has live data
+    // on first paint without requiring a manual sync from Sell-Through.
+    sources.push('shopify-inventory');
+    tasks.push(
+      syncShopifyInventory().catch(err => {
+        errors['shopify-inventory'] = err.message;
+        console.warn('[auto-sync] Shopify inventory:', err.message);
       }),
     );
   }

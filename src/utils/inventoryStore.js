@@ -108,7 +108,8 @@ async function fetchTechPacks() {
  * @property {string} size
  * @property {string} cat
  * @property {'Staple'|'Drop'} tier
- * @property {number} on_hand
+ * @property {number} on_hand               // clamped >= 0
+ * @property {number} oversold               // |negative qty| when Shopify reports < 0
  * @property {{[loc: string]: number}} on_hand_by_location
  * @property {number} on_order
  * @property {number} allocated
@@ -195,6 +196,13 @@ export async function list() {
     // tracked: stored override → tier default
     const tracked = sku in trackingMap ? Boolean(trackingMap[sku]) : defaultTracked(tier);
 
+    // Shopify can report negative inventoryQuantity (oversold). Clamp to 0
+    // for display math but expose the oversold flag separately so the agent
+    // and ops team know which SKUs need a physical reconciliation.
+    const rawOnHand = Number(v.inventoryQuantity) || 0;
+    const onHand    = Math.max(0, rawOnHand);
+    const oversold  = rawOnHand < 0 ? -rawOnHand : 0;
+
     skus.push({
       sku,
       style_id:          mapping.style_id,
@@ -204,7 +212,8 @@ export async function list() {
       size,
       cat,
       tier,
-      on_hand:           Number(v.inventoryQuantity) || 0,
+      on_hand:           onHand,
+      oversold,
       on_hand_by_location: v.inventoryByLocation || {},
       on_order:          onOrder,
       allocated:         Number(v.allocated) || 0,
