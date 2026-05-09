@@ -3,10 +3,12 @@
 // `#product/library/embellishments/:id` deep link or by clicking a card
 // in EmbellishmentList. All edits write back through saveEmbellishment.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { saveEmbellishment, archiveEmbellishment, restoreEmbellishment } from '../../utils/embellishmentStore';
+import useOptimisticSync from './useOptimisticSync';
+import { useCurrentUser } from '../../lib/auth';
 import { EMBELLISHMENT_TYPES, EMBELLISHMENT_TYPE_LABEL, EMBELLISHMENT_STATUSES, PLACEMENT_OPTIONS } from '../../utils/embellishmentLibrary';
 import CoverImagePicker from './CoverImagePicker';
 import VendorPicker from './VendorPicker';
@@ -66,12 +68,38 @@ export default function EmbellishmentBuilder({ embellishment, onBack }) {
 
   const set = (patch) => setDraft(d => ({ ...d, ...patch }));
 
+  // OCC + Realtime presence
+  const draftRefForRemote = useRef(draft);
+  const dirtyRefForRemote = useRef(dirty);
+  useEffect(() => { draftRefForRemote.current = draft; }, [draft]);
+  useEffect(() => { dirtyRefForRemote.current = dirty; }, [dirty]);
+  const currentUser = useCurrentUser();
+  const sync = useOptimisticSync({
+    table: 'embellishments',
+    id: draft?.id,
+    entityLabel: draft?.name || draft?.code || 'embellishment',
+    initialUpdatedAt: draft?.updated_at,
+    deepFields: [],
+    retrySave: useCallback(async (patch, newBase) => {
+      const id = draftRefForRemote.current?.id;
+      if (!id) return { ok: false, error: new Error('no id') };
+      return saveEmbellishment(id, patch, { base_updated_at: newBase });
+    }, []),
+    applyRemote: useCallback((newRow) => {
+      setDraft(d => ({ ...d, ...newRow }));
+    }, []),
+    hasPendingEdits: useCallback(() => dirtyRefForRemote.current, []),
+    displayName: currentUser?.name || currentUser?.email || '',
+  });
+
   const save = async () => {
     setSaving(true);
     try {
       const { id, code, created_at, ...updates } = draft;
-      await saveEmbellishment(id, updates);
-      setSavedAt(new Date());
+      const base = sync.getBaseUpdatedAt();
+      const result = await saveEmbellishment(id, updates, base ? { base_updated_at: base } : {});
+      const final = await sync.handleSaveResult(result, updates);
+      if (final?.ok) setSavedAt(new Date());
     } finally {
       setSaving(false);
     }
@@ -94,10 +122,14 @@ export default function EmbellishmentBuilder({ embellishment, onBack }) {
 
   return (
     <div>
-      <button onClick={onBack}
-        style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', color: FR.stone, fontSize: 12, cursor: 'pointer', padding: 0, marginBottom: 12 }}>
-        <ArrowLeft size={13} /> Embellishments
-      </button>
+      {sync.conflictUI}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+        <button onClick={onBack}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', color: FR.stone, fontSize: 12, cursor: 'pointer', padding: 0 }}>
+          <ArrowLeft size={13} /> Embellishments
+        </button>
+        {sync.presencePill}
+      </div>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 240 }}>

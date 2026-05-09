@@ -11,7 +11,7 @@ import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync } from '../lib/auth';
 import { emptyEmbellishment, EMBELLISHMENT_TYPE_CODE } from './embellishmentLibrary';
 import { copyCoverImage } from './plmAssets';
-import { robustUpsertAtom, robustUpsertAtomBatch } from './atomCloudSync';
+import { robustUpsertAtom, robustUpsertAtomBatch, robustUpdateAtomOptimistic } from './atomCloudSync';
 
 const LOCAL_KEY = 'cashmodel_embellishments';
 
@@ -150,11 +150,13 @@ export async function createEmbellishment({ type = 'embroidery', ...overrides } 
   return row;
 }
 
-export async function saveEmbellishment(id, updates) {
-  if (!id) return null;
+// See fabricStore.saveFabric for the OCC return shape and contract.
+export async function saveEmbellishment(id, updates, opts = {}) {
+  if (!id) return { ok: false, error: new Error('saveEmbellishment: id required') };
   const now = new Date().toISOString();
   const local = readLocal();
   const idx = local.findIndex(r => r.id === id);
+  const before = idx >= 0 ? local[idx] : null;
   let merged;
   if (idx >= 0) {
     merged = { ...local[idx], ...updates, updated_at: now };
@@ -165,18 +167,46 @@ export async function saveEmbellishment(id, updates) {
   }
   writeLocal(local);
 
-  await robustUpsertAtom('embellishments', toEmbellishmentCloudRow({ ...merged, updated_at: now }));
-  return merged;
+  const base = opts.base_updated_at || before?.updated_at || null;
+  if (!base) {
+    await robustUpsertAtom('embellishments', toEmbellishmentCloudRow(merged));
+    return { ok: true, row: merged };
+  }
+  const result = await robustUpdateAtomOptimistic('embellishments', id, base, toEmbellishmentCloudRow(merged));
+  if (result.ok && result.row) {
+    const refreshed = readLocal();
+    const j = refreshed.findIndex(r => r.id === id);
+    if (j >= 0) {
+      refreshed[j] = { ...refreshed[j], updated_at: result.row.updated_at };
+      writeLocal(refreshed);
+    }
+    return { ok: true, row: { ...merged, updated_at: result.row.updated_at } };
+  }
+  return result;
 }
 
 export const updateEmbellishment = saveEmbellishment;
 
+async function saveEmbellishmentWithRetry(id, updates) {
+  let result = await saveEmbellishment(id, updates);
+  if (result?.ok || !result?.conflict) return result;
+  const latest = result.latest;
+  if (!latest) return result;
+  const local = readLocal();
+  const idx = local.findIndex(r => r.id === id);
+  if (idx >= 0) {
+    local[idx] = { ...local[idx], ...latest };
+    writeLocal(local);
+  }
+  return saveEmbellishment(id, updates, { base_updated_at: latest.updated_at });
+}
+
 export async function archiveEmbellishment(id) {
-  return saveEmbellishment(id, { status: 'archived' });
+  return saveEmbellishmentWithRetry(id, { status: 'archived' });
 }
 
 export async function restoreEmbellishment(id) {
-  return saveEmbellishment(id, { status: 'draft' });
+  return saveEmbellishmentWithRetry(id, { status: 'draft' });
 }
 
 export async function duplicateEmbellishment(id) {

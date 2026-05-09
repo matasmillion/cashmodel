@@ -180,14 +180,22 @@ export async function getSyncDiagnosticsReport() {
     }
   }
 
+  // Pull recent conflict / auto-merge events out of the shared sync log so
+  // the panel can show "the last 10 times another device beat us to it".
+  const fullLog = getSyncLog();
+  const recentConflicts = fullLog.filter(e => e?.op === 'conflict').slice(0, 10);
+  const recentAutoMerges = fullLog.filter(e => e?.op === 'auto-merge').slice(0, 10);
+
   return {
     timestamp: new Date().toISOString(),
     identity,
     serverJwt,
     issues,
     tables: tableDiff,
-    log: getSyncLog().slice(0, 30),
+    log: fullLog.slice(0, 30),
     lastErrorByTable: getLastSyncErrorByTable(),
+    recentConflicts,
+    recentAutoMerges,
   };
 }
 

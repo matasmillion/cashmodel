@@ -18,7 +18,7 @@ import { getCurrentOrgIdSync } from '../lib/auth';
 import { emptyTreatment, TREATMENT_TYPE_CODE } from './treatmentLibrary';
 import { addVendor } from './vendorLibrary';
 import { copyCoverImage } from './plmAssets';
-import { robustUpsertAtom, robustUpsertAtomBatch } from './atomCloudSync';
+import { robustUpsertAtom, robustUpsertAtomBatch, robustUpdateAtomOptimistic } from './atomCloudSync';
 
 const LOCAL_KEY = 'cashmodel_treatments';
 
@@ -170,11 +170,13 @@ export async function createTreatment({ type = 'wash', ...overrides } = {}) {
 // Persist a partial update. Auto-stamps `updated_at`. Empty-string fields
 // overwrite — unlike colorLibrary, treatments need to be able to clear a
 // note or chemistry value, so we don't filter falsy.
-export async function saveTreatment(id, updates) {
-  if (!id) return null;
+// See fabricStore.saveFabric for the OCC return shape and contract.
+export async function saveTreatment(id, updates, opts = {}) {
+  if (!id) return { ok: false, error: new Error('saveTreatment: id required') };
   const now = new Date().toISOString();
   const local = readLocal();
   const idx = local.findIndex(r => r.id === id);
+  const before = idx >= 0 ? local[idx] : null;
   let merged;
   if (idx >= 0) {
     merged = { ...local[idx], ...updates, updated_at: now };
@@ -185,11 +187,39 @@ export async function saveTreatment(id, updates) {
   }
   writeLocal(local);
 
-  await robustUpsertAtom('treatments', toTreatmentCloudRow({ ...merged, updated_at: now }));
-  return merged;
+  const base = opts.base_updated_at || before?.updated_at || null;
+  if (!base) {
+    await robustUpsertAtom('treatments', toTreatmentCloudRow(merged));
+    return { ok: true, row: merged };
+  }
+  const result = await robustUpdateAtomOptimistic('treatments', id, base, toTreatmentCloudRow(merged));
+  if (result.ok && result.row) {
+    const refreshed = readLocal();
+    const j = refreshed.findIndex(r => r.id === id);
+    if (j >= 0) {
+      refreshed[j] = { ...refreshed[j], updated_at: result.row.updated_at };
+      writeLocal(refreshed);
+    }
+    return { ok: true, row: { ...merged, updated_at: result.row.updated_at } };
+  }
+  return result;
 }
 
 export const updateTreatment = saveTreatment;
+
+async function saveTreatmentWithRetry(id, updates) {
+  let result = await saveTreatment(id, updates);
+  if (result?.ok || !result?.conflict) return result;
+  const latest = result.latest;
+  if (!latest) return result;
+  const local = readLocal();
+  const idx = local.findIndex(r => r.id === id);
+  if (idx >= 0) {
+    local[idx] = { ...local[idx], ...latest };
+    writeLocal(local);
+  }
+  return saveTreatment(id, updates, { base_updated_at: latest.updated_at });
+}
 
 // Production log for a treatment. Joins `atom_usage` rows with the
 // originating PO and the latest `drift_log` for the same {po_id, treatment_id}
@@ -227,11 +257,11 @@ export async function getProductionLog(treatmentId) {
 }
 
 export async function archiveTreatment(id) {
-  return saveTreatment(id, { status: 'archived' });
+  return saveTreatmentWithRetry(id, { status: 'archived' });
 }
 
 export async function restoreTreatment(id) {
-  return saveTreatment(id, { status: 'draft' });
+  return saveTreatmentWithRetry(id, { status: 'draft' });
 }
 
 // Duplicate — copies a treatment, issues a fresh id + code, prefixes the

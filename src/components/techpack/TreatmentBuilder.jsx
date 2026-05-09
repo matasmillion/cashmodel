@@ -7,12 +7,14 @@
 // Twin-column spec, production log, drift, and used-in sections land in
 // chunks 08-10.
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Edit2, Check, X, Sparkles, FileDown } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { getFRColor } from '../../utils/colorLibrary';
 import { resolveVendor } from '../../utils/vendorLibrary';
 import { getTreatment, getTreatmentRollups, getProductionLog, getUsedInForTreatment, updateTreatment } from '../../utils/treatmentStore';
+import useOptimisticSync from './useOptimisticSync';
+import { useCurrentUser } from '../../lib/auth';
 import { listDriftLogs } from '../../utils/productionStore';
 import { TREATMENT_TYPE_LABEL, LORA_BASE_MODELS } from '../../utils/treatmentLibrary';
 import { generateTreatmentBOMPDF } from '../../utils/treatmentBOMPDF';
@@ -150,6 +152,30 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
   const [aiOpen, setAiOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
 
+  // OCC + Realtime presence
+  const treatmentRef = useRef(treatment);
+  const editingRef = useRef(editing);
+  useEffect(() => { treatmentRef.current = treatment; }, [treatment]);
+  useEffect(() => { editingRef.current = editing; }, [editing]);
+  const currentUser = useCurrentUser();
+  const sync = useOptimisticSync({
+    table: 'treatments',
+    id,
+    entityLabel: treatment?.name || treatment?.code || 'treatment',
+    initialUpdatedAt: treatment?.updated_at,
+    deepFields: [],
+    retrySave: useCallback(async (patch, newBase) => {
+      if (!id) return { ok: false, error: new Error('no id') };
+      return updateTreatment(id, patch, { base_updated_at: newBase });
+    }, [id]),
+    applyRemote: useCallback((newRow) => {
+      // Only fold cloud-side updates back when the user isn't mid-edit.
+      if (!editingRef.current) setTreatment(newRow);
+    }, []),
+    hasPendingEdits: useCallback(() => editingRef.current, []),
+    displayName: currentUser?.name || currentUser?.email || '',
+  });
+
   useEffect(() => {
     let cancelled = false;
     if (treatmentProp) {
@@ -276,10 +302,18 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
         cover_image: draft.cover_image ?? null,
         digital: draft.digital || treatment.digital,
       };
-      const updated = await updateTreatment(treatment.id, patch);
-      if (updated) setTreatment(updated);
-      setEditing(false);
-      setDraft(null);
+      const base = sync.getBaseUpdatedAt();
+      const result = await updateTreatment(treatment.id, patch, base ? { base_updated_at: base } : {});
+      const final = await sync.handleSaveResult(result, patch);
+      if (final?.ok && final.row) {
+        // Server-merged copy is in final.row; surface back into the view.
+        setTreatment(t => ({ ...t, ...patch, updated_at: final.row.updated_at }));
+        setEditing(false);
+        setDraft(null);
+      } else if (final?.conflict) {
+        // Conflict modal is open; keep the user in edit mode so their
+        // typed values stay visible until the resolver applies.
+      }
     } finally {
       setSaving(false);
     }
@@ -334,6 +368,7 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
 
   return (
     <div>
+      {sync.conflictUI}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         {onBack ? (
           <button onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: FR.stone, fontSize: 11, cursor: 'pointer', padding: 0 }}>
@@ -341,6 +376,7 @@ export default function TreatmentBuilder({ treatment: treatmentProp, treatmentId
           </button>
         ) : <span />}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {sync.presencePill}
           <button onClick={() => setAiOpen(true)} title="Auto-fill from a vendor treatment card"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 10px', background: FR.salt, color: FR.soil, border: `1px solid ${FR.sand}`, borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
             <Sparkles size={12} /> AI auto-fill

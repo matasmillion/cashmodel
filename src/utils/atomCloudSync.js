@@ -60,6 +60,13 @@ export function clearSyncLog() {
   _lastErrorByTable.clear();
 }
 
+// Builders call this after a silent 3-way merge resolves zero real conflicts.
+// Surfaces in the Sync Diagnostics panel under "Recent auto-merges" so the
+// user can see when another device's edits were folded in invisibly.
+export function recordAutoMerge({ table, id, fields }) {
+  recordSyncEvent({ table, op: 'auto-merge', id, ok: true, fields });
+}
+
 export function isRlsError(err) {
   if (!err) return false;
   const code = String(err.code || '');
@@ -261,6 +268,145 @@ export async function robustUpsertAtomBatch(table, rows, opts = {}) {
     else { failed += 1; if (result.error) errors.push({ id: row?.id, message: result.error.message }); }
   }
   return { succeeded, failed, errors };
+}
+
+// ─── Optimistic concurrency UPDATE ──────────────────────────────────────────
+//
+// robustUpdateAtomOptimistic runs a precondition UPDATE — the row only gets
+// written if its current updated_at still matches the base the caller saw
+// when it loaded the row. The matching set_updated_at() trigger on each
+// editable table (20260509000001_occ_updated_at_triggers.sql) means the
+// server, not the client, stamps the new updated_at — so updated_at is a
+// trustworthy ETag.
+//
+// Returns:
+//   { ok: true, row }                              applied; row is the new server row
+//   { ok: false, conflict: true, latest }          base mismatch; latest is whatever cloud has now
+//   { ok: false, error, code }                     transport / RLS / schema error
+//
+// `patch` is the body to write. Server-managed columns (id, organization_id,
+// user_id, created_at, updated_at) are stripped defensively — the trigger
+// overrides updated_at anyway, but stripping keeps the diagnostic event
+// payload clean.
+const SERVER_MANAGED = new Set(['id', 'organization_id', 'user_id', 'created_at', 'updated_at']);
+
+function stripServerManaged(patch) {
+  const out = {};
+  for (const [k, v] of Object.entries(patch || {})) {
+    if (!SERVER_MANAGED.has(k)) out[k] = v;
+  }
+  return out;
+}
+
+async function tryUpdateWithSchemaRecovery(db, table, id, baseUpdatedAt, patch) {
+  let working = patch;
+  const dropped = [];
+  for (let i = 0; i <= MAX_SCHEMA_DROPS; i++) {
+    const { data, error } = await db
+      .from(table)
+      .update(working)
+      .eq('id', id)
+      .eq('updated_at', baseUpdatedAt)
+      .select()
+      .maybeSingle();
+    if (!error) return { ok: true, row: data, payload: working, dropped };
+    if (!isSchemaCacheError(error)) return { ok: false, error, payload: working, dropped };
+    const col = extractMissingColumn(error);
+    if (!col || !(col in working) || PROTECTED_COLUMNS.has(col)) {
+      return { ok: false, error, payload: working, dropped };
+    }
+    const next = { ...working };
+    delete next[col];
+    working = next;
+    dropped.push(col);
+  }
+  return {
+    ok: false,
+    error: new Error(`Hit MAX_SCHEMA_DROPS (${MAX_SCHEMA_DROPS}) — schema cache severely stale on ${table}.`),
+    payload: working,
+    dropped,
+  };
+}
+
+async function fetchLatestRow(db, table, id) {
+  const { data, error } = await db.from(table).select('*').eq('id', id).maybeSingle();
+  if (error) return null;
+  return data || null;
+}
+
+export async function robustUpdateAtomOptimistic(table, id, baseUpdatedAt, patch) {
+  if (!IS_SUPABASE_ENABLED) {
+    return { ok: false, skipped: 'supabase-disabled' };
+  }
+  if (!id || !baseUpdatedAt) {
+    const error = new Error('robustUpdateAtomOptimistic requires id and baseUpdatedAt.');
+    error.code = 'OCC_BAD_ARGS';
+    return { ok: false, error };
+  }
+
+  const orgId = await getReconciledOrgId();
+  if (!orgId) {
+    const error = new Error('JWT is missing the org_id claim — open Sync Diagnostics to investigate.');
+    error.code = 'NO_JWT_ORG_ID';
+    recordSyncEvent({ table, op: 'occ-update', id, ok: false, error: error.message, code: error.code });
+    return { ok: false, error };
+  }
+
+  let db = await getAuthedSupabase();
+  if (!db) {
+    const error = new Error('Supabase client not available.');
+    recordSyncEvent({ table, op: 'occ-update', id, ok: false, error: error.message });
+    return { ok: false, error };
+  }
+
+  await ensureOrgExists(db, orgId);
+
+  const cleaned = stripServerManaged(patch);
+
+  let result = await tryUpdateWithSchemaRecovery(db, table, id, baseUpdatedAt, cleaned);
+
+  // RLS retry — refresh JWT and try once more, same as upsert path.
+  if (!result.ok && isRlsError(result.error)) {
+    db = await refreshAuthedSupabase();
+    result = await tryUpdateWithSchemaRecovery(db, table, id, baseUpdatedAt, result.payload);
+    if (result.ok) {
+      // fall through to the success-or-conflict branch below
+    } else {
+      recordSyncEvent({
+        table, op: 'occ-update', id, ok: false, retried: true,
+        error: result.error.message, code: result.error.code,
+        droppedColumns: result.dropped.length ? result.dropped : undefined,
+      });
+      return { ok: false, retried: true, error: result.error, droppedColumns: result.dropped };
+    }
+  }
+
+  if (!result.ok) {
+    recordSyncEvent({
+      table, op: 'occ-update', id, ok: false,
+      error: result.error.message, code: result.error.code, details: result.error.details,
+      droppedColumns: result.dropped.length ? result.dropped : undefined,
+    });
+    return { ok: false, error: result.error, droppedColumns: result.dropped };
+  }
+
+  // result.ok === true — but maybeSingle returns null when zero rows
+  // matched the precondition, which means the base updated_at no longer
+  // matches: optimistic conflict.
+  if (result.row == null) {
+    const latest = await fetchLatestRow(db, table, id);
+    recordSyncEvent({
+      table, op: 'conflict', id, ok: false,
+      base: baseUpdatedAt, latest_updated_at: latest?.updated_at || null,
+    });
+    return { ok: false, conflict: true, latest };
+  }
+
+  recordSyncEvent({
+    table, op: 'occ-update', id, ok: true,
+    droppedColumns: result.dropped.length ? result.dropped : undefined,
+  });
+  return { ok: true, row: result.row, droppedColumns: result.dropped };
 }
 
 // Resets the per-session "we've called ensure_org_exists for this org"

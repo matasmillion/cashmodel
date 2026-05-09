@@ -12,7 +12,7 @@ import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync } from '../lib/auth';
 import { emptyFabric, FABRIC_WEAVE_CODE } from './fabricLibrary';
 import { copyCoverImage } from './plmAssets';
-import { robustUpsertAtom, robustUpsertAtomBatch } from './atomCloudSync';
+import { robustUpsertAtom, robustUpsertAtomBatch, robustUpdateAtomOptimistic } from './atomCloudSync';
 
 const LOCAL_KEY = 'cashmodel_fabrics';
 
@@ -199,36 +199,91 @@ export async function createFabric({ weave = 'jersey', ...overrides } = {}) {
   return row;
 }
 
-export async function saveFabric(id, updates) {
-  if (!id) return null;
+// saveFabric returns one of:
+//   { ok: true,  row }                       on success (row is the merged local copy)
+//   { ok: false, conflict: true, latest }    when another device wrote first
+//   { ok: false, error }                     on transport / RLS error
+//
+// `opts.base_updated_at` is the ETag the caller saw when it loaded the row.
+// Builders pass it explicitly so multi-device edits collide visibly. When
+// omitted the store falls back to the local row's updated_at; this preserves
+// the legacy upsert path for first-time mirrors of cloud-only fabrics.
+export async function saveFabric(id, updates, opts = {}) {
+  if (!id) return { ok: false, error: new Error('saveFabric: id required') };
   const now = new Date().toISOString();
   const local = readLocal();
   const idx = local.findIndex(r => r.id === id);
+  const before = idx >= 0 ? local[idx] : null;
   let merged;
   if (idx >= 0) {
     merged = { ...local[idx], ...updates, updated_at: now };
     local[idx] = merged;
   } else {
-    // Defend in depth: if no local row (e.g. cloud-only fabric, or this
-    // device hasn't run getFabric yet) insert a new row instead of
-    // silently skipping the local write.
     merged = { id, ...updates, updated_at: now };
     local.push(merged);
   }
   writeLocal(local);
 
-  await robustUpsertAtom('fabrics', toFabricCloudRow({ ...merged, updated_at: now }));
-  return merged;
+  const base = opts.base_updated_at || before?.updated_at || null;
+
+  // No usable base ETag → row hasn't been written cloud-side yet (fresh
+  // create or local-only row). Fall back to the upsert path; conflicts
+  // are impossible because there's no cloud row to collide with.
+  if (!base) {
+    await robustUpsertAtom('fabrics', toFabricCloudRow(merged));
+    return { ok: true, row: merged };
+  }
+
+  const result = await robustUpdateAtomOptimistic(
+    'fabrics',
+    id,
+    base,
+    toFabricCloudRow(merged),
+  );
+
+  if (result.ok && result.row) {
+    // Server stamped a fresh updated_at — write it back into local so the
+    // next save uses the right ETag.
+    const refreshed = readLocal();
+    const j = refreshed.findIndex(r => r.id === id);
+    if (j >= 0) {
+      refreshed[j] = { ...refreshed[j], updated_at: result.row.updated_at };
+      writeLocal(refreshed);
+    }
+    return { ok: true, row: { ...merged, updated_at: result.row.updated_at } };
+  }
+
+  return result;
 }
 
 export const updateFabric = saveFabric;
 
+// For callers that don't want the conflict UI (archive button, etc.). On a
+// conflict, refetches the latest cloud row, merges the patch on top, and
+// re-attempts the OCC update with the fresh ETag. Patch always wins on
+// fields it touched — fine for single-field admin actions like archive.
+async function saveFabricWithRetry(id, updates) {
+  let result = await saveFabric(id, updates);
+  if (result?.ok || !result?.conflict) return result;
+  // Conflict: rebase the patch on `latest`.
+  const latest = result.latest;
+  if (!latest) return result;
+  const local = readLocal();
+  const idx = local.findIndex(r => r.id === id);
+  if (idx >= 0) {
+    local[idx] = { ...local[idx], ...latest };
+    writeLocal(local);
+  }
+  result = await saveFabric(id, updates, { base_updated_at: latest.updated_at });
+  return result;
+}
+
 export async function archiveFabric(id) {
-  return saveFabric(id, { status: 'archived' });
+  return saveFabricWithRetry(id, { status: 'archived' });
 }
 
 export async function restoreFabric(id) {
-  return saveFabric(id, { status: 'draft' });
+  return saveFabricWithRetry(id, { status: 'draft' });
 }
 
 export async function duplicateFabric(id) {

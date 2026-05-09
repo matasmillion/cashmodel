@@ -13,10 +13,12 @@
 //     three image groups feed the one-page BOM PDF that the tech pack
 //     embeds at production time.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Save, Trash2, Sparkles, FileDown, Plus, Loader2 } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { saveFabric, archiveFabric, restoreFabric } from '../../utils/fabricStore';
+import useOptimisticSync from './useOptimisticSync';
+import { useCurrentUser } from '../../lib/auth';
 import {
   FABRIC_CATEGORIES, FABRIC_WEAVES, FABRIC_WEAVE_LABEL, FABRIC_STATUSES,
   weavesForCategory, categoryForWeave, bumpVersion,
@@ -114,6 +116,35 @@ export default function FabricBuilder({ fabric, onBack }) {
 
   const dirty = useMemo(() => JSON.stringify(draft) !== savedSnapshot, [draft, savedSnapshot]);
 
+  // OCC + Realtime presence hook.
+  const draftRefForRemote = useRef(draft);
+  const dirtyRefForRemote = useRef(dirty);
+  useEffect(() => { draftRefForRemote.current = draft; }, [draft]);
+  useEffect(() => { dirtyRefForRemote.current = dirty; }, [dirty]);
+
+  const currentUser = useCurrentUser();
+  const sync = useOptimisticSync({
+    table: 'fabrics',
+    id: draft?.id,
+    entityLabel: draft?.name || draft?.code || 'fabric',
+    initialUpdatedAt: draft?.updated_at,
+    deepFields: [],
+    retrySave: useCallback(async (patch, newBase) => {
+      const id = draftRefForRemote.current?.id;
+      if (!id) return { ok: false, error: new Error('no id') };
+      return saveFabric(id, patch, { base_updated_at: newBase });
+    }, []),
+    applyRemote: useCallback((newRow) => {
+      // Only fold cloud-side updates back into the draft when the user
+      // has nothing in flight; otherwise the next save's auto-merge picks
+      // up the diff and the user's keystrokes aren't disturbed mid-edit.
+      setDraft(d => ({ ...d, ...newRow }));
+      setSavedSnapshot(JSON.stringify({ ...draftRefForRemote.current, ...newRow }));
+    }, []),
+    hasPendingEdits: useCallback(() => dirtyRefForRemote.current, []),
+    displayName: currentUser?.name || currentUser?.email || '',
+  });
+
   const set = (patch) => setDraft(d => ({ ...d, ...patch }));
 
   // Mirror a price across the USD/CNY pair as the user types. `kind` is
@@ -157,15 +188,26 @@ export default function FabricBuilder({ fabric, onBack }) {
   // the snapshot at the moment we start the write so a save that takes
   // a second still clears `dirty` for the state at-issue, even if the
   // user kept typing — the next debounce will catch the new edits.
+  //
+  // Threads the OCC base updated_at via useOptimisticSync. If the cloud
+  // beats us to it, the hook's handleSaveResult auto-merges or surfaces
+  // the conflict modal; either way it resolves to a final write that
+  // advances the local snapshot.
   const save = async () => {
     if (saving) return;
     setSaving(true);
     const snapshotAtSave = JSON.stringify(draft);
     try {
       const { id, ...updates } = draft;
-      await saveFabric(id, updates);
-      setSavedSnapshot(snapshotAtSave);
-      setSavedAt(new Date());
+      const base = sync.getBaseUpdatedAt();
+      const result = await saveFabric(id, updates, base ? { base_updated_at: base } : {});
+      const final = await sync.handleSaveResult(result, updates);
+      if (final?.ok) {
+        setSavedSnapshot(snapshotAtSave);
+        setSavedAt(new Date());
+      } else if (!final?.conflict) {
+        console.error('FabricBuilder save:', final?.error);
+      }
     } catch (err) {
       console.error('FabricBuilder save:', err);
     } finally {
@@ -278,11 +320,15 @@ export default function FabricBuilder({ fabric, onBack }) {
 
   return (
     <div>
+      {sync.conflictUI}
       {/* ─── Top bar ────────────────────────────────────────────────── */}
-      <button onClick={onBack}
-        style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', color: FR.stone, fontSize: 12, cursor: 'pointer', padding: 0, marginBottom: 10 }}>
-        <ArrowLeft size={13} /> Fabrics
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+        <button onClick={onBack}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', color: FR.stone, fontSize: 12, cursor: 'pointer', padding: 0 }}>
+          <ArrowLeft size={13} /> Fabrics
+        </button>
+        {sync.presencePill}
+      </div>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 240 }}>

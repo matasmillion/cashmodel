@@ -20,7 +20,7 @@ import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync } from '../lib/auth';
 import { emptyPattern, PATTERN_CATEGORIES, PATTERN_CATEGORY_CODE } from './patternLibrary';
 import { copyCoverImage } from './plmAssets';
-import { robustUpsertAtom, robustUpsertAtomBatch } from './atomCloudSync';
+import { robustUpsertAtom, robustUpsertAtomBatch, robustUpdateAtomOptimistic } from './atomCloudSync';
 
 const LOCAL_KEY = 'cashmodel_patterns';
 
@@ -159,11 +159,13 @@ export async function createPattern({ category = 'hoodie', ...overrides } = {}) 
   return row;
 }
 
-export async function savePattern(id, updates) {
-  if (!id) return null;
+// See fabricStore.saveFabric for the OCC return shape and contract.
+export async function savePattern(id, updates, opts = {}) {
+  if (!id) return { ok: false, error: new Error('savePattern: id required') };
   const now = new Date().toISOString();
   const local = readLocal();
   const idx = local.findIndex(r => r.id === id);
+  const before = idx >= 0 ? local[idx] : null;
   let merged;
   if (idx >= 0) {
     merged = { ...local[idx], ...updates, updated_at: now };
@@ -174,18 +176,46 @@ export async function savePattern(id, updates) {
   }
   writeLocal(local);
 
-  await robustUpsertAtom('patterns', toPatternCloudRow({ ...merged, updated_at: now }));
-  return merged;
+  const base = opts.base_updated_at || before?.updated_at || null;
+  if (!base) {
+    await robustUpsertAtom('patterns', toPatternCloudRow(merged));
+    return { ok: true, row: merged };
+  }
+  const result = await robustUpdateAtomOptimistic('patterns', id, base, toPatternCloudRow(merged));
+  if (result.ok && result.row) {
+    const refreshed = readLocal();
+    const j = refreshed.findIndex(r => r.id === id);
+    if (j >= 0) {
+      refreshed[j] = { ...refreshed[j], updated_at: result.row.updated_at };
+      writeLocal(refreshed);
+    }
+    return { ok: true, row: { ...merged, updated_at: result.row.updated_at } };
+  }
+  return result;
 }
 
 export const updatePattern = savePattern;
 
+async function savePatternWithRetry(id, updates) {
+  let result = await savePattern(id, updates);
+  if (result?.ok || !result?.conflict) return result;
+  const latest = result.latest;
+  if (!latest) return result;
+  const local = readLocal();
+  const idx = local.findIndex(r => r.id === id);
+  if (idx >= 0) {
+    local[idx] = { ...local[idx], ...latest };
+    writeLocal(local);
+  }
+  return savePattern(id, updates, { base_updated_at: latest.updated_at });
+}
+
 export async function archivePattern(id) {
-  return savePattern(id, { status: 'archived' });
+  return savePatternWithRetry(id, { status: 'archived' });
 }
 
 export async function restorePattern(id) {
-  return savePattern(id, { status: 'draft' });
+  return savePatternWithRetry(id, { status: 'draft' });
 }
 
 export async function duplicatePattern(id) {
