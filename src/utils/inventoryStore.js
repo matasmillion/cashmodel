@@ -168,65 +168,93 @@ export async function list() {
   const skus = [];
   for (const v of snapshotVariants) {
     const mapping = mappingByGid.get(v.variantId);
-    if (!mapping) continue; // unmapped — skip (handled by VariantMapper UI)
+    const pack    = mapping ? packById.get(mapping.style_id) : null;
 
-    const pack = packById.get(mapping.style_id);
+    // PLM-mapped path: use the linked tech pack as the source of truth, with
+    //   Shopify as fallback for missing fields.
+    // Unmapped path: synthesize a record straight from Shopify so every
+    //   active variant shows up. style_id falls back to the Shopify productId
+    //   so all variants of the same product group together; on_order still
+    //   matches if the operator later creates a PO against a real style.
+    const styleData = pack?.data || {};
+    const styleId   = mapping?.style_id || v.productId || v.variantId;
+    const styleName = styleData.styleName || styleData.styleNumber || pack?.style_name || v.productTitle || '';
+    const { size: parsedSize, color: parsedColor } = parseVariantTitle(v.variantTitle);
+    const color     = styleData.colorName || mapping?.variant_options?.color || parsedColor;
+    const size      = mapping?.variant_options?.size || parsedSize;
+    const cat       = styleData.productCategory || pack?.product_category || v.productType || '';
+    const tier      = /** @type {'Staple'|'Drop'} */ (styleData.tier || 'Staple');
+    const retail    = styleData.retailPrice != null ? Number(styleData.retailPrice)
+                    : (v.price != null ? Number(v.price) : null);
+    const cost      = v.unitCost != null ? Number(v.unitCost)
+                    : (styleData.unitCostUSD != null ? Number(styleData.unitCostUSD) : null);
 
-    // PLM style metadata — fall back to Shopify titles when pack is absent.
-    const styleData  = pack?.data || {};
-    const styleName  = styleData.styleName || styleData.styleNumber || pack?.style_name || v.productTitle || '';
-    const color      = styleData.colorName  || mapping.variant_options?.color || '';
-    const size       = mapping.variant_options?.size || v.variantTitle || '';
-    const cat        = styleData.productCategory || pack?.product_category || '';
-    const tier       = /** @type {'Staple'|'Drop'} */ (styleData.tier || 'Staple');
-    const retail     = styleData.retailPrice != null ? Number(styleData.retailPrice) : null;
-    const cost       = v.unitCost != null ? Number(v.unitCost) : (styleData.unitCostUSD != null ? Number(styleData.unitCostUSD) : null);
-
-    // Split style on_order evenly across its mapped variants.
-    const styleOnOrder  = onOrderByStyle.get(mapping.style_id) || 0;
-    const variantCount  = variantCountByStyle.get(mapping.style_id) || 1;
-    const onOrder       = Math.round(styleOnOrder / variantCount);
+    // Split style on_order evenly across its mapped variants. Unmapped
+    // variants don't get on_order even if a PO exists for the same product —
+    // the operator needs an explicit mapping for that math to be safe.
+    const styleOnOrder = mapping ? (onOrderByStyle.get(mapping.style_id) || 0) : 0;
+    const variantCount = mapping ? (variantCountByStyle.get(mapping.style_id) || 1) : 1;
+    const onOrder      = Math.round(styleOnOrder / variantCount);
 
     const salesByDay = v.salesByDay || {};
     const sold4w     = unitsInWindow(salesByDay, 28, today);
     const sold12w    = unitsInWindow(salesByDay, 84, today);
 
-    const sku = v.sku || mapping.shopify_sku || '';
+    const sku = v.sku || mapping?.shopify_sku || '';
+    if (!sku) continue; // Shopify variants without a SKU can't be tracked.
 
     // tracked: stored override → tier default
     const tracked = sku in trackingMap ? Boolean(trackingMap[sku]) : defaultTracked(tier);
 
     // Shopify can report negative inventoryQuantity (oversold). Clamp to 0
-    // for display math but expose the oversold flag separately so the agent
-    // and ops team know which SKUs need a physical reconciliation.
+    // for display math but expose the oversold flag separately.
     const rawOnHand = Number(v.inventoryQuantity) || 0;
     const onHand    = Math.max(0, rawOnHand);
     const oversold  = rawOnHand < 0 ? -rawOnHand : 0;
 
     skus.push({
       sku,
-      style_id:          mapping.style_id,
-      variant_id:        v.variantId,
-      style_name:        styleName,
+      style_id:            styleId,
+      variant_id:          v.variantId,
+      style_name:          styleName,
       color,
       size,
       cat,
       tier,
-      on_hand:           onHand,
+      on_hand:             onHand,
       oversold,
       on_hand_by_location: v.inventoryByLocation || {},
-      on_order:          onOrder,
-      allocated:         Number(v.allocated) || 0,
+      on_order:            onOrder,
+      allocated:           Number(v.allocated) || 0,
       cost,
       retail,
-      sold_4w:           sold4w,
-      sold_12w:          sold12w,
+      sold_4w:             sold4w,
+      sold_12w:            sold12w,
+      salesByDay,
       tracked,
-      first_received:    v.first_received || null,
+      first_received:      v.first_received || null,
     });
   }
 
   return skus;
+}
+
+// Best-effort split of a Shopify variant title into size + color. Real-world
+// titles seen on FR: "W32 / Stone", "S", "Sand / M", "Erosion Pendant",
+// "Default Title". Heuristic: a size token matches one of the known patterns
+// (S/M/L/XL/XXL or Wnn); whichever side of " / " matches becomes size, the
+// other becomes color. No match → whole title goes into size.
+const SIZE_RE = /^(?:XS|S|M|L|XL|XXL|XXXL|W\d{2}|\d{2})$/i;
+function parseVariantTitle(title) {
+  const t = (title || '').trim();
+  if (!t || t === 'Default Title') return { size: '', color: '' };
+  if (!t.includes(' / ')) {
+    return SIZE_RE.test(t) ? { size: t, color: '' } : { size: '', color: t };
+  }
+  const [a, b] = t.split(' / ').map(s => s.trim());
+  if (SIZE_RE.test(a)) return { size: a, color: b };
+  if (SIZE_RE.test(b)) return { size: b, color: a };
+  return { size: t, color: '' };
 }
 
 /**
