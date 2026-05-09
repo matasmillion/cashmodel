@@ -72,8 +72,13 @@ function LibraryPickerModal({ title, subtitle, fetchItems, renderItem, getId, on
       // ?v=updated_at cache buster keeps the browser from showing
       // yesterday's image after the row was edited in the library.
       const resolved = await Promise.all(rows.map(async r => {
-        const url = await resolveCoverPath(r?.cover_image, r?.updated_at);
-        return url && url !== r.cover_image ? { ...r, cover_image: url } : r;
+        // Mirror the slot card / live preview priority: front_image_url first,
+        // cover_image fallback. Without this, fabrics that only have a front
+        // image render an empty tile in the picker even though the library
+        // shows them with a thumbnail.
+        const raw = r?.front_image_url || r?.cover_image;
+        const url = await resolveCoverPath(raw, r?.updated_at);
+        return url && url !== raw ? { ...r, cover_image: url, front_image_url: url } : r;
       }));
       if (!cancelled) setItems(resolved);
     })();
