@@ -517,57 +517,65 @@ function PageFabrics({ d, fabricsById = {} }) {
                   <image href={cover} x={x} y={startY} width={cardW} height={imgH}
                     preserveAspectRatio="xMidYMid slice" />
                 )}
+                {/* Area label */}
                 <text x={x + 16} y={cy}
                   fontSize={9} fontWeight={600} fill={FR.soil} letterSpacing={1}>
-                  AREA OF PRODUCT: {(entry.role || `Fabric ${i + 1}`).toUpperCase()}
+                  {(entry.role || `Fabric ${i + 1}`).toUpperCase()}
                 </text>
-                <text x={x + 16} y={cy + 22}
-                  fontSize={16} fill={FR.slate} fontFamily="'Cormorant Garamond', Georgia, serif">
+
+                {/* Fabric name — General Sans */}
+                <text x={x + 16} y={cy + 16} fontSize={14} fontWeight={600} fill={FR.slate}>
                   {name}
                 </text>
+
+                {/* Vendor · composition · weight/weave subtitle */}
+                <text x={x + 16} y={cy + 30} fontSize={9} fill={FR.stone}>
+                  {[millName !== '—' ? millName : null, composition !== '—' ? composition : null, weightGsm ? `${weightGsm} GSM` : null, weave !== '—' ? weave : null].filter(Boolean).join(' · ') || '—'}
+                </text>
+
+                {/* Thin separator */}
+                <line x1={x + 16} y1={cy + 40} x2={x + cardW - 16} y2={cy + 40}
+                  stroke={FR.sand} strokeWidth={0.5} />
 
                 {/* Colorway badge */}
                 {entry.colorLabel && (
                   <g>
-                    <rect x={x + 16} y={cy + 36} width={20} height={20} rx={3}
+                    <rect x={x + 16} y={cy + 50} width={18} height={18} rx={2}
                       fill={entry.colorHex || FR.salt} stroke={FR.sand} strokeWidth={0.5} />
                     {entry.colorUrl && (
-                      <image href={entry.colorUrl} x={x + 16} y={cy + 36} width={20} height={20}
+                      <image href={entry.colorUrl} x={x + 16} y={cy + 50} width={18} height={18}
                         preserveAspectRatio="xMidYMid slice" />
                     )}
-                    <text x={x + 42} y={cy + 50} fontSize={10} fill={FR.slate}>
+                    <text x={x + 40} y={cy + 63} fontSize={10} fill={FR.slate}>
                       {entry.colorLabel}
                     </text>
                   </g>
                 )}
                 {!entry.colorLabel && (
-                  <text x={x + 16} y={cy + 50} fontSize={10} fill={FR.stone} fontStyle="italic">
+                  <text x={x + 16} y={cy + 63} fontSize={10} fill={FR.stone} fontStyle="italic">
                     Colorway: not picked
                   </text>
                 )}
 
-                <text x={x + 16} y={cy + 76} fontSize={10} fill={FR.stone}>{composition}</text>
-                <text x={x + 16} y={cy + 92} fontSize={10} fill={FR.stone}>
-                  {weightGsm ? `${weightGsm} GSM` : '—'} · {weave}
-                </text>
-
-                {/* Vendor block */}
-                <line x1={x + 16} y1={cy + 104} x2={x + cardW - 16} y2={cy + 104}
-                  stroke={FR.sand} strokeWidth={0.5} />
-                <text x={x + 16} y={cy + 122} fontSize={11} fontWeight={600} fill={FR.slate}>
-                  {millName}
-                </text>
-                {vendorContact && (
-                  <text x={x + 16} y={cy + 138} fontSize={9} fill={FR.stone}>{vendorContact}</text>
-                )}
-                {vendorEmail && (
-                  <text x={x + 16} y={cy + (vendorContact ? 152 : 138)} fontSize={9}
-                    fill={FR.stone} fontFamily="ui-monospace, Menlo, monospace">{vendorEmail}</text>
-                )}
-                {vendorPhone && (
-                  <text x={x + 16} y={cy + (vendorContact ? 166 : (vendorEmail ? 152 : 138))}
-                    fontSize={9} fill={FR.stone} fontFamily="ui-monospace, Menlo, monospace">{vendorPhone}</text>
-                )}
+                {/* Mill finishes chips */}
+                {(() => {
+                  const finishes = entry.chosenFinishes || [];
+                  if (!finishes.length) return null;
+                  return finishes.slice(0, 4).map((f, fi) => {
+                    const execColor = f.executed_at === 'secondary' ? '#854F0B' : f.executed_at === 'at_treatment' ? '#3a5a8c' : '#3B6D11';
+                    const execFill = f.executed_at === 'secondary' ? 'rgba(133,79,11,0.12)' : f.executed_at === 'at_treatment' ? 'rgba(58,90,140,0.12)' : 'rgba(99,153,34,0.12)';
+                    const execLabel = f.executed_at === 'secondary' ? 'SECONDARY' : f.executed_at === 'at_treatment' ? 'WASH HOUSE' : 'AT MILL';
+                    const fy = cy + 78 + fi * 22;
+                    return (
+                      <g key={fi}>
+                        <rect x={x + 16} y={fy} width={cardW - 32} height={18} fill={execFill} rx={2} />
+                        <text x={x + 22} y={fy + 12} fontSize={9} fill={FR.slate}>{f.name}</text>
+                        <text x={x + cardW - 22} y={fy + 12} textAnchor="end" fontSize={8}
+                          fill={execColor} fontFamily="ui-monospace, Menlo, monospace">{execLabel}</text>
+                      </g>
+                    );
+                  });
+                })()}
 
                 {/* Cost row */}
                 <line x1={x + 16} y1={startY + cardH - 36} x2={x + cardW - 16} y2={startY + cardH - 36}

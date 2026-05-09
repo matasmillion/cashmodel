@@ -10,6 +10,7 @@ import { SectionTitle, AssetImage } from './TechPackPrimitives';
 import { listFabrics } from '../../utils/fabricStore';
 import { listComponentPacks, getComponentPack } from '../../utils/componentPackStore';
 import { getAssetUrl } from '../../utils/plmAssets';
+import { FABRIC_GARMENT_AREAS, MILL_FINISH_CATALOG, FINISH_EXECUTED_AT } from '../../utils/fabricLibrary';
 
 // Cover images in fabric / component pack rows are stored as Supabase
 // Storage paths, not URLs. The browser can't render them directly — we
@@ -135,8 +136,7 @@ function LibraryPickerModal({ title, subtitle, fetchItems, renderItem, getId, on
 // the fabric has no color cards).
 function FabricAreaPickerModal({ fabric, defaultArea, onSelect, onClose }) {
   const [area, setArea] = useState(defaultArea || fabric?.default_garment_area || 'Body');
-  const areas = ['Body', 'Lining', 'Rib', 'Pocket', 'Hood', 'Hood lining',
-                 'Cuff', 'Hem', 'Yoke', 'Sleeve', 'Collar', 'Other'];
+  const areas = FABRIC_GARMENT_AREAS;
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(58,58,58,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
       <div style={{ background: FR.salt, borderRadius: 8, padding: 22, width: 560, maxWidth: '94vw', border: `0.5px solid rgba(58,58,58,0.15)` }}>
@@ -260,9 +260,74 @@ function fabricSpec(row) {
     millId:      row?.mill_id || d?.mill_id || d?.supplier || row?.supplier || row?.mill || '',
     cover:       row?.front_image_url || row?.cover_image || d?.front_image_url || d?.cover_image || null,
     colors:      row?.color_card_images || d?.color_card_images || [],
+    finishes:    row?.mill_finishes || d?.mill_finishes || [],
     unitCost,
     currency:    d.currency || tier?.currency || 'USD',
   };
+}
+
+// ─── Mill Finishes inline editor (per fabric slot in StepFabrics) ────────────
+
+const EXEC_LABEL = { mill: 'At mill', secondary: 'Secondary', at_treatment: 'Wash house' };
+
+function MillFinishesPanel({ entry, libraryFinishes, onChange }) {
+  const finishes = entry.chosenFinishes ?? libraryFinishes;
+  const isOverridden = entry.chosenFinishes != null;
+
+  // All catalog names + any custom ones already in the list
+  const allCatalog = [...new Set([...MILL_FINISH_CATALOG, ...finishes.map(f => f.name).filter(Boolean)])];
+
+  function updateFinish(idx, patch) {
+    const next = finishes.map((f, i) => i === idx ? { ...f, ...patch } : f);
+    onChange(next);
+  }
+
+  function removeFinish(idx) {
+    onChange(finishes.filter((_, i) => i !== idx));
+  }
+
+  function addFinish(name) {
+    if (!name) return;
+    onChange([...finishes, { name, executed_at: 'mill', delta_per_meter_usd: 0, delta_per_meter_cny: 0 }]);
+  }
+
+  return (
+    <div style={{ paddingTop: 6, paddingBottom: 6, borderTop: `0.5px solid ${FR.sand}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>Mill Finishes</span>
+        {isOverridden && finishes.length === 0 && libraryFinishes.length > 0 && (
+          <button
+            onClick={() => onChange(null)}
+            style={{ fontSize: 9, color: FR.stone, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+          >Reset to library</button>
+        )}
+      </div>
+      {finishes.map((f, fi) => (
+        <div key={fi} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+          <div style={{ flex: 1, fontSize: 10, color: FR.slate, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
+          <select
+            value={f.executed_at || 'mill'}
+            onChange={e => updateFinish(fi, { executed_at: e.target.value })}
+            style={{ fontSize: 9, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '2px 3px', color: FR.stone, background: FR.white, outline: 'none', maxWidth: 90 }}
+          >
+            {FINISH_EXECUTED_AT.map(opt => <option key={opt.id} value={opt.id}>{EXEC_LABEL[opt.id]}</option>)}
+          </select>
+          <button
+            onClick={() => removeFinish(fi)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: FR.stone, fontSize: 14, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
+          >×</button>
+        </div>
+      ))}
+      <select
+        value=""
+        onChange={e => { addFinish(e.target.value); e.target.value = ''; }}
+        style={{ width: '100%', fontSize: 10, border: `0.5px dashed ${FR.sand}`, borderRadius: 3, padding: '4px 6px', color: FR.stone, background: FR.white, outline: 'none', cursor: 'pointer' }}
+      >
+        <option value="">+ Add finish…</option>
+        {allCatalog.map(name => <option key={name} value={name}>{name}</option>)}
+      </select>
+    </div>
+  );
 }
 
 // ─── Picked card UI shared by Fabric / Trim / Packaging slots ──────────────
@@ -298,8 +363,6 @@ function EmptyPickerSlot({ onPick, label, hint }) {
 }
 
 // ─── Page 03 — Fabrics ──────────────────────────────────────────────────────
-
-const FABRIC_ROLES = ['Body', 'Lining', 'Rib / Trim', 'Other'];
 
 export function StepFabrics({ data, set }) {
   const [pickerSlot, setPickerSlot] = useState(null); // 0..2 | null
@@ -383,7 +446,7 @@ export function StepFabrics({ data, set }) {
   }
 
   function commitFabric(slotIdx, item, colorChoice, area) {
-    const role = area || picked[slotIdx]?.role || item.default_garment_area || FABRIC_ROLES[slotIdx] || '';
+    const role = area || picked[slotIdx]?.role || item.default_garment_area || FABRIC_GARMENT_AREAS[0] || '';
     setSlot(slotIdx, {
       fabricId:   item.id,
       role,
@@ -419,7 +482,7 @@ export function StepFabrics({ data, set }) {
         {slots.map(i => {
           const entry = picked[i];
           if (!entry) {
-            return <EmptyPickerSlot key={i} onPick={() => setPickerSlot(i)} label="Pick fabric" hint="Body / Lining / Rib" />;
+            return <EmptyPickerSlot key={i} onPick={() => setPickerSlot(i)} label="Pick fabric" hint="Body / Lining / Rib / …" />;
           }
           const spec = resolved[entry.fabricId];
           return (
@@ -434,18 +497,23 @@ export function StepFabrics({ data, set }) {
               </div>
               <div style={{ padding: 12 }}>
                 <div style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span>Area of product:</span>
+                  <span>Area:</span>
                   <select
                     value={entry.role || ''}
                     onChange={e => setSlot(i, { ...entry, role: e.target.value })}
                     style={{ background: 'transparent', border: 'none', color: FR.soil, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', cursor: 'pointer', outline: 'none' }}
                   >
-                    {FABRIC_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                    {FABRIC_GARMENT_AREAS.map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
                 </div>
-                <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 16, color: FR.slate, lineHeight: 1.2, marginBottom: 8 }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: FR.slate, lineHeight: 1.2, marginBottom: 4 }}>
                   {spec?.name || 'Loading…'}
                 </div>
+                {spec?.millId && (
+                  <div style={{ fontSize: 10, color: FR.stone, marginBottom: 8 }}>
+                    {[spec.millId, spec.composition, spec.weight].filter(v => v && v !== '—').join(' · ')}
+                  </div>
+                )}
                 {/* Selected colorway badge */}
                 {entry.colorLabel && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -477,6 +545,13 @@ export function StepFabrics({ data, set }) {
                     {spec?.vendor?.phone && <div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 10 }}>{spec.vendor.phone}</div>}
                   </div>
                 </div>
+                {/* Mill Finishes — per-style override; falls back to library defaults */}
+                <MillFinishesPanel
+                  entry={entry}
+                  libraryFinishes={spec?.finishes || []}
+                  onChange={finishes => setSlot(i, { ...entry, chosenFinishes: finishes })}
+                />
+
                 <div style={{ paddingTop: 6, borderTop: `0.5px solid ${FR.sand}` }}>
                   {/* Cost value — shows /unit when yield is known, /m otherwise */}
                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6, fontFamily: "ui-monospace, Menlo, monospace" }}>
@@ -549,7 +624,7 @@ export function StepFabrics({ data, set }) {
       {areaPickFor && (
         <FabricAreaPickerModal
           fabric={areaPickFor.fabric}
-          defaultArea={picked[areaPickFor.slot]?.role || areaPickFor.fabric?.default_garment_area || FABRIC_ROLES[areaPickFor.slot] || 'Body'}
+          defaultArea={picked[areaPickFor.slot]?.role || areaPickFor.fabric?.default_garment_area || 'Body'}
           onSelect={pickArea}
           onClose={() => setAreaPickFor(null)}
         />
