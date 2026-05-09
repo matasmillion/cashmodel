@@ -28,7 +28,6 @@ import {
 import { TREATMENT_TYPES, TREATMENT_TYPE_LABEL } from '../../utils/treatmentLibrary';
 import TreatmentBuilder from './TreatmentBuilder';
 import CoverThumb from './CoverThumb';
-import SyncDiagnosticsPanel, { SyncDiagnosticsToggle } from './SyncDiagnosticsPanel';
 
 const VIEW_STORAGE_KEY = 'cashmodel_treatments_view';
 
@@ -267,7 +266,6 @@ export default function TreatmentList() {
     catch { return 'grid'; }
   });
   const [dragOverStatus, setDragOverStatus] = useState(null);
-  const [syncDiagOpen, setSyncDiagOpen] = useState(false);
   const pickerRef = useRef(null);
 
   const switchView = (next) => {
@@ -444,7 +442,6 @@ export default function TreatmentList() {
               Archived
             </label>
           )}
-          <SyncDiagnosticsToggle open={syncDiagOpen} onToggle={() => setSyncDiagOpen(o => !o)} />
           <button
             disabled={creating}
             onClick={() => setPicker(p => !p)}
@@ -467,8 +464,6 @@ export default function TreatmentList() {
           )}
         </div>
       </div>
-
-      <SyncDiagnosticsPanel open={syncDiagOpen} atomLabel="Treatments" />
 
       {filtered.length === 0 ? (
         <div style={{ padding: '60px 24px', textAlign: 'center', background: FR.salt, border: `1px dashed ${FR.sand}`, borderRadius: 8 }}>
