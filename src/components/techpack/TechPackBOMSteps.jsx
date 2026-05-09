@@ -432,6 +432,12 @@ export function StepFabrics({ data, set }) {
               <div style={{ aspectRatio: '4 / 3', background: FR.salt, position: 'relative' }}>
                 {spec?.cover ? (
                   <img src={spec.cover} alt={spec.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : !spec ? (
+                  // Fabric library row hasn't resolved yet — show a spinner
+                  // so the user knows we're working on it, not stuck.
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                    <SlotSpinner size={36} />
+                  </div>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: FR.stone, fontSize: 10, fontStyle: 'italic' }}>No cover image</div>
                 )}
@@ -606,7 +612,30 @@ function formatMoney(n, currency = 'USD') {
   }
 }
 
+// Tiny SMIL-animated spinner — same visual as the live preview's so the
+// editor and the printed page read as the same loading state. Inline SVG so
+// no CSS keyframes need to be injected.
+function SlotSpinner({ size = 28 }) {
+  const r = size / 2 - 3;
+  const cx = size / 2;
+  const cy = size / 2;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label="Loading">
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={FR.soil} strokeOpacity={0.18} strokeWidth={2.5} />
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={FR.soil} strokeWidth={2.5} strokeLinecap="round"
+        strokeDasharray={`${c * 0.25} ${c}`} transform={`rotate(-90 ${cx} ${cy})`}>
+        <animateTransform attributeName="transform" type="rotate"
+          from={`0 ${cx} ${cy}`} to={`360 ${cx} ${cy}`} dur="0.9s" repeatCount="indefinite" />
+      </circle>
+    </svg>
+  );
+}
+
 function ComponentSlotCard({ entry, fullData, onClear, onChangeRole, onChangeQty, roleLabel = 'Type' }) {
+  // fullData arrives async via getComponentPack — until it lands the card
+  // is in a real loading state, not "no image."
+  const isLoading = !fullData;
   const s = readComponentSpec(fullData);
   const qtyNum = parseFloat(String(entry.quantity || '').replace(/[^0-9.]/g, '')) || 1;
   const lineCost = s.unitCost * qtyNum;
@@ -628,6 +657,10 @@ function ComponentSlotCard({ entry, fullData, onClear, onChangeRole, onChangeQty
       <div style={{ aspectRatio: '4 / 3', background: FR.salt, position: 'relative' }}>
         {s.cover ? (
           <img src={s.cover} alt={s.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+        ) : isLoading ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+            <SlotSpinner size={36} />
+          </div>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: FR.stone, fontSize: 9, fontStyle: 'italic' }}>No image</div>
         )}
