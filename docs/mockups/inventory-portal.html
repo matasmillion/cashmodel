@@ -249,6 +249,14 @@
   .mr-label .stat .v.bad { color: var(--bad); font-weight: 600; }
   .mr-label .stat .l { font-size: 9px; color: var(--faded); letter-spacing: 0.08em; text-transform: uppercase; }
 
+  /* ─── Cell hover tooltip — actual date + state ───────────────────── */
+  /* Single shared element follows the cursor; populated by JS on hover.   */
+  .cell-tip { position: fixed; display: none; background: var(--slate); color: var(--salt); padding: 8px 12px; border-radius: 3px; pointer-events: none; z-index: 100; box-shadow: 0 4px 14px rgba(58,58,58,0.20); white-space: nowrap; }
+  .cell-tip.show { display: block; }
+  .cell-tip .d-date { font-family: var(--serif); font-size: 16px; line-height: 1.1; font-weight: 400; color: #fff; }
+  .cell-tip .d-meta { font-size: 10px; color: rgba(245,240,232,0.70); margin-top: 4px; letter-spacing: 0.06em; text-transform: uppercase; font-family: var(--sans); }
+  .cell-tip .d-meta .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+
   /* ─── Star / track toggle ─────────────────────────────────────────── */
   .star { font-size: 14px; cursor: pointer; line-height: 1; user-select: none; transition: color 100ms ease, transform 100ms ease; flex-shrink: 0; }
   .star.tracked { color: var(--sienna); }
@@ -1155,7 +1163,8 @@
         else cell.classList.add('healthy');
         if (pos.indexOf(dayIdx) >= 0) cell.classList.add('po');
         if (dayIdx === 0) cell.classList.add('today');
-        cell.title = 'Day +' + dayIdx;
+        cell.setAttribute('data-day', dayIdx);
+        cell.setAttribute('data-state', inStockout ? 'Stockout' : inWarn ? 'Restock window' : 'Healthy');
         daysDiv.appendChild(cell);
       }
       weekDiv.appendChild(daysDiv);
@@ -1235,6 +1244,8 @@
         else cell.classList.add('healthy');
         if (pos.indexOf(dayIdx) >= 0) cell.classList.add('po');
         if (dayIdx === 0) cell.classList.add('today');
+        cell.setAttribute('data-day', dayIdx);
+        cell.setAttribute('data-state', inStockout ? 'Stockout' : inWarn ? 'Restock window' : 'Healthy');
         weekDiv.appendChild(cell);
       }
       weeks.appendChild(weekDiv);
@@ -1314,6 +1325,45 @@
       cockpitGrid.appendChild(buildCockpitRow(p));
     });
   }
+
+  /* ─── Calendar cell hover tooltip ─────────────────────────────────── */
+  /* Anchor: today is May 9 2026. Day idx N => May 9 + N days.            */
+  var TODAY_DATE = new Date(2026, 4, 9);
+  var MONTHS_F = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var DAYS_F   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  var STATE_DOT = { 'Healthy': '#6B8E6B', 'Restock window': '#C8924A', 'Stockout': '#A8543C' };
+
+  var cellTip = document.createElement('div');
+  cellTip.className = 'cell-tip';
+  document.body.appendChild(cellTip);
+
+  document.addEventListener('mouseover', function (e) {
+    var cell = e.target.closest('.cal-cell');
+    if (!cell) return;
+    var idx = parseInt(cell.getAttribute('data-day'), 10);
+    if (isNaN(idx)) return;
+    var d = new Date(TODAY_DATE);
+    d.setDate(d.getDate() + idx);
+    var state = cell.getAttribute('data-state') || 'Healthy';
+    var po = cell.classList.contains('po');
+    var today = cell.classList.contains('today');
+    var dot = STATE_DOT[state] || '#6B8E6B';
+    var meta = DAYS_F[d.getDay()] + ' · ' + state;
+    if (po) meta += ' · PO arrives';
+    if (today) meta = 'Today · ' + state;
+    cellTip.innerHTML =
+      '<div class="d-date">' + MONTHS_F[d.getMonth()] + ' ' + d.getDate() + '</div>' +
+      '<div class="d-meta"><span class="dot" style="background:' + dot + ';"></span>' + meta + '</div>';
+    cellTip.classList.add('show');
+  });
+  document.addEventListener('mouseout', function (e) {
+    if (e.target.closest('.cal-cell')) cellTip.classList.remove('show');
+  });
+  document.addEventListener('mousemove', function (e) {
+    if (!cellTip.classList.contains('show')) return;
+    cellTip.style.left = (e.clientX + 14) + 'px';
+    cellTip.style.top  = (e.clientY - 56) + 'px';
+  });
 
   /* ─── Star toggle (mockup interaction) ────────────────────────────── */
   document.addEventListener('click', function (e) {
