@@ -79,7 +79,13 @@ function execBadge(executedAt) {
   return { fill: 'rgba(99,153,34,0.18)', stroke: '#3B6D11' };
 }
 
-function PageBody({ fabric, chosenColor, chosenArea, chosenFinishes, yieldM }) {
+function PageBody(props) { return <FabricBOMPreviewBody {...props} />; }
+
+// Body-only renderer (no <svg> wrapper, no header/footer chrome). Used by
+// TechPackPagePreview's PageFabrics so the tech pack live preview and the
+// library card render through one component. The wrapper above adds the
+// salt background + slate header + soil divider for the standalone view.
+export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFinishes, yieldM }) {
   const allColors = fabric.color_card_images || [];
   const finishes = chosenFinishes != null ? chosenFinishes : (fabric.mill_finishes || []);
   const area = chosenArea || fabric.default_garment_area || 'Body';
