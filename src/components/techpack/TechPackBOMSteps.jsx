@@ -129,6 +129,54 @@ function LibraryPickerModal({ title, subtitle, fetchItems, renderItem, getId, on
   );
 }
 
+// Area-of-product picker shown immediately after a fabric is selected.
+// Defaults to the fabric's library default; user can override per-style.
+// Picking an area moves the flow on to the color picker (or commits if
+// the fabric has no color cards).
+function FabricAreaPickerModal({ fabric, defaultArea, onSelect, onClose }) {
+  const [area, setArea] = useState(defaultArea || fabric?.default_garment_area || 'Body');
+  const areas = ['Body', 'Lining', 'Rib', 'Pocket', 'Hood', 'Hood lining',
+                 'Cuff', 'Hem', 'Yoke', 'Sleeve', 'Collar', 'Other'];
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(58,58,58,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+      <div style={{ background: FR.salt, borderRadius: 8, padding: 22, width: 560, maxWidth: '94vw', border: `0.5px solid rgba(58,58,58,0.15)` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 22, color: FR.slate }}>Where on the garment?</div>
+            <div style={{ fontSize: 11, color: FR.stone, marginTop: 4 }}>
+              {fabric?.name || fabric?.mill_fabric_no || 'Selected fabric'} — pick the area this fabric is cut for.
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: FR.stone, lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 18 }}>
+          {areas.map(a => (
+            <button key={a} onClick={() => setArea(a)}
+              style={{
+                padding: '10px 8px',
+                background: area === a ? FR.slate : FR.white,
+                color: area === a ? FR.salt : FR.slate,
+                border: `1px solid ${area === a ? FR.slate : FR.sand}`,
+                borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              }}>
+              {a}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button onClick={onClose} style={{ padding: '7px 14px', background: 'none', border: `0.5px solid ${FR.sand}`, borderRadius: 6, cursor: 'pointer', fontSize: 11, color: FR.stone }}>
+            Cancel
+          </button>
+          <button onClick={() => onSelect(area)}
+            style={{ padding: '7px 18px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+            Continue → {fabric?.color_card_images?.length ? 'pick color' : 'commit'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Color picker shown after a fabric is selected. Each color_card_images
 // entry on the fabric is rendered as a clickable swatch — pick one to
 // commit the fabric + color, or skip to commit without a colorway.
@@ -261,15 +309,11 @@ export function StepFabrics({ data, set }) {
   const picked = data.pickedFabrics || [];
   const slots = [0, 1, 2]; // up to 3 fabrics
 
-  // Always re-fetch the picked fabric rows on mount or when the picked
-  // ids change. We don't short-circuit on cached entries — the user may
-  // have edited the fabric in the library and we want those edits to
-  // show up immediately. The cache buster on resolveCoverPath forces a
-  // fresh image load whenever the row's updated_at moves.
-  // After fabric is picked, optionally show a color-card picker
-  // (only if the fabric has color_card_images on it). Stores the
-  // pending fabric until the user makes a color choice or skips.
-  const [colorPickFor, setColorPickFor] = useState(null); // { fabric, slot } | null
+  // After fabric is picked, the flow is fabric → area → (color if any) → commit.
+  // areaPickFor holds the pending fabric while the area-of-product modal is open;
+  // colorPickFor takes over once an area is picked and the fabric has color cards.
+  const [areaPickFor, setAreaPickFor] = useState(null); // { fabric, slot } | null
+  const [colorPickFor, setColorPickFor] = useState(null); // { fabric, slot, area } | null
 
   useEffect(() => {
     let cancelled = false;
@@ -320,20 +364,29 @@ export function StepFabrics({ data, set }) {
   async function pickFabric(item) {
     const slotIdx = pickerSlot;
     setPickerSlot(null);
-    // If the fabric has color cards, prompt for which colorway. Otherwise
-    // commit immediately with no color.
-    const colors = item.color_card_images || [];
+    // Always ask for area of product first — the library default seeds
+    // the modal but we surface the choice explicitly so the user can't
+    // commit the wrong area silently.
+    setAreaPickFor({ fabric: item, slot: slotIdx });
+  }
+
+  function pickArea(area) {
+    const ctx = areaPickFor;
+    setAreaPickFor(null);
+    if (!ctx) return;
+    const colors = ctx.fabric.color_card_images || [];
     if (colors.length > 0) {
-      setColorPickFor({ fabric: item, slot: slotIdx });
+      setColorPickFor({ fabric: ctx.fabric, slot: ctx.slot, area });
     } else {
-      commitFabric(slotIdx, item, null);
+      commitFabric(ctx.slot, ctx.fabric, null, area);
     }
   }
 
-  function commitFabric(slotIdx, item, colorChoice) {
+  function commitFabric(slotIdx, item, colorChoice, area) {
+    const role = area || picked[slotIdx]?.role || item.default_garment_area || FABRIC_ROLES[slotIdx] || '';
     setSlot(slotIdx, {
       fabricId:   item.id,
-      role:       picked[slotIdx]?.role || FABRIC_ROLES[slotIdx] || '',
+      role,
       notes:      '',
       colorIndex: colorChoice?.index ?? null,
       colorLabel: colorChoice?.label || '',
@@ -493,15 +546,23 @@ export function StepFabrics({ data, set }) {
           onClose={() => setPickerSlot(null)}
         />
       )}
+      {areaPickFor && (
+        <FabricAreaPickerModal
+          fabric={areaPickFor.fabric}
+          defaultArea={picked[areaPickFor.slot]?.role || areaPickFor.fabric?.default_garment_area || FABRIC_ROLES[areaPickFor.slot] || 'Body'}
+          onSelect={pickArea}
+          onClose={() => setAreaPickFor(null)}
+        />
+      )}
       {colorPickFor && (
         <FabricColorPickerModal
           fabric={colorPickFor.fabric}
           onSelect={(idx, color) => {
-            commitFabric(colorPickFor.slot, colorPickFor.fabric, { index: idx, ...color });
+            commitFabric(colorPickFor.slot, colorPickFor.fabric, { index: idx, ...color }, colorPickFor.area);
             setColorPickFor(null);
           }}
           onSkip={() => {
-            commitFabric(colorPickFor.slot, colorPickFor.fabric, null);
+            commitFabric(colorPickFor.slot, colorPickFor.fabric, null, colorPickFor.area);
             setColorPickFor(null);
           }}
           onClose={() => setColorPickFor(null)}
