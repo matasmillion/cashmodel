@@ -8,13 +8,14 @@
 // muted "No details yet" badge so users can find and enrich them.
 
 import { useState, useEffect, useRef } from 'react';
-import { X, Upload, Plus, Trash2, MapPin, Globe } from 'lucide-react';
+import { X, Upload, Plus, Trash2, MapPin, Globe, Archive, RotateCcw } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { Input, labelStyle } from './TechPackPrimitives';
 import {
   listVendorsLocal, listVendors,
   getVendor, updateVendor, clearVendorField,
   addVendor, deleteVendor, renameVendor,
+  archiveVendor, restoreVendor,
 } from '../../utils/vendorLibrary';
 import { fileToDataUrl } from '../../utils/cropImage';
 import { uploadAsset, deleteAsset, isLegacyDataUrl, dataUrlToBlob } from '../../utils/plmAssets';
@@ -24,26 +25,27 @@ import VendorNotificationLog from './VendorNotificationLog';
 import SyncDiagnosticsPanel, { SyncDiagnosticsToggle } from './SyncDiagnosticsPanel';
 
 export default function VendorManager() {
-  const [vendors, setVendors] = useState(() => listVendorsLocal());
+  const [showArchived, setShowArchived] = useState(false);
+  const [vendors, setVendors] = useState(() => listVendorsLocal({ includeArchived: false }));
   const [activeName, setActiveName] = useState(null);
   const [adding, setAdding] = useState(false);
   const [syncDiagOpen, setSyncDiagOpen] = useState(false);
 
   // Quick synchronous refresh from library store.
-  const refresh = () => setVendors(listVendorsLocal());
+  const refresh = () => setVendors(listVendorsLocal({ includeArchived: showArchived }));
 
   // Async refresh that also pulls names from plmDirectory. Used on mount
   // and after closing editors so the grid always reflects both sources.
   const refreshAll = async () => {
     try {
-      const full = await listVendors();
+      const full = await listVendors({ includeArchived: showArchived });
       setVendors(full);
     } catch (err) {
       console.error(err);
       refresh();
     }
   };
-  useEffect(() => { refreshAll(); }, []);
+  useEffect(() => { refreshAll(); }, [showArchived]);
 
   const handleClose = (openName) => {
     setActiveName(null);
@@ -73,6 +75,10 @@ export default function VendorManager() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: FR.stone, cursor: 'pointer' }}>
+            <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />
+            Show archived
+          </label>
           <SyncDiagnosticsToggle open={syncDiagOpen} onToggle={() => setSyncDiagOpen(o => !o)} />
           <button onClick={() => setAdding(true)}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
@@ -112,6 +118,7 @@ export default function VendorManager() {
 function VendorCard({ vendor, onClick }) {
   const f = vendor;
   const hasDetails = f._hasRecord;
+  const isArchived = !!f.archivedAt;
   const specialties = (f.specialties || '')
     .split(',')
     .map(s => s.trim())
@@ -121,9 +128,19 @@ function VendorCard({ vendor, onClick }) {
 
   return (
     <div onClick={onClick}
-      style={{ cursor: 'pointer', border: `1px solid ${FR.sand}`, borderRadius: 8, overflow: 'hidden', background: FR.white, transition: 'box-shadow 0.15s, transform 0.15s' }}
+      style={{ cursor: 'pointer', border: `1px solid ${FR.sand}`, borderRadius: 8, overflow: 'hidden', background: FR.white, transition: 'box-shadow 0.15s, transform 0.15s', opacity: isArchived ? 0.6 : 1, position: 'relative' }}
       onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 3px 10px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
+
+      {isArchived && (
+        <span style={{
+          position: 'absolute', top: 8, right: 8,
+          padding: '3px 8px',
+          background: 'rgba(58,58,58,0.06)', color: '#9A9A9A',
+          borderRadius: 5, fontSize: 9, fontWeight: 600,
+          letterSpacing: '0.06em', textTransform: 'uppercase',
+        }}>Archived</span>
+      )}
 
       <div style={{ padding: '14px 14px 10px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
         {f.logoImage ? (
@@ -310,12 +327,10 @@ function VendorEditor({ name, onClose, onDeleted, onRenamed }) {
   };
 
   const handleDelete = () => {
-    if (!hasRecord) {
-      // Nothing to delete — this vendor exists only via plmDirectory.
-      onClose();
-      return;
-    }
-    if (!window.confirm(`Delete “${name}” from the directory? Any pack that still references this vendor will keep the name as a plain text value.`)) return;
+    const message = hasRecord
+      ? `Delete “${name}” from the directory? Any pack that still references this vendor will keep the name as a plain text value — to fully hide a vendor that's referenced in a pack, archive it instead.`
+      : `Remove “${name}” from the directory? This vendor has no rich record yet — only the manually-added supplier list will be cleaned up. Pack references stay.`;
+    if (!window.confirm(message)) return;
     const res = deleteVendor(name);
     if (!res.ok) {
       alert(res.reason);
@@ -323,6 +338,26 @@ function VendorEditor({ name, onClose, onDeleted, onRenamed }) {
     }
     if (onDeleted) onDeleted();
     else onClose();
+  };
+
+  const handleArchive = () => {
+    if (!window.confirm(`Archive “${name}”? It will be hidden from the active directory until you restore it. Pack references and notification history are kept.`)) return;
+    const res = archiveVendor(name);
+    if (!res.ok) {
+      alert(res.reason);
+      return;
+    }
+    if (onDeleted) onDeleted();
+    else onClose();
+  };
+
+  const handleRestore = () => {
+    const res = restoreVendor(name);
+    if (!res.ok) {
+      alert(res.reason);
+      return;
+    }
+    setEntry({ ...getVendor(name), _hasRecord: true });
   };
 
   return (
@@ -439,8 +474,8 @@ function VendorEditor({ name, onClose, onDeleted, onRenamed }) {
             </div>
           </div>
 
-          {hasRecord && <VendorPortalAccessPanel vendorName={name} />}
-          {hasRecord && <VendorNotificationLog vendorName={name} />}
+          <VendorPortalAccessPanel vendorName={name} />
+          <VendorNotificationLog vendorName={name} />
 
           <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${FR.sand}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
             <div style={{ fontSize: 10, color: FR.stone, fontStyle: 'italic' }}>
@@ -448,13 +483,29 @@ function VendorEditor({ name, onClose, onDeleted, onRenamed }) {
                 ? <>Linked to <strong style={{ color: FR.slate, fontStyle: 'normal' }}>{name}</strong> across every pack.</>
                 : <>Edits here will establish <strong style={{ color: FR.slate, fontStyle: 'normal' }}>{name}</strong> in the directory.</>}
             </div>
-            {hasRecord && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              {entry.archivedAt
+                ? (
+                  <button type="button" onClick={handleRestore}
+                    title="Restore this vendor — bring it back into the active directory"
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'transparent', color: FR.slate, border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 10, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    <RotateCcw size={11} /> Restore
+                  </button>
+                )
+                : (
+                  <button type="button" onClick={handleArchive}
+                    title="Archive this vendor — hide from the directory but keep the record"
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'transparent', color: FR.slate, border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 10, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    <Archive size={11} /> Archive
+                  </button>
+                )
+              }
               <button type="button" onClick={handleDelete}
                 title="Delete this vendor from the directory"
                 style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: 'transparent', color: '#C0392B', border: `1px solid #C0392B`, borderRadius: 3, fontSize: 10, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                 <Trash2 size={11} /> Delete vendor
               </button>
-            )}
+            </div>
           </div>
         </div>
       </div>
