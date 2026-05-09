@@ -133,6 +133,72 @@ Enforce at the query layer (row-level security via `scopedQuery(vendorId, ...)`)
 
 ---
 
+## Multi-device sync — required architecture (PLM **and** the rest of the ERP)
+
+This whole codebase is, at heart, a digital asset management platform. Every
+record (atom, pack, sprint, ad, vendor, PO, sample…) is an asset that one
+person edits on a laptop while another opens it on a phone. The default
+"localStorage primary, fire-and-forget upsert" pattern was fine for the
+single-user prototype; it is not safe under concurrency. Going forward,
+**every editable cloud-mirrored table must use optimistic concurrency
+control + Realtime presence** — never the legacy blind UPSERT.
+
+The pieces are already in the codebase:
+
+- **Server-stamped `updated_at`** — `set_updated_at()` BEFORE UPDATE trigger
+  on every editable table. The server, not the client, decides what
+  `updated_at` becomes after a write. Migration template:
+  `supabase/migrations/20260509000001_occ_updated_at_triggers.sql`.
+- **Conditional UPDATE primitive** — `robustUpdateAtomOptimistic(table, id,
+  baseUpdatedAt, patch)` in `src/utils/atomCloudSync.js`. Returns
+  `{ ok, row }`, `{ ok: false, conflict: true, latest }`, or
+  `{ ok: false, error }`.
+- **3-way merge** — `threeWayMerge(base, mine, theirs, { deepFields })` in
+  `src/utils/threeWayMerge.js`. Auto-merges non-overlapping field changes;
+  surfaces only true per-field clashes. Use `deepFields: ['data']` on JSONB
+  body tables (`tech_packs`, `component_packs`).
+- **Realtime presence + row updates** — `joinPresence(rowKey, …)` and
+  `subscribeRowChanges(table, id, onChange)` in
+  `src/utils/presenceChannel.js`.
+- **Builder wiring hook** — `useOptimisticSync` in
+  `src/components/techpack/useOptimisticSync.jsx` is the single place that
+  threads all of the above. New builders should import and use it; do not
+  re-invent the conflict / presence wiring per builder.
+- **UI** — `<ConflictResolver />` and `<PresencePill />` in
+  `src/components/techpack/`.
+
+Hard rules:
+
+1. New editable tables MUST have a `set_updated_at()` trigger and MUST be
+   added to the `supabase_realtime` publication in their first migration.
+2. Store-layer `saveX` functions return
+   `{ ok, row?, conflict?, latest?, error? }` — not the merged row directly.
+   Builders call `useOptimisticSync` and pass the result through
+   `handleSaveResult`.
+3. Append-only tables (`atom_usage`, `state_transition`,
+   `agent_interaction`, `learnings`, `metrics_daily`, `bom_snapshot`)
+   reject updates at the store layer; OCC is a no-op for them.
+4. Vendor portal queries (`/vendor/*`) MUST go through `scopedQuery` even
+   on the conflict re-fetch path. Cost columns must never leak.
+
+Status of conversion:
+- ✅ atoms — fabrics, treatments, patterns, embellishments
+- ✅ packs — tech_packs, component_packs (JSONB-aware merge via
+  `deepFields: ['data']`)
+- ⏳ libraries — vendors, colors (name-keyed `(organization_id, name)`
+  shape; needs a sibling primitive that preconditions on the composite
+  key instead of `id`)
+- ⏳ Creative — sprints, briefs, renders, ads, discussions, budget_config,
+  creative_library, creative_knowledge (groundwork in the migration; store
+  conversions follow)
+- ⏳ ERP-wide — POs, samples, drift logs, sample_requests, etc. — same
+  rules apply when each store gains its first cloud-mirroring write.
+
+If you are adding a new editable cloud table and you are not using the
+hooks above, **stop and flag it**. There is no second-best path.
+
+---
+
 ## When in doubt
 
 Stop and ask. Better to pause for clarification than to regress a working workflow.
@@ -181,3 +247,4 @@ Views: `today | knowledge | pulse | sprints | brief | jobs | production | queue 
 
 - 2026-04-25 — initial conventions established (folder structure, module boundaries, brand system, append-only collections, vendor surface hard rules)
 - 2026-05-06 — Creative Module Conventions added (Creative Engine phase 0)
+- 2026-05-09 — Multi-device sync architecture: optimistic concurrency control + Realtime presence is mandatory for every editable cloud-mirrored table (PLM and the rest of the ERP)

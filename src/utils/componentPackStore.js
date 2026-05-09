@@ -4,6 +4,7 @@
 import { IS_SUPABASE_ENABLED, getAuthedSupabase, refreshAuthedSupabase } from '../lib/supabase';
 import { getCurrentUserIdSync, getCurrentOrgIdSync, getJwtOrgId } from '../lib/auth';
 import { persistableImages, deleteAssets, copyAsset, scheduleOrphanDeletion, cancelOrphanDeletion } from './plmAssets';
+import { robustUpdateAtomOptimistic } from './atomCloudSync';
 
 const LOCAL_KEY = 'cashmodel_component_packs';
 
@@ -280,7 +281,9 @@ export async function createComponentPack(defaultData) {
   return row;
 }
 
-export async function saveComponentPack(id, updates) {
+// See saveTechPack — same OCC contract. opts.base_updated_at gates the
+// precondition update; conflicts surface as { conflict: true, latest }.
+export async function saveComponentPack(id, updates, opts = {}) {
   const now = new Date().toISOString();
 
   // Strip transient upload-state fields (_blobUrl, _uploading, _uploadError)
@@ -324,6 +327,28 @@ export async function saveComponentPack(id, updates) {
 
   const clientOrgId = getCurrentOrgIdSync();
   if (!IS_SUPABASE_ENABLED || !clientOrgId) return { ok: true };
+
+  // OCC fast path — see saveTechPack for the rationale. Falls through to the
+  // legacy upsert below on missing-row / RLS / schema-cache errors so all the
+  // hard-won recovery logic still applies.
+  if (opts.base_updated_at) {
+    const occPatch = { ...corePatch };
+    if (cover !== undefined) occPatch.cover_image = cover;
+    const occ = await robustUpdateAtomOptimistic('component_packs', id, opts.base_updated_at, occPatch);
+    if (occ.ok) {
+      if (toGc.length) {
+        const stillReferenced = (cleanedUpdates.images || [])
+          .map(img => img && img.path).filter(Boolean);
+        cancelOrphanDeletion(stillReferenced);
+        scheduleOrphanDeletion(toGc);
+      }
+      return { ok: true, row: occ.row };
+    }
+    if (occ.conflict && occ.latest) {
+      return { ok: false, conflict: true, latest: occ.latest };
+    }
+    // fall through
+  }
 
   // Use the JWT's org_id claim as the authoritative organization_id for the
   // upsert body rather than clientOrgId. The two can drift when Clerk's

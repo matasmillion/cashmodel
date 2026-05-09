@@ -7,6 +7,8 @@ import { useApp } from '../../context/AppContext';
 import { STEP_FNS } from './TechPackSteps';
 import TechPackPagePreview from './TechPackPagePreview';
 import { saveTechPack } from '../../utils/techPackStore';
+import useOptimisticSync from './useOptimisticSync';
+import { useCurrentUser } from '../../lib/auth';
 import { generateTechPackPDF } from '../../utils/techPackPDF';
 import { generateTechPackSVGAsync, svgToBlob } from '../../utils/techPackSVG';
 import { resizeImage } from './techPackConstants';
@@ -342,6 +344,33 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     return true;
   }, []);
 
+  // OCC + Realtime presence — see useOptimisticSync for the contract.
+  // tech_packs stores most fields inside the `data` JSONB blob, so the merge
+  // walks one level into `data` (and `library`) to maximise the silent
+  // auto-merge surface.
+  const dataRef = useRef(data);
+  useEffect(() => { dataRef.current = data; }, [data]);
+  const currentUser = useCurrentUser();
+  const sync = useOptimisticSync({
+    table: 'tech_packs',
+    id: packIdRef.current,
+    entityLabel: pack?.style_name || pack?.id || 'tech pack',
+    initialUpdatedAt: pack?.updated_at,
+    deepFields: ['data', 'library'],
+    retrySave: useCallback(async (patch, newBase) => {
+      return saveTechPack(packIdRef.current, patch, { base_updated_at: newBase });
+    }, []),
+    applyRemote: useCallback((newRow) => {
+      // Only fold remote updates back when the user isn't typing — the
+      // hook's hasPendingEdits gate keeps this from clobbering live edits.
+      if (newRow?.data) setData(newRow.data);
+      if (newRow?.images) setImages(newRow.images);
+      if (newRow?.library) setLibrary(newRow.library);
+    }, []),
+    hasPendingEdits: useCallback(() => pendingUploadsRef.current > 0, []),
+    displayName: currentUser?.name || currentUser?.email || '',
+  });
+
   // Push step into URL on every change (replaceState — flicking through
   // 14 steps shouldn't pollute the back stack).
   useEffect(() => {
@@ -488,18 +517,21 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
         return;
       }
       try {
-        const result = await saveTechPack(packIdRef.current, {
+        const patch = {
           data, images, library,
           style_name: data.styleNumber || data.styleName || '',
           product_category: data.productCategory || '',
           status: data.status || 'Design',
           completion_pct: computeCompletion(data),
-        });
-        if (result && result.ok === false) {
-          setSaveError(result.error?.message || 'Cloud save failed');
+        };
+        const base = sync.getBaseUpdatedAt();
+        const result = await saveTechPack(packIdRef.current, patch, base ? { base_updated_at: base } : {});
+        const final = await sync.handleSaveResult(result, patch);
+        if (final && final.ok === false && !final.conflict) {
+          setSaveError(final.error?.message || 'Cloud save failed');
         } else {
-          if (result && result.idChanged) {
-            packIdRef.current = result.idChanged.to;
+          if (final && final.idChanged) {
+            packIdRef.current = final.idChanged.to;
             replacePLMHash({ section: 'styles', packId: packIdRef.current, step });
           }
           setSaveError(null);
@@ -752,6 +784,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
 
   return (
     <div style={{ background: FR.salt, fontFamily: "'Helvetica Neue','Inter',sans-serif", borderRadius: 8, overflow: 'hidden', border: `1px solid ${FR.sand}` }}>
+      {sync.conflictUI}
       {/* Header */}
       <div style={{ background: FR.slate, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -759,6 +792,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
             style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: FR.salt, padding: '5px 10px', borderRadius: 3, fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
             <ArrowLeft size={12} /> Back
           </button>
+          {sync.presencePill}
           <div>
             <div style={{ color: FR.salt, fontSize: 9, letterSpacing: 3, fontWeight: 600 }}>
               F O R E I G N  R E S O U R C E  C O .

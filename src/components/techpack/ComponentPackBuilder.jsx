@@ -10,6 +10,8 @@ import { getFRColor } from '../../utils/colorLibrary';
 import { COMPONENT_STEP_FNS } from './ComponentPackSteps';
 import ComponentPackPagePreview from './ComponentPackPagePreview';
 import { saveComponentPack, getLocalQuotaError } from '../../utils/componentPackStore';
+import useOptimisticSync from './useOptimisticSync';
+import { useCurrentUser } from '../../lib/auth';
 import { parsePLMHash, replacePLMHash } from '../../utils/plmRouting';
 import { addPerson } from '../../utils/plmDirectory';
 import { generateComponentPackPDF, generateComponentPackSVGAsync, svgToBlob } from '../../utils/componentPackExport';
@@ -224,6 +226,27 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
   const packIdRef = useRef(pack.id);
   useEffect(() => { dataRef.current = data; imagesRef.current = images; }, [data, images]);
 
+  // OCC + Realtime presence — see CLAUDE.md "Multi-device sync" for the
+  // standard. component_packs stores most fields inside `data` jsonb so the
+  // merge walks one level into `data` to maximise silent auto-merges.
+  const currentUser = useCurrentUser();
+  const sync = useOptimisticSync({
+    table: 'component_packs',
+    id: packIdRef.current,
+    entityLabel: pack?.component_name || pack?.id || 'component pack',
+    initialUpdatedAt: pack?.updated_at,
+    deepFields: ['data'],
+    retrySave: useCallback(async (patch, newBase) => {
+      return saveComponentPack(packIdRef.current, patch, { base_updated_at: newBase });
+    }, []),
+    applyRemote: useCallback((newRow) => {
+      if (newRow?.data) setData(newRow.data);
+      if (newRow?.images) setImages(newRow.images);
+    }, []),
+    hasPendingEdits: useCallback(() => dirtyRef.current, []),
+    displayName: currentUser?.name || currentUser?.email || '',
+  });
+
   // Wait for all in-flight Storage uploads to settle (success or failure) so
   // we never persist a placeholder that has no `path` yet. Bounded by a
   // generous timeout so a stuck upload can't freeze the save indefinitely.
@@ -263,7 +286,7 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
       || d.costPerUnit
       || '';
     try {
-      const result = await saveComponentPack(packIdRef.current, {
+      const patch = {
         data: d, images: imgs,
         component_name: d.componentName || '',
         component_category: d.componentCategory || '',
@@ -271,16 +294,19 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
         supplier: d.supplier || '',
         cost_per_unit: moqUnitCost,
         currency: d.currency || 'USD',
-      });
-      if (result && result.ok === false) {
-        setSaveError(result.error?.message || 'Cloud save failed');
+      };
+      const base = sync.getBaseUpdatedAt();
+      const result = await saveComponentPack(packIdRef.current, patch, base ? { base_updated_at: base } : {});
+      const final = await sync.handleSaveResult(result, patch);
+      if (final && final.ok === false && !final.conflict) {
+        setSaveError(final.error?.message || 'Cloud save failed');
         setSaving(false);
-        return result;
+        return final;
       }
       // Save adopted the pack under a new id (RLS-locked old row left
       // orphaned in cloud). Point future saves + the URL at the new id.
-      if (result && result.idChanged) {
-        packIdRef.current = result.idChanged.to;
+      if (final && final.idChanged) {
+        packIdRef.current = final.idChanged.to;
         replacePLMHash({ section: 'components', packId: packIdRef.current, step });
       }
       dirtyRef.current = false;
@@ -683,12 +709,14 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
       <VersionViewer revision={viewingRevision} onClose={() => setViewingVersionIdx(null)} />
     )}
     <div style={{ background: FR.salt, fontFamily: "'Helvetica Neue','Inter',sans-serif", borderRadius: 8, overflow: 'hidden', border: `1px solid ${FR.sand}` }}>
+      {sync.conflictUI}
       <div style={{ background: FR.slate, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button onClick={handleBack}
             style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: FR.salt, padding: '5px 10px', borderRadius: 3, fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
             <ArrowLeft size={12} /> Back to Trims
           </button>
+          {sync.presencePill}
           <div>
             <div style={{ color: FR.salt, fontSize: 9, letterSpacing: 3, fontWeight: 600 }}>F R · T R I M  P A C K</div>
             <div style={{ fontFamily: "'Cormorant Garamond','Georgia',serif", color: FR.salt, fontSize: 16, marginTop: 2 }}>

@@ -4,6 +4,7 @@
 import { IS_SUPABASE_ENABLED, getAuthedSupabase, refreshAuthedSupabase } from '../lib/supabase';
 import { getCurrentUserIdSync, getCurrentOrgIdSync, getJwtOrgId } from '../lib/auth';
 import { persistableImages, deleteAssets, copyAsset, scheduleOrphanDeletion, cancelOrphanDeletion } from './plmAssets';
+import { robustUpdateAtomOptimistic } from './atomCloudSync';
 
 const LOCAL_KEY = 'cashmodel_techpacks';
 
@@ -257,8 +258,11 @@ export async function createTechPack(defaultData, defaultLibrary) {
 }
 
 // Save full tech pack (used for debounced auto-save). Returns { ok, error }
-// so callers can surface failures instead of silently dropping edits.
-export async function saveTechPack(id, updates) {
+// or, when `opts.base_updated_at` is supplied and a conflict is detected,
+// { ok: false, conflict: true, latest } per the OCC contract documented in
+// CLAUDE.md. Builders pass the OCC base via the hook so multi-device edits
+// collide visibly instead of silently overwriting.
+export async function saveTechPack(id, updates, opts = {}) {
   const now = new Date().toISOString();
 
   // Strip transient upload-state fields so they never reach the DB.
@@ -287,6 +291,30 @@ export async function saveTechPack(id, updates) {
 
   const clientOrgId = getCurrentOrgIdSync();
   if (!IS_SUPABASE_ENABLED || !clientOrgId) return { ok: true };
+
+  // OCC fast path. When the caller passed a base ETag, do a precondition
+  // UPDATE first. Real conflicts surface as { conflict: true, latest } and
+  // bail out early; missing-row / RLS / schema-cache errors fall through to
+  // the legacy upsert below (which carries the schema-recovery + adopt-and-
+  // rotate logic that's been tuned over many incidents).
+  if (opts.base_updated_at) {
+    const occPatch = { ...corePatch };
+    if (cover !== undefined) occPatch.cover_image = cover;
+    const occ = await robustUpdateAtomOptimistic('tech_packs', id, opts.base_updated_at, occPatch);
+    if (occ.ok) {
+      if (toGc.length) {
+        const stillReferenced = (cleanedUpdates.images || [])
+          .map(img => img && img.path).filter(Boolean);
+        cancelOrphanDeletion(stillReferenced);
+        scheduleOrphanDeletion(toGc);
+      }
+      return { ok: true, row: occ.row };
+    }
+    if (occ.conflict && occ.latest) {
+      return { ok: false, conflict: true, latest: occ.latest };
+    }
+    // fall through — row may not exist yet, RLS retry, etc.
+  }
 
   // Use the JWT's org_id claim as the authoritative organization_id — mirrors
   // saveComponentPack. See that function for the full rationale.

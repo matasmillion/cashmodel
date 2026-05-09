@@ -232,17 +232,22 @@ function LastErrorsBlock({ lastErrorByTable }) {
 // with <SyncDiagnosticsPanel /> below the header to render the
 // expanded surface only when `open` is true.
 export function SyncDiagnosticsToggle({ open, onToggle }) {
+  // Match Backup / Storage Health visual language in the PLM header:
+  // transparent + sand border + stone text by default, slate fill + salt
+  // text when active, identical paddings / radius / type weight.
   return (
     <button
       onClick={onToggle}
-      title="Diagnose cross-device sync issues for this library"
+      title="Diagnose cross-device sync issues across the PLM"
       style={{
-        display: 'flex', alignItems: 'center', gap: 6,
-        padding: '8px 12px',
-        background: open ? FR.sand : '#fff',
-        color: FR.slate,
-        border: `1px solid ${FR.sand}`, borderRadius: 6,
-        fontSize: 12, fontWeight: 500, cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: 5,
+        padding: '6px 11px', borderRadius: 5,
+        fontSize: 11,
+        background: open ? FR.slate : 'transparent',
+        color: open ? FR.salt : FR.stone,
+        border: `0.5px solid ${open ? FR.slate : FR.sand}`,
+        cursor: 'pointer',
+        letterSpacing: 0.3,
         fontFamily: "'Inter', sans-serif", whiteSpace: 'nowrap',
       }}
     >
