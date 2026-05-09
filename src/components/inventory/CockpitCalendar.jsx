@@ -22,7 +22,13 @@ const HORIZON_DAYS = WEEKS * 7;
 // aren't clipped. The user can horizontally scroll for the right-side weeks.
 const LABEL_COL_W = 360;
 
-export default function CockpitCalendar() {
+/**
+ * Props (all optional):
+ *   searchQuery    — case-insensitive substring filter applied to sku/style/color/size
+ *   topN           — cap visible rows after sort (default unlimited)
+ *   eyebrowOverride — replace the "Inventory cover" eyebrow (e.g. for the Forecast tab)
+ */
+export default function CockpitCalendar({ searchQuery = '', topN = null, eyebrowOverride = null } = {}) {
   const { state } = useApp();
   const [skus, setSkus] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,8 +44,8 @@ export default function CockpitCalendar() {
   }, []);
 
   const rows = useMemo(
-    () => buildRows(skus, mode, state.assumptions),
-    [skus, mode, state.assumptions],
+    () => buildRows(skus, mode, state.assumptions, { searchQuery, topN }),
+    [skus, mode, state.assumptions, searchQuery, topN],
   );
 
   const today = new Date();
@@ -47,7 +53,7 @@ export default function CockpitCalendar() {
   return (
     <div style={{ ...CARD, marginBottom: 14, position: 'relative' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-        <span style={EYEBROW}>Inventory cover</span>
+        <span style={EYEBROW}>{eyebrowOverride || 'Inventory cover'}</span>
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
           <Chip active={mode === 'sku'}     onClick={() => setMode('sku')}>By SKU</Chip>
@@ -281,15 +287,26 @@ function Legend() {
 
 // ── Row builder ───────────────────────────────────────────────────────────
 
-function buildRows(skus, mode, assumptions) {
+function buildRows(skus, mode, assumptions, opts = {}) {
   if (!skus.length) return [];
+
+  const { searchQuery = '', topN = null } = opts;
+  const q = (searchQuery || '').toLowerCase().trim();
+  const matches = (s) => {
+    if (!q) return true;
+    const hay = [s.sku, s.style_name, s.color, s.size, s.cat]
+      .filter(Boolean).join(' ').toLowerCase();
+    return hay.includes(q);
+  };
 
   const lift     = Number(assumptions?.liftMultiplier) || 1.10;
   const leadDays = (Number(assumptions?.leadTime) || 10) * 7;
   const safetyDays = 21;
 
+  const filtered = skus.filter(matches);
+
   // Build per-SKU CoverInput.
-  const inputs = skus.map(s => ({
+  const inputs = filtered.map(s => ({
     sku: s.sku,
     style_id: s.style_id,
     cover: {
@@ -308,11 +325,10 @@ function buildRows(skus, mode, assumptions) {
     weeklyVelocity: (s.sold_12w || 0) / 12,
   }));
 
+  const cap = (rows) => topN != null ? rows.slice(0, topN) : rows;
+
   if (mode === 'sku') {
-    // All tracked SKUs, sorted by trailing 90d revenue. The container
-    // adds vertical scroll past ~12 rows.
-    return inputs
-      .sort((a, b) => b.revenue90 - a.revenue90)
+    return cap(inputs.sort((a, b) => b.revenue90 - a.revenue90))
       .map(x => projectionToRow(x.sku, x.label, x.cover, x.weeklyVelocity, lift, x.sku));
   }
 
@@ -341,8 +357,7 @@ function buildRows(skus, mode, assumptions) {
     });
   }
 
-  return productRows
-    .sort((a, b) => b.revenue90 - a.revenue90)
+  return cap(productRows.sort((a, b) => b.revenue90 - a.revenue90))
     .map(x => projectionToRow(x.id, x.label, x.cover, x.weeklyVelocity, lift, x.targetSku));
 }
 
