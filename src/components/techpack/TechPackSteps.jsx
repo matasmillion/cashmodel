@@ -2468,8 +2468,12 @@ export function StepCompliance({ data, set }) {
   const addT = () => set('testingStandards', [...tests, { test: '', standard: '', requirement: '', testMethod: '', passFail: 'Pending' }]);
   const rmT  = (i) => set('testingStandards', tests.filter((_, idx) => idx !== i));
 
-  // Auto-seed barcode matrix from colorways × sizeRange on first use
-  const sizes = (data.sizeRange || 'S / M / L / XL').split('/').map(s => s.trim()).filter(Boolean);
+  // Auto-seed barcode matrix from colorways × sizeRange on first use.
+  // sizeRange may be an array (newer shape) or a "S / M / L" string (legacy);
+  // tolerate both so opening this page never crashes the app.
+  const sizes = Array.isArray(data.sizeRange)
+    ? data.sizeRange.map(s => String(s).trim()).filter(Boolean)
+    : String(data.sizeRange || 'S / M / L / XL').split(/[/,]+/).map(s => s.trim()).filter(Boolean);
   const colorways = (data.colorways || []).filter(c => c && c.name);
   const seedMatrix = () => {
     const rows = [];
