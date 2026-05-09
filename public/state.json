@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-09T17:16:37.570Z",
+  "lastUpdated": "2026-05-09T17:47:33.298Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,54 +1044,54 @@
   ],
   "changelog": [
     {
+      "sha": "b857010",
+      "date": "2026-05-09T17:21:25+00:00",
+      "message": "Merge origin/main — resolve CutSewBuilder.jsx conflict (keep 7-tab rebuild)"
+    },
+    {
+      "sha": "de0bdc2",
+      "date": "2026-05-09T17:18:26+00:00",
+      "message": "chore: update generated state.json"
+    },
+    {
+      "sha": "d8bcc9f",
+      "date": "2026-05-09T17:17:46+00:00",
+      "message": "cut-sew: full rebuild — 7-tab builder, multi-page preview, tech pack seeding"
+    },
+    {
+      "sha": "ddc2283",
+      "date": "2026-05-09T20:16:07+03:00",
+      "message": "Merge pull request #107 from matasmillion/claude/setup-creative-engine-P2LMR"
+    },
+    {
+      "sha": "8b21b61",
+      "date": "2026-05-09T17:15:39+00:00",
+      "message": "Merge remote-tracking branch 'origin/main' into claude/setup-creative-engine-P2LMR"
+    },
+    {
+      "sha": "259c193",
+      "date": "2026-05-09T20:09:32+03:00",
+      "message": "Inventory Phase 7: agent · retire legacy pages · CLAUDE.md conventions (#106)"
+    },
+    {
+      "sha": "11873f5",
+      "date": "2026-05-09T17:00:33+00:00",
+      "message": "feat: close creative engine loose ends — slack actions, dm, seed flow"
+    },
+    {
+      "sha": "db9802a",
+      "date": "2026-05-09T19:54:32+03:00",
+      "message": "Inventory Phase 6: Forecast tab — assumptions strip, bridge chart, calendar (#105)"
+    },
+    {
+      "sha": "309e662",
+      "date": "2026-05-09T19:52:08+03:00",
+      "message": "cut-sew: 2-col builder with sticky live BOM preview + autosave (#104)"
+    },
+    {
       "sha": "e213658",
       "date": "2026-05-09T16:51:47+00:00",
       "message": "cut-sew: 2-col builder with sticky CutSewBOMPreview + autosave"
-    },
-    {
-      "sha": "a573c9f",
-      "date": "2026-05-09T15:38:47+00:00",
-      "message": "Merge remote-tracking branch 'origin/main' into claude/continue-plm-development-Vkjqg"
-    },
-    {
-      "sha": "8280edb",
-      "date": "2026-05-09T15:38:08+00:00",
-      "message": "Merge origin/main into claude/continue-plm-development-Vkjqg"
-    },
-    {
-      "sha": "ae6e77c",
-      "date": "2026-05-09T18:36:33+03:00",
-      "message": "Inventory: Shopify sync wiring + parity check + nav dedupe (#97)"
-    },
-    {
-      "sha": "2ef4093",
-      "date": "2026-05-09T14:47:18+00:00",
-      "message": "fabric: General Sans name, vendor subtitle, mill finishes in selection flow + BOM exec labels"
-    },
-    {
-      "sha": "875509b",
-      "date": "2026-05-09T17:19:21+03:00",
-      "message": "Merge pull request #96 from matasmillion/claude/research-inventory-setup-q65Zf"
-    },
-    {
-      "sha": "3522dc2",
-      "date": "2026-05-09T17:16:58+03:00",
-      "message": "Merge pull request #95 from matasmillion/claude/editor-slot-spinner"
-    },
-    {
-      "sha": "5f43703",
-      "date": "2026-05-09T14:16:39+00:00",
-      "message": "techpack: spinner on editor BOM slots while the library row loads"
-    },
-    {
-      "sha": "49e41d7",
-      "date": "2026-05-09T17:14:00+03:00",
-      "message": "Embellishment: 2-col builder + BOM preview + artwork_swatch_image_url (#93)"
-    },
-    {
-      "sha": "7c6bb58",
-      "date": "2026-05-09T17:13:55+03:00",
-      "message": "Rename Patterns → Cut & Sew (CS-* codes, /cut-sew route, cut_sew table) (#92)"
     }
   ]
 }
