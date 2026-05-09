@@ -7,7 +7,7 @@ import { FR, STEPS } from './techPackConstants';
 
 const PAGE_W = 1123;
 const PAGE_H = 794;
-const TOTAL_PAGES = 20;
+const TOTAL_PAGES = 24;
 
 function esc(s) { return String(s ?? ''); }
 function clampLine(s, maxW, charW = 6.5) {
@@ -390,10 +390,10 @@ function PageDesignOverview({ d, images }) {
 }
 
 // ─── Page 3 — Technical Flat Lay Diagrams ────────────────────────────────────
-function PageFlatlays({ d, images }) {
+function PageFlatlays({ d, images, frontSlot = 'flatlay-front', backSlot = 'flatlay-back', subtitle = 'Front and back annotated flat lay diagrams.', frontLabel = 'Front', backLabel = 'Back' }) {
   const imgs = images || [];
-  const front = imgs.find(i => i.slot === 'flatlay-front');
-  const back  = imgs.find(i => i.slot === 'flatlay-back');
+  const front = imgs.find(i => i.slot === frontSlot);
+  const back  = imgs.find(i => i.slot === backSlot);
 
   // Two side-by-side cells maximised to fill the content area below the
   // info strip. Each cell is A4-landscape so the in-app preview matches
@@ -408,11 +408,11 @@ function PageFlatlays({ d, images }) {
       <InfoStrip d={d} />
 
       <text x={PAGE_W / 2} y={152} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
-        Front and back annotated flat lay diagrams.
+        {subtitle}
       </text>
 
-      <PhotoSlot x={40}                   y={gridY} w={cellW} h={cellH} label="Front" image={front} />
-      <PhotoSlot x={40 + cellW + gridGap} y={gridY} w={cellW} h={cellH} label="Back"  image={back} />
+      <PhotoSlot x={40}                   y={gridY} w={cellW} h={cellH} label={frontLabel} image={front} />
+      <PhotoSlot x={40 + cellW + gridGap} y={gridY} w={cellW} h={cellH} label={backLabel}  image={back} />
     </g>
   );
 }
@@ -931,11 +931,12 @@ function PageConstruction({ d, images }) {
 // 9:16 reference image on the left (designer adds red-dot callouts in
 // Photoshop), 2x2 grid of A4-landscape detail cards on the right. Each card
 // has a red-numbered circle at the top + translatable title + description.
-function PageSketches({ d, images, pageKey = 'page1' }) {
+function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey }) {
   const imgs = images || [];
-  const fieldName = pageKey === 'page2' ? 'constructionDetailsPage2' : 'constructionDetailsPage1';
-  const entries = ((d?.[fieldName]) || []).slice(0, 4);
-  const callout = imgs.find(i => i.slot === `sketch-callout-${pageKey}`);
+  const resolvedField = fieldName || (pageKey === 'page2' ? 'constructionDetailsPage2' : 'constructionDetailsPage1');
+  const resolvedSlot  = slotKey  || `sketch-callout-${pageKey}`;
+  const entries = ((d?.[resolvedField]) || []).slice(0, 4);
+  const callout = imgs.find(i => i.slot === resolvedSlot);
 
   const topY    = 158;
   const padX    = 40;
@@ -1209,95 +1210,76 @@ function PageSizeMatrix({ d }) {
   );
 }
 
-// ─── Page 12 — Garment Treatments ───────────────────────────────────────────
-function PageTreatments({ d, images, treatmentsById }) {
+// ─── Treatments — Render (three-angle photos + wash types) ──────────────────
+function PageTreatments({ d, images }) {
   const imgs = images || [];
-  const before = imgs.find(i => i.slot === 'treatment-before');
-  const after  = imgs.find(i => i.slot === 'treatment-after');
+  const front = imgs.find(i => i.slot === 'treatment-front');
+  const back  = imgs.find(i => i.slot === 'treatment-back');
+  const side  = imgs.find(i => i.slot === 'treatment-side');
 
-  const treatments  = (d.treatments  || []).filter(r => r.step || r.treatment || r.process);
-  const distressing = (d.distressing || []).filter(r => r.area || r.technique || r.intensity);
+  const washTypes = (d.treatmentWashTypes || []).filter(r => r.name || r.notes);
 
-  // Group BOM fabric rows by treatment_id so the linked-treatments strip
-  // shows one chip per unique treatment with all using-components listed.
-  const linkedById = new Map();
-  (d.fabrics || []).forEach(f => {
-    if (!f.treatment_id) return;
-    const arr = linkedById.get(f.treatment_id) || [];
-    const tag = (f.component || '').trim();
-    if (tag && !arr.includes(tag)) arr.push(tag);
-    linkedById.set(f.treatment_id, arr);
-  });
-  const linked = Array.from(linkedById.entries())
-    .map(([id, components]) => ({ id, components, t: (treatmentsById || {})[id] }))
-    .filter(l => l.t);
+  const gridY   = 152;
+  const gridGap = 14;
+  const cellW   = (PAGE_W - 80 - gridGap * 2) / 3;
+  const cellH   = 380;
+  const tableY  = gridY + cellH + 26;
 
-  const tCols = [
-    { key: 'step',        label: 'Step',                 w: 60  },
-    { key: 'treatment',   label: 'Treatment',            w: 180 },
-    { key: 'process',     label: 'Process',              w: 180 },
-    { key: 'temperature', label: 'Temp',                 w: 90  },
-    { key: 'duration',    label: 'Duration',             w: 100 },
-    { key: 'chemicals',   label: 'Chemicals or Agents',  w: 230 },
-    { key: 'notes',       label: 'Notes',                w: 203 },
+  const wCols = [
+    { key: 'name',  label: 'Wash Type', w: 320 },
+    { key: 'notes', label: 'Notes',     w: PAGE_W - 80 - 320 },
   ];
-
-  const dCols = [
-    { key: 'area',           label: 'Area',            w: 180 },
-    { key: 'technique',      label: 'Technique',       w: 210 },
-    { key: 'intensity',      label: 'Intensity (1-5)', w: 140 },
-    { key: 'referenceImage', label: 'Reference Image', w: 260 },
-    { key: 'notes',          label: 'Notes',           w: 253 },
-  ];
-
-  // Layout shifts when there's a linked-treatments strip, so the wash table
-  // and downstream blocks can claim their original Y offsets when nothing
-  // is linked.
-  const linkedY = 158;
-  const linkedH = linked.length ? 92 : 0;
-  const tableY = 158 + (linked.length ? linkedH + 24 : 0);
-  const distressY = tableY + 148;
-  const refY = distressY + 148;
 
   return (
     <g>
       <InfoStrip d={d} />
 
-      {linked.length > 0 && (
+      <PhotoSlot x={40}                            y={gridY} w={cellW} h={cellH} label="Front" image={front} />
+      <PhotoSlot x={40 + cellW + gridGap}          y={gridY} w={cellW} h={cellH} label="Back"  image={back} />
+      <PhotoSlot x={40 + (cellW + gridGap) * 2}    y={gridY} w={cellW} h={cellH} label="Side"  image={side} />
+
+      <SectionHeading x={40} y={tableY}>Wash Types</SectionHeading>
+      <GridTable x={40} y={tableY + 12} cols={wCols} rows={washTypes} bodyRows={4} />
+    </g>
+  );
+}
+
+// ─── Embellishments — Sizing & Colors ───────────────────────────────────────
+function PageEmbSizing({ d, images }) {
+  const imgs = images || [];
+  const ref  = imgs.find(i => i.slot === 'emb-sizing-reference');
+  const s1   = imgs.find(i => i.slot === 'emb-sizing-source-1');
+  const s2   = imgs.find(i => i.slot === 'emb-sizing-source-2');
+  const s3   = imgs.find(i => i.slot === 'emb-sizing-source-3');
+
+  const refY    = 152;
+  const refH    = 320;
+  const refW    = (PAGE_W - 80 - 14) / 2;
+  const sourceX = 40 + refW + 14;
+  const sourceCellH = (refH - 12 * 2) / 3;
+
+  const notes = (d.embSizingNotes || '').trim();
+  const notesY = refY + refH + 22;
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      <PhotoSlot x={40} y={refY} w={refW} h={refH} label="Sizing & Color Reference" image={ref} />
+      <PhotoSlot x={sourceX} y={refY}                                w={refW} h={sourceCellH} label="Source File 1" image={s1} />
+      <PhotoSlot x={sourceX} y={refY + sourceCellH + 12}             w={refW} h={sourceCellH} label="Source File 2" image={s2} />
+      <PhotoSlot x={sourceX} y={refY + (sourceCellH + 12) * 2}       w={refW} h={sourceCellH} label="Source File 3" image={s3} />
+
+      {notes && (
         <g>
-          <SectionHeading x={40} y={linkedY}>Linked Treatments (from BOM)</SectionHeading>
-          {linked.slice(0, 4).map(({ t, components }, i) => {
-            const cardW = (PAGE_W - 80 - 12 * 3) / 4;
-            const x = 40 + i * (cardW + 12);
-            const y = linkedY + 14;
-            const procBits = [];
-            if (t.chemistry) procBits.push(t.chemistry);
-            if (t.temperature_c) procBits.push(`${t.temperature_c}°C`);
-            if (t.duration_minutes) procBits.push(`${t.duration_minutes} min`);
-            const proc = procBits.join(' · ') || '—';
-            return (
-              <g key={t.id}>
-                <rect x={x} y={y} width={cardW} height={70} fill={FR.white} stroke={FR.sand} />
-                <text x={x + 10} y={y + 16} fontSize="10.5" fontWeight="bold" fill={FR.slate}>{esc(clampLine(t.name || 'Untitled', cardW - 70, 5.4))}</text>
-                <text x={x + cardW - 10} y={y + 16} textAnchor="end" fontSize="9" fontFamily="ui-monospace, SF Mono, Menlo, monospace" fill={FR.stone}>{esc(t.code || '—')}</text>
-                <text x={x + 10} y={y + 32} fontSize="9" fill={FR.slate}>{esc(clampLine(proc, cardW - 20, 5))}</text>
-                <text x={x + 10} y={y + 50} fontSize="8" fill={FR.soil} letterSpacing="0.4">APPLIES TO</text>
-                <text x={x + 10} y={y + 62} fontSize="9" fill={FR.slate}>{esc(clampLine(components.join(' · ') || '—', cardW - 20, 5.2))}</text>
-              </g>
-            );
-          })}
+          <SectionHeading x={40} y={notesY}>Sizing &amp; Color Notes</SectionHeading>
+          <foreignObject x={40} y={notesY + 14} width={PAGE_W - 80} height={Math.max(60, PAGE_H - notesY - 80)}>
+            <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontSize: 10.5, color: FR.slate, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+              {notes}
+            </div>
+          </foreignObject>
         </g>
       )}
-
-      <SectionHeading x={40} y={tableY}>Wash &amp; Dye Treatments</SectionHeading>
-      <GridTable x={40} y={tableY + 12} cols={tCols} rows={treatments} bodyRows={4} />
-
-      <SectionHeading x={40} y={distressY}>Distressing &amp; Special Finishes</SectionHeading>
-      <GridTable x={40} y={distressY + 12} cols={dCols} rows={distressing} bodyRows={4} />
-
-      <SectionHeading x={40} y={refY}>Before / After Reference</SectionHeading>
-      <PhotoSlot x={40}                                 y={refY + 21} w={(PAGE_W - 80 - 16) / 2} h={Math.max(140, PAGE_H - refY - 110)} label="Before Treatment" image={before} />
-      <PhotoSlot x={40 + (PAGE_W - 80 - 16) / 2 + 16}  y={refY + 21} w={(PAGE_W - 80 - 16) / 2} h={Math.max(140, PAGE_H - refY - 110)} label="After Treatment"  image={after} />
     </g>
   );
 }
@@ -1633,29 +1615,43 @@ function ComingSoon({ pageNum, title }) {
 }
 
 // Page order mirrors STEPS in techPackConstants.js (manufacturing stage).
+// Index parity is required — TechPackPagePreview indexes into PAGE_FNS by
+// `step` directly, so a misaligned slot here means the wrong page renders
+// for the wrong sidebar entry (the bug from PR #83).
 const PAGE_FNS = [
-  { title: 'Competitor Landscape',              phase: 'Merchandising',  body: ({ d }) => <PageCompetitorLandscape d={d} /> },
-  { title: 'Merchandising Preview',             phase: 'Merchandising',  body: ({ d }) => <PageMerchandisingPreview d={d} /> },
-  { title: 'Style Overview',                    phase: 'Design',         body: ({ d, images }) => <PageCover d={d} images={images} /> },
-  { title: 'Design Overview',                   phase: 'Design',         body: ({ d, images }) => <PageDesignOverview d={d} images={images} /> },
+  // 00, 01 — Merchandising
+  { title: 'Competitor Landscape',              phase: 'Merchandising',     body: ({ d }) => <PageCompetitorLandscape d={d} /> },
+  { title: 'Merchandising Preview',             phase: 'Merchandising',     body: ({ d }) => <PageMerchandisingPreview d={d} /> },
+  // 02, 03 — Design
+  { title: 'Style Overview',                    phase: 'Design',            body: ({ d, images }) => <PageCover d={d} images={images} /> },
+  { title: 'Design Overview',                   phase: 'Design',            body: ({ d, images }) => <PageDesignOverview d={d} images={images} /> },
+  // 04, 05, 06 — Bill of Materials
   { title: 'Fabrics',                           phase: 'Bill of Materials', body: ({ d, fabricsById }) => <PageFabrics d={d} fabricsById={fabricsById} /> },
   { title: 'Trims',                             phase: 'Bill of Materials', body: ({ d, componentsById }) => <PageTrims d={d} componentsById={componentsById} /> },
   { title: 'Packaging',                         phase: 'Bill of Materials', body: ({ d, componentsById }) => <PagePackaging d={d} componentsById={componentsById} /> },
-  { title: 'Technical Flat Lay Diagrams',       phase: 'Cut & Sew',      body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
-  { title: 'Construction Details — Page 1',     phase: 'Cut & Sew',      body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page1" /> },
-  { title: 'Construction Details — Page 2',     phase: 'Cut & Sew',      body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page2" /> },
-  { title: 'Seam & Stitch Specifications',      phase: 'Cut & Sew',      body: ({ d, images }) => <PageConstruction d={d} images={images} /> },
-  { title: 'Pattern Pieces & Cutting',          phase: 'Cut & Sew',      body: ({ d, images }) => <PagePattern d={d} images={images} /> },
-  { title: 'Points of Measure (Sample Size)',   phase: 'Cut & Sew',      body: ({ d, images }) => <PagePom d={d} images={images} /> },
-  { title: 'Graded Size Matrix',                phase: 'Cut & Sew',      body: ({ d }) => <PageSizeMatrix d={d} /> },
-  { title: 'Colorways',                         phase: 'Embellishments', body: ({ d }) => <PageColorways d={d} /> },
-  { title: 'Artwork & Placement',               phase: 'Embellishments', body: ({ d, images }) => <PageArtwork d={d} images={images} /> },
-  { title: 'Garment Treatments',                phase: 'Treatments',     body: ({ d, images, treatmentsById }) => <PageTreatments d={d} images={images} treatmentsById={treatmentsById} /> },
-  { title: 'Compliance & Testing',              phase: 'QC',             body: ({ d }) => <PageCompliance d={d} /> },
-  { title: 'Quality Inspection (AQL)',          phase: 'QC',             body: ({ d }) => <PageQuality d={d} /> },
-  { title: 'Labels & Packaging',                phase: 'Packaging',      body: ({ d, images }) => <PageLabels d={d} images={images} /> },
-  { title: 'Order & Delivery',                  phase: 'Logistics',      body: ({ d }) => <PageOrder d={d} /> },
-  { title: 'Revision History & Approval',       phase: 'Sign-off',       body: ({ d }) => <PageRevision d={d} /> },
+  // 07–13 — Cut & Sew
+  { title: 'Flat Lay',                          phase: 'Cut & Sew',         body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
+  { title: 'Call Outs',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page1" /> },
+  { title: 'Call Outs',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page2" /> },
+  { title: 'Stitching',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageConstruction d={d} images={images} /> },
+  { title: 'Pattern & Cutting',                 phase: 'Cut & Sew',         body: ({ d, images }) => <PagePattern d={d} images={images} /> },
+  { title: 'POM',                               phase: 'Cut & Sew',         body: ({ d, images }) => <PagePom d={d} images={images} /> },
+  { title: 'Size Grading',                      phase: 'Cut & Sew',         body: ({ d }) => <PageSizeMatrix d={d} /> },
+  // 14–18 — Embellishments
+  { title: 'Colorways',                         phase: 'Embellishments',    body: ({ d }) => <PageColorways d={d} /> },
+  { title: 'Artwork & Placement',               phase: 'Embellishments',    body: ({ d, images }) => <PageArtwork d={d} images={images} /> },
+  { title: 'Flat Lay',                          phase: 'Embellishments',    body: ({ d, images }) => <PageFlatlays d={d} images={images} frontSlot="emb-flatlay-front" backSlot="emb-flatlay-back" subtitle="Front and back embellishment placement flats." frontLabel="Front (with embellishment)" backLabel="Back (with embellishment)" /> },
+  { title: 'Call Outs',                         phase: 'Embellishments',    body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="emb-callouts" fieldName="embCalloutDetails" slotKey="sketch-callout-emb-callouts" /> },
+  { title: 'Sizing & Colors',                   phase: 'Embellishments',    body: ({ d, images }) => <PageEmbSizing d={d} images={images} /> },
+  // 19, 20 — Treatments
+  { title: 'Render',                            phase: 'Treatments',        body: ({ d, images }) => <PageTreatments d={d} images={images} /> },
+  { title: 'Call Outs',                         phase: 'Treatments',        body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="treat-callouts" fieldName="treatCalloutDetails" slotKey="sketch-callout-treat-callouts" /> },
+  // 21–25 — QC, Packaging, Logistics, Sign-off
+  { title: 'Compliance & Testing',              phase: 'QC',                body: ({ d }) => <PageCompliance d={d} /> },
+  { title: 'Quality Inspection (AQL)',          phase: 'QC',                body: ({ d }) => <PageQuality d={d} /> },
+  { title: 'Labels & Packaging',                phase: 'Packaging',         body: ({ d, images }) => <PageLabels d={d} images={images} /> },
+  { title: 'Order & Delivery',                  phase: 'Logistics',         body: ({ d }) => <PageOrder d={d} /> },
+  { title: 'Revision History & Approval',       phase: 'Sign-off',          body: ({ d }) => <PageRevision d={d} /> },
 ];
 
 function SkipOverlay() {
