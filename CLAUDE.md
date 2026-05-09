@@ -185,9 +185,9 @@ Status of conversion:
 - ✅ atoms — fabrics, treatments, patterns, embellishments
 - ✅ packs — tech_packs, component_packs (JSONB-aware merge via
   `deepFields: ['data']`)
-- ⏳ libraries — vendors, colors (name-keyed `(organization_id, name)`
-  shape; needs a sibling primitive that preconditions on the composite
-  key instead of `id`)
+- ✅ libraries — vendors, colors (composite-keyed via
+  `robustUpdateAtomOptimisticByName(table, orgId, name, baseUpdatedAt,
+  patch)`; per-entry `_updatedAt` carries the ETag in localStorage)
 - ⏳ Creative — sprints, briefs, renders, ads, discussions, budget_config,
   creative_library, creative_knowledge (groundwork in the migration; store
   conversions follow)

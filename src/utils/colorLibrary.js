@@ -10,6 +10,7 @@
 import { FR_COLOR_OPTIONS } from '../components/techpack/techPackConstants';
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync } from '../lib/auth';
+import { robustUpdateAtomOptimisticByName, recordSyncEvent } from './atomCloudSync';
 
 const LS_KEY = 'cashmodel_fr_colors';
 
@@ -47,15 +48,60 @@ function toSupabaseRow(orgId, name, entry) {
   };
 }
 
+// Per CLAUDE.md "Multi-device sync" — color saves use OCC keyed on
+// (organization_id, name). Each local entry stores `_updatedAt`, the
+// server-stamped ETag from the last successful round-trip; the next sync
+// uses it as the precondition. On conflict we re-fetch the cloud's
+// updated_at so the next save uses the fresh ETag instead of looping.
+function stampLocalUpdatedAt(name, updatedAt) {
+  if (!updatedAt) return;
+  try {
+    const store = readStore();
+    if (store[name]) {
+      store[name] = { ...store[name], _updatedAt: updatedAt };
+      writeStore(store);
+    }
+  } catch (err) {
+    console.error('colorLibrary stamp:', err);
+  }
+}
+
 function syncColorToCloud(name, entry) {
   const orgId = getCurrentOrgIdSync();
   if (!IS_SUPABASE_ENABLED || !orgId) return;
-  getAuthedSupabase().then(db => {
-    if (!db) return;
-    db.from('colors')
-      .upsert(toSupabaseRow(orgId, name, entry), { onConflict: 'organization_id,name' })
-      .then(({ error }) => { if (error) console.error('colorLibrary sync:', error); });
-  });
+  const row = toSupabaseRow(orgId, name, entry);
+  const baseUpdatedAt = entry?._updatedAt || null;
+
+  if (!baseUpdatedAt) {
+    getAuthedSupabase().then(db => {
+      if (!db) return;
+      db.from('colors')
+        .upsert(row, { onConflict: 'organization_id,name' })
+        .select('updated_at')
+        .maybeSingle()
+        .then(({ data, error }) => {
+          if (error) {
+            recordSyncEvent({ table: 'colors', op: 'upsert', id: name, ok: false, error: error.message, code: error.code });
+            console.error('colorLibrary upsert:', error);
+            return;
+          }
+          if (data?.updated_at) stampLocalUpdatedAt(name, data.updated_at);
+        });
+    });
+    return;
+  }
+
+  robustUpdateAtomOptimisticByName('colors', orgId, name, baseUpdatedAt, row)
+    .then(result => {
+      if (result?.ok && result.row?.updated_at) {
+        stampLocalUpdatedAt(name, result.row.updated_at);
+        return;
+      }
+      if (result?.conflict && result.latest?.updated_at) {
+        stampLocalUpdatedAt(name, result.latest.updated_at);
+      }
+    })
+    .catch(err => console.error('colorLibrary OCC:', err));
 }
 
 function deleteColorFromCloud(name) {
@@ -86,6 +132,9 @@ function fromSupabaseRow(row) {
     adobeAseUrl: row.adobe_ase_url || '',
     adobeAceUrl: row.adobe_ace_url || '',
     clo3dColorUrl: row.clo3d_color_url || '',
+    // Server-stamped ETag — preconditions the next OCC update so two
+    // devices editing the same color row collide visibly.
+    _updatedAt: row.updated_at || null,
   };
 }
 

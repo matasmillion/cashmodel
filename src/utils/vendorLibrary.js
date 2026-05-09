@@ -23,6 +23,7 @@ import * as _atomTypes from '../types/atoms';
 import { listAllSuppliers } from './plmDirectory';
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync } from '../lib/auth';
+import { robustUpdateAtomOptimisticByName, recordSyncEvent } from './atomCloudSync';
 
 const LS_KEY = 'cashmodel_vendors';
 const LEGACY_LS_KEY = 'cashmodel_factories';
@@ -81,6 +82,10 @@ function fromSupabaseRow(row) {
       ? String(row.sam_rate_usd_per_min)
       : '',
     archivedAt: row.archived_at || null,
+    // Server-stamped ETag — preconditions the next OCC update so two
+    // devices editing the same vendor row collide visibly. See
+    // CLAUDE.md "Multi-device sync".
+    _updatedAt: row.updated_at || null,
   };
 }
 
@@ -136,33 +141,96 @@ function writeStore(store) {
   catch (err) { console.error('vendorLibrary write:', err); }
 }
 
+// Per CLAUDE.md "Multi-device sync" — vendor saves use OCC keyed on the
+// composite (organization_id, name). Each local entry stores `_updatedAt`,
+// the server-stamped ETag from the last successful round-trip; the next
+// sync uses it as the precondition. On conflict we don't show a modal
+// (vendor library edits are background-saves from VendorManager / pickers,
+// not a builder flow), but we DO log a 'conflict' event and re-fetch the
+// cloud row's updated_at so the next save uses the fresh ETag instead of
+// looping into the same conflict forever.
+function vendorEntryToRow(name, orgId, entry) {
+  return {
+    organization_id: orgId,
+    name,
+    country: entry.country || '',
+    city: entry.city || '',
+    primary_contact: entry.primaryContact || '',
+    email: entry.email || '',
+    phone: entry.phone || '',
+    website: entry.website || '',
+    moq: entry.moq || '',
+    lead_time_days: Number(entry.lead_time_days) || 0,
+    specialties: entry.specialties || '',
+    notes: entry.notes || '',
+    logo_image: entry.logoImage || null,
+    capabilities: entry.capabilities || [],
+    payment_terms: entry.payment_terms || '',
+    rating: Number(entry.rating) || 0,
+    sam_rate_usd_per_min: Number(entry.samRateUsdPerMin) || 0,
+    archived_at: entry.archivedAt || null,
+  };
+}
+
+// After a successful cloud round-trip, persist the server-stamped ETag back
+// into localStorage so the next save preconditions on the right value.
+function stampLocalUpdatedAt(name, updatedAt) {
+  if (!updatedAt) return;
+  try {
+    const store = readStore();
+    if (store[name]) {
+      store[name] = { ...store[name], _updatedAt: updatedAt };
+      writeStore(store);
+    }
+  } catch (err) {
+    console.error('vendorLibrary stamp:', err);
+  }
+}
+
 function syncVendorToCloud(name, entry) {
   const orgId = getCurrentOrgIdSync();
   if (!IS_SUPABASE_ENABLED || !orgId) return;
-  getAuthedSupabase().then(db => {
-    if (!db) return;
-    db.from('vendors').upsert({
-      organization_id: orgId,
-      name,
-      country: entry.country || '',
-      city: entry.city || '',
-      primary_contact: entry.primaryContact || '',
-      email: entry.email || '',
-      phone: entry.phone || '',
-      website: entry.website || '',
-      moq: entry.moq || '',
-      lead_time_days: Number(entry.lead_time_days) || 0,
-      specialties: entry.specialties || '',
-      notes: entry.notes || '',
-      logo_image: entry.logoImage || null,
-      capabilities: entry.capabilities || [],
-      payment_terms: entry.payment_terms || '',
-      rating: Number(entry.rating) || 0,
-      sam_rate_usd_per_min: Number(entry.samRateUsdPerMin) || 0,
-      archived_at: entry.archivedAt || null,
-    }, { onConflict: 'organization_id,name' })
-    .then(({ error }) => { if (error) console.error('vendorLibrary sync:', error); });
-  });
+  const row = vendorEntryToRow(name, orgId, entry);
+  const baseUpdatedAt = entry?._updatedAt || null;
+
+  // Brand-new entry (no ETag yet) — upsert and capture the server timestamp
+  // so subsequent saves go through the OCC path.
+  if (!baseUpdatedAt) {
+    getAuthedSupabase().then(db => {
+      if (!db) return;
+      db.from('vendors')
+        .upsert(row, { onConflict: 'organization_id,name' })
+        .select('updated_at')
+        .maybeSingle()
+        .then(({ data, error }) => {
+          if (error) {
+            recordSyncEvent({ table: 'vendors', op: 'upsert', id: name, ok: false, error: error.message, code: error.code });
+            console.error('vendorLibrary upsert:', error);
+            return;
+          }
+          if (data?.updated_at) stampLocalUpdatedAt(name, data.updated_at);
+        });
+    });
+    return;
+  }
+
+  // OCC path. Conflict → fetch latest, update local ETag, log diagnostic.
+  // The local entry already has the user's edits; the next save will retry
+  // with the fresh base.
+  robustUpdateAtomOptimisticByName('vendors', orgId, name, baseUpdatedAt, row)
+    .then(result => {
+      if (result?.ok && result.row?.updated_at) {
+        stampLocalUpdatedAt(name, result.row.updated_at);
+        return;
+      }
+      if (result?.conflict && result.latest?.updated_at) {
+        // Adopt the cloud's updated_at into local so the next save's
+        // precondition matches. The diagnostic event was already
+        // recorded inside the OCC core.
+        stampLocalUpdatedAt(name, result.latest.updated_at);
+      }
+    })
+    .catch(err => console.error('vendorLibrary OCC:', err));
 }
 
 function deleteVendorFromCloud(name) {

@@ -298,17 +298,16 @@ function stripServerManaged(patch) {
   return out;
 }
 
-async function tryUpdateWithSchemaRecovery(db, table, id, baseUpdatedAt, patch) {
+// `whereEqs` is an array of [column, value] pairs that locate the row.
+// For `id`-keyed atom tables: [['id', id]]. For composite-keyed library
+// tables (vendors, colors): [['organization_id', orgId], ['name', name]].
+async function tryUpdateWithSchemaRecovery(db, table, whereEqs, baseUpdatedAt, patch) {
   let working = patch;
   const dropped = [];
   for (let i = 0; i <= MAX_SCHEMA_DROPS; i++) {
-    const { data, error } = await db
-      .from(table)
-      .update(working)
-      .eq('id', id)
-      .eq('updated_at', baseUpdatedAt)
-      .select()
-      .maybeSingle();
+    let q = db.from(table).update(working);
+    for (const [col, val] of whereEqs) q = q.eq(col, val);
+    const { data, error } = await q.eq('updated_at', baseUpdatedAt).select().maybeSingle();
     if (!error) return { ok: true, row: data, payload: working, dropped };
     if (!isSchemaCacheError(error)) return { ok: false, error, payload: working, dropped };
     const col = extractMissingColumn(error);
@@ -328,18 +327,23 @@ async function tryUpdateWithSchemaRecovery(db, table, id, baseUpdatedAt, patch) 
   };
 }
 
-async function fetchLatestRow(db, table, id) {
-  const { data, error } = await db.from(table).select('*').eq('id', id).maybeSingle();
+async function fetchLatestRowByKey(db, table, whereEqs) {
+  let q = db.from(table).select('*');
+  for (const [col, val] of whereEqs) q = q.eq(col, val);
+  const { data, error } = await q.maybeSingle();
   if (error) return null;
   return data || null;
 }
 
-export async function robustUpdateAtomOptimistic(table, id, baseUpdatedAt, patch) {
+// Shared OCC core. Both robustUpdateAtomOptimistic (id-keyed) and
+// robustUpdateAtomOptimisticByKey (composite-keyed) feed into this so the
+// JWT/RLS/schema-cache hardening lives in exactly one place.
+async function robustOccCore({ table, whereEqs, idForLog, baseUpdatedAt, patch }) {
   if (!IS_SUPABASE_ENABLED) {
     return { ok: false, skipped: 'supabase-disabled' };
   }
-  if (!id || !baseUpdatedAt) {
-    const error = new Error('robustUpdateAtomOptimistic requires id and baseUpdatedAt.');
+  if (!whereEqs?.length || !baseUpdatedAt) {
+    const error = new Error('robustOccCore requires whereEqs and baseUpdatedAt.');
     error.code = 'OCC_BAD_ARGS';
     return { ok: false, error };
   }
@@ -348,14 +352,14 @@ export async function robustUpdateAtomOptimistic(table, id, baseUpdatedAt, patch
   if (!orgId) {
     const error = new Error('JWT is missing the org_id claim — open Sync Diagnostics to investigate.');
     error.code = 'NO_JWT_ORG_ID';
-    recordSyncEvent({ table, op: 'occ-update', id, ok: false, error: error.message, code: error.code });
+    recordSyncEvent({ table, op: 'occ-update', id: idForLog, ok: false, error: error.message, code: error.code });
     return { ok: false, error };
   }
 
   let db = await getAuthedSupabase();
   if (!db) {
     const error = new Error('Supabase client not available.');
-    recordSyncEvent({ table, op: 'occ-update', id, ok: false, error: error.message });
+    recordSyncEvent({ table, op: 'occ-update', id: idForLog, ok: false, error: error.message });
     return { ok: false, error };
   }
 
@@ -363,17 +367,14 @@ export async function robustUpdateAtomOptimistic(table, id, baseUpdatedAt, patch
 
   const cleaned = stripServerManaged(patch);
 
-  let result = await tryUpdateWithSchemaRecovery(db, table, id, baseUpdatedAt, cleaned);
+  let result = await tryUpdateWithSchemaRecovery(db, table, whereEqs, baseUpdatedAt, cleaned);
 
-  // RLS retry — refresh JWT and try once more, same as upsert path.
   if (!result.ok && isRlsError(result.error)) {
     db = await refreshAuthedSupabase();
-    result = await tryUpdateWithSchemaRecovery(db, table, id, baseUpdatedAt, result.payload);
-    if (result.ok) {
-      // fall through to the success-or-conflict branch below
-    } else {
+    result = await tryUpdateWithSchemaRecovery(db, table, whereEqs, baseUpdatedAt, result.payload);
+    if (!result.ok) {
       recordSyncEvent({
-        table, op: 'occ-update', id, ok: false, retried: true,
+        table, op: 'occ-update', id: idForLog, ok: false, retried: true,
         error: result.error.message, code: result.error.code,
         droppedColumns: result.dropped.length ? result.dropped : undefined,
       });
@@ -383,30 +384,62 @@ export async function robustUpdateAtomOptimistic(table, id, baseUpdatedAt, patch
 
   if (!result.ok) {
     recordSyncEvent({
-      table, op: 'occ-update', id, ok: false,
+      table, op: 'occ-update', id: idForLog, ok: false,
       error: result.error.message, code: result.error.code, details: result.error.details,
       droppedColumns: result.dropped.length ? result.dropped : undefined,
     });
     return { ok: false, error: result.error, droppedColumns: result.dropped };
   }
 
-  // result.ok === true — but maybeSingle returns null when zero rows
-  // matched the precondition, which means the base updated_at no longer
-  // matches: optimistic conflict.
+  // maybeSingle returns null when zero rows matched the precondition —
+  // base updated_at no longer matches: optimistic conflict.
   if (result.row == null) {
-    const latest = await fetchLatestRow(db, table, id);
+    const latest = await fetchLatestRowByKey(db, table, whereEqs);
     recordSyncEvent({
-      table, op: 'conflict', id, ok: false,
+      table, op: 'conflict', id: idForLog, ok: false,
       base: baseUpdatedAt, latest_updated_at: latest?.updated_at || null,
     });
     return { ok: false, conflict: true, latest };
   }
 
   recordSyncEvent({
-    table, op: 'occ-update', id, ok: true,
+    table, op: 'occ-update', id: idForLog, ok: true,
     droppedColumns: result.dropped.length ? result.dropped : undefined,
   });
   return { ok: true, row: result.row, droppedColumns: result.dropped };
+}
+
+export async function robustUpdateAtomOptimistic(table, id, baseUpdatedAt, patch) {
+  if (!id) {
+    const error = new Error('robustUpdateAtomOptimistic requires id.');
+    error.code = 'OCC_BAD_ARGS';
+    return { ok: false, error };
+  }
+  return robustOccCore({
+    table,
+    whereEqs: [['id', id]],
+    idForLog: id,
+    baseUpdatedAt,
+    patch,
+  });
+}
+
+// Composite-key variant for tables keyed by (organization_id, name) — the
+// shape used by the vendor and color libraries. `name` is the per-org
+// natural key.
+export async function robustUpdateAtomOptimisticByName(table, orgId, name, baseUpdatedAt, patch) {
+  if (!orgId || !name) {
+    const error = new Error('robustUpdateAtomOptimisticByName requires orgId and name.');
+    error.code = 'OCC_BAD_ARGS';
+    return { ok: false, error };
+  }
+  return robustOccCore({
+    table,
+    whereEqs: [['organization_id', orgId], ['name', name]],
+    idForLog: name,
+    baseUpdatedAt,
+    patch,
+  });
 }
 
 // Resets the per-session "we've called ensure_org_exists for this org"
