@@ -11,7 +11,7 @@ export default function KPICards() {
   const weeklyRevenue = current.revenue;
   const monthlyRevenue = weeklyRevenue * 4.33;
   const cashOnHand = current.totalCash;
-  const activePOs = (state.manualPOs?.length || 0);
+  const activePOs = 0; // POs live in productionStore; loaded in PO views
 
   const freeCash = current.freeCash || 0;
   const stLiabilities = current.stLiabilities || 0;

@@ -34,7 +34,7 @@ import SimpleImageSlot from './SimpleImageSlot';
 import MultiImageSlot from './MultiImageSlot';
 import FabricAIExtract from './FabricAIExtract';
 import FabricBOMPreview from './FabricBOMPreview';
-import { migrateLegacyCoverIfNeeded, isLegacyDataUrl } from '../../utils/plmAssets';
+import { migrateLegacyCoverIfNeeded, isLegacyDataUrl, uploadAsset } from '../../utils/plmAssets';
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
@@ -70,6 +70,80 @@ function Field({ label, children }) {
   );
 }
 
+// Infer a 3-letter file kind tag for the docs list. The actual mime type
+// is whatever the browser sniffed at upload time; this is just a label.
+function docKind(name = '') {
+  const lower = (name || '').toLowerCase();
+  if (lower.endsWith('.pdf')) return 'PDF';
+  if (/\.(jpe?g|png|webp|gif|heic|heif|avif)$/.test(lower)) return 'IMG';
+  if (/\.(docx?|rtf|odt)$/.test(lower)) return 'DOC';
+  if (/\.(xlsx?|csv|numbers)$/.test(lower)) return 'XLS';
+  if (/\.(txt|md)$/.test(lower)) return 'TXT';
+  if (/\.(zip|rar|7z)$/.test(lower)) return 'ZIP';
+  return 'FILE';
+}
+
+function DocumentsCard({ docs, onChange, fabricId }) {
+  const [busy, setBusy] = useState(false);
+  const onPick = async (e) => {
+    const list = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!list.length || !fabricId) return;
+    setBusy(true);
+    try {
+      const uploaded = await Promise.all(list.map(async (f, i) => {
+        try {
+          const ref = await uploadAsset({
+            scope: 'fabrics',
+            ownerId: fabricId,
+            slot: `doc-${Date.now()}-${i}`,
+            blob: f,
+            skipCompress: true,
+          });
+          return { ...ref, name: f.name || `file-${i + 1}`, kind: docKind(f.name), uploaded_at: new Date().toISOString() };
+        } catch (err) { console.error('Document upload:', err); return null; }
+      }));
+      onChange([...(docs || []), ...uploaded.filter(Boolean)]);
+    } finally { setBusy(false); }
+  };
+  const removeAt = (i) => onChange(docs.filter((_, idx) => idx !== i));
+  return (
+    <div style={CARD_STYLE}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+        <h4 style={{ ...SECTION_TITLE, marginBottom: 0 }}>Documents</h4>
+        <span style={{ fontSize: 10, color: FR.stone }}>
+          {(docs || []).length} file{(docs || []).length === 1 ? '' : 's'} · AI source cards auto-saved
+        </span>
+      </div>
+      {(docs || []).length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+          {docs.map((doc, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: FR.salt, borderRadius: 4, fontSize: 11 }}>
+              <span style={{ background: FR.sand, padding: '1px 6px', borderRadius: 3, fontSize: 8, letterSpacing: 0.5, textTransform: 'uppercase', color: FR.soil, fontWeight: 600 }}>
+                {doc.kind || docKind(doc.name)}
+              </span>
+              <span style={{ flex: 1, color: FR.slate, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.name || 'Untitled'}</span>
+              <span style={{ fontSize: 9, color: FR.stone, fontFamily: 'ui-monospace, Menlo, monospace' }}>
+                {doc.uploaded_at ? doc.uploaded_at.slice(0, 10) : ''}
+              </span>
+              <button onClick={() => removeAt(i)} title="Remove"
+                style={{ background: 'transparent', border: 'none', color: FR.stone, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                <X size={11} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12, border: `1px dashed ${FR.sand}`, borderRadius: 4, fontSize: 11, color: busy ? FR.stone : FR.soil, fontStyle: busy ? 'italic' : 'normal', cursor: busy ? 'wait' : 'pointer', fontWeight: 600 }}>
+        {busy ? 'Uploading…' : '+ Drop or click to add files'}
+        <input type="file" multiple onChange={onPick} disabled={busy}
+          accept="image/*,application/pdf,.txt,.md,.doc,.docx,.xlsx,.xls,.csv,.zip"
+          style={{ display: 'none' }} />
+      </label>
+    </div>
+  );
+}
+
 export default function FabricBuilder({ fabric, onBack }) {
   const [draft, setDraft] = useState(fabric);
   const [savedAt, setSavedAt] = useState(null);
@@ -90,6 +164,27 @@ export default function FabricBuilder({ fabric, onBack }) {
       .catch(err => console.error('FabricBuilder FX:', err));
     return () => { cancelled = true; };
   }, []);
+
+  // Backfill the missing side of any USD/CNY pair the moment FX resolves
+  // (or when the user switches fabrics). Without this, a fabric saved with
+  // only the RMB side filled in (because FX hadn't loaded when the user
+  // first typed) shows USD = 0 forever, until the user touches the RMB
+  // input again. Only fills the empty side; never overwrites an existing value.
+  useEffect(() => {
+    if (!fx?.usdPerCny) return;
+    const patch = {};
+    const m = (a, b, dir) => {
+      const aVal = parseFloat(draft[a] || 0);
+      const bVal = parseFloat(draft[b] || 0);
+      if (!aVal && bVal) patch[a] = dir === 'cny->usd' ? cnyToUsd(bVal, fx.usdPerCny) : usdToCny(bVal, fx.usdPerCny);
+    };
+    m('price_per_meter_usd', 'price_per_meter_cny', 'cny->usd');
+    m('price_per_meter_cny', 'price_per_meter_usd', 'usd->cny');
+    m('price_per_kg_usd', 'price_per_kg_cny', 'cny->usd');
+    m('price_per_kg_cny', 'price_per_kg_usd', 'usd->cny');
+    if (Object.keys(patch).length) set(patch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fx?.usdPerCny, draft.id]);
 
   const migratedRef = useRef(false);
   useEffect(() => {
@@ -253,14 +348,43 @@ export default function FabricBuilder({ fabric, onBack }) {
     finally { setExporting(false); }
   };
 
-  const onApplyAI = (patch) => {
+  const onApplyAI = async (patch) => {
     setAiOpen(false);
+    const { _aiSourceFiles, ...rest } = patch || {};
+
+    // Archive the raw mill-card files the user dropped into the AI parser.
+    // We always want the original card preserved for reference, even though
+    // the parsed fields become the source of truth on the form.
+    let newDocs = [];
+    if (Array.isArray(_aiSourceFiles) && _aiSourceFiles.length && draft.id) {
+      try {
+        const uploaded = await Promise.all(_aiSourceFiles.map(async (f, i) => {
+          try {
+            const ref = await uploadAsset({
+              scope: 'fabrics',
+              ownerId: draft.id,
+              slot: `doc-ai-${Date.now()}-${i}`,
+              blob: f,
+              skipCompress: true,
+            });
+            return { ...ref, name: f.name || `mill-card-${i + 1}`, kind: 'ai-source', uploaded_at: new Date().toISOString() };
+          } catch (err) {
+            console.error('AI source upload:', err);
+            return null;
+          }
+        }));
+        newDocs = uploaded.filter(Boolean);
+      } catch (err) {
+        console.error('FabricBuilder save AI sources:', err);
+      }
+    }
+
     setDraft(d => {
-      const next = { ...d, ...patch };
-      if (Array.isArray(patch.color_card_images) && patch.color_card_images.length) {
+      const next = { ...d, ...rest };
+      if (Array.isArray(rest.color_card_images) && rest.color_card_images.length) {
         const existing = Array.isArray(d.color_card_images) ? d.color_card_images : [];
         const seen = new Set(existing.map(c => (c.hex || '').toLowerCase() || (c.label || '').trim().toLowerCase()).filter(Boolean));
-        const additions = patch.color_card_images.filter(c => {
+        const additions = rest.color_card_images.filter(c => {
           const key = (c.hex || '').toLowerCase() || (c.label || '').trim().toLowerCase();
           if (!key) return true;
           if (seen.has(key)) return false;
@@ -270,6 +394,9 @@ export default function FabricBuilder({ fabric, onBack }) {
         next.color_card_images = [...existing, ...additions];
       } else {
         next.color_card_images = d.color_card_images || [];
+      }
+      if (newDocs.length) {
+        next.documents = [...(d.documents || []), ...newDocs];
       }
       return next;
     });
@@ -604,6 +731,21 @@ export default function FabricBuilder({ fabric, onBack }) {
               assetSlot="swatch"
               hint="Drop swatch photos"
             />
+
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: `0.5px solid ${FR.sand}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                <h5 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 13, color: FR.slate, margin: 0, letterSpacing: 0.2 }}>Original images</h5>
+                <span style={{ fontSize: 10, color: FR.stone }}>raw photos of the physical color card &amp; full fabric card</span>
+              </div>
+              <MultiImageSlot
+                value={draft.original_images || []}
+                onChange={v => set({ original_images: v })}
+                assetScope="fabrics"
+                assetOwnerId={draft.id}
+                assetSlot="original"
+                hint="Drop the original card photos"
+              />
+            </div>
           </div>
 
           {/* Ribbing — knit only */}
@@ -659,6 +801,13 @@ export default function FabricBuilder({ fabric, onBack }) {
               </Field>
             </div>
           </div>
+
+          {/* Documents — AI parser sources, certifications, vendor PDFs, chats */}
+          <DocumentsCard
+            docs={draft.documents || []}
+            onChange={v => set({ documents: v })}
+            fabricId={draft.id}
+          />
         </div>
 
         {/* RIGHT — sticky live preview */}

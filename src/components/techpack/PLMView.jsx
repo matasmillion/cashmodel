@@ -10,26 +10,27 @@
 // was.
 
 import { useEffect, useState } from 'react';
-import { Library, Shirt, Package, Scissors, Palette, Layers, Sparkles, Building2, Boxes, PenTool, Download, ShieldCheck } from 'lucide-react';
+import { Library, Shirt, Package, Scissors, Palette, Layers, Sparkles, Building2, Boxes, PenTool, Download, ShieldCheck, GitMerge } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { exportAllPlmData } from '../../utils/plmBackup';
 import TechPackList from './TechPackList';
 import ComponentPackList from './ComponentPackList';
 import ColorPaletteManager from './ColorPaletteManager';
 import VendorManager from './VendorManager';
-import PatternList from './PatternList';
+import CutSewList from './CutSewList';
 import FabricList from './FabricList';
 import TreatmentList from './TreatmentList';
 import EmbellishmentList from './EmbellishmentList';
 import { parsePLMHash, setPLMHash, normalizeLegacyHash } from '../../utils/plmRouting';
 import { seedTreatmentsIfEmpty } from '../../utils/treatmentStore';
 import { seedProductionIfEmpty } from '../../utils/productionStore';
-import { seedPatternsIfEmpty } from '../../utils/patternStore';
+import { seedCutSewIfEmpty } from '../../utils/cutSewStore';
 import { seedFabricsIfEmpty } from '../../utils/fabricStore';
 import { seedEmbellishmentsIfEmpty } from '../../utils/embellishmentStore';
 import ProductionList from '../production/ProductionList';
 import ProductionDetail from '../production/ProductionDetail';
 import StorageHealthPanel from './StorageHealthPanel';
+import VariantMapper from './VariantMapper';
 import SyncDiagnosticsPanel, { SyncDiagnosticsToggle } from './SyncDiagnosticsPanel';
 
 const TOP_TABS = [
@@ -39,13 +40,14 @@ const TOP_TABS = [
 ];
 
 const LIBRARY_TABS = [
-  { id: 'patterns', label: 'Patterns', icon: PenTool },
+  { id: 'cut-sew', label: 'Cut & Sew', icon: PenTool },
   { id: 'fabrics', label: 'Fabrics', icon: Layers },
   { id: 'colors', label: 'Colors', icon: Palette },
   { id: 'trims', label: 'Trims', icon: Boxes },
   { id: 'treatments', label: 'Treatments', icon: Scissors },
   { id: 'embellishments', label: 'Embellishments', icon: Sparkles },
   { id: 'vendors', label: 'Vendors', icon: Building2 },
+  { id: 'variant-mapping', label: 'Variant Mapping', icon: GitMerge },
 ];
 
 export default function PLMView() {
@@ -74,7 +76,7 @@ export default function PLMView() {
     // so the Treatment detail page lights up with rollup data on first
     // paint. Each call is idempotent — only runs when its store is empty.
     seedTreatmentsIfEmpty()
-      .then(() => seedPatternsIfEmpty())
+      .then(() => seedCutSewIfEmpty())
       .then(() => seedFabricsIfEmpty())
       .then(() => seedEmbellishmentsIfEmpty())
       .then(() => seedProductionIfEmpty())
@@ -102,8 +104,8 @@ export default function PLMView() {
   }, []);
 
   const switchLayer = (layer) => {
-    setRoute({ layer, atom: layer === 'library' ? (route.atom || 'patterns') : null });
-    setPLMHash({ layer, atom: layer === 'library' ? (route.atom || 'patterns') : null });
+    setRoute({ layer, atom: layer === 'library' ? (route.atom || 'cut-sew') : null });
+    setPLMHash({ layer, atom: layer === 'library' ? (route.atom || 'cut-sew') : null });
   };
 
   const switchAtom = (atom) => {
@@ -198,13 +200,14 @@ export default function PLMView() {
         </div>
       )}
 
-      {route.layer === 'library' && route.atom === 'patterns' && <PatternList />}
+      {route.layer === 'library' && route.atom === 'cut-sew' && <CutSewList />}
       {route.layer === 'library' && route.atom === 'fabrics' && <FabricList />}
       {route.layer === 'library' && route.atom === 'colors' && <ColorPaletteManager />}
       {route.layer === 'library' && route.atom === 'trims' && <ComponentPackList />}
       {route.layer === 'library' && route.atom === 'treatments' && <TreatmentList />}
       {route.layer === 'library' && route.atom === 'embellishments' && <EmbellishmentList />}
       {route.layer === 'library' && route.atom === 'vendors' && <VendorManager />}
+      {route.layer === 'library' && route.atom === 'variant-mapping' && <VariantMapper />}
 
       {route.layer === 'styles' && <TechPackList />}
 

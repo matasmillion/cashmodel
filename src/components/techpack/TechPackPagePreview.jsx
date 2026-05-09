@@ -4,6 +4,7 @@
 // are pre-pack strategy and aren't counted toward the numbered total.
 
 import { FR, STEPS } from './techPackConstants';
+import { FabricBOMPreviewBody } from './FabricBOMPreview';
 
 const PAGE_W = 1123;
 const PAGE_H = 794;
@@ -338,17 +339,53 @@ function SectionHeading({ x, y, children }) {
   );
 }
 
-function PhotoSlot({ x, y, w, h, label, image, placeholder }) {
+// SMIL-animated spinner — pure SVG so it works inside the live-preview <svg>
+// without any CSS-in-JS plumbing. Stroke arc renders ~3/4 of the circle then
+// rotates indefinitely. Use it whenever a cover image is in flight so the
+// supplier knows the system is working, not stuck.
+function Spinner({ cx, cy, r = 14, color = FR.soil }) {
+  const stroke = Math.max(2, r / 6);
+  const c = 2 * Math.PI * r;
+  return (
+    <g>
+      {/* faint background ring so the spinner reads against any fill */}
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeOpacity={0.18} strokeWidth={stroke} />
+      {/* animated arc */}
+      <circle
+        cx={cx} cy={cy} r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeDasharray={`${c * 0.25} ${c}`}
+        transform={`rotate(-90 ${cx} ${cy})`}
+      >
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from={`0 ${cx} ${cy}`}
+          to={`360 ${cx} ${cy}`}
+          dur="0.9s"
+          repeatCount="indefinite"
+        />
+      </circle>
+    </g>
+  );
+}
+
+function PhotoSlot({ x, y, w, h, label, image, placeholder, loading = false }) {
   return (
     <g>
       <rect x={x} y={y} width={w} height={h} fill={FR.white} stroke={FR.soil} strokeDasharray="5 4" />
-      {image
-        ? <image href={image.data} x={x + 4} y={y + 4} width={w - 8} height={h - 8} preserveAspectRatio="xMidYMid meet" />
-        : (
-          <text x={x + w / 2} y={y + h / 2 + 4} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
-            {placeholder || `Drop ${label.toLowerCase()} here`}
-          </text>
-        )}
+      {image ? (
+        <image href={image.data} x={x + 4} y={y + 4} width={w - 8} height={h - 8} preserveAspectRatio="xMidYMid meet" />
+      ) : loading ? (
+        <Spinner cx={x + w / 2} cy={y + h / 2} r={Math.min(20, Math.max(10, Math.min(w, h) * 0.12))} />
+      ) : (
+        <text x={x + w / 2} y={y + h / 2 + 4} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
+          {placeholder || `Drop ${label.toLowerCase()} here`}
+        </text>
+      )}
       <rect x={x} y={y + h} width={w} height={22} fill={FR.salt} stroke={FR.sand} />
       <text x={x + w / 2} y={y + h + 15} textAnchor="middle" fontSize="9" fontWeight="bold" fill={FR.slate} letterSpacing="1.5">
         {esc((label || '').toUpperCase())}
@@ -457,154 +494,56 @@ function GridTable({ x, y, cols, rows, bodyRows = 4, rowH = 22, headerH = 22, re
 
 // ─── Page 4 — Bill of Materials ─────────────────────────────────────────────
 // ─── Page 03 — Fabrics (live preview reads pickedFabrics references) ────────
+// Page 03 now renders the same `FabricBOMPreviewBody` the library card
+// uses, so the tech pack live preview cannot drift from the fabric card.
+// Single-fabric mode for now — the picker still allows up to three
+// fabrics, but the live preview shows the first picked fabric on its
+// dedicated page. Multi-fabric pagination (one A4 per fabric, dropdown
+// nav) is the follow-up.
 function PageFabrics({ d, fabricsById = {} }) {
-  const picked = (d?.pickedFabrics || []).slice(0, 3);
-  const cardW = 300;
-  const cardH = 460; // taller to fit vendor block + colorway badge
-  const totalW = cardW * 3 + 16 * 2;
-  const startX = (PAGE_W - totalW) / 2;
-  const startY = 110;
-  const imgH = cardH * 0.45;
-
+  const picked = (d?.pickedFabrics || []).filter(p => p?.fabricId);
+  if (picked.length === 0) {
+    return (
+      <g>
+        <text x={PAGE_W / 2} y={94} textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="14" fill={FR.stone}>
+          Pick fabrics in the BOM step to populate this page.
+        </text>
+        <rect x={(PAGE_W - 540) / 2} y={300} width="540" height="180"
+          fill={FR.salt} stroke={FR.sand} strokeWidth="0.5" rx="8" />
+        <text x={PAGE_W / 2} y={395} textAnchor="middle" fontSize="13" fill={FR.stone} fontStyle="italic">
+          No fabric picked
+        </text>
+      </g>
+    );
+  }
+  const entry = picked[0];
+  const fabric = fabricsById[entry.fabricId];
+  // Show a spinner card while the fabric library row is still being fetched
+  // (signed cover URL, vendor lookup, color cards). Without it the page
+  // looked frozen for the seconds it takes the loader to resolve everything.
+  if (!fabric) {
+    return (
+      <g>
+        <text x={PAGE_W / 2} y={94} textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="14" fill={FR.stone}>
+          Loading fabric…
+        </text>
+        <rect x={(PAGE_W - 540) / 2} y={240} width="540" height="280"
+          fill={FR.salt} stroke={FR.sand} strokeWidth="0.5" rx="8" />
+        <Spinner cx={PAGE_W / 2} cy={380} r={28} />
+      </g>
+    );
+  }
+  const chosenColor = entry.colorLabel || entry.colorHex || entry.colorUrl
+    ? { label: entry.colorLabel, hex: entry.colorHex, url: entry.colorUrl }
+    : null;
   return (
-    <g>
-      <text x={PAGE_W / 2} y={94} textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="14" fill={FR.stone}>
-        Up to three fabrics, picked from the PLM Fabric library.
-      </text>
-      {[0, 1, 2].map(i => {
-        const entry = picked[i];
-        const row = entry ? fabricsById[entry.fabricId] : null;
-        const d2 = row?.data || {};
-        const x = startX + i * (cardW + 16);
-
-        const cover = row?.front_image_url || row?.cover_image || d2?.front_image_url || d2?.cover_image;
-        const name = row?.code || d2?.name || row?.name || (entry?.fabricId ? 'Loading…' : '—');
-        const composition = row?.composition || d2?.composition || '—';
-        const weightGsm = row?.weight_gsm || d2?.weight_gsm;
-        const weave = row?.weave || d2?.weave || '—';
-
-        const millName = row?.mill_id || d2?.mill_id || '—';
-        const vendorEmail = row?._vendorEmail || '';
-        const vendorPhone = row?._vendorPhone || '';
-        const vendorContact = row?._vendorContact || '';
-
-        const tier = (d2?.costTiers || [])[0];
-        const gsm = parseFloat(row?.weight_gsm ?? d2?.weight_gsm) || 0;
-        const widthCm = parseFloat(row?.width_cm ?? d2?.width_cm) || 0;
-        const kgUsd = parseFloat(row?.price_per_kg_usd ?? d2?.price_per_kg_usd) || 0;
-        const fromKg = (kgUsd && gsm && widthCm) ? kgUsd * (gsm * widthCm / 100000) : 0;
-        const unitCost =
-          parseFloat(row?.price_per_meter_usd) ||
-          parseFloat(d2?.price_per_meter_usd) ||
-          fromKg ||
-          parseFloat(tier?.unitCost) ||
-          parseFloat(row?.cost_per_unit) ||
-          parseFloat(d2?.cost_per_unit) || 0;
-
-        let cy = startY + imgH + 22;
-        return (
-          <g key={i}>
-            <rect x={x} y={startY} width={cardW} height={cardH}
-              fill={FR.white} stroke={FR.sand} strokeWidth={0.5} rx={6} />
-            {!entry && (
-              <text x={x + cardW / 2} y={startY + cardH / 2} textAnchor="middle"
-                fontSize={11} fill={FR.stone} fontStyle="italic">No fabric picked</text>
-            )}
-            {entry && (
-              <>
-                <rect x={x} y={startY} width={cardW} height={imgH} fill={FR.salt} rx={6} />
-                {cover && (
-                  <image href={cover} x={x} y={startY} width={cardW} height={imgH}
-                    preserveAspectRatio="xMidYMid slice" />
-                )}
-                {/* Area label */}
-                <text x={x + 16} y={cy}
-                  fontSize={9} fontWeight={600} fill={FR.soil} letterSpacing={1}>
-                  {(entry.role || `Fabric ${i + 1}`).toUpperCase()}
-                </text>
-
-                {/* Fabric name — General Sans */}
-                <text x={x + 16} y={cy + 16} fontSize={14} fontWeight={600} fill={FR.slate}>
-                  {name}
-                </text>
-
-                {/* Vendor · composition · weight/weave subtitle */}
-                <text x={x + 16} y={cy + 30} fontSize={9} fill={FR.stone}>
-                  {[millName !== '—' ? millName : null, composition !== '—' ? composition : null, weightGsm ? `${weightGsm} GSM` : null, weave !== '—' ? weave : null].filter(Boolean).join(' · ') || '—'}
-                </text>
-
-                {/* Thin separator */}
-                <line x1={x + 16} y1={cy + 40} x2={x + cardW - 16} y2={cy + 40}
-                  stroke={FR.sand} strokeWidth={0.5} />
-
-                {/* Colorway badge */}
-                {entry.colorLabel && (
-                  <g>
-                    <rect x={x + 16} y={cy + 50} width={18} height={18} rx={2}
-                      fill={entry.colorHex || FR.salt} stroke={FR.sand} strokeWidth={0.5} />
-                    {entry.colorUrl && (
-                      <image href={entry.colorUrl} x={x + 16} y={cy + 50} width={18} height={18}
-                        preserveAspectRatio="xMidYMid slice" />
-                    )}
-                    <text x={x + 40} y={cy + 63} fontSize={10} fill={FR.slate}>
-                      {entry.colorLabel}
-                    </text>
-                  </g>
-                )}
-                {!entry.colorLabel && (
-                  <text x={x + 16} y={cy + 63} fontSize={10} fill={FR.stone} fontStyle="italic">
-                    Colorway: not picked
-                  </text>
-                )}
-
-                {/* Mill finishes chips */}
-                {(() => {
-                  const finishes = entry.chosenFinishes || [];
-                  if (!finishes.length) return null;
-                  return finishes.slice(0, 4).map((f, fi) => {
-                    const execColor = f.executed_at === 'secondary' ? '#854F0B' : f.executed_at === 'at_treatment' ? '#3a5a8c' : '#3B6D11';
-                    const execFill = f.executed_at === 'secondary' ? 'rgba(133,79,11,0.12)' : f.executed_at === 'at_treatment' ? 'rgba(58,90,140,0.12)' : 'rgba(99,153,34,0.12)';
-                    const execLabel = f.executed_at === 'secondary' ? 'SECONDARY' : f.executed_at === 'at_treatment' ? 'WASH HOUSE' : 'AT MILL';
-                    const fy = cy + 78 + fi * 22;
-                    return (
-                      <g key={fi}>
-                        <rect x={x + 16} y={fy} width={cardW - 32} height={18} fill={execFill} rx={2} />
-                        <text x={x + 22} y={fy + 12} fontSize={9} fill={FR.slate}>{f.name}</text>
-                        <text x={x + cardW - 22} y={fy + 12} textAnchor="end" fontSize={8}
-                          fill={execColor} fontFamily="ui-monospace, Menlo, monospace">{execLabel}</text>
-                      </g>
-                    );
-                  });
-                })()}
-
-                {/* Cost row */}
-                <line x1={x + 16} y1={startY + cardH - 36} x2={x + cardW - 16} y2={startY + cardH - 36}
-                  stroke={FR.sand} strokeWidth={0.5} />
-                <text x={x + 16} y={startY + cardH - 22} fontSize={10} fill={FR.stone}
-                  fontFamily="ui-monospace, Menlo, monospace">
-                  {entry.metersPerUnit
-                    ? (entry.yieldIsActual ? 'Cost / unit' : 'Cost / unit (est.)')
-                    : 'Cost / m'}
-                </text>
-                <text x={x + cardW - 16} y={startY + cardH - 22} textAnchor="end"
-                  fontSize={12} fontWeight={700} fill={FR.slate} fontFamily="ui-monospace, Menlo, monospace">
-                  {entry.metersPerUnit
-                    ? (unitCost > 0 ? `$${(unitCost * entry.metersPerUnit).toFixed(2)}` : '$0.00')
-                    : (unitCost > 0 ? `$${unitCost.toFixed(2)}` : '$0.00')}
-                </text>
-                <text x={x + 16} y={startY + cardH - 8} fontSize={8}
-                  fill={entry.metersPerUnit ? (entry.yieldIsActual ? '#3B6D11' : '#854F0B') : '#854F0B'}
-                  fontFamily="ui-monospace, Menlo, monospace">
-                  {entry.metersPerUnit
-                    ? `${entry.metersPerUnit}m/unit · ${entry.yieldIsActual ? 'CLO3D actual' : 'std. estimate'}`
-                    : 'yield TBD — pick garment type in BOM'}
-                </text>
-              </>
-            )}
-          </g>
-        );
-      })}
-    </g>
+    <FabricBOMPreviewBody
+      fabric={fabric}
+      chosenColor={chosenColor}
+      chosenArea={entry.role || null}
+      chosenFinishes={entry.chosenFinishes || null}
+      yieldM={entry.metersPerUnit || null}
+    />
   );
 }
 
@@ -669,6 +608,10 @@ function ComponentGridPage({ entries, subtitle, componentsById = {} }) {
                   // `meet` so the full image is visible without cropping.
                   <image href={cover} x={x + 4} y={y + 4} width={cardW - 8} height={imgH - 8}
                     preserveAspectRatio="xMidYMid meet" />
+                ) : entryId && !full ? (
+                  // Pack reference exists but the full row hasn't resolved
+                  // yet — spinner so the user sees we're working on it.
+                  <Spinner cx={x + cardW / 2} cy={y + imgH / 2} r={18} />
                 ) : (
                   <text x={x + cardW / 2} y={y + imgH / 2 + 4} textAnchor="middle"
                     fontSize={9} fill={FR.stone} fontStyle="italic">cover image</text>

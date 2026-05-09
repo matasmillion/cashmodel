@@ -293,18 +293,22 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
         let cover = row.front_image_url || row.cover_image || null;
         if (cover && !/^(https?:|data:|blob:)/.test(cover)) {
           try { invalidateAssetUrl?.(cover); } catch {}
-          cover = await getAssetUrl(cover).catch(() => null) || row.cover_image;
+          cover = await getAssetUrl(cover).catch(() => null) || row.front_image_url || row.cover_image;
         }
         const tagged = cover ? `${cover}${cover.includes('?') ? '&' : '?'}v=${encodeURIComponent(v || '')}` : null;
         // Vendor contact lookup so the SVG card can show email / phone /
         // primary contact alongside the mill name.
         const vendor = row.mill_id ? getVendor(row.mill_id) : null;
+        // Overwrite both fields with the resolved tagged URL so the live
+        // preview reads the same image regardless of which it checks first.
+        const finalUrl = tagged || cover || row.cover_image;
         next[id] = {
           ...row,
-          cover_image:    tagged || cover || row.cover_image,
-          _vendorEmail:   vendor?.email || '',
-          _vendorPhone:   vendor?.phone || '',
-          _vendorContact: vendor?.primary_contact || '',
+          cover_image:      finalUrl,
+          front_image_url:  finalUrl,
+          _vendorEmail:     vendor?.email || '',
+          _vendorPhone:     vendor?.phone || '',
+          _vendorContact:   vendor?.primary_contact || '',
         };
       }
       if (!cancelled) setFabricsById(next);

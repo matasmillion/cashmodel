@@ -1,14 +1,47 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { listPOs } from '../utils/productionStore';
 import { formatCurrency, formatDate } from '../utils/calculations';
 import { Package, AlertTriangle, Check } from 'lucide-react';
 
 const FR = { slate: '#3A3A3A', salt: '#F5F0E8', sand: '#EBE5D5', stone: '#716F70', soil: '#9A816B', sea: '#B5C7D3', sage: '#ADBDA3', sienna: '#D4956A' };
 
+// Normalize a productionStore PO to the display shape expected by the table.
+// productionStore PO: { code, placed_at, units, unit_cost_usd, payment_schedule, expected_landing }
+// autoPO shape:       { id, orderDate, weekIndex, units, fullCost, payments, arrivalDate }
+function normalizePO(po) {
+  const totalCost = (po.units || 0) * (po.unit_cost_usd || 0);
+  const payments  = (po.payment_schedule || []).map(pmt => ({
+    amount: pmt.amount || Math.round(totalCost * (pmt.percent || 0) / 100),
+    date:   pmt.due || null,
+    label:  pmt.milestone || '',
+  }));
+  return {
+    id:          po.code || po.id,
+    orderDate:   po.placed_at || null,
+    weekIndex:   null,
+    units:       po.units || 0,
+    fullCost:    totalCost,
+    payments,
+    arrivalDate: po.expected_landing || null,
+    _source:     'store',
+  };
+}
+
 export default function POSchedule() {
   const { projections, autoPOs, state } = useApp();
+  const [storePOs, setStorePOs] = useState([]);
 
-  const allPOs = [...autoPOs, ...state.manualPOs];
+  useEffect(() => {
+    listPOs().then(all => {
+      // Exclude cancelled and PLM-only POs without cashflow context.
+      const cashflowPOs = all.filter(po => po.status !== 'cancelled');
+      setStorePOs(cashflowPOs.map(normalizePO));
+    }).catch(err => console.error('POSchedule listPOs:', err));
+  }, []);
+
+  // autoPOs are model-generated (demand projection); storePOs are real operator POs.
+  const allPOs = [...autoPOs, ...storePOs];
 
   return (
     <div className="space-y-6">
@@ -19,7 +52,6 @@ export default function POSchedule() {
         </p>
       </div>
 
-      {/* PO Table */}
       <div className="rounded-xl border overflow-hidden" style={{ background: 'white', borderColor: FR.sand }}>
         <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full text-xs" style={{ fontFamily: "'Inter', sans-serif" }}>
@@ -44,12 +76,14 @@ export default function POSchedule() {
                 <tr key={po.id || i} style={{ borderTop: `1px solid rgba(235,229,213,0.5)` }}>
                   <td className="px-3 py-2 font-medium" style={{ color: FR.slate }}>{po.id}</td>
                   <td className="px-3 py-2" style={{ color: FR.slate }}>{formatDate(po.orderDate)}</td>
-                  <td className="px-3 py-2 text-right" style={{ color: FR.stone }}>{po.weekIndex}</td>
+                  <td className="px-3 py-2 text-right" style={{ color: FR.stone }}>{po.weekIndex ?? '—'}</td>
                   <td className="px-3 py-2 text-right font-medium" style={{ color: FR.slate }}>{po.units?.toLocaleString()}</td>
                   <td className="px-3 py-2 text-right font-medium" style={{ color: FR.slate }}>{formatCurrency(po.fullCost)}</td>
                   {po.payments?.map((pmt, j) => (
                     <React.Fragment key={j}>
-                      <td className="px-3 py-2 text-right" style={{ color: j === 0 ? '#2563eb' : j === 1 ? FR.sienna : FR.sage }}>{formatCurrency(pmt.amount)}</td>
+                      <td className="px-3 py-2 text-right" style={{ color: j === 0 ? '#2563eb' : j === 1 ? FR.sienna : FR.sage }}>
+                        {formatCurrency(pmt.amount)}
+                      </td>
                       <td className="px-3 py-2" style={{ color: FR.stone }}>{formatDate(pmt.date)}</td>
                     </React.Fragment>
                   ))}
@@ -59,17 +93,25 @@ export default function POSchedule() {
               {allPOs.length > 0 && (
                 <tr style={{ background: 'rgba(235,229,213,0.2)', borderTop: `1px solid ${FR.sand}` }}>
                   <td className="px-3 py-2 font-semibold" style={{ color: FR.slate }}>TOTALS</td>
-                  <td></td>
-                  <td></td>
-                  <td className="px-3 py-2 text-right font-semibold" style={{ color: FR.slate }}>{allPOs.reduce((s, po) => s + (po.units || 0), 0).toLocaleString()}</td>
-                  <td className="px-3 py-2 text-right font-semibold" style={{ color: FR.slate }}>{formatCurrency(allPOs.reduce((s, po) => s + (po.fullCost || 0), 0))}</td>
-                  <td className="px-3 py-2 text-right font-semibold" style={{ color: '#2563eb' }}>{formatCurrency(allPOs.reduce((s, po) => s + (po.payments?.[0]?.amount || 0), 0))}</td>
-                  <td></td>
-                  <td className="px-3 py-2 text-right font-semibold" style={{ color: FR.sienna }}>{formatCurrency(allPOs.reduce((s, po) => s + (po.payments?.[1]?.amount || 0), 0))}</td>
-                  <td></td>
-                  <td className="px-3 py-2 text-right font-semibold" style={{ color: FR.sage }}>{formatCurrency(allPOs.reduce((s, po) => s + (po.payments?.[2]?.amount || 0), 0))}</td>
-                  <td></td>
-                  <td></td>
+                  <td /><td />
+                  <td className="px-3 py-2 text-right font-semibold" style={{ color: FR.slate }}>
+                    {allPOs.reduce((s, po) => s + (po.units || 0), 0).toLocaleString()}
+                  </td>
+                  <td className="px-3 py-2 text-right font-semibold" style={{ color: FR.slate }}>
+                    {formatCurrency(allPOs.reduce((s, po) => s + (po.fullCost || 0), 0))}
+                  </td>
+                  <td className="px-3 py-2 text-right font-semibold" style={{ color: '#2563eb' }}>
+                    {formatCurrency(allPOs.reduce((s, po) => s + (po.payments?.[0]?.amount || 0), 0))}
+                  </td>
+                  <td />
+                  <td className="px-3 py-2 text-right font-semibold" style={{ color: FR.sienna }}>
+                    {formatCurrency(allPOs.reduce((s, po) => s + (po.payments?.[1]?.amount || 0), 0))}
+                  </td>
+                  <td />
+                  <td className="px-3 py-2 text-right font-semibold" style={{ color: FR.sage }}>
+                    {formatCurrency(allPOs.reduce((s, po) => s + (po.payments?.[2]?.amount || 0), 0))}
+                  </td>
+                  <td /><td />
                 </tr>
               )}
             </tbody>
@@ -77,7 +119,6 @@ export default function POSchedule() {
         </div>
       </div>
 
-      {/* Inventory Alerts */}
       <div className="rounded-xl p-5 border" style={{ background: 'white', borderColor: FR.sand }}>
         <h3 style={{ color: FR.slate, fontFamily: "'Cormorant Garamond', serif", fontSize: 18, marginBottom: 12 }}>Inventory Forecast</h3>
         <div className="space-y-2">

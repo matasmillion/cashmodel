@@ -1,6 +1,6 @@
-// Pattern detail / editor — single-page form. Loaded via the
-// `#product/library/patterns/:id` deep link or by clicking a card in
-// PatternList. All edits write back through patternStore.savePattern,
+// Cut & Sew detail / editor — single-page form. Loaded via the
+// `#product/library/cut-sew/:id` deep link or by clicking a card in
+// CutSewList. All edits write back through cutSewStore.saveCutSew,
 // which auto-stamps updated_at.
 //
 // Layout matches the visual rhythm of the rest of the PLM atom detail
@@ -12,8 +12,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import { FR } from './techPackConstants';
-import { savePattern, archivePattern, restorePattern } from '../../utils/patternStore';
-import { PATTERN_CATEGORIES, PATTERN_CATEGORY_LABEL, PATTERN_STATUSES, STANDARD_SIZE_SETS } from '../../utils/patternLibrary';
+import { saveCutSew, archiveCutSew, restoreCutSew } from '../../utils/cutSewStore';
+import { CUT_SEW_CATEGORIES, CUT_SEW_CATEGORY_LABEL, CUT_SEW_STATUSES, STANDARD_SIZE_SETS } from '../../utils/cutSewLibrary';
 import CoverImagePicker from './CoverImagePicker';
 import FileSlot from './FileSlot';
 import { migrateLegacyCoverIfNeeded, isLegacyDataUrl } from '../../utils/plmAssets';
@@ -42,12 +42,12 @@ function Field({ label, children }) {
   );
 }
 
-export default function PatternBuilder({ pattern, onBack }) {
-  const [draft, setDraft] = useState(pattern);
+export default function CutSewBuilder({ block, onBack }) {
+  const [draft, setDraft] = useState(block);
   const [savedAt, setSavedAt] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { setDraft(pattern); }, [pattern.id]);
+  useEffect(() => { setDraft(block); }, [block.id]);
 
   // Lazy Storage migration on mount for pre-Phase-3 covers (data: URLs).
   const migratedRef = useRef(false);
@@ -58,16 +58,16 @@ export default function PatternBuilder({ pattern, onBack }) {
     migratedRef.current = true;
     let cancelled = false;
     (async () => {
-      const newPath = await migrateLegacyCoverIfNeeded(draft.cover_image, { scope: 'patterns', ownerId: draft.id });
+      const newPath = await migrateLegacyCoverIfNeeded(draft.cover_image, { scope: 'cut-sew', ownerId: draft.id });
       if (cancelled || !newPath) return;
       setDraft(d => ({ ...d, cover_image: newPath }));
-      try { await savePattern(draft.id, { cover_image: newPath }); }
-      catch (err) { console.error('PatternBuilder lazy migration save:', err); }
+      try { await saveCutSew(draft.id, { cover_image: newPath }); }
+      catch (err) { console.error('CutSewBuilder lazy migration save:', err); }
     })();
     return () => { cancelled = true; };
   }, [draft?.id, draft?.cover_image]);
 
-  const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(pattern), [draft, pattern]);
+  const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(block), [draft, block]);
 
   const set = (patch) => setDraft(d => ({ ...d, ...patch }));
 
@@ -75,7 +75,7 @@ export default function PatternBuilder({ pattern, onBack }) {
     setSaving(true);
     try {
       const { id, code, created_at, ...updates } = draft;
-      await savePattern(id, updates);
+      await saveCutSew(id, updates);
       setSavedAt(new Date());
     } finally {
       setSaving(false);
@@ -84,12 +84,12 @@ export default function PatternBuilder({ pattern, onBack }) {
 
   const toggleArchive = async () => {
     if (draft.status === 'archived') {
-      await restorePattern(draft.id);
+      await restoreCutSew(draft.id);
       set({ status: 'draft' });
     } else {
       const ok = confirm(`Archive "${draft.name || draft.code}"? It will hide from default lists; you can restore it any time.`);
       if (!ok) return;
-      await archivePattern(draft.id);
+      await archiveCutSew(draft.id);
       set({ status: 'archived' });
     }
   };
@@ -103,7 +103,7 @@ export default function PatternBuilder({ pattern, onBack }) {
     <div>
       <button onClick={onBack}
         style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', color: FR.stone, fontSize: 12, cursor: 'pointer', padding: 0, marginBottom: 12 }}>
-        <ArrowLeft size={13} /> Patterns
+        <ArrowLeft size={13} /> Cut &amp; Sew
       </button>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -111,11 +111,11 @@ export default function PatternBuilder({ pattern, onBack }) {
           <input
             value={draft.name || ''}
             onChange={e => set({ name: e.target.value })}
-            placeholder="Untitled pattern"
+            placeholder="Untitled cut & sew"
             style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 28, color: FR.slate, border: 'none', outline: 'none', background: 'transparent', width: '100%' }}
           />
           <div style={{ fontSize: 11, color: FR.stone, marginTop: 2, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-            {draft.code} · {PATTERN_CATEGORY_LABEL[draft.category] || draft.category} · {draft.version}
+            {draft.code} · {CUT_SEW_CATEGORY_LABEL[draft.category] || draft.category} · {draft.version}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -124,7 +124,7 @@ export default function PatternBuilder({ pattern, onBack }) {
             onChange={e => set({ status: e.target.value })}
             style={{ background: pill.bg, color: pill.fg, padding: '6px 10px', borderRadius: 5, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, border: 'none', cursor: 'pointer' }}
           >
-            {PATTERN_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            {CUT_SEW_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <button
             onClick={toggleArchive}
@@ -155,38 +155,38 @@ export default function PatternBuilder({ pattern, onBack }) {
           onChange={pathOrDataUrl => set({ cover_image: pathOrDataUrl })}
           label="Cover image"
           hint="Drop a photo of the block"
-          assetScope="patterns"
+          assetScope="cut-sew"
           assetOwnerId={draft.id}
         />
         <div style={{ flex: 1, minWidth: 280 }}>
           <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Identity</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-          <Field label="Category">
-            <select
-              value={draft.category}
-              onChange={e => set({ category: e.target.value })}
-              style={INPUT_STYLE}
-            >
-              {PATTERN_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-            </select>
-          </Field>
-          <Field label="Version">
-            <input
-              value={draft.version || ''}
-              onChange={e => set({ version: e.target.value })}
-              placeholder="v1.0"
-              style={INPUT_STYLE}
-            />
-          </Field>
-          <Field label="Base block">
-            <input
-              value={draft.base_block || ''}
-              onChange={e => set({ base_block: e.target.value })}
-              placeholder="FR-MASTER-HD"
-              style={INPUT_STYLE}
-            />
-          </Field>
-        </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+            <Field label="Category">
+              <select
+                value={draft.category}
+                onChange={e => set({ category: e.target.value })}
+                style={INPUT_STYLE}
+              >
+                {CUT_SEW_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Version">
+              <input
+                value={draft.version || ''}
+                onChange={e => set({ version: e.target.value })}
+                placeholder="v1.0"
+                style={INPUT_STYLE}
+              />
+            </Field>
+            <Field label="Base block">
+              <input
+                value={draft.base_block || ''}
+                onChange={e => set({ base_block: e.target.value })}
+                placeholder="FR-MASTER-HD"
+                style={INPUT_STYLE}
+              />
+            </Field>
+          </div>
         </div>
       </div>
 
@@ -251,7 +251,7 @@ export default function PatternBuilder({ pattern, onBack }) {
       </div>
 
       <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: 20, marginBottom: 14 }}>
-        <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Files & notes</h4>
+        <h4 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: FR.slate, margin: 0, marginBottom: 14 }}>Files &amp; notes</h4>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
           <Field label="DXF / CAD file">
             <FileSlot
