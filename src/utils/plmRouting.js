@@ -44,7 +44,7 @@ const ALT_TAB = 'plm'; // short-lived earlier prefix; rewritten on load.
 
 // Every library atom the nav knows about, in the order the tabs appear.
 export const LIBRARY_SECTIONS = [
-  'patterns', 'fabrics', 'colors', 'trims',
+  'cut-sew', 'fabrics', 'colors', 'trims',
   'treatments', 'embellishments', 'vendors',
 ];
 const LIBRARY_SET = new Set(LIBRARY_SECTIONS);
@@ -52,20 +52,19 @@ const LIBRARY_SET = new Set(LIBRARY_SECTIONS);
 const TOP_LAYERS = new Set(['library', 'styles', 'production', 'storage-health']);
 
 // Default landing atom when the URL is bare (`#product` or `#product/library`).
-// Patterns is first in the library tab order, so a fresh user lands at the
-// natural left-most starting point of the library; Colors has data but lives
-// mid-row and would feel arbitrary as the entry surface.
-const DEFAULT_LIBRARY_ATOM = 'patterns';
+// Cut & Sew is first in the library tab order, so a fresh user lands at the
+// natural left-most starting point of the library.
+const DEFAULT_LIBRARY_ATOM = 'cut-sew';
 
 // New grammar ⇆ legacy `section` translation.
 // Legacy sections: styles | components | colors | factories.
-// Atoms with no legacy equivalent (patterns, fabrics, treatments,
+// Atoms with no legacy equivalent (cut-sew, fabrics, treatments,
 // embellishments) surface as legacy section 'styles' purely so older callers
 // reading `.section` off a parse result don't get undefined. Those callers
 // only actually run when the layer is 'styles' anyway, so the fallback is
 // never observed in practice.
 const ATOM_TO_LEGACY_SECTION = {
-  patterns: 'styles',
+  'cut-sew': 'styles',
   fabrics: 'styles',
   colors: 'colors',
   trims: 'components',
@@ -122,7 +121,7 @@ function parseInner(parts) {
   // New grammar: <tab>/library, <tab>/styles, <tab>/production
   if (TOP_LAYERS.has(second)) {
     if (second === 'library') {
-      const atomRaw = parts[2];
+      const atomRaw = parts[2] === 'patterns' ? 'cut-sew' : parts[2];
       const atom = LIBRARY_SET.has(atomRaw) ? atomRaw : DEFAULT_LIBRARY_ATOM;
       // Trims + treatments can host nested detail routes; future atoms may too.
       const packId = parts[3] || null;

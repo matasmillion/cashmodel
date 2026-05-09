@@ -28,7 +28,7 @@ import {
 const ATOM_TABLES = [
   { table: 'fabrics',        lsKey: 'cashmodel_fabrics',        label: 'Fabrics',        kind: 'atom' },
   { table: 'treatments',     lsKey: 'cashmodel_treatments',     label: 'Treatments',     kind: 'atom' },
-  { table: 'patterns',       lsKey: 'cashmodel_patterns',       label: 'Patterns',       kind: 'atom' },
+  { table: 'cut_sew',        lsKey: 'cashmodel_cut_sew',        label: 'Cut & Sew',      kind: 'atom' },
   { table: 'embellishments', lsKey: 'cashmodel_embellishments', label: 'Embellishments', kind: 'atom' },
   { table: 'vendors',        lsKey: 'cashmodel_vendors',        label: 'Vendors',        kind: 'control', shape: 'object' },
   { table: 'colors',         lsKey: 'cashmodel_fr_colors',      label: 'Colors',         kind: 'control', shape: 'object' },
@@ -209,7 +209,7 @@ export async function forceResyncAllAtoms() {
   const atomTables = [
     { table: 'fabrics',        lsKey: 'cashmodel_fabrics',        toRow: r => r },
     { table: 'treatments',     lsKey: 'cashmodel_treatments',     toRow: r => r },
-    { table: 'patterns',       lsKey: 'cashmodel_patterns',       toRow: r => r },
+    { table: 'cut_sew',        lsKey: 'cashmodel_cut_sew',        toRow: r => r },
     { table: 'embellishments', lsKey: 'cashmodel_embellishments', toRow: r => r },
   ];
 
@@ -236,9 +236,9 @@ export async function forceResyncAllAtoms() {
       } else if (t.table === 'treatments') {
         const mod = await import('./treatmentStore');
         if (mod.toTreatmentCloudRow) projected = local.map(mod.toTreatmentCloudRow);
-      } else if (t.table === 'patterns') {
-        const mod = await import('./patternStore');
-        if (mod.toPatternCloudRow) projected = local.map(mod.toPatternCloudRow);
+      } else if (t.table === 'cut_sew') {
+        const mod = await import('./cutSewStore');
+        if (mod.toCutSewCloudRow) projected = local.map(mod.toCutSewCloudRow);
       } else if (t.table === 'embellishments') {
         const mod = await import('./embellishmentStore');
         if (mod.toEmbellishmentCloudRow) projected = local.map(mod.toEmbellishmentCloudRow);
