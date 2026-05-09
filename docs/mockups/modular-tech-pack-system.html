@@ -1,0 +1,1749 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Modular Tech Pack System — v1 mockup</title>
+<style>
+  /* ───────── FR design tokens ───────── */
+  :root{
+    --salt:#F5F0E8; --slate:#3A3A3A; --sand:#EBE5D5; --soil:#854F0B;
+    --stone:#9A9A9A; --white:#fff;
+    --good:#3B6D11; --warn:#854F0B; --bad:#A32D2D;
+    --border:rgba(58,58,58,0.15);
+    --serif:'Cormorant Garamond','Georgia',serif;
+    --sans:'General Sans','Inter','Helvetica Neue',system-ui,sans-serif;
+    --mono:ui-monospace,'SF Mono',Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--salt);color:var(--slate);font-family:var(--sans);font-size:13px}
+  h1,h2,h3,h4{font-family:var(--serif);font-weight:400;margin:0}
+  button{font-family:inherit}
+  input,select,textarea{font-family:inherit;color:var(--slate)}
+  a{color:inherit}
+
+  /* ───────── App chrome ───────── */
+  .app-bar{
+    display:flex;justify-content:space-between;align-items:center;
+    background:var(--slate);color:var(--salt);padding:10px 20px;
+  }
+  .brand{font-size:9px;letter-spacing:3px;font-weight:600}
+  .brand-title{font-family:var(--serif);font-size:18px;margin-top:2px}
+  .app-bar-meta{font-size:10px;color:var(--sand);font-family:var(--mono)}
+
+  .tabs{
+    display:flex;gap:2px;background:var(--slate);padding:0 14px 8px;
+  }
+  .tabs button{
+    background:transparent;color:var(--sand);border:none;
+    padding:6px 14px;border-radius:6px;font-size:11px;font-weight:600;
+    letter-spacing:0.4px;cursor:pointer;
+  }
+  .tabs button.active{background:var(--salt);color:var(--slate)}
+  .tabs button:not(.active):hover{background:rgba(255,255,255,0.05)}
+
+  /* ───────── Page (builder) header ───────── */
+  .builder{display:none}
+  .builder.active{display:block}
+  .page-header{
+    display:flex;justify-content:space-between;align-items:flex-start;gap:14px;
+    padding:14px 24px 8px;
+  }
+  .back-link{
+    background:transparent;border:none;color:var(--stone);font-size:12px;
+    cursor:pointer;padding:0;display:flex;align-items:center;gap:6px;margin-bottom:8px;
+  }
+  .title-block input.title{
+    font-family:var(--sans);font-weight:600;font-size:24px;color:var(--slate);
+    background:transparent;border:none;outline:none;width:100%;letter-spacing:0.2px;padding:0;
+  }
+  .title-block input.subtitle{
+    font-size:13px;color:var(--stone);background:transparent;border:none;outline:none;width:100%;padding:0;
+  }
+  .id-chip-row{
+    display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+    font-family:var(--mono);font-size:10px;color:var(--stone);margin-top:4px;
+  }
+  .id-chip{
+    display:inline-flex;align-items:center;gap:4px;padding:2px 6px;
+    background:var(--salt);border-radius:3px;color:var(--slate);
+  }
+  .actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .actions button, .actions select{
+    padding:5px 10px;border-radius:6px;font-size:11px;font-weight:600;
+    cursor:pointer;border:1px solid var(--sand);
+  }
+  .btn-ghost{background:transparent;color:var(--slate)}
+  .btn-soft{background:var(--salt);color:var(--soil)}
+  .btn-primary{background:var(--slate);color:var(--salt);border-color:var(--slate)}
+  .pill{
+    padding:5px 9px;border-radius:5px;font-size:10px;letter-spacing:0.06em;
+    text-transform:uppercase;font-weight:600;border:none;
+  }
+  .pill.draft{background:rgba(116,116,116,0.10);color:#5A5A5A}
+  .pill.testing{background:rgba(133,79,11,0.12);color:var(--warn)}
+  .pill.approved{background:rgba(99,153,34,0.12);color:var(--good)}
+
+  /* ───────── 3-column body ───────── */
+  .builder-body{
+    display:grid;grid-template-columns:540px minmax(0,1fr);gap:0;
+    background:var(--salt);
+  }
+  .left-col{
+    padding:6px 14px 24px 24px;display:flex;flex-direction:column;gap:10px;
+    max-height:calc(100vh - 130px);overflow-y:auto;
+  }
+  .right-col{
+    background:var(--sand);padding:18px 22px;
+    display:flex;flex-direction:column;gap:10px;
+    border-left:1px solid var(--sand);
+    min-height:calc(100vh - 130px);
+  }
+  .preview-header{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-size:9px;color:var(--stone);letter-spacing:2px;font-weight:600;text-transform:uppercase;
+    padding:0 2px;
+  }
+  .preview-frame{
+    background:var(--white);border-radius:6px;
+    box-shadow:0 2px 14px rgba(0,0,0,0.10);overflow:hidden;
+  }
+  .preview-frame svg{display:block;width:100%;height:auto}
+
+  /* ───────── Cards ───────── */
+  .card{
+    background:var(--white);border:0.5px solid var(--border);
+    border-radius:8px;padding:14px;
+  }
+  .card h4{
+    font-family:var(--serif);font-size:15px;color:var(--slate);
+    margin:0 0 10px;letter-spacing:0.2px;
+  }
+  .card-row-head{
+    display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;
+  }
+  .card-row-head h4{margin:0}
+  .label{
+    font-size:10px;color:var(--stone);margin-bottom:2px;display:block;
+    letter-spacing:0.2px;text-transform:uppercase;font-weight:600;
+  }
+  .input,.select,.textarea{
+    width:100%;padding:5px 7px;border:1px solid var(--sand);
+    border-radius:4px;font-size:12px;background:var(--white);outline:none;
+  }
+  .textarea{resize:vertical;font-family:var(--sans)}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+
+  .seg{
+    display:inline-flex;background:var(--salt);border-radius:6px;padding:2px;gap:2px;
+  }
+  .seg button{
+    padding:4px 14px;background:transparent;color:var(--stone);border:none;border-radius:4px;
+    font-size:11px;font-weight:600;cursor:pointer;letter-spacing:0.3px;
+  }
+  .seg button.on{background:var(--slate);color:var(--salt)}
+
+  /* ───────── Mill finish table ───────── */
+  .mill-table{
+    width:100%;border-collapse:separate;border-spacing:0;
+    font-size:10px;
+  }
+  .mill-table th{
+    text-align:left;font-size:8.5px;color:var(--stone);letter-spacing:0.2px;
+    text-transform:uppercase;font-weight:600;padding:4px 4px;border-bottom:1px solid var(--sand);
+  }
+  .mill-table td{
+    padding:5px 3px;border-bottom:1px solid var(--sand);
+  }
+  .mill-table td input,.mill-table td select{
+    width:100%;padding:3px 5px;border:1px solid var(--sand);border-radius:3px;
+    font-size:10px;background:var(--white);outline:none;
+  }
+  .mill-table td.delta input{text-align:right;font-family:var(--mono)}
+  .mill-table td.exec select{font-size:10px}
+  .mill-table .x-btn{
+    background:transparent;border:none;color:var(--stone);cursor:pointer;font-size:13px;
+  }
+  .exec-hint{
+    font-size:8.5px;color:var(--stone);font-style:italic;padding:2px 4px 6px;
+  }
+  .exec-hint.mill{color:var(--good)}
+  .exec-hint.secondary{color:var(--warn)}
+  .exec-hint.treatment{color:#3a5a8c}
+  .add-finish-row{
+    display:flex;align-items:center;gap:6px;font-size:11px;color:var(--soil);
+    cursor:pointer;padding:6px 0 0;
+  }
+  .add-finish-row::before{content:'+';font-size:14px;color:var(--soil)}
+
+  /* ───────── Photo / color slots ───────── */
+  .photo-slot{
+    background:var(--salt);border:1px dashed var(--sand);border-radius:4px;
+    height:130px;display:flex;align-items:center;justify-content:center;
+    font-size:10px;color:var(--stone);font-style:italic;position:relative;
+  }
+  .photo-slot.has{
+    background:linear-gradient(135deg,#dcd4c2 0%,#bda988 100%);
+    border-style:solid;color:var(--salt);font-style:normal;font-weight:600;
+  }
+  .photo-slot .corner{
+    position:absolute;bottom:0;left:0;background:var(--slate);color:var(--salt);
+    padding:3px 8px;font-size:8px;font-weight:600;letter-spacing:1px;
+  }
+  .colors-strip{
+    display:flex;gap:6px;overflow-x:auto;padding:6px 0 4px;scrollbar-width:thin;
+  }
+  .swatch{
+    flex:0 0 48px;height:48px;border-radius:4px;border:0.5px solid var(--sand);
+    position:relative;
+  }
+  .swatch .lbl{
+    position:absolute;bottom:-14px;left:0;right:0;text-align:center;
+    font-size:8px;color:var(--stone);
+  }
+  .colors-toggle{
+    background:transparent;border:1px solid var(--sand);border-radius:4px;
+    font-size:10px;padding:3px 8px;color:var(--stone);cursor:pointer;
+  }
+
+  /* ───────── Documents ───────── */
+  .docs-list{display:flex;flex-direction:column;gap:6px}
+  .doc-row{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:7px 10px;background:var(--salt);border-radius:4px;font-size:11px;
+  }
+  .doc-name{display:flex;align-items:center;gap:8px}
+  .doc-kind{
+    background:var(--sand);padding:1px 6px;border-radius:3px;
+    font-size:8px;letter-spacing:0.5px;text-transform:uppercase;color:var(--soil);
+  }
+  .doc-comments{font-size:10px;color:var(--stone)}
+  .doc-add{
+    border:1px dashed var(--sand);border-radius:4px;padding:14px;text-align:center;
+    font-size:11px;color:var(--stone);font-style:italic;
+  }
+
+  /* ───────── Versions ───────── */
+  .versions-head{
+    display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;
+  }
+  .versions-head h4{margin:0;font-size:14px}
+  .snap-btn{
+    padding:4px 10px;background:var(--slate);color:var(--salt);
+    border:none;border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;
+  }
+  .version-row{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:7px 10px;background:var(--white);border:1px solid var(--sand);
+    border-radius:4px;font-size:11px;cursor:pointer;
+  }
+  .version-row:hover{border-color:var(--soil)}
+  .version-meta{font-size:9px;color:var(--stone);font-family:var(--mono)}
+  .version-tag{
+    display:inline-block;padding:1px 6px;background:var(--salt);
+    border-radius:3px;font-size:9px;color:var(--slate);
+  }
+
+  /* ───────── Tech pack picker view ───────── */
+  .picker-stage{
+    background:#555;padding:16px;display:flex;flex-direction:column;gap:14px;
+    min-height:calc(100vh - 130px);
+  }
+  .picker-step{
+    background:var(--salt);border-radius:8px;padding:18px;max-width:920px;
+    margin:0 auto;width:100%;border:0.5px solid var(--border);
+  }
+  .picker-step .step-tag{
+    display:inline-block;padding:3px 8px;background:var(--slate);color:var(--salt);
+    font-size:9px;letter-spacing:1px;font-weight:600;border-radius:3px;
+    margin-bottom:8px;
+  }
+  .picker-step h3{
+    font-family:var(--serif);font-size:20px;color:var(--slate);
+  }
+  .picker-step .sub{font-size:11px;color:var(--stone);margin-top:3px}
+  .pickgrid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:14px;
+  }
+  .pickcard{
+    background:var(--white);border:0.5px solid var(--sand);border-radius:6px;
+    overflow:hidden;cursor:pointer;
+  }
+  .pickcard:hover{border-color:var(--soil)}
+  .pickcard.selected{border-color:var(--soil);box-shadow:0 0 0 2px rgba(133,79,11,0.15)}
+  .pickcard .swatch-thumb{height:100px;background:linear-gradient(135deg,#cdbf9c,#a8916a)}
+  .pickcard .meta{padding:8px 10px;font-size:11px}
+  .pickcard .meta .code{font-family:var(--mono);font-size:9px;color:var(--stone)}
+  .colorgrid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;margin-top:14px;
+  }
+  .colordisk{
+    aspect-ratio:1;border-radius:6px;border:0.5px solid var(--sand);
+    cursor:pointer;position:relative;display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px;
+  }
+  .colordisk.selected{box-shadow:0 0 0 3px var(--soil)}
+  .colordisk span{font-size:9px;color:var(--white);background:rgba(0,0,0,0.45);padding:1px 5px;border-radius:3px}
+  .picker-section{
+    margin-top:14px;padding-top:14px;border-top:1px solid var(--sand);
+  }
+  .picker-section h5{
+    margin:0 0 8px;font-family:var(--sans);font-weight:600;font-size:11px;
+    text-transform:uppercase;letter-spacing:0.5px;color:var(--soil);
+  }
+  .checkbox-row{
+    display:flex;align-items:center;gap:10px;padding:7px 10px;
+    background:var(--white);border:1px solid var(--sand);border-radius:4px;font-size:11px;
+    margin-bottom:5px;
+  }
+  .checkbox-row .delta{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--stone)}
+  .snap-cards{display:flex;gap:10px;flex-wrap:wrap}
+  .snap-card{
+    background:var(--white);border:1px solid var(--sand);border-radius:6px;
+    padding:10px;cursor:pointer;flex:1 1 220px;font-size:11px;
+  }
+  .snap-card:hover{border-color:var(--soil)}
+  .snap-card .when{font-size:9px;color:var(--stone);font-family:var(--mono)}
+  .snap-card .combo{margin:6px 0;font-size:11px;color:var(--slate)}
+  .snap-card .combo span{display:inline-block;background:var(--salt);padding:2px 6px;border-radius:3px;margin-right:3px;margin-bottom:3px}
+
+  .picker-foot{
+    display:flex;justify-content:space-between;align-items:center;margin-top:14px;
+  }
+  .picker-foot .skip{background:transparent;border:1px solid var(--sand);color:var(--stone);padding:6px 14px;border-radius:4px;font-size:11px;cursor:pointer}
+  .picker-foot .commit{background:var(--slate);color:var(--salt);border:none;padding:7px 18px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer}
+
+  /* Spec strip used inside SVG — purely for documentation; SVG draws its own */
+  .legend{
+    background:#fff;border:0.5px solid var(--border);border-radius:8px;padding:12px 14px;
+    font-size:11px;color:var(--stone);line-height:1.5;
+  }
+  .legend strong{color:var(--slate)}
+
+  /* Internal-only badge for fields that don't show on the external PDF */
+  .internal{
+    display:inline-block;background:rgba(133,79,11,0.10);color:var(--soil);
+    font-size:8px;letter-spacing:0.5px;text-transform:uppercase;font-weight:600;
+    padding:1px 5px;border-radius:3px;margin-left:6px;
+  }
+</style>
+</head>
+<body>
+
+<div class="app-bar">
+  <div>
+    <div class="brand">F R · M O D U L A R   T E C H   P A C K   S Y S T E M</div>
+    <div class="brand-title">Library cards · live preview spec</div>
+  </div>
+  <div class="app-bar-meta">v1 mockup · 2026-05-09 · branch: claude/fabric-treatments-dropdown-aArvn</div>
+</div>
+
+<nav class="tabs">
+  <button data-tab="fabric" class="active">Fabric card</button>
+  <button data-tab="treatment">Treatment card</button>
+  <button data-tab="cutsew">Cut &amp; Sew card</button>
+  <button data-tab="embellishment">Embellishment card</button>
+  <button data-tab="picker">Tech-pack picker flow</button>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     FABRIC CARD
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="builder active" id="view-fabric">
+  <div class="page-header">
+    <div style="flex:1;min-width:240px">
+      <button class="back-link">← Fabrics</button>
+      <div class="title-block">
+        <input class="title" value="ZF-FRT-340">
+        <input class="subtitle" value="ZhuFeng French Terry 340">
+        <div class="id-chip-row">
+          <span>French terry</span><span>·  KNIT</span>
+          <span class="id-chip">v1.2 <span style="color:var(--soil)">＋</span></span>
+          <span>FB-FRT-007</span>
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn-soft">✦ AI auto-fill</button>
+      <button class="btn-ghost">⤓ Export BOM PDF</button>
+      <select class="pill approved"><option>approved</option><option>testing</option><option>draft</option><option>archived</option></select>
+      <button class="btn-ghost">🗑 Archive</button>
+      <button class="btn-primary">Saved ✓</button>
+    </div>
+  </div>
+
+  <div class="builder-body">
+    <!-- ── LEFT: form cards ────────────────────────────────────────── -->
+    <aside class="left-col">
+
+      <div class="card">
+        <div class="card-row-head">
+          <h4>Identity</h4>
+          <div class="seg">
+            <button class="on">Knit</button><button>Woven</button>
+          </div>
+        </div>
+        <div class="grid-3">
+          <div><label class="label">Weave</label><select class="select"><option>French terry</option><option>Jersey</option><option>Fleece</option></select></div>
+          <div><label class="label">Composition</label><input class="input" value="100% Cotton (combed)"></div>
+          <div><label class="label">Hand / feel</label><input class="input" value="Soft, slightly brushed"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Spec</h4>
+        <div class="grid-4">
+          <div><label class="label">Weight (gsm)</label><input class="input" value="340"></div>
+          <div><label class="label">Width (cm)</label><input class="input" value="180"></div>
+          <div><label class="label">Shrinkage %</label><input class="input" value="4.5"></div>
+          <div><label class="label">Stretch %</label><input class="input" value="0"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-row-head">
+          <h4>Sourcing</h4>
+          <span style="font-size:9px;color:var(--stone);font-family:var(--mono)">USD/CNY 0.1380 · cached</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:10px;margin-bottom:10px">
+          <div><label class="label">Vendor</label><select class="select"><option>ZhuFeng Knits (Foshan)</option></select></div>
+          <div><label class="label">Lead time (days)</label><input class="input" value="35"></div>
+          <div><label class="label">MOQ (m)</label><input class="input" value="732"></div>
+        </div>
+        <div class="grid-4">
+          <div><label class="label">Price / m USD</label><input class="input" value="5.18"></div>
+          <div><label class="label">Price / m RMB</label><input class="input" value="37.50"></div>
+          <div><label class="label">Price / kg USD</label><input class="input" value="15.20"></div>
+          <div><label class="label">Price / kg RMB</label><input class="input" value="110.00"></div>
+        </div>
+      </div>
+
+      <!-- ── Garment placement (NEW) ── -->
+      <div class="card">
+        <div class="card-row-head">
+          <h4>Where on garment</h4>
+          <span style="font-size:10px;color:var(--stone)">default · tech pack picker can override</span>
+        </div>
+        <div style="display:grid;grid-template-columns:120px 1fr;gap:14px;align-items:start">
+          <div class="photo-slot has" style="height:180px;background:linear-gradient(160deg,#dcd4c2,#9a8460);font-size:9px">
+            <div style="text-align:center;line-height:1.5">
+              <div style="font-size:24px;margin-bottom:4px">⌒</div>
+              BODY PANELS
+            </div>
+            <div class="corner">2:3 PLACEMENT</div>
+          </div>
+          <div>
+            <label class="label">Area of product</label>
+            <select class="select">
+              <option>Body</option><option>Lining</option><option>Rib</option><option>Pocket</option>
+              <option>Hood lining</option><option>Cuff</option><option>Hem</option><option>Yoke</option>
+              <option>Sleeve</option><option>Collar</option>
+            </select>
+            <label class="label" style="margin-top:8px">Notes</label>
+            <input class="input" value="Main body panels and hood; not sleeves or cuffs">
+            <div style="font-size:9px;color:var(--stone);margin-top:6px;font-style:italic">
+              Drop a 2:3 garment silhouette with the fabric area shaded so vendors see at a glance which pieces are cut from this fabric.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Mill finishes (NEW) ── -->
+      <div class="card" style="background:linear-gradient(180deg,#fff 0%,#FAF6EE 100%)">
+        <div class="card-row-head">
+          <h4>Mill finishes <span class="internal">internal · adds to base price</span></h4>
+          <span style="font-size:10px;color:var(--stone)">3 finishes · base ¥37.50/m</span>
+        </div>
+        <table class="mill-table">
+          <thead>
+            <tr>
+              <th style="width:22%">Finish</th>
+              <th class="delta">+/m USD</th>
+              <th class="delta">+/m RMB</th>
+              <th class="delta">+/kg USD</th>
+              <th class="delta">+/kg RMB</th>
+              <th style="width:24%">Executed by</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><select class="select"><option>Brushing (interior)</option></select></td>
+              <td class="delta"><input class="input" value="1.03"></td>
+              <td class="delta"><input class="input" value="7.48"></td>
+              <td class="delta"><input class="input" value="3.02"></td>
+              <td class="delta"><input class="input" value="22.00"></td>
+              <td class="exec"><select class="select"><option>At ZhuFeng Mill (default)</option><option>Foshan Finishing Co. (secondary)</option><option>With wash-house treatment</option><option>＋ Add new vendor…</option></select></td>
+              <td><button class="x-btn">×</button></td>
+            </tr>
+            <tr><td colspan="7" class="exec-hint mill">↳ MOQ 732 m met — runs in-line at the mill, no separate logistics</td></tr>
+            <tr>
+              <td><select class="select"><option>Antibacterial</option></select></td>
+              <td class="delta"><input class="input" value="0.40"></td>
+              <td class="delta"><input class="input" value="2.90"></td>
+              <td class="delta"><input class="input" value="1.20"></td>
+              <td class="delta"><input class="input" value="8.70"></td>
+              <td class="exec"><select class="select"><option>At ZhuFeng Mill (default)</option><option>Foshan Finishing Co. (secondary)</option><option>With wash-house treatment</option></select></td>
+              <td><button class="x-btn">×</button></td>
+            </tr>
+            <tr><td colspan="7" class="exec-hint mill">↳ MOQ met</td></tr>
+            <tr>
+              <td><select class="select"><option>UV protection</option></select></td>
+              <td class="delta"><input class="input" value="0.28"></td>
+              <td class="delta"><input class="input" value="2.04"></td>
+              <td class="delta"><input class="input" value="0.82"></td>
+              <td class="delta"><input class="input" value="5.94"></td>
+              <td class="exec"><select class="select"><option selected>Foshan Finishing Co. (secondary)</option><option>At ZhuFeng Mill (default)</option><option>With wash-house treatment</option></select></td>
+              <td><button class="x-btn">×</button></td>
+            </tr>
+            <tr><td colspan="7" class="exec-hint secondary">↳ Mill MOQ for UV is 2,000 m — current order is below; runs at Foshan Finishing post-knit (+3 days lead)</td></tr>
+            <tr>
+              <td><select class="select"><option>Anti-pilling</option></select></td>
+              <td class="delta"><input class="input" value="0.18"></td>
+              <td class="delta"><input class="input" value="1.30"></td>
+              <td class="delta"><input class="input" value="0.52"></td>
+              <td class="delta"><input class="input" value="3.78"></td>
+              <td class="exec"><select class="select"><option selected>With wash-house treatment</option><option>At ZhuFeng Mill (default)</option><option>Foshan Finishing Co. (secondary)</option></select></td>
+              <td><button class="x-btn">×</button></td>
+            </tr>
+            <tr><td colspan="7" class="exec-hint treatment">↳ Bundled with the Stone Wash treatment in tech pack — no extra logistics, vendor inferred from BOM-T pick</td></tr>
+          </tbody>
+        </table>
+        <div class="add-finish-row">Add finish (catalog: brushing · antibacterial · anti-mite · UV protection · negative ion · anti-odor · anti-pilling · mercerization · sanforization · calendering · peaching · singeing)</div>
+      </div>
+
+      <!-- ── Ribbing (NEW · knit only) ── -->
+      <div class="card">
+        <div class="card-row-head">
+          <h4>Ribbing <span style="font-size:9px;color:var(--stone);font-weight:400;letter-spacing:0.5px;text-transform:uppercase;margin-left:4px">· knit only · paired by mill</span></h4>
+          <span style="font-size:10px;color:var(--stone)">held under the main mill fabric</span>
+        </div>
+        <div style="display:grid;grid-template-columns:100px 1fr;gap:14px;align-items:center">
+          <div class="photo-slot has" style="height:90px;background:repeating-linear-gradient(90deg,#7a6a55 0 3px,#5e4f3f 3px 6px);font-size:9px">
+            <div class="corner">RIB PHOTO</div>
+          </div>
+          <div class="grid-2" style="grid-template-columns:1fr 1fr">
+            <div><label class="label">Rib fabric #</label><input class="input" value="ZF-RIB-340-A"></div>
+            <div><label class="label">Notes (optional)</label><input class="input" placeholder="Construction · 2×2 rib, matching base color"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Fabric photos</h4>
+        <div class="grid-2">
+          <div class="photo-slot has">FRONT<div class="corner">FRONT</div></div>
+          <div class="photo-slot has" style="background:linear-gradient(135deg,#bda988,#9a8460)">BACK<div class="corner">BACK</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-row-head">
+          <h4>Color card</h4>
+          <button class="colors-toggle">12 colors · expand ▾</button>
+        </div>
+        <div class="colors-strip">
+          <div class="swatch" style="background:#3A3A3A"><span class="lbl">Slate</span></div>
+          <div class="swatch" style="background:#F5F0E8"><span class="lbl">Salt</span></div>
+          <div class="swatch" style="background:#C7B299"><span class="lbl">Sand</span></div>
+          <div class="swatch" style="background:#854F0B"><span class="lbl">Soil</span></div>
+          <div class="swatch" style="background:#9F4B2C"><span class="lbl">Sienna</span></div>
+          <div class="swatch" style="background:#3F4938"><span class="lbl">Moss</span></div>
+          <div class="swatch" style="background:#2B3A55"><span class="lbl">Ink</span></div>
+          <div class="swatch" style="background:#A5A19A"><span class="lbl">Stone</span></div>
+          <div class="swatch" style="background:#E8E4D9"><span class="lbl">Bone</span></div>
+          <div class="swatch" style="background:#5C5751"><span class="lbl">Pewter</span></div>
+          <div class="swatch" style="background:#7A7060"><span class="lbl">Otter</span></div>
+          <div class="swatch" style="background:#222"><span class="lbl">Charcoal</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>CLO3D &amp; notes</h4>
+        <div class="grid-2">
+          <div><label class="label">.ZFAB file</label><div class="photo-slot" style="height:60px">zhufeng_ft340.zfab</div></div>
+          <div><label class="label">Notes</label><textarea class="textarea" rows="3">Compatible with Vintage Soft. Run on cotton-only programs.</textarea></div>
+        </div>
+      </div>
+
+      <!-- ── Documents (NEW) ── -->
+      <div class="card">
+        <div class="card-row-head">
+          <h4>Documents <span class="internal">internal</span></h4>
+          <span style="font-size:10px;color:var(--stone)">3 files · 2 comments</span>
+        </div>
+        <div class="docs-list">
+          <div class="doc-row">
+            <div class="doc-name">
+              <span class="doc-kind">photo</span>
+              <span>process_brushing_run_2026-04-22.jpg</span>
+            </div>
+            <div class="doc-comments">2 comments · 22 Apr</div>
+          </div>
+          <div class="doc-row">
+            <div class="doc-name">
+              <span class="doc-kind">pdf</span>
+              <span>zhufeng_oeko_tex_cert.pdf</span>
+            </div>
+            <div class="doc-comments">— · 12 Mar</div>
+          </div>
+          <div class="doc-row">
+            <div class="doc-name">
+              <span class="doc-kind">doc</span>
+              <span>chat_thread_with_mr_lin_2026-04.txt</span>
+            </div>
+            <div class="doc-comments">— · 28 Apr</div>
+          </div>
+          <div class="doc-add">Drop process photos, certifications, mill chats… or paste a link</div>
+        </div>
+      </div>
+
+      <!-- ── Versions ── -->
+      <div class="card">
+        <div class="versions-head">
+          <h4>Versions</h4>
+          <button class="snap-btn">＋ Snapshot</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div class="version-row">
+            <div>
+              <strong>V3.0</strong> <span class="version-tag">Salt + Brushing + Antibacterial</span>
+              <div class="version-meta">2026-04-12 · sample run for AP-HD-STONE-01</div>
+            </div>
+            <span style="font-size:10px;color:var(--soil)">Open PDF →</span>
+          </div>
+          <div class="version-row">
+            <div>
+              <strong>V2.0</strong> <span class="version-tag">Slate + Brushing</span>
+              <div class="version-meta">2026-02-18 · before UV finish was added</div>
+            </div>
+            <span style="font-size:10px;color:var(--soil)">Open PDF →</span>
+          </div>
+          <div class="version-row">
+            <div>
+              <strong>V1.0</strong> <span class="version-tag">PFD · base</span>
+              <div class="version-meta">2025-12-15 · initial card</div>
+            </div>
+            <span style="font-size:10px;color:var(--soil)">Open PDF →</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <strong>External (renders on the supplier-facing tech pack page):</strong> identity, spec, sourcing, garment placement, mill finishes (with executed-by), color card, ribbing pair, cost summary.
+        <br><strong>Internal-only:</strong> documents and versions.
+        <br><strong>One source of truth:</strong> the SVG on the right is the same component the tech pack uses for its fabric page — they cannot drift.
+      </div>
+
+    </aside>
+
+    <!-- ── RIGHT: live SVG preview ─────────────────────────────────── -->
+    <main class="right-col">
+      <div class="preview-header">
+        <span>Live preview · matches tech pack Fabric page exactly</span>
+        <span>Page 03 / 24 · Fabric 1 / 1</span>
+      </div>
+      <div class="preview-frame">
+        <svg viewBox="0 0 1123 794" xmlns="http://www.w3.org/2000/svg" style="font-family:Helvetica,Arial,sans-serif">
+          <!-- ═════ FABRIC TECH PACK PAGE — single fabric, single page ═════ -->
+          <rect x="0" y="0" width="1123" height="794" fill="#F5F0E8"/>
+          <!-- Header chrome (matches existing tech pack page 03) -->
+          <rect x="0" y="0" width="1123" height="70" fill="#3A3A3A"/>
+          <text x="40" y="28" font-size="9" font-weight="bold" fill="#F5F0E8" letter-spacing="3">FOREIGN RESOURCE CO.</text>
+          <text x="40" y="50" font-size="8" fill="#EBE5D5" letter-spacing="2">BILL OF MATERIALS</text>
+          <text x="561" y="44" text-anchor="middle" font-family="'Cormorant Garamond',Georgia,serif" font-size="20" fill="#F5F0E8">Fabrics</text>
+          <text x="1083" y="28" text-anchor="end" font-size="10" font-weight="bold" fill="#F5F0E8" letter-spacing="2" font-family="ui-monospace,Menlo,monospace">FW26-BB-HO-0002</text>
+          <text x="1083" y="50" text-anchor="end" font-size="8" fill="#EBE5D5" letter-spacing="2">PAGE 03 / 24</text>
+          <rect x="0" y="70" width="1123" height="2" fill="#854F0B"/>
+
+          <!-- Single-fabric mode (no pagination dropdown) -->
+          <text x="561" y="92" text-anchor="middle" font-size="9" fill="#9A9A9A" letter-spacing="1.5">ONE FABRIC PICKED · NO PAGINATION</text>
+
+          <!-- Body card -->
+          <rect x="40" y="106" width="1043" height="640" fill="#fff" stroke="rgba(58,58,58,0.15)" stroke-width="0.5"/>
+
+          <!-- ── TOP ROW: photo · info · placement ── -->
+          <!-- Photo -->
+          <rect x="60" y="126" width="300" height="300" fill="url(#fp1)"/>
+          <rect x="60" y="408" width="60" height="18" fill="#3A3A3A"/>
+          <text x="90" y="421" text-anchor="middle" font-size="9" font-weight="bold" fill="#F5F0E8" letter-spacing="2">FRONT</text>
+
+          <!-- Info column -->
+          <text x="380" y="142" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">AREA OF PRODUCT</text>
+          <rect x="380" y="148" width="80" height="22" fill="#3A3A3A"/>
+          <text x="420" y="163" text-anchor="middle" font-size="11" font-weight="bold" fill="#F5F0E8" letter-spacing="0.5">BODY</text>
+
+          <text x="380" y="200" font-family="ui-monospace,Menlo,monospace" font-size="22" fill="#3A3A3A" letter-spacing="1">FB-FRT-007</text>
+          <rect x="380" y="216" width="14" height="14" fill="#F5F0E8" stroke="#EBE5D5"/>
+          <text x="402" y="227" font-size="10" fill="#3A3A3A" font-family="ui-monospace,Menlo,monospace">JF-034 特殊米白 (raw)</text>
+
+          <text x="380" y="258" font-size="11" fill="#3A3A3A">100% Cotton (combed)</text>
+          <text x="380" y="276" font-size="11" fill="#3A3A3A">340 GSM · french terry · 180 cm wide</text>
+          <text x="380" y="294" font-size="11" fill="#3A3A3A">Hand: soft, slightly brushed loop back</text>
+          <text x="380" y="312" font-size="11" fill="#3A3A3A">Shrinkage 4.5% · stretch 0%</text>
+
+          <line x1="380" y1="328" x2="760" y2="328" stroke="#EBE5D5" stroke-width="0.5"/>
+
+          <text x="380" y="348" font-size="11" fill="#3A3A3A" font-weight="bold">ZhuFeng Cloth Industry Ltd.</text>
+          <text x="380" y="366" font-size="10" fill="#9A9A9A" font-family="ui-monospace,Menlo,monospace">zhanxiaoyin@zhufengtextile.com.cn</text>
+          <text x="380" y="384" font-size="10" fill="#9A9A9A" font-family="ui-monospace,Menlo,monospace">+86 18922138369</text>
+          <text x="380" y="408" font-size="10" fill="#9A9A9A">Lead 35 days · MOQ 732 m</text>
+
+          <!-- Garment placement (NEW) -->
+          <text x="800" y="142" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">GARMENT PLACEMENT</text>
+          <rect x="800" y="150" width="160" height="240" fill="#F5F0E8" stroke="#EBE5D5"/>
+          <g stroke="#3A3A3A" stroke-width="1" fill="#fff">
+            <path d="M 845 175 L 855 165 L 905 165 L 915 175 L 920 185 L 915 195 L 905 192 L 905 360 L 855 360 L 855 192 L 845 195 L 840 185 Z"/>
+            <path d="M 868 165 Q 880 175 892 165" fill="none"/>
+          </g>
+          <rect x="855" y="200" width="50" height="160" fill="#854F0B" opacity="0.30"/>
+          <text x="880" y="380" text-anchor="middle" font-size="10" fill="#3A3A3A" font-weight="bold">BODY PANELS</text>
+          <text x="880" y="412" text-anchor="middle" font-size="9" fill="#9A9A9A" font-style="italic">Main body and hood</text>
+          <text x="880" y="425" text-anchor="middle" font-size="9" fill="#9A9A9A" font-style="italic">not sleeves or cuffs</text>
+
+          <!-- ── COLOR CARD strip (single row, selected highlighted) ── -->
+          <text x="60" y="466" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">COLOR CARD · 12 COLORWAYS</text>
+          <text x="1063" y="466" text-anchor="end" font-size="9" fill="#854F0B" font-weight="bold">PICKED: SALT</text>
+          <g stroke="#EBE5D5" stroke-width="0.5">
+            <rect x="60"  y="472" width="76" height="62" fill="#3A3A3A"/>
+            <rect x="144" y="472" width="76" height="62" fill="#F5F0E8" stroke="#854F0B" stroke-width="3"/>
+            <rect x="228" y="472" width="76" height="62" fill="#C7B299"/>
+            <rect x="312" y="472" width="76" height="62" fill="#854F0B"/>
+            <rect x="396" y="472" width="76" height="62" fill="#9F4B2C"/>
+            <rect x="480" y="472" width="76" height="62" fill="#3F4938"/>
+            <rect x="564" y="472" width="76" height="62" fill="#2B3A55"/>
+            <rect x="648" y="472" width="76" height="62" fill="#A5A19A"/>
+            <rect x="732" y="472" width="76" height="62" fill="#E8E4D9"/>
+            <rect x="816" y="472" width="76" height="62" fill="#5C5751"/>
+            <rect x="900" y="472" width="76" height="62" fill="#7A7060"/>
+            <rect x="984" y="472" width="76" height="62" fill="#222"/>
+          </g>
+          <g font-size="7.5" fill="#9A9A9A" text-anchor="middle">
+            <text x="98"  y="548">Slate</text>
+            <text x="182" y="548" font-weight="bold" fill="#854F0B">Salt ✓</text>
+            <text x="266" y="548">Sand</text>
+            <text x="350" y="548">Soil</text>
+            <text x="434" y="548">Sienna</text>
+            <text x="518" y="548">Moss</text>
+            <text x="602" y="548">Ink</text>
+            <text x="686" y="548">Stone</text>
+            <text x="770" y="548">Bone</text>
+            <text x="854" y="548">Pewter</text>
+            <text x="938" y="548">Otter</text>
+            <text x="1022" y="548">Charcoal</text>
+          </g>
+
+          <!-- ── MILL FINISHES table with EXECUTED-BY ── -->
+          <text x="60" y="578" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">MILL FINISHES &amp; EXECUTION</text>
+          <rect x="60" y="584" width="850" height="118" fill="#F5F0E8" stroke="#EBE5D5"/>
+          <text x="76" y="600" font-size="8" fill="#9A9A9A" letter-spacing="0.5" font-weight="bold">FINISH</text>
+          <text x="380" y="600" font-size="8" fill="#9A9A9A" letter-spacing="0.5" font-weight="bold">+ COST / m</text>
+          <text x="500" y="600" font-size="8" fill="#9A9A9A" letter-spacing="0.5" font-weight="bold">+ COST / kg</text>
+          <text x="620" y="600" font-size="8" fill="#9A9A9A" letter-spacing="0.5" font-weight="bold">EXECUTED BY</text>
+          <line x1="60" y1="606" x2="910" y2="606" stroke="#EBE5D5" stroke-width="0.5"/>
+          <g font-size="10" fill="#3A3A3A">
+            <text x="76" y="624">Brushing (interior)</text>
+            <text x="380" y="624" font-family="ui-monospace,Menlo,monospace">+¥7.48 · $1.03</text>
+            <text x="500" y="624" font-family="ui-monospace,Menlo,monospace">+¥22.00 · $3.02</text>
+            <rect x="620" y="612" width="120" height="16" fill="rgba(99,153,34,0.18)" rx="2"/>
+            <text x="680" y="624" text-anchor="middle" font-size="9" fill="#3B6D11">At ZhuFeng Mill</text>
+
+            <text x="76" y="644">Antibacterial</text>
+            <text x="380" y="644" font-family="ui-monospace,Menlo,monospace">+¥2.90 · $0.40</text>
+            <text x="500" y="644" font-family="ui-monospace,Menlo,monospace">+¥8.70 · $1.20</text>
+            <rect x="620" y="632" width="120" height="16" fill="rgba(99,153,34,0.18)" rx="2"/>
+            <text x="680" y="644" text-anchor="middle" font-size="9" fill="#3B6D11">At ZhuFeng Mill</text>
+
+            <text x="76" y="664">UV protection</text>
+            <text x="380" y="664" font-family="ui-monospace,Menlo,monospace">+¥2.04 · $0.28</text>
+            <text x="500" y="664" font-family="ui-monospace,Menlo,monospace">+¥5.94 · $0.82</text>
+            <rect x="620" y="652" width="200" height="16" fill="rgba(133,79,11,0.18)" rx="2"/>
+            <text x="720" y="664" text-anchor="middle" font-size="9" fill="#854F0B">Foshan Finishing (secondary, +3d)</text>
+
+            <text x="76" y="684">Anti-pilling</text>
+            <text x="380" y="684" font-family="ui-monospace,Menlo,monospace">+¥1.30 · $0.18</text>
+            <text x="500" y="684" font-family="ui-monospace,Menlo,monospace">+¥3.78 · $0.52</text>
+            <rect x="620" y="672" width="220" height="16" fill="rgba(58,90,140,0.18)" rx="2"/>
+            <text x="730" y="684" text-anchor="middle" font-size="9" fill="#3a5a8c">Bundled with Stone Wash treatment</text>
+          </g>
+
+          <!-- ── RIBBING (knit-only, simple) ── -->
+          <text x="930" y="578" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">RIBBING</text>
+          <rect x="930" y="584" width="133" height="84" fill="url(#rib1)" stroke="#EBE5D5"/>
+          <text x="996" y="688" text-anchor="middle" font-size="11" fill="#3A3A3A" font-family="ui-monospace,Menlo,monospace" font-weight="bold">ZF-RIB-340-A</text>
+          <text x="996" y="700" text-anchor="middle" font-size="9" fill="#9A9A9A">2×2 rib · matched</text>
+
+          <!-- ── BOTTOM COST STRIP ── -->
+          <line x1="60" y1="712" x2="1063" y2="712" stroke="#EBE5D5" stroke-width="0.5"/>
+          <text x="76" y="728" font-size="8" fill="#9A9A9A" letter-spacing="0.4">BASE</text>
+          <text x="76" y="740" font-size="11" fill="#3A3A3A" font-family="ui-monospace,Menlo,monospace">¥37.50 / m</text>
+          <text x="220" y="728" font-size="8" fill="#9A9A9A" letter-spacing="0.4">+ FINISHES</text>
+          <text x="220" y="740" font-size="11" fill="#3A3A3A" font-family="ui-monospace,Menlo,monospace">+¥13.72 / m</text>
+          <text x="400" y="728" font-size="8" fill="#9A9A9A" letter-spacing="0.4">ALL-IN / m</text>
+          <text x="400" y="740" font-size="12" fill="#854F0B" font-family="ui-monospace,Menlo,monospace" font-weight="bold">¥51.22 · $7.07</text>
+          <text x="640" y="728" font-size="8" fill="#9A9A9A" letter-spacing="0.4">YIELD</text>
+          <text x="640" y="740" font-size="11" fill="#3A3A3A" font-family="ui-monospace,Menlo,monospace">1.9 m / unit</text>
+          <text x="800" y="728" font-size="8" fill="#9A9A9A" letter-spacing="0.4">COST / UNIT (est.)</text>
+          <text x="800" y="740" font-size="13" fill="#854F0B" font-family="ui-monospace,Menlo,monospace" font-weight="bold">$13.43</text>
+
+          <!-- Footer -->
+          <text x="40" y="775" font-size="9" fill="#9A9A9A">© 2026 Foreign Resource Co. — Confidential Tech Pack</text>
+          <text x="1083" y="775" text-anchor="end" font-size="9" fill="#9A9A9A">PAGE 03 / 24</text>
+
+          <defs>
+            <linearGradient id="fp1" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0" stop-color="#dcd4c2"/><stop offset="1" stop-color="#bda988"/>
+            </linearGradient>
+            <pattern id="rib1" patternUnits="userSpaceOnUse" width="6" height="84">
+              <rect width="3" height="84" fill="#7a6a55"/>
+              <rect x="3" width="3" height="84" fill="#5e4f3f"/>
+            </pattern>
+          </defs>
+        </svg>
+      </div>
+      <div class="legend" style="background:transparent;border:none;padding:8px 2px">
+        <strong>One component renders both surfaces.</strong> The library card preview (this view) and the tech pack BOM Fabrics page use the exact same SVG component. Single fabric → single page; 2-3 fabrics → page 03 gets a dropdown nav (<code>Fabric 1 / N ▼</code>) and each fabric occupies its own A4. See the picker tab for the multi-fabric demo.
+      </div>
+    </main>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     TREATMENT CARD (wash-house — existing atom, gets the new layout)
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="builder" id="view-treatment">
+  <div class="page-header">
+    <div style="flex:1;min-width:240px">
+      <button class="back-link">← Treatments</button>
+      <div class="title-block">
+        <input class="title" value="Stone wash">
+        <input class="subtitle" value="Enzyme + pumice on cotton sweats">
+        <div class="id-chip-row">
+          <span>Wash</span><span>·  WASH-HOUSE</span>
+          <span class="id-chip">v2.1 <span style="color:var(--soil)">＋</span></span>
+          <span>TR-WSH-001</span>
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn-soft">✦ AI auto-fill</button>
+      <button class="btn-ghost">⤓ Export BOM PDF</button>
+      <select class="pill approved"><option>approved</option></select>
+      <button class="btn-ghost">🗑 Archive</button>
+      <button class="btn-primary">Saved ✓</button>
+    </div>
+  </div>
+
+  <div class="builder-body">
+    <aside class="left-col">
+
+      <div class="card">
+        <h4>Identity</h4>
+        <div class="grid-3">
+          <div><label class="label">Type</label><select class="select"><option>Wash</option><option>Garment dye</option><option>Print</option><option>Finish</option><option>Distress</option></select></div>
+          <div><label class="label">Base color</label><input class="input" value="Sienna"></div>
+          <div><label class="label">Shrinkage expected %</label><input class="input" value="3.5"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Recipe</h4>
+        <div class="grid-2">
+          <div><label class="label">Chemistry</label><textarea class="textarea" rows="3">Enzyme (cellulase 2%) + pumice, softener finish, pH 5.5 ± 0.3</textarea></div>
+          <div>
+            <label class="label">Duration (min) / Temp (°C)</label>
+            <div class="grid-2">
+              <input class="input" value="40">
+              <input class="input" value="55">
+            </div>
+            <label class="label" style="margin-top:8px">Compatible categories</label>
+            <input class="input" value="Hoodie, Sweatpant, Cargo">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Sourcing</h4>
+        <div class="grid-3">
+          <div><label class="label">Primary vendor</label><select class="select"><option>Guangdong Ocean Wash</option></select></div>
+          <div><label class="label">Backup</label><select class="select"><option>Foshan Blue Wash</option></select></div>
+          <div><label class="label">Cost / unit USD</label><input class="input" value="3.80"></div>
+        </div>
+        <div class="grid-3" style="margin-top:8px">
+          <div><label class="label">Lead time (days)</label><input class="input" value="12"></div>
+          <div><label class="label">MOQ (units)</label><input class="input" value="500"></div>
+          <div><label class="label">Defect rate % <span class="internal">internal</span></label><input class="input" value="1.8"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Photos &amp; swatch</h4>
+        <div class="grid-2">
+          <div class="photo-slot has" style="background:linear-gradient(135deg,#9F4B2C,#6E3520)">SWATCH<div class="corner">SWATCH</div></div>
+          <div class="photo-slot has" style="background:linear-gradient(135deg,#7A6452,#5A4837)">SAMPLE<div class="corner">ON-GARMENT</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Digital twin <span class="internal">internal</span></h4>
+        <div class="grid-3">
+          <div><label class="label">Source</label><select class="select"><option>LoRA trained</option><option>Manual</option><option>CLO-set</option></select></div>
+          <div><label class="label">Base model</label><select class="select"><option>Flux</option></select></div>
+          <div><label class="label">Trigger phrase</label><input class="input" value="fr_stone_wash"></div>
+        </div>
+        <div class="grid-2" style="margin-top:8px">
+          <div><label class="label">Checkpoint</label><input class="input" value="fr_stone_wash_v2.safetensors"></div>
+          <div><label class="label">Last sync</label><input class="input" value="2026-02-18"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-row-head">
+          <h4>Documents <span class="internal">internal</span></h4>
+          <span style="font-size:10px;color:var(--stone)">2 files</span>
+        </div>
+        <div class="docs-list">
+          <div class="doc-row"><div class="doc-name"><span class="doc-kind">photo</span><span>guangdong_run_2026-04-01.jpg</span></div><div class="doc-comments">1 comment · 1 Apr</div></div>
+          <div class="doc-row"><div class="doc-name"><span class="doc-kind">pdf</span><span>chemistry_msds.pdf</span></div><div class="doc-comments">— · 12 Mar</div></div>
+          <div class="doc-add">Drop process photos, MSDS, vendor chats…</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="versions-head">
+          <h4>Versions</h4>
+          <button class="snap-btn">＋ Snapshot</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div class="version-row"><div><strong>V2.1</strong> <span class="version-tag">enzyme 2% · pumice 0.6kg/kg</span><div class="version-meta">2026-02-18 · current spec</div></div><span style="font-size:10px;color:var(--soil)">Open PDF →</span></div>
+          <div class="version-row"><div><strong>V2.0</strong> <span class="version-tag">enzyme 1.5%</span><div class="version-meta">2025-09-04 · before pumice tweak</div></div><span style="font-size:10px;color:var(--soil)">Open PDF →</span></div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <strong>Internal-only on this card:</strong> defect rate, digital LoRA, documents, versions. <strong>External (shows in tech pack BOM-T page):</strong> identity, chemistry, duration/temp, vendor, cost, MOQ, lead time, swatch.
+      </div>
+    </aside>
+
+    <main class="right-col">
+      <div class="preview-header"><span>Live preview · BOM-T</span><span>Treatment card</span></div>
+      <div class="preview-frame">
+        <svg viewBox="0 0 1123 794" xmlns="http://www.w3.org/2000/svg" style="font-family:Helvetica,Arial,sans-serif">
+          <rect x="0" y="0" width="1123" height="794" fill="#fff"/>
+          <rect x="0" y="0" width="1123" height="70" fill="#3A3A3A"/>
+          <text x="40" y="28" font-size="9" font-weight="bold" fill="#F5F0E8" letter-spacing="3">FOREIGN RESOURCE CO.</text>
+          <text x="40" y="50" font-size="8" fill="#EBE5D5" letter-spacing="2">TREATMENT</text>
+          <text x="561" y="44" text-anchor="middle" font-family="'Cormorant Garamond',Georgia,serif" font-size="20" fill="#F5F0E8">Treatment Spec Card</text>
+          <text x="1083" y="28" text-anchor="end" font-size="10" font-weight="bold" fill="#F5F0E8" letter-spacing="2" font-family="ui-monospace,Menlo,monospace">TR-WSH-001</text>
+          <text x="1083" y="50" text-anchor="end" font-size="8" fill="#EBE5D5" letter-spacing="2">PAGE BOM-T / 20</text>
+          <rect x="0" y="70" width="1123" height="2" fill="#854F0B"/>
+
+          <text x="561" y="108" text-anchor="middle" font-family="'Cormorant Garamond',Georgia,serif" font-size="16" fill="#3A3A3A">Stone wash · v2.1 · WASH</text>
+
+          <!-- spec strip -->
+          <rect x="40" y="118" width="1043" height="56" fill="#F5F0E8" stroke="#EBE5D5" stroke-width="0.5"/>
+          <g font-size="7.5" font-weight="bold" fill="#854F0B" letter-spacing="1.2">
+            <text x="52" y="138">VENDOR</text><text x="227" y="138">BACKUP</text><text x="402" y="138">DURATION</text><text x="577" y="138">TEMPERATURE</text><text x="752" y="138">SHRINKAGE</text><text x="927" y="138">COST / UNIT</text>
+          </g>
+          <g font-size="11" fill="#3A3A3A">
+            <text x="52" y="156">Guangdong Ocean Wash</text>
+            <text x="227" y="156">Foshan Blue Wash</text>
+            <text x="402" y="156">40 min</text>
+            <text x="577" y="156">55 °C</text>
+            <text x="752" y="156">3.5%</text>
+            <text x="927" y="156">$3.80</text>
+          </g>
+
+          <!-- swatch + sample -->
+          <text x="40" y="200" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">SWATCH &amp; SAMPLE</text>
+          <rect x="40" y="208" width="240" height="240" fill="url(#tg1)" stroke="#EBE5D5"/>
+          <rect x="40" y="430" width="60" height="18" fill="#3A3A3A"/>
+          <text x="70" y="443" text-anchor="middle" font-size="9" font-weight="bold" fill="#F5F0E8" letter-spacing="2">SWATCH</text>
+          <rect x="296" y="208" width="240" height="240" fill="url(#tg2)" stroke="#EBE5D5"/>
+          <rect x="296" y="430" width="80" height="18" fill="#3A3A3A"/>
+          <text x="336" y="443" text-anchor="middle" font-size="9" font-weight="bold" fill="#F5F0E8" letter-spacing="2">ON-GARMENT</text>
+
+          <!-- chemistry -->
+          <text x="552" y="200" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">CHEMISTRY</text>
+          <rect x="552" y="208" width="531" height="120" fill="#F5F0E8" stroke="#EBE5D5"/>
+          <text x="568" y="230" font-size="11" fill="#3A3A3A" font-family="ui-monospace,Menlo,monospace">Enzyme (cellulase 2%) + pumice,</text>
+          <text x="568" y="250" font-size="11" fill="#3A3A3A" font-family="ui-monospace,Menlo,monospace">softener finish, pH 5.5 ± 0.3</text>
+          <text x="568" y="282" font-size="9" fill="#9A9A9A">Net 30 · 50% deposit. Run on cotton, cotton-linen ≥ 70%.</text>
+
+          <!-- compatibility -->
+          <text x="552" y="356" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">COMPATIBLE WITH</text>
+          <g font-size="11" fill="#3A3A3A">
+            <rect x="552" y="364" width="100" height="22" fill="#EBE5D5"/><text x="602" y="379" text-anchor="middle">Hoodie</text>
+            <rect x="660" y="364" width="120" height="22" fill="#EBE5D5"/><text x="720" y="379" text-anchor="middle">Sweatpant</text>
+            <rect x="788" y="364" width="100" height="22" fill="#EBE5D5"/><text x="838" y="379" text-anchor="middle">Cargo</text>
+          </g>
+
+          <!-- production tally -->
+          <text x="40" y="490" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">PRODUCTION TO DATE</text>
+          <rect x="40" y="500" width="1043" height="56" fill="#F5F0E8" stroke="#EBE5D5"/>
+          <g font-size="11" fill="#3A3A3A">
+            <text x="52" y="520">Units produced</text><text x="240" y="520" font-family="ui-monospace,Menlo,monospace">14,820</text>
+            <text x="320" y="520">POs run</text><text x="430" y="520" font-family="ui-monospace,Menlo,monospace">22</text>
+            <text x="510" y="520">Last lead (avg)</text><text x="700" y="520" font-family="ui-monospace,Menlo,monospace">11.4 days</text>
+            <text x="800" y="520">Cost trend</text><text x="940" y="520" font-family="ui-monospace,Menlo,monospace">$3.78 → $3.80</text>
+          </g>
+
+          <text x="40" y="775" font-size="9" fill="#9A9A9A">© 2026 Foreign Resource Co. — Confidential Tech Pack</text>
+          <text x="1083" y="775" text-anchor="end" font-size="9" fill="#9A9A9A">PAGE BOM-T / 20</text>
+
+          <defs>
+            <linearGradient id="tg1" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0" stop-color="#9F4B2C"/><stop offset="1" stop-color="#6E3520"/>
+            </linearGradient>
+            <linearGradient id="tg2" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0" stop-color="#7A6452"/><stop offset="1" stop-color="#5A4837"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+    </main>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CUT & SEW (renamed from Patterns) — full rename including DB
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="builder" id="view-cutsew">
+  <div class="page-header">
+    <div style="flex:1;min-width:240px">
+      <button class="back-link">← Cut &amp; Sew</button>
+      <div class="title-block">
+        <input class="title" value="Master Hoodie Block — adult unisex">
+        <input class="subtitle" value="Drop shoulder · oversized · derived from FR-MASTER-HD">
+        <div class="id-chip-row">
+          <span>Hoodie</span><span>·  CUT &amp; SEW</span>
+          <span class="id-chip">v3.2 <span style="color:var(--soil)">＋</span></span>
+          <span>CS-HD-001</span>
+          <span style="color:var(--good)">renamed from PT-HD-001</span>
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn-ghost">⤓ Export BOM PDF</button>
+      <select class="pill approved"><option>approved</option></select>
+      <button class="btn-ghost">🗑 Archive</button>
+      <button class="btn-primary">Saved ✓</button>
+    </div>
+  </div>
+
+  <div class="builder-body">
+    <aside class="left-col">
+
+      <div class="card">
+        <h4>Identity</h4>
+        <div class="grid-3">
+          <div><label class="label">Category</label><select class="select"><option>Hoodie</option><option>Tee</option><option>Sweatpant</option><option>Cargo</option><option>Shirt</option></select></div>
+          <div><label class="label">Version</label><input class="input" value="v3.2"></div>
+          <div><label class="label">Base block</label><input class="input" value="FR-MASTER-HD"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Spec</h4>
+        <div class="grid-3">
+          <div><label class="label">Size set</label><select class="select"><option>XS / S / M / L / XL / XXL</option></select></div>
+          <div><label class="label">Grade rule</label><input class="input" value="2 cm chest · 1.5 cm length"></div>
+          <div><label class="label">Seam allowance (cm)</label><input class="input" value="1.0"></div>
+        </div>
+        <div class="grid-3" style="margin-top:8px">
+          <div><label class="label">Ease at chest (cm)</label><input class="input" value="22"></div>
+          <div><label class="label">Drop (cm)</label><input class="input" value="6.5"></div>
+          <div><label class="label">Construction <span class="internal">internal</span></label><input class="input" value="French seam · double-needle hem"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Files</h4>
+        <div class="grid-2">
+          <div><label class="label">DXF / CAD</label><div class="photo-slot" style="height:60px">master_hoodie_v3.dxf</div></div>
+          <div><label class="label">Marker layout</label><div class="photo-slot" style="height:60px">marker_hoodie_180cm.ai</div></div>
+        </div>
+        <div class="grid-2" style="margin-top:8px">
+          <div><label class="label">Spec sheet</label><div class="photo-slot" style="height:60px">measurements_v3.pdf</div></div>
+          <div><label class="label">Sample photos</label><div class="photo-slot has" style="height:60px;background:linear-gradient(135deg,#cdbf9c,#a8916a)">3 attached</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Block lineage <span class="internal">internal</span></h4>
+        <div style="font-size:11px;color:var(--stone);line-height:1.6">
+          Forked from <strong style="color:var(--slate)">FR-MASTER-HD</strong> · 2025-08-12<br>
+          Diverges in: shoulder drop (+2.5 cm), body length (+3 cm), hood depth (+1.5 cm)<br>
+          Children: <strong style="color:var(--slate)">CS-HD-002</strong> (cropped), <strong style="color:var(--slate)">CS-HD-003</strong> (zip-front)
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-row-head">
+          <h4>Documents <span class="internal">internal</span></h4>
+          <span style="font-size:10px;color:var(--stone)">4 files</span>
+        </div>
+        <div class="docs-list">
+          <div class="doc-row"><div class="doc-name"><span class="doc-kind">photo</span><span>fit_session_2026-03-22.jpg</span></div><div class="doc-comments">3 comments · 22 Mar</div></div>
+          <div class="doc-row"><div class="doc-name"><span class="doc-kind">pdf</span><span>fit_notes_round_2.pdf</span></div><div class="doc-comments">— · 8 Apr</div></div>
+          <div class="doc-row"><div class="doc-name"><span class="doc-kind">other</span><span>pattern_3d_render.zprj</span></div><div class="doc-comments">— · 14 Apr</div></div>
+          <div class="doc-add">Drop fit photos, sloper history, marker layouts…</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="versions-head">
+          <h4>Versions</h4>
+          <button class="snap-btn">＋ Snapshot</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div class="version-row"><div><strong>V3.2</strong> <span class="version-tag">+1.5cm hood depth</span><div class="version-meta">2026-04-08 · current</div></div><span style="font-size:10px;color:var(--soil)">Open PDF →</span></div>
+          <div class="version-row"><div><strong>V3.1</strong> <span class="version-tag">drop fixed at 6.5cm</span><div class="version-meta">2026-02-12 · before hood tweak</div></div><span style="font-size:10px;color:var(--soil)">Open PDF →</span></div>
+          <div class="version-row"><div><strong>V3.0</strong> <span class="version-tag">first oversized rev</span><div class="version-meta">2025-12-05</div></div><span style="font-size:10px;color:var(--soil)">Open PDF →</span></div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <strong>Cut &amp; Sew migration:</strong> all <code>PT-*</code> codes get rewritten to <code>CS-*</code> in PR 3 (DB migration). The legacy hash <code>#product/library/patterns</code> redirects to <code>#product/library/cut-sew</code> via <code>normalizeLegacyHash</code>. Block lineage and construction notes are <strong>internal-only</strong>.
+      </div>
+    </aside>
+
+    <main class="right-col">
+      <div class="preview-header"><span>Live preview · BOM-CS</span><span>Cut &amp; Sew card</span></div>
+      <div class="preview-frame">
+        <svg viewBox="0 0 1123 794" xmlns="http://www.w3.org/2000/svg" style="font-family:Helvetica,Arial,sans-serif">
+          <rect x="0" y="0" width="1123" height="794" fill="#fff"/>
+          <rect x="0" y="0" width="1123" height="70" fill="#3A3A3A"/>
+          <text x="40" y="28" font-size="9" font-weight="bold" fill="#F5F0E8" letter-spacing="3">FOREIGN RESOURCE CO.</text>
+          <text x="40" y="50" font-size="8" fill="#EBE5D5" letter-spacing="2">CUT &amp; SEW</text>
+          <text x="561" y="44" text-anchor="middle" font-family="'Cormorant Garamond',Georgia,serif" font-size="20" fill="#F5F0E8">Cut &amp; Sew Block Card</text>
+          <text x="1083" y="28" text-anchor="end" font-size="10" font-weight="bold" fill="#F5F0E8" letter-spacing="2" font-family="ui-monospace,Menlo,monospace">CS-HD-001</text>
+          <text x="1083" y="50" text-anchor="end" font-size="8" fill="#EBE5D5" letter-spacing="2">PAGE BOM-CS / 20</text>
+          <rect x="0" y="70" width="1123" height="2" fill="#854F0B"/>
+
+          <text x="561" y="108" text-anchor="middle" font-family="'Cormorant Garamond',Georgia,serif" font-size="16" fill="#3A3A3A">Master Hoodie Block — adult unisex · v3.2</text>
+
+          <!-- spec strip -->
+          <rect x="40" y="118" width="1043" height="56" fill="#F5F0E8" stroke="#EBE5D5" stroke-width="0.5"/>
+          <g font-size="7.5" font-weight="bold" fill="#854F0B" letter-spacing="1.2">
+            <text x="52" y="138">CATEGORY</text><text x="227" y="138">BASE BLOCK</text><text x="402" y="138">SIZES</text><text x="577" y="138">EASE @ CHEST</text><text x="752" y="138">DROP</text><text x="927" y="138">SEAM ALL.</text>
+          </g>
+          <g font-size="11" fill="#3A3A3A">
+            <text x="52" y="156">Hoodie</text>
+            <text x="227" y="156">FR-MASTER-HD</text>
+            <text x="402" y="156">XS / S / M / L / XL / XXL</text>
+            <text x="577" y="156">22 cm</text>
+            <text x="752" y="156">6.5 cm</text>
+            <text x="927" y="156">1.0 cm</text>
+          </g>
+
+          <!-- pattern thumbnails (just stylized rects) -->
+          <text x="40" y="200" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">PATTERN PIECES</text>
+          <g stroke="#3A3A3A" stroke-width="0.5" fill="#F5F0E8">
+            <rect x="40" y="208" width="200" height="240"/>
+            <path d="M 60 230 L 220 230 L 220 420 L 60 420 Z" fill="#EBE5D5"/>
+            <text x="140" y="438" text-anchor="middle" font-size="10" fill="#3A3A3A">FRONT BODY</text>
+
+            <rect x="256" y="208" width="200" height="240"/>
+            <path d="M 276 230 L 436 230 L 436 420 L 276 420 Z" fill="#EBE5D5"/>
+            <text x="356" y="438" text-anchor="middle" font-size="10" fill="#3A3A3A">BACK BODY</text>
+
+            <rect x="472" y="208" width="160" height="240"/>
+            <path d="M 488 230 L 612 230 L 612 420 L 488 420 Z" fill="#EBE5D5"/>
+            <text x="552" y="438" text-anchor="middle" font-size="10" fill="#3A3A3A">SLEEVE × 2</text>
+
+            <rect x="648" y="208" width="200" height="120"/>
+            <path d="M 668 230 L 828 230 L 828 308 L 668 308 Z" fill="#EBE5D5"/>
+            <text x="748" y="318" text-anchor="middle" font-size="10" fill="#3A3A3A">HOOD × 2</text>
+
+            <rect x="648" y="340" width="200" height="108"/>
+            <path d="M 668 360 L 828 360 L 828 430 L 668 430 Z" fill="#EBE5D5"/>
+            <text x="748" y="438" text-anchor="middle" font-size="10" fill="#3A3A3A">POCKET</text>
+
+            <rect x="864" y="208" width="219" height="240"/>
+            <text x="974" y="225" text-anchor="middle" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">FIT POI</text>
+            <g font-size="10" fill="#3A3A3A">
+              <text x="880" y="248">Chest (M)</text><text x="1067" y="248" text-anchor="end" font-family="ui-monospace,Menlo,monospace">122 cm</text>
+              <text x="880" y="266">Length</text><text x="1067" y="266" text-anchor="end" font-family="ui-monospace,Menlo,monospace">73 cm</text>
+              <text x="880" y="284">Sleeve</text><text x="1067" y="284" text-anchor="end" font-family="ui-monospace,Menlo,monospace">62 cm</text>
+              <text x="880" y="302">Shoulder</text><text x="1067" y="302" text-anchor="end" font-family="ui-monospace,Menlo,monospace">52 cm</text>
+              <text x="880" y="320">Hood depth</text><text x="1067" y="320" text-anchor="end" font-family="ui-monospace,Menlo,monospace">36 cm</text>
+              <text x="880" y="338">Hem rib</text><text x="1067" y="338" text-anchor="end" font-family="ui-monospace,Menlo,monospace">5 cm</text>
+              <text x="880" y="356">Cuff rib</text><text x="1067" y="356" text-anchor="end" font-family="ui-monospace,Menlo,monospace">7 cm</text>
+              <text x="880" y="374">Pocket</text><text x="1067" y="374" text-anchor="end" font-family="ui-monospace,Menlo,monospace">28 × 19 cm</text>
+            </g>
+          </g>
+
+          <!-- size grade table -->
+          <text x="40" y="490" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">SIZE GRADE — CHEST / LENGTH / SLEEVE</text>
+          <rect x="40" y="500" width="1043" height="120" fill="#F5F0E8" stroke="#EBE5D5"/>
+          <g font-size="10" fill="#3A3A3A">
+            <text x="60" y="520" font-weight="bold">XS</text><text x="60" y="540" font-family="ui-monospace,Menlo,monospace">114 / 69 / 60</text>
+            <text x="240" y="520" font-weight="bold">S</text><text x="240" y="540" font-family="ui-monospace,Menlo,monospace">118 / 71 / 61</text>
+            <text x="420" y="520" font-weight="bold">M</text><text x="420" y="540" font-family="ui-monospace,Menlo,monospace">122 / 73 / 62</text>
+            <text x="600" y="520" font-weight="bold">L</text><text x="600" y="540" font-family="ui-monospace,Menlo,monospace">126 / 75 / 63</text>
+            <text x="780" y="520" font-weight="bold">XL</text><text x="780" y="540" font-family="ui-monospace,Menlo,monospace">130 / 77 / 64</text>
+            <text x="960" y="520" font-weight="bold">XXL</text><text x="960" y="540" font-family="ui-monospace,Menlo,monospace">134 / 79 / 65</text>
+            <text x="60" y="585" font-style="italic" fill="#9A9A9A">Grade rule: 2 cm chest · 1.5 cm length per step. Sleeve grades 1 cm.</text>
+          </g>
+
+          <text x="40" y="775" font-size="9" fill="#9A9A9A">© 2026 Foreign Resource Co. — Confidential Tech Pack</text>
+          <text x="1083" y="775" text-anchor="end" font-size="9" fill="#9A9A9A">PAGE BOM-CS / 20</text>
+        </svg>
+      </div>
+    </main>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     EMBELLISHMENT
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="builder" id="view-embellishment">
+  <div class="page-header">
+    <div style="flex:1;min-width:240px">
+      <button class="back-link">← Embellishments</button>
+      <div class="title-block">
+        <input class="title" value="FR Logo — flat embroidery">
+        <input class="subtitle" value="Center chest · 2-color satin stitch">
+        <div class="id-chip-row">
+          <span>Embroidery</span>
+          <span class="id-chip">v1.4 <span style="color:var(--soil)">＋</span></span>
+          <span>EM-EMB-002</span>
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn-ghost">⤓ Export BOM PDF</button>
+      <select class="pill approved"><option>approved</option></select>
+      <button class="btn-ghost">🗑 Archive</button>
+      <button class="btn-primary">Saved ✓</button>
+    </div>
+  </div>
+
+  <div class="builder-body">
+    <aside class="left-col">
+
+      <div class="card">
+        <h4>Identity</h4>
+        <div class="grid-3">
+          <div><label class="label">Type</label><select class="select"><option>Embroidery</option><option>Print</option><option>Patch</option><option>Label</option></select></div>
+          <div><label class="label">Technique</label><input class="input" value="Flat satin stitch · 2 colors"></div>
+          <div><label class="label">Color count</label><input class="input" value="2"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Placement &amp; size</h4>
+        <div class="grid-3">
+          <div><label class="label">Placement</label><select class="select"><option>Center chest</option><option>Left chest</option><option>Back yoke</option><option>Sleeve</option></select></div>
+          <div><label class="label">Width (cm)</label><input class="input" value="6.0"></div>
+          <div><label class="label">Height (cm)</label><input class="input" value="2.0"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Sourcing</h4>
+        <div class="grid-3">
+          <div><label class="label">Primary vendor</label><select class="select"><option>Foshan Stitch Co.</option></select></div>
+          <div><label class="label">Backup</label><select class="select"><option>Hangzhou Embroidery</option></select></div>
+          <div><label class="label">Cost / unit USD</label><input class="input" value="0.62"></div>
+        </div>
+        <div class="grid-3" style="margin-top:8px">
+          <div><label class="label">Lead time (days)</label><input class="input" value="8"></div>
+          <div><label class="label">MOQ (units)</label><input class="input" value="200"></div>
+          <div><label class="label">Stitch count <span class="internal">internal</span></label><input class="input" value="4,820"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Working files <span class="internal">internal</span></h4>
+        <div class="grid-2">
+          <div><label class="label">.ai (artwork master)</label><div class="photo-slot" style="height:60px">fr_logo_v1.ai</div></div>
+          <div><label class="label">.psd</label><div class="photo-slot" style="height:60px">fr_logo_v1.psd</div></div>
+          <div><label class="label">.dst (digitizing)</label><div class="photo-slot" style="height:60px">fr_logo_4820st.dst</div></div>
+          <div><label class="label">CLO graphic</label><div class="photo-slot" style="height:60px">fr_logo_clo.png</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-row-head">
+          <h4>Documents <span class="internal">internal</span></h4>
+          <span style="font-size:10px;color:var(--stone)">2 files</span>
+        </div>
+        <div class="docs-list">
+          <div class="doc-row"><div class="doc-name"><span class="doc-kind">photo</span><span>foshan_strike_off_2026-04-15.jpg</span></div><div class="doc-comments">2 comments · 15 Apr</div></div>
+          <div class="doc-row"><div class="doc-name"><span class="doc-kind">other</span><span>thread_madeira_swatch_card.psd</span></div><div class="doc-comments">— · 18 Mar</div></div>
+          <div class="doc-add">Drop strike-off photos, thread cards, vendor chats…</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="versions-head">
+          <h4>Versions</h4>
+          <button class="snap-btn">＋ Snapshot</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <div class="version-row"><div><strong>V1.4</strong> <span class="version-tag">stitch density tightened</span><div class="version-meta">2026-04-15 · current</div></div><span style="font-size:10px;color:var(--soil)">Open PDF →</span></div>
+          <div class="version-row"><div><strong>V1.3</strong> <span class="version-tag">5cm width</span><div class="version-meta">2026-01-12</div></div><span style="font-size:10px;color:var(--soil)">Open PDF →</span></div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <strong>External:</strong> placement, dimensions, technique, color count, vendor, cost. <strong>Internal-only:</strong> stitch count, working files (.ai/.psd/.dst), strike-off documents, versions.
+      </div>
+    </aside>
+
+    <main class="right-col">
+      <div class="preview-header"><span>Live preview · BOM-EM</span><span>Embellishment card</span></div>
+      <div class="preview-frame">
+        <svg viewBox="0 0 1123 794" xmlns="http://www.w3.org/2000/svg" style="font-family:Helvetica,Arial,sans-serif">
+          <rect x="0" y="0" width="1123" height="794" fill="#fff"/>
+          <rect x="0" y="0" width="1123" height="70" fill="#3A3A3A"/>
+          <text x="40" y="28" font-size="9" font-weight="bold" fill="#F5F0E8" letter-spacing="3">FOREIGN RESOURCE CO.</text>
+          <text x="40" y="50" font-size="8" fill="#EBE5D5" letter-spacing="2">EMBELLISHMENT</text>
+          <text x="561" y="44" text-anchor="middle" font-family="'Cormorant Garamond',Georgia,serif" font-size="20" fill="#F5F0E8">Embellishment Spec Card</text>
+          <text x="1083" y="28" text-anchor="end" font-size="10" font-weight="bold" fill="#F5F0E8" letter-spacing="2" font-family="ui-monospace,Menlo,monospace">EM-EMB-002</text>
+          <text x="1083" y="50" text-anchor="end" font-size="8" fill="#EBE5D5" letter-spacing="2">PAGE BOM-EM / 20</text>
+          <rect x="0" y="70" width="1123" height="2" fill="#854F0B"/>
+
+          <text x="561" y="108" text-anchor="middle" font-family="'Cormorant Garamond',Georgia,serif" font-size="16" fill="#3A3A3A">FR Logo — flat embroidery · v1.4</text>
+
+          <!-- spec strip -->
+          <rect x="40" y="118" width="1043" height="56" fill="#F5F0E8" stroke="#EBE5D5" stroke-width="0.5"/>
+          <g font-size="7.5" font-weight="bold" fill="#854F0B" letter-spacing="1.2">
+            <text x="52" y="138">VENDOR</text><text x="227" y="138">PLACEMENT</text><text x="402" y="138">SIZE</text><text x="577" y="138">COLORS</text><text x="752" y="138">LEAD / MOQ</text><text x="927" y="138">COST / UNIT</text>
+          </g>
+          <g font-size="11" fill="#3A3A3A">
+            <text x="52" y="156">Foshan Stitch Co.</text>
+            <text x="227" y="156">Center chest</text>
+            <text x="402" y="156">6.0 × 2.0 cm</text>
+            <text x="577" y="156">2 (Salt + Soil)</text>
+            <text x="752" y="156">8 days · 200 MOQ</text>
+            <text x="927" y="156">$0.62</text>
+          </g>
+
+          <!-- placement diagram -->
+          <text x="40" y="200" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">PLACEMENT</text>
+          <rect x="40" y="208" width="500" height="450" fill="#F5F0E8" stroke="#EBE5D5"/>
+          <!-- stylized garment torso -->
+          <g stroke="#3A3A3A" stroke-width="1.2" fill="#fff">
+            <path d="M 180 250 L 220 230 L 360 230 L 400 250 L 420 270 L 400 290 L 380 280 L 380 580 L 220 580 L 220 280 L 200 290 L 180 270 Z"/>
+            <path d="M 220 230 L 200 290" fill="none"/>
+            <path d="M 380 230 L 400 290" fill="none"/>
+            <!-- neckline -->
+            <path d="M 270 230 Q 290 250 310 230" fill="none"/>
+          </g>
+          <!-- embroidery placement marker -->
+          <rect x="270" y="320" width="60" height="20" fill="#854F0B" opacity="0.85"/>
+          <text x="300" y="335" text-anchor="middle" font-size="8" fill="#fff">FR</text>
+          <!-- dimension lines -->
+          <line x1="270" y1="360" x2="330" y2="360" stroke="#3A3A3A" stroke-width="0.5"/>
+          <text x="300" y="372" text-anchor="middle" font-size="8" fill="#3A3A3A">6.0 cm</text>
+          <line x1="350" y1="320" x2="350" y2="340" stroke="#3A3A3A" stroke-width="0.5"/>
+          <text x="358" y="333" font-size="8" fill="#3A3A3A">2.0 cm</text>
+          <text x="290" y="430" font-size="9" fill="#9A9A9A" font-style="italic">12 cm below neckline · centered on body CB</text>
+
+          <!-- artwork -->
+          <text x="556" y="200" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">ARTWORK</text>
+          <rect x="556" y="208" width="527" height="220" fill="#F5F0E8" stroke="#EBE5D5"/>
+          <text x="820" y="320" text-anchor="middle" font-family="'Cormorant Garamond',Georgia,serif" font-size="56" fill="#3A3A3A">FR</text>
+
+          <!-- thread spec -->
+          <text x="556" y="450" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">THREAD &amp; STITCH SPEC</text>
+          <rect x="556" y="458" width="527" height="200" fill="#F5F0E8" stroke="#EBE5D5"/>
+          <g font-size="11" fill="#3A3A3A">
+            <text x="572" y="480">Madeira Polyneon 40 wt</text>
+            <text x="572" y="500">Color 1: Salt #F5F0E8 (4824)</text>
+            <text x="572" y="520">Color 2: Soil #854F0B (1066)</text>
+            <text x="572" y="544">Stitch type: flat satin</text>
+            <text x="572" y="564">Underlay: zigzag, density 4 mm</text>
+            <text x="572" y="584">Density: 0.4 mm</text>
+            <text x="572" y="604">Pull comp: 0.2 mm body / 0.1 mm letterform</text>
+            <text x="572" y="628">Backing: tear-away (single layer)</text>
+          </g>
+
+          <text x="40" y="775" font-size="9" fill="#9A9A9A">© 2026 Foreign Resource Co. — Confidential Tech Pack</text>
+          <text x="1083" y="775" text-anchor="end" font-size="9" fill="#9A9A9A">PAGE BOM-EM / 20</text>
+        </svg>
+      </div>
+    </main>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     TECH PACK PICKER FLOW
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="builder" id="view-picker">
+  <div class="page-header">
+    <div style="flex:1;min-width:240px">
+      <div class="title-block">
+        <input class="title" value="Adding fabric to AP-HD-STONE-01 · BOM line 1">
+        <input class="subtitle" value="3-step picker: library → color → mill finishes">
+        <div class="id-chip-row">
+          <span>tech pack BOM-F page</span>
+          <span class="id-chip">step 3 of 14</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="picker-stage">
+
+    <!-- STEP 1 -->
+    <div class="picker-step">
+      <span class="step-tag">STEP 1 · LIBRARY</span>
+      <h3>Pick a fabric</h3>
+      <div class="sub">Library-first — only fabrics that exist in PLM are pickable. Add new ones in the Fabric tab.</div>
+      <input class="input" value="" placeholder="Search the library…" style="margin-top:14px">
+      <div class="pickgrid">
+        <div class="pickcard selected">
+          <div class="swatch-thumb"></div>
+          <div class="meta"><strong>ZhuFeng FT 340</strong><div class="code">FB-FRT-007 · 100% Cotton · 340 gsm</div></div>
+        </div>
+        <div class="pickcard">
+          <div class="swatch-thumb" style="background:linear-gradient(135deg,#A5A19A,#5C5751)"></div>
+          <div class="meta"><strong>FR Combed Jersey 180</strong><div class="code">FB-JSY-001 · 180 gsm</div></div>
+        </div>
+        <div class="pickcard">
+          <div class="swatch-thumb" style="background:linear-gradient(135deg,#2B3A55,#0E1830)"></div>
+          <div class="meta"><strong>13 oz Selvedge Denim</strong><div class="code">FB-DNM-001 · 440 gsm</div></div>
+        </div>
+        <div class="pickcard">
+          <div class="swatch-thumb" style="background:linear-gradient(135deg,#9F4B2C,#6E3520)"></div>
+          <div class="meta"><strong>Brushed Fleece 380</strong><div class="code">FB-FLC-002 · 380 gsm</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="picker-step">
+      <span class="step-tag">STEP 2 · COLORWAY</span>
+      <h3>Pick a color from ZhuFeng FT 340</h3>
+      <div class="sub">12 colorways on this fabric. Skip if this BOM line should be unspecified.</div>
+      <div class="colorgrid">
+        <div class="colordisk" style="background:#3A3A3A"><span>Slate</span></div>
+        <div class="colordisk selected" style="background:#F5F0E8"><span style="color:#3A3A3A;background:rgba(255,255,255,0.6)">Salt</span></div>
+        <div class="colordisk" style="background:#C7B299"><span>Sand</span></div>
+        <div class="colordisk" style="background:#854F0B"><span>Soil</span></div>
+        <div class="colordisk" style="background:#9F4B2C"><span>Sienna</span></div>
+        <div class="colordisk" style="background:#3F4938"><span>Moss</span></div>
+        <div class="colordisk" style="background:#2B3A55"><span>Ink</span></div>
+        <div class="colordisk" style="background:#A5A19A"><span>Stone</span></div>
+        <div class="colordisk" style="background:#E8E4D9"><span style="color:#3A3A3A;background:rgba(255,255,255,0.6)">Bone</span></div>
+        <div class="colordisk" style="background:#5C5751"><span>Pewter</span></div>
+        <div class="colordisk" style="background:#7A7060"><span>Otter</span></div>
+        <div class="colordisk" style="background:#222"><span>Charcoal</span></div>
+      </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="picker-step">
+      <span class="step-tag">STEP 3 · MILL FINISHES (NEW)</span>
+      <h3>Pick mill finishes for ZhuFeng FT 340 · Salt</h3>
+      <div class="sub">Three paths: pull a saved snapshot, check this fabric's existing finishes, or add a new one. Skip commits with no extras.</div>
+
+      <div class="picker-section">
+        <h5>Recent snapshots — click to commit the whole combo</h5>
+        <div class="snap-cards">
+          <div class="snap-card">
+            <div class="when">V3.0 · 2026-04-12</div>
+            <div class="combo"><span>Salt</span><span>Brushing</span><span>Antibacterial</span></div>
+            <div class="version-meta">Sample run for AP-HD-STONE-01 · ¥47.88/m total</div>
+          </div>
+          <div class="snap-card">
+            <div class="when">V2.0 · 2026-02-18</div>
+            <div class="combo"><span>Slate</span><span>Brushing</span></div>
+            <div class="version-meta">Pre-UV finish · ¥44.98/m total</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="picker-section">
+        <h5>Or check finishes already on this fabric</h5>
+        <div class="checkbox-row">
+          <input type="checkbox" checked>
+          <div style="flex:1">
+            <div>Brushing (interior)</div>
+            <select class="select" style="font-size:9px;width:auto;padding:2px 6px;margin-top:3px;display:inline-block">
+              <option>Executed at: ZhuFeng Mill (default — MOQ met)</option>
+              <option>Foshan Finishing Co. (secondary, +3d)</option>
+              <option>With Stone Wash treatment (bundle)</option>
+            </select>
+          </div>
+          <span class="delta">+¥7.48 / m · +¥22.00 / kg</span>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" checked>
+          <div style="flex:1">
+            <div>Antibacterial</div>
+            <select class="select" style="font-size:9px;width:auto;padding:2px 6px;margin-top:3px;display:inline-block">
+              <option>Executed at: ZhuFeng Mill (default)</option>
+              <option>Foshan Finishing Co. (secondary)</option>
+              <option>With Stone Wash treatment</option>
+            </select>
+          </div>
+          <span class="delta">+¥2.90 / m · +¥8.70 / kg</span>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" checked>
+          <div style="flex:1">
+            <div>UV protection</div>
+            <select class="select" style="font-size:9px;width:auto;padding:2px 6px;margin-top:3px;display:inline-block">
+              <option selected>Executed at: Foshan Finishing Co. (mill MOQ not met)</option>
+              <option>At ZhuFeng Mill (default)</option>
+              <option>With Stone Wash treatment</option>
+            </select>
+          </div>
+          <span class="delta">+¥2.04 / m · +¥5.94 / kg</span>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox">
+          <div style="flex:1">
+            <div>Anti-pilling</div>
+            <select class="select" style="font-size:9px;width:auto;padding:2px 6px;margin-top:3px;display:inline-block">
+              <option selected>Bundled with Stone Wash treatment (TR-WSH-001)</option>
+              <option>At ZhuFeng Mill</option>
+              <option>Foshan Finishing Co.</option>
+            </select>
+          </div>
+          <span class="delta">+¥1.30 / m · +¥3.78 / kg</span>
+        </div>
+        <div style="font-size:10px;color:var(--stone);margin-top:8px;font-style:italic;line-height:1.5">
+          <strong style="color:var(--good)">Green</strong> = at the mill (default · MOQ met).
+          <strong style="color:var(--warn)">Amber</strong> = secondary finishing facility (extra logistics + lead).
+          <strong style="color:#3a5a8c">Blue</strong> = bundled with a wash-house treatment in this tech pack — vendor inferred from the BOM-T pick.
+          The library default surfaces here; overriding only changes this tech pack.
+        </div>
+      </div>
+
+      <div class="picker-section">
+        <h5>Or add a brand-new finish</h5>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select class="select" style="flex:1">
+            <option>— Pick from catalog —</option>
+            <option>Anti-mite</option><option>Negative ion</option><option>Anti-odor</option><option>Anti-pilling</option><option>Mercerization</option><option>Sanforization</option><option>Calendering</option><option>Peaching</option><option>Singeing</option>
+            <option>＋ Type a new name…</option>
+          </select>
+          <input class="input" placeholder="+/m RMB" style="width:90px">
+          <input class="input" placeholder="+/kg RMB" style="width:90px">
+          <button class="btn-primary" style="white-space:nowrap;border-radius:4px">Add to fabric</button>
+        </div>
+        <div style="font-size:10px;color:var(--stone);margin-top:6px;font-style:italic">
+          Adding here writes back to the fabric record so future tech packs see this finish on the dropdown too. The org-wide name catalog grows over time.
+        </div>
+      </div>
+
+      <div class="picker-foot">
+        <button class="skip">Skip — no extra finishes</button>
+        <button class="commit">Commit fabric + Salt + 2 finishes →</button>
+      </div>
+    </div>
+
+    <!-- Result preview — single fabric -->
+    <div class="picker-step" style="background:#fff">
+      <span class="step-tag">RESULT · TECH PACK PAGE 03 · FABRIC 1 OF 1</span>
+      <h3>What lands when you commit one fabric</h3>
+      <div class="sub">Same SVG component as the library Fabric card preview — overlay props: chosenColor=Salt, chosenFinishes=[Brushing@Mill, Antibacterial@Mill, UV@Foshan, Anti-pilling@Treatment], chosenArea=Body.</div>
+      <div style="margin-top:14px;border:0.5px solid var(--border);border-radius:6px;overflow:hidden">
+        <svg viewBox="0 0 1123 794" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;font-family:Helvetica,Arial,sans-serif">
+          <rect x="0" y="0" width="1123" height="794" fill="#F5F0E8"/>
+          <rect x="0" y="0" width="1123" height="70" fill="#3A3A3A"/>
+          <text x="40" y="28" font-size="9" font-weight="bold" fill="#F5F0E8" letter-spacing="3">FOREIGN RESOURCE CO.</text>
+          <text x="40" y="50" font-size="8" fill="#EBE5D5" letter-spacing="2">BILL OF MATERIALS — AP-HD-STONE-01</text>
+          <text x="561" y="44" text-anchor="middle" font-family="'Cormorant Garamond',Georgia,serif" font-size="20" fill="#F5F0E8">Fabrics</text>
+          <text x="1083" y="28" text-anchor="end" font-size="10" font-weight="bold" fill="#F5F0E8" letter-spacing="2" font-family="ui-monospace,Menlo,monospace">FW26-BB-HO-0002</text>
+          <text x="1083" y="50" text-anchor="end" font-size="8" fill="#EBE5D5" letter-spacing="2">PAGE 03 / 24</text>
+          <rect x="0" y="70" width="1123" height="2" fill="#854F0B"/>
+          <text x="561" y="92" text-anchor="middle" font-size="9" fill="#9A9A9A" letter-spacing="1.5">ONE FABRIC PICKED · NO PAGINATION</text>
+
+          <rect x="40" y="106" width="1043" height="640" fill="#fff" stroke="rgba(58,58,58,0.15)" stroke-width="0.5"/>
+
+          <rect x="60" y="126" width="300" height="300" fill="url(#rfp1)"/>
+          <rect x="60" y="408" width="60" height="18" fill="#3A3A3A"/>
+          <text x="90" y="421" text-anchor="middle" font-size="9" font-weight="bold" fill="#F5F0E8" letter-spacing="2">FRONT</text>
+
+          <text x="380" y="142" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">AREA OF PRODUCT</text>
+          <rect x="380" y="148" width="80" height="22" fill="#3A3A3A"/>
+          <text x="420" y="163" text-anchor="middle" font-size="11" font-weight="bold" fill="#F5F0E8">BODY</text>
+          <text x="380" y="200" font-family="ui-monospace,Menlo,monospace" font-size="22" fill="#3A3A3A">FB-FRT-007</text>
+          <rect x="380" y="216" width="14" height="14" fill="#F5F0E8" stroke="#854F0B" stroke-width="2"/>
+          <text x="402" y="227" font-size="10" fill="#3A3A3A" font-family="ui-monospace,Menlo,monospace">SALT (chosen) · JF-034</text>
+          <text x="380" y="258" font-size="11" fill="#3A3A3A">100% Cotton (combed)</text>
+          <text x="380" y="276" font-size="11" fill="#3A3A3A">340 GSM · french terry · 180 cm</text>
+          <text x="380" y="294" font-size="11" fill="#3A3A3A">Hand: soft, slightly brushed loop</text>
+          <line x1="380" y1="312" x2="760" y2="312" stroke="#EBE5D5" stroke-width="0.5"/>
+          <text x="380" y="332" font-size="11" fill="#3A3A3A" font-weight="bold">ZhuFeng Cloth Industry Ltd.</text>
+          <text x="380" y="350" font-size="10" fill="#9A9A9A" font-family="ui-monospace,Menlo,monospace">zhanxiaoyin@zhufengtextile.com.cn</text>
+          <text x="380" y="368" font-size="10" fill="#9A9A9A" font-family="ui-monospace,Menlo,monospace">+86 18922138369</text>
+          <text x="380" y="392" font-size="10" fill="#9A9A9A">Lead 35 days · MOQ 732 m</text>
+
+          <text x="800" y="142" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">GARMENT PLACEMENT</text>
+          <rect x="800" y="150" width="160" height="240" fill="#F5F0E8" stroke="#EBE5D5"/>
+          <g stroke="#3A3A3A" stroke-width="1" fill="#fff">
+            <path d="M 845 175 L 855 165 L 905 165 L 915 175 L 920 185 L 915 195 L 905 192 L 905 360 L 855 360 L 855 192 L 845 195 L 840 185 Z"/>
+            <path d="M 868 165 Q 880 175 892 165" fill="none"/>
+          </g>
+          <rect x="855" y="200" width="50" height="160" fill="#854F0B" opacity="0.30"/>
+          <text x="880" y="380" text-anchor="middle" font-size="10" fill="#3A3A3A" font-weight="bold">BODY PANELS</text>
+
+          <!-- Color card with selected SALT highlighted -->
+          <text x="60" y="466" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">COLOR CARD · 12 COLORWAYS</text>
+          <text x="1063" y="466" text-anchor="end" font-size="9" fill="#854F0B" font-weight="bold">PICKED: SALT</text>
+          <g stroke="#EBE5D5" stroke-width="0.5">
+            <rect x="60"  y="472" width="76" height="62" fill="#3A3A3A" opacity="0.35"/>
+            <rect x="144" y="472" width="76" height="62" fill="#F5F0E8" stroke="#854F0B" stroke-width="3"/>
+            <rect x="228" y="472" width="76" height="62" fill="#C7B299" opacity="0.35"/>
+            <rect x="312" y="472" width="76" height="62" fill="#854F0B" opacity="0.35"/>
+            <rect x="396" y="472" width="76" height="62" fill="#9F4B2C" opacity="0.35"/>
+            <rect x="480" y="472" width="76" height="62" fill="#3F4938" opacity="0.35"/>
+            <rect x="564" y="472" width="76" height="62" fill="#2B3A55" opacity="0.35"/>
+            <rect x="648" y="472" width="76" height="62" fill="#A5A19A" opacity="0.35"/>
+            <rect x="732" y="472" width="76" height="62" fill="#E8E4D9" opacity="0.35"/>
+            <rect x="816" y="472" width="76" height="62" fill="#5C5751" opacity="0.35"/>
+            <rect x="900" y="472" width="76" height="62" fill="#7A7060" opacity="0.35"/>
+            <rect x="984" y="472" width="76" height="62" fill="#222" opacity="0.35"/>
+          </g>
+
+          <!-- Mill finishes table -->
+          <text x="60" y="578" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">MILL FINISHES &amp; EXECUTION</text>
+          <rect x="60" y="584" width="850" height="118" fill="#F5F0E8" stroke="#EBE5D5"/>
+          <text x="76" y="600" font-size="8" fill="#9A9A9A" letter-spacing="0.5" font-weight="bold">FINISH</text>
+          <text x="380" y="600" font-size="8" fill="#9A9A9A" letter-spacing="0.5" font-weight="bold">+ COST / m</text>
+          <text x="500" y="600" font-size="8" fill="#9A9A9A" letter-spacing="0.5" font-weight="bold">+ COST / kg</text>
+          <text x="620" y="600" font-size="8" fill="#9A9A9A" letter-spacing="0.5" font-weight="bold">EXECUTED BY</text>
+          <line x1="60" y1="606" x2="910" y2="606" stroke="#EBE5D5" stroke-width="0.5"/>
+          <g font-size="10" fill="#3A3A3A">
+            <text x="76" y="624">Brushing (interior)</text>
+            <text x="380" y="624" font-family="ui-monospace,Menlo,monospace">+¥7.48 · $1.03</text>
+            <text x="500" y="624" font-family="ui-monospace,Menlo,monospace">+¥22.00 · $3.02</text>
+            <rect x="620" y="612" width="120" height="16" fill="rgba(99,153,34,0.18)" rx="2"/>
+            <text x="680" y="624" text-anchor="middle" font-size="9" fill="#3B6D11">At ZhuFeng Mill</text>
+            <text x="76" y="644">Antibacterial</text>
+            <text x="380" y="644" font-family="ui-monospace,Menlo,monospace">+¥2.90 · $0.40</text>
+            <text x="500" y="644" font-family="ui-monospace,Menlo,monospace">+¥8.70 · $1.20</text>
+            <rect x="620" y="632" width="120" height="16" fill="rgba(99,153,34,0.18)" rx="2"/>
+            <text x="680" y="644" text-anchor="middle" font-size="9" fill="#3B6D11">At ZhuFeng Mill</text>
+            <text x="76" y="664">UV protection</text>
+            <text x="380" y="664" font-family="ui-monospace,Menlo,monospace">+¥2.04 · $0.28</text>
+            <text x="500" y="664" font-family="ui-monospace,Menlo,monospace">+¥5.94 · $0.82</text>
+            <rect x="620" y="652" width="200" height="16" fill="rgba(133,79,11,0.18)" rx="2"/>
+            <text x="720" y="664" text-anchor="middle" font-size="9" fill="#854F0B">Foshan Finishing (secondary, +3d)</text>
+            <text x="76" y="684">Anti-pilling</text>
+            <text x="380" y="684" font-family="ui-monospace,Menlo,monospace">+¥1.30 · $0.18</text>
+            <text x="500" y="684" font-family="ui-monospace,Menlo,monospace">+¥3.78 · $0.52</text>
+            <rect x="620" y="672" width="220" height="16" fill="rgba(58,90,140,0.18)" rx="2"/>
+            <text x="730" y="684" text-anchor="middle" font-size="9" fill="#3a5a8c">Bundled with Stone Wash treatment</text>
+          </g>
+
+          <text x="930" y="578" font-size="8" font-weight="bold" fill="#854F0B" letter-spacing="1.2">RIBBING</text>
+          <rect x="930" y="584" width="133" height="84" fill="url(#rrib1)" stroke="#EBE5D5"/>
+          <text x="996" y="688" text-anchor="middle" font-size="11" fill="#3A3A3A" font-family="ui-monospace,Menlo,monospace" font-weight="bold">ZF-RIB-340-A</text>
+          <text x="996" y="700" text-anchor="middle" font-size="9" fill="#9A9A9A">2×2 rib · matched</text>
+
+          <line x1="60" y1="712" x2="1063" y2="712" stroke="#EBE5D5" stroke-width="0.5"/>
+          <text x="76" y="728" font-size="8" fill="#9A9A9A" letter-spacing="0.4">BASE</text>
+          <text x="76" y="740" font-size="11" fill="#3A3A3A" font-family="ui-monospace,Menlo,monospace">¥37.50 / m</text>
+          <text x="220" y="728" font-size="8" fill="#9A9A9A" letter-spacing="0.4">+ FINISHES</text>
+          <text x="220" y="740" font-size="11" fill="#3A3A3A" font-family="ui-monospace,Menlo,monospace">+¥13.72 / m</text>
+          <text x="400" y="728" font-size="8" fill="#9A9A9A" letter-spacing="0.4">ALL-IN / m</text>
+          <text x="400" y="740" font-size="12" fill="#854F0B" font-family="ui-monospace,Menlo,monospace" font-weight="bold">¥51.22 · $7.07</text>
+          <text x="640" y="728" font-size="8" fill="#9A9A9A" letter-spacing="0.4">YIELD</text>
+          <text x="640" y="740" font-size="11" fill="#3A3A3A" font-family="ui-monospace,Menlo,monospace">1.9 m / unit</text>
+          <text x="800" y="728" font-size="8" fill="#9A9A9A" letter-spacing="0.4">COST / UNIT (est.)</text>
+          <text x="800" y="740" font-size="13" fill="#854F0B" font-family="ui-monospace,Menlo,monospace" font-weight="bold">$13.43</text>
+
+          <text x="40" y="775" font-size="9" fill="#9A9A9A">© 2026 Foreign Resource Co. — Confidential Tech Pack</text>
+          <text x="1083" y="775" text-anchor="end" font-size="9" fill="#9A9A9A">PAGE 03 / 24</text>
+
+          <defs>
+            <linearGradient id="rfp1" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0" stop-color="#dcd4c2"/><stop offset="1" stop-color="#bda988"/>
+            </linearGradient>
+            <pattern id="rrib1" patternUnits="userSpaceOnUse" width="6" height="84">
+              <rect width="3" height="84" fill="#7a6a55"/>
+              <rect x="3" width="3" height="84" fill="#5e4f3f"/>
+            </pattern>
+          </defs>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Multi-fabric pagination demo -->
+    <div class="picker-step" style="background:#fff">
+      <span class="step-tag">MULTI-FABRIC · PAGINATION VIA DROPDOWN</span>
+      <h3>What happens when you pick 2+ fabrics</h3>
+      <div class="sub">Page 03 keeps the same chrome, but the top of the body adds <code>Fabric N of M ▼</code> nav. Each fabric gets its own A4 page. The dropdown lets vendors jump between them; the PDF export emits one page per fabric back-to-back.</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+        <!-- Page 1 mini -->
+        <div style="border:0.5px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
+          <div style="position:absolute;top:8px;right:10px;background:rgba(255,255,255,0.92);border:1px solid var(--soil);border-radius:4px;padding:3px 8px;font-size:9px;color:var(--soil);font-weight:600;z-index:2">Fabric 1 of 2 ▼ · Body</div>
+          <svg viewBox="0 0 1123 794" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;font-family:Helvetica,Arial,sans-serif">
+            <rect x="0" y="0" width="1123" height="794" fill="#F5F0E8"/>
+            <rect x="0" y="0" width="1123" height="70" fill="#3A3A3A"/>
+            <text x="40" y="28" font-size="9" font-weight="bold" fill="#F5F0E8" letter-spacing="3">FOREIGN RESOURCE CO.</text>
+            <text x="40" y="50" font-size="8" fill="#EBE5D5" letter-spacing="2">BILL OF MATERIALS</text>
+            <text x="561" y="44" text-anchor="middle" font-family="'Cormorant Garamond',Georgia,serif" font-size="20" fill="#F5F0E8">Fabrics</text>
+            <text x="1083" y="50" text-anchor="end" font-size="8" fill="#EBE5D5" letter-spacing="2">PAGE 03 / 25</text>
+            <rect x="0" y="70" width="1123" height="2" fill="#854F0B"/>
+            <rect x="40" y="106" width="1043" height="640" fill="#fff" stroke="rgba(58,58,58,0.15)"/>
+            <rect x="60" y="126" width="300" height="300" fill="#bda988"/>
+            <rect x="380" y="148" width="80" height="22" fill="#3A3A3A"/>
+            <text x="420" y="163" text-anchor="middle" font-size="11" font-weight="bold" fill="#F5F0E8">BODY</text>
+            <text x="380" y="200" font-family="ui-monospace,Menlo,monospace" font-size="22" fill="#3A3A3A">FB-FRT-007</text>
+            <text x="380" y="240" font-size="14" fill="#3A3A3A">ZhuFeng FT 340 · Salt</text>
+            <text x="380" y="280" font-size="11" fill="#9A9A9A">+ Brushing, Antibacterial @ Mill</text>
+            <text x="380" y="298" font-size="11" fill="#9A9A9A">+ UV @ Foshan Finishing</text>
+            <text x="380" y="316" font-size="11" fill="#9A9A9A">+ Anti-pilling @ Stone Wash</text>
+            <text x="380" y="700" font-size="13" fill="#854F0B" font-family="ui-monospace,Menlo,monospace" font-weight="bold">$13.43 / unit</text>
+          </svg>
+        </div>
+        <!-- Page 2 mini -->
+        <div style="border:0.5px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
+          <div style="position:absolute;top:8px;right:10px;background:rgba(255,255,255,0.92);border:1px solid var(--soil);border-radius:4px;padding:3px 8px;font-size:9px;color:var(--soil);font-weight:600;z-index:2">Fabric 2 of 2 ▼ · Rib</div>
+          <svg viewBox="0 0 1123 794" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto;font-family:Helvetica,Arial,sans-serif">
+            <rect x="0" y="0" width="1123" height="794" fill="#F5F0E8"/>
+            <rect x="0" y="0" width="1123" height="70" fill="#3A3A3A"/>
+            <text x="40" y="28" font-size="9" font-weight="bold" fill="#F5F0E8" letter-spacing="3">FOREIGN RESOURCE CO.</text>
+            <text x="40" y="50" font-size="8" fill="#EBE5D5" letter-spacing="2">BILL OF MATERIALS</text>
+            <text x="561" y="44" text-anchor="middle" font-family="'Cormorant Garamond',Georgia,serif" font-size="20" fill="#F5F0E8">Fabrics</text>
+            <text x="1083" y="50" text-anchor="end" font-size="8" fill="#EBE5D5" letter-spacing="2">PAGE 04 / 25</text>
+            <rect x="0" y="70" width="1123" height="2" fill="#854F0B"/>
+            <rect x="40" y="106" width="1043" height="640" fill="#fff" stroke="rgba(58,58,58,0.15)"/>
+            <rect x="60" y="126" width="300" height="300" fill="url(#mfrib)"/>
+            <rect x="380" y="148" width="80" height="22" fill="#3A3A3A"/>
+            <text x="420" y="163" text-anchor="middle" font-size="11" font-weight="bold" fill="#F5F0E8">RIB</text>
+            <text x="380" y="200" font-family="ui-monospace,Menlo,monospace" font-size="22" fill="#3A3A3A">FB-RIB-005</text>
+            <text x="380" y="240" font-size="14" fill="#3A3A3A">2×2 Rib 280 · Slate</text>
+            <text x="380" y="280" font-size="11" fill="#9A9A9A">No mill finishes</text>
+            <text x="380" y="700" font-size="13" fill="#854F0B" font-family="ui-monospace,Menlo,monospace" font-weight="bold">$2.18 / unit</text>
+            <defs><pattern id="mfrib" patternUnits="userSpaceOnUse" width="8" height="300"><rect width="4" height="300" fill="#5C5751"/><rect x="4" width="4" height="300" fill="#3A3A3A"/></pattern></defs>
+          </svg>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--stone);margin-top:10px;line-height:1.5">
+        Total tech pack length grows by 1 per extra fabric (single fabric = 24 pages, two fabrics = 25, etc.). The dropdown is interactive in the live preview and inert in the PDF export — vendors flip pages instead. <strong>Note:</strong> for body+rib hoodies you'd usually pick a knit fabric whose <em>library card already has the matched ribbing</em> (ZF-RIB-340-A above) — and that ribbing only triggers a separate page if you've intentionally added it as a 2nd BOM line.
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+<script>
+  document.querySelectorAll('.tabs button').forEach(b => {
+    b.addEventListener('click', () => {
+      const target = b.dataset.tab;
+      document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('active', x === b));
+      document.querySelectorAll('.builder').forEach(s => s.classList.toggle('active', s.id === 'view-' + target));
+      window.scrollTo({top: 0, behavior: 'smooth'});
+    });
+  });
+</script>
+
+</body>
+</html>
