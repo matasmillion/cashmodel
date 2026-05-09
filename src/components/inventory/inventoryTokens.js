@@ -28,10 +28,14 @@ export const FADE = {
   slate06: 'rgba(58,58,58,0.06)',
 };
 
-// Type families
+// Type families.
+// CLAUDE.md (2026-05-09): "General Sans is the brand sans for body / UI
+// labels (Inter / Helvetica Neue fallback). Cormorant Garamond stays as
+// the heading face." Operator override (2026-05-09): KPI hero numbers
+// switch to sans — see KPI_VALUE below.
 export const TYPE = {
   serif: "'Cormorant Garamond', Georgia, serif",
-  sans:  "'Inter', system-ui, -apple-system, 'Helvetica Neue', sans-serif",
+  sans:  "'General Sans', 'Inter', system-ui, -apple-system, 'Helvetica Neue', sans-serif",
   mono:  "'SF Mono', 'Menlo', ui-monospace, monospace",
 };
 
@@ -53,13 +57,16 @@ export const EYEBROW = {
   textTransform: 'uppercase',
 };
 
-// KPI hero number.
+// KPI hero number. Operator-overridden 2026-05-09 to General Sans (was
+// Cormorant Garamond). The four cockpit tiles need crisp, monospaced-feeling
+// stat values that read as data, not editorial copy.
 export const KPI_VALUE = {
-  fontFamily: TYPE.serif,
-  fontSize: 32,
-  fontWeight: 400,
+  fontFamily: TYPE.sans,
+  fontSize: 28,
+  fontWeight: 500,
   color: INV.slate,
   lineHeight: 1.1,
+  letterSpacing: '-0.01em',
   fontVariantNumeric: 'tabular-nums',
 };
 
