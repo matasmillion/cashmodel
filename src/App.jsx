@@ -8,8 +8,6 @@ import KPICards from './components/KPICards';
 import CashflowTable from './components/CashflowTable';
 import Cashflow58WeekTable from './components/Cashflow58WeekTable';
 import UnitEconomics from './components/UnitEconomics';
-import POBuilder from './components/POBuilder';
-import POSchedule from './components/POSchedule';
 import OpexManager from './components/OpexManager';
 import ScenarioManager from './components/ScenarioManager';
 import IntegrationsPanel from './components/IntegrationsPanel';
@@ -18,7 +16,6 @@ import AdUnitModel from './components/AdUnitModel';
 import RateCardManager from './components/RateCardManager';
 import PLMView from './components/techpack/PLMView';
 import CreativeEngineView from './components/creative/CreativeEngineView';
-import SellThrough from './components/SellThrough';
 import InventoryView from './components/inventory/InventoryView';
 import RequireAuth from './components/auth/RequireAuth';
 import SignInPage from './components/auth/SignInPage';
@@ -76,11 +73,8 @@ function Dashboard() {
         {state.activeTab === 'unit-economics' && <UnitEconomics />}
         {state.activeTab === 'product' && <PLMView />}
         {state.activeTab === 'creative-engine' && <CreativeEngineView />}
-        {state.activeTab === 'sell-through' && <SellThrough />}
         {state.activeTab === 'inventory' && <InventoryView />}
         {state.activeTab === 'fulfillment' && <RateCardManager />}
-        {state.activeTab === 'po-schedule' && <POSchedule />}
-        {state.activeTab === 'pos' && <POBuilder />}
         {state.activeTab === 'opex' && <OpexManager />}
         {state.activeTab === 'scenarios' && <ScenarioManager />}
         {state.activeTab === 'integrations' && <IntegrationsPanel />}

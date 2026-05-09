@@ -193,9 +193,47 @@ Views: `today | knowledge | pulse | sprints | brief | jobs | production | queue 
 
 ---
 
+## Inventory Module Conventions
+
+All inventory code lives in `src/components/inventory/`. Stores in `src/utils/` (one file per data type, mirroring `treatmentStore.js`). The module is phase 7-complete: cockpit, SKU master ledger, SKU detail, sell-through, POs, OTB, forecast, and the read-only inventory agent.
+
+**Stack:** Plain JavaScript + JSDoc. localStorage primary + Supabase cloud mirror where shared. No TypeScript, no Zustand, no Zod.
+
+**Palette:** FR brand (Salt `#F5F0E8` / Slate `#3A3A3A` / Sand `#EBE5D5`) for surfaces. Sienna `#D4956A` is the single "movement" accent — vs-prior deltas, ad-projection lines, PO arrival markers, sienna ★ on tracked SKUs. Calendar states: good `#6B8E6B` healthy / warn `#C8924A` restock / bad `#A8543C` stockout / sea `#B5C7D3` overstock. Tokens: `src/components/inventory/inventoryTokens.js`.
+
+**KPI numbers:** General Sans 28px wt500 (operator override of the Cormorant-for-stat-values rule, 2026-05-09). Headings stay Cormorant.
+
+**Hash grammar:** `#inventory/{view}[/{id}]`
+Views: `cockpit | inventory | sell-through | otb | pos | forecast | sku/{sku}`
+Routing helper: `src/utils/inventoryRouting.js` (mirrors `plmRouting.js`). `migrateLegacyInventoryHash()` redirects pre-Phase-7 bookmarks (`#sell-through`, `#po-schedule`, `#pos`, `#new-po`).
+
+**Stores (one per data type, mirroring techPackStore.js):**
+- `inventoryStore.js` — joined SKU read model (Shopify on-hand + sales + PLM + POs + tracked flag)
+- `variantMappingStore.js` — Shopify variant ↔ PLM style mapping
+- `sellThroughStore.js` — snapshot of variant on-hand + 90d salesByDay
+- `productionStore.js` — POs, BOM snapshots, atom usage, drift logs
+- `otbStore.js` — quarterly per-class planned receipts $ (localStorage-only)
+- `forecastAssumptionsStore.js` — operator's planned ad spend / MER → derives liftMultiplier
+
+**Append-only enforcement** (at JS store layer): `tracking_audit` (every star toggle), plus the existing `atom_usage`, `state_transition`, `agent_interaction`, `bom_snapshot`. Reject any update/delete calls.
+
+**Tracked vs untracked SKUs (hard rule, mirrors top-level CLAUDE.md):** `inventoryStore.tracked[sku]`. Default true for Staples, false for Drops. Untracked SKUs:
+- excluded from cockpit calendar, urgent reorders, chase suggestions, Slack alerts
+- still visible on the Inventory tab (faded 0.45 opacity) with a "Untracked" pill replacing their bucket
+- ★ tracked / ☆ untracked toggle in the table, on the SKU detail header, and on cockpit cover rows
+
+**Never discount (hard rule, mirrors top-level CLAUDE.md):** No markdown actions anywhere in the inventory module. Overstock surfaces as a status pill and an OTB warning chip; the only operator levers are pause reorder (= setTracked false), hold for review, archive / repurpose at full price. The inventory agent's system prompt explicitly forbids proposing markdowns.
+
+**Inventory agent:** `src/utils/inventoryAgent.js` + `InventoryAgentChat.jsx`. Floating chat panel (bottom-right) accessible from every inventory tab. Read-only Claude Opus 4.7 with prompt-cached system prompt and 7 read-only tools dispatched into the stores. Routes through the existing `anthropic-proxy` Supabase Edge Function — no per-feature API key prompt.
+
+**Design reference:** `docs/mockups/inventory-portal.html` (1392 lines, 7 views, locked V1 spec). Implementation plan: `docs/inventory-implementation-plan.md`.
+
+---
+
 ## Changelog
 
 - 2026-04-25 — initial conventions established (folder structure, module boundaries, brand system, append-only collections, vendor surface hard rules)
 - 2026-05-06 — Creative Module Conventions added (Creative Engine phase 0)
 - 2026-05-09 — Type system: General Sans is the brand sans for body / UI labels (Cormorant Garamond stays as the heading face).
 - 2026-05-09 — Brand operating principle: never discount. Inventory module phase 0 (variant mapping store + Today/SKU mockups locked).
+- 2026-05-09 — Inventory module phases 1–7 shipped: cockpit, SKU master ledger, SKU detail, sell-through, POs, Open-to-Buy, forecast bridge + assumptions strip + top-20 calendar, read-only Claude agent. Legacy standalone `#sell-through`, `#po-schedule`, `#pos` routes retired (redirects preserved). KPI hero numbers switched from Cormorant to General Sans.
