@@ -1056,7 +1056,7 @@ export function StepDesignOverview({ data, set, images, onUpload, onRemove }) {
 export function StepFlatlays({ data, set, images, onUpload, onRemove }) {
   return (
     <div>
-      <SectionTitle>Technical Flat Lay Diagrams</SectionTitle>
+      <SectionTitle>Flat Lay</SectionTitle>
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, fontStyle: 'italic' }}>
         Front and back technical flats. Each maximised to A4 landscape so callouts stay legible on the printed page.
       </p>
@@ -1555,7 +1555,7 @@ export function StepConstruction({ data, set, images, onUpload, onRemove }) {
 
   return (
     <div>
-      <SectionTitle>Seam &amp; Stitch Specifications</SectionTitle>
+      <SectionTitle>Stitching</SectionTitle>
 
       {/* Stitch reference image blocks — up to six modular 2:3 vertical cells,
           one per stitch the factory will run. Labels (e.g. "401 Coverstitch")
@@ -1732,7 +1732,7 @@ function ConstructionDetailsPage({ pageKey, dataKey, fieldName, data, set, image
   };
   return (
     <div>
-      <SectionTitle>Construction Details — {pageKey === 'page1' ? 'Page 1' : 'Page 2'}</SectionTitle>
+      <SectionTitle>Call Outs</SectionTitle>
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, fontStyle: 'italic' }}>
         Number each callout on the left reference image (red dots) and describe the matching detail in the box. All text is dedicated per-field so it can be translated per factory.
       </p>
@@ -1805,7 +1805,7 @@ export function StepPattern({ data, set, images, onUpload, onRemove }) {
 
   return (
     <div>
-      <SectionTitle>Pattern Pieces &amp; Cutting</SectionTitle>
+      <SectionTitle>Pattern &amp; Cutting</SectionTitle>
 
       <PhotoUpload label="Pattern Pieces Layout" slotKey="pattern-layout" images={images} onUpload={onUpload} onRemove={onRemove} />
 
@@ -1889,7 +1889,7 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
 
   return (
     <div>
-      <SectionTitle>Points of Measure (cm)</SectionTitle>
+      <SectionTitle>POM (cm)</SectionTitle>
 
       <PhotoUpload label="POM Diagram (numbered measurement points)" slotKey="pom-diagram" images={images} onUpload={onUpload} onRemove={onRemove} />
 
@@ -1973,7 +1973,7 @@ export function StepSizeMatrix({ data, set }) {
 
   return (
     <div>
-      <SectionTitle>Graded Size Matrix</SectionTitle>
+      <SectionTitle>Size Grading</SectionTitle>
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, lineHeight: 1.5 }}>
         Sizes are pulled from the Style Overview page. Select the sample size — its values come straight from the Points of Measure page. Enter per-size deltas for all other sizes; final values are computed as <code style={{ fontFamily: 'ui-monospace,Menlo,monospace', background: FR.salt, padding: '1px 5px', borderRadius: 3 }}>sample + delta</code>.
       </p>
@@ -2174,7 +2174,35 @@ export function StepTreatments({ data, set, images, onUpload, onRemove }) {
 
   return (
     <div>
-      <SectionTitle>Garment Treatments</SectionTitle>
+      <SectionTitle>Render</SectionTitle>
+      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 18, fontStyle: 'italic' }}>
+        Three angles of the wash render. When the wash is brand-new and untested, generate a render to align everyone before sampling. Once the wash is tested, replace these with the real photos.
+      </p>
+
+      <div style={{ marginBottom: 22 }}>
+        <Row cols="1fr 1fr 1fr">
+          <PhotoUpload single label="Front" slotKey="treatment-front" images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
+          <PhotoUpload single label="Back"  slotKey="treatment-back"  images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
+          <PhotoUpload single label="Side"  slotKey="treatment-side"  images={images} onUpload={onUpload} onRemove={onRemove} aspect="2 / 3" />
+        </Row>
+      </div>
+
+      <div style={{ marginBottom: 22 }}>
+        <label style={sectionLabel}>Wash Types</label>
+        <p style={{ fontSize: 11, color: FR.stone, marginTop: -2, marginBottom: 8 }}>
+          One row per wash applied to this garment. Stone wash, garment dye, enzyme wash — list each as a separate row.
+        </p>
+        <ArrayTable
+          headers={[
+            { key: 'name',  label: 'Wash Type', placeholder: 'Stone Wash / Garment Dye / Enzyme Wash' },
+            { key: 'notes', label: 'Notes',     placeholder: 'Color / intensity / process detail' },
+          ]}
+          rows={(data.treatmentWashTypes || [{ name: '', notes: '' }])}
+          onUpdate={(i, k, v) => set('treatmentWashTypes', (data.treatmentWashTypes || [{ name: '', notes: '' }]).map((r, idx) => (idx === i ? { ...r, [k]: v } : r)))}
+          onAdd={() => set('treatmentWashTypes', [...(data.treatmentWashTypes || []), { name: '', notes: '' }])}
+          onRemove={i => set('treatmentWashTypes', (data.treatmentWashTypes || []).filter((_, idx) => idx !== i))}
+        />
+      </div>
 
       <div style={{ marginBottom: 18 }}>
         <label style={sectionLabel}>Linked Treatments (from BOM)</label>
@@ -2230,7 +2258,7 @@ export function StepTreatments({ data, set, images, onUpload, onRemove }) {
   );
 }
 export function StepLabels({ data, set, images, onUpload, onRemove }) {
-  const locked = isStepLocked(19, data.status);
+  const locked = isStepLocked(23, data.status);
 
   const packaging = data.packagingItems && data.packagingItems.length ? data.packagingItems : [{ component: '', material: '', color: '', size: '', artworkPrint: '', qtyPerOrder: '', notes: '' }];
   const updP = (i, k, v) => set('packagingItems', packaging.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
@@ -2288,7 +2316,7 @@ function computeQtyRow(row) {
 }
 
 export function StepOrder({ data, set, library, saveToLibrary }) {
-  const locked = isStepLocked(20, data.status);
+  const locked = isStepLocked(24, data.status);
   const [unitWeightG, setUnitWeightG] = useState(data.unitWeightGrams || '500');
   const [aiKey, setAiKey] = useState(getStoredKey());
   const [aiNotes, setAiNotes] = useState('');
@@ -2428,7 +2456,7 @@ export function StepOrder({ data, set, library, saveToLibrary }) {
   );
 }
 export function StepCompliance({ data, set }) {
-  const locked = isStepLocked(17, data.status);
+  const locked = isStepLocked(21, data.status);
 
   const shipping = data.shippingReqs && data.shippingReqs.length ? data.shippingReqs : [{ requirement: '', specification: '', notes: '' }];
   const updS = (i, k, v) => set('shippingReqs', shipping.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
@@ -2521,7 +2549,7 @@ const INSPECTION_STAGES = ['Pre-Production', 'During Production', 'Final Random 
 const SEVERITY_OPTIONS = ['Critical', 'Major', 'Minor'];
 
 export function StepQuality({ data, set }) {
-  const locked = isStepLocked(18, data.status);
+  const locked = isStepLocked(22, data.status);
 
   const qi = data.qualityInspection || { aqlMajor: '2.5', aqlMinor: '4.0', inspectionStage: 'During Production', checklist: [], photoRequirements: '' };
   const setQI = (k, v) => set('qualityInspection', { ...qi, [k]: v });
@@ -2760,6 +2788,83 @@ export function StepRevision({ data, set, onSubmit, submitting, submitResult, on
   );
 }
 
+// New step components added for the Embellishments + Treatments page expansion.
+// Each one mirrors an existing pattern (flat lay, call-outs, source-files) so the
+// supplier sees a consistent layout end-to-end.
+export function StepEmbFlatlay({ data, set, images, onUpload, onRemove }) {
+  return (
+    <div>
+      <SectionTitle>Flat Lay</SectionTitle>
+      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, fontStyle: 'italic' }}>
+        Two flat-lay sketches showing print or embellishment placement. Each maximised to A4 landscape so the supplier can read the artwork at scale.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+        <PhotoUpload label="Front (with embellishment)" slotKey="emb-flatlay-front" images={images} onUpload={onUpload} onRemove={onRemove} aspect="1.414 / 1" />
+        <PhotoUpload label="Back (with embellishment)"  slotKey="emb-flatlay-back"  images={images} onUpload={onUpload} onRemove={onRemove} aspect="1.414 / 1" />
+      </div>
+      <Row cols="1fr 1fr">
+        <Input label="Print Type" value={data.embPrintType} onChange={v => set('embPrintType', v)} placeholder="Screen print / DTG / Embroidery / Patch / Heat transfer" />
+        <Input label="Process Details" value={data.embProcessDetails} onChange={v => set('embProcessDetails', v)} placeholder="Plastisol, 4-color, 320 mesh, …" />
+      </Row>
+      <Input label="Flat Lay Notes" value={data.embFlatLayNotes} onChange={v => set('embFlatLayNotes', v)} multiline placeholder="Callouts, annotations, embellishment placement notes…" />
+    </div>
+  );
+}
+
+export function StepEmbCallouts({ data, set, images, onUpload, onRemove }) {
+  return (
+    <ConstructionDetailsPage
+      pageKey="emb-callouts"
+      fieldName="embCalloutDetails"
+      data={data}
+      set={set}
+      images={images}
+      onUpload={onUpload}
+      onRemove={onRemove}
+    />
+  );
+}
+
+export function StepEmbSizing({ data, set, images, onUpload, onRemove }) {
+  return (
+    <div>
+      <SectionTitle>Sizing &amp; Colors</SectionTitle>
+      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, fontStyle: 'italic' }}>
+        Per-size artwork and colorway swatches. Drop the working source files (Illustrator / Photoshop / Figma exports) so the supplier can scale and recolor without rebuilding from scratch.
+      </p>
+      <div style={{ marginBottom: 14 }}>
+        <PhotoUpload
+          label="Sizing & Color Reference"
+          slotKey="emb-sizing-reference"
+          images={images}
+          onUpload={onUpload}
+          onRemove={onRemove}
+        />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 14 }}>
+        <PhotoUpload single label="Source File 1" slotKey="emb-sizing-source-1" images={images} onUpload={onUpload} onRemove={onRemove} />
+        <PhotoUpload single label="Source File 2" slotKey="emb-sizing-source-2" images={images} onUpload={onUpload} onRemove={onRemove} />
+        <PhotoUpload single label="Source File 3" slotKey="emb-sizing-source-3" images={images} onUpload={onUpload} onRemove={onRemove} />
+      </div>
+      <Input label="Sizing &amp; Color Notes" value={data.embSizingNotes} onChange={v => set('embSizingNotes', v)} multiline placeholder="Per-size print scaling, color swap rules, gradient handling, source-file format…" />
+    </div>
+  );
+}
+
+export function StepTreatmentCallouts({ data, set, images, onUpload, onRemove }) {
+  return (
+    <ConstructionDetailsPage
+      pageKey="treat-callouts"
+      fieldName="treatCalloutDetails"
+      data={data}
+      set={set}
+      images={images}
+      onUpload={onUpload}
+      onRemove={onRemove}
+    />
+  );
+}
+
 // Order mirrors STEPS in techPackConstants.js — by manufacturing stage.
 export const STEP_FNS = [
   StepCompetitorLandscape, // 00 Merchandising — Competitor Landscape (000)
@@ -2769,21 +2874,25 @@ export const STEP_FNS = [
   StepFabrics,             // 04 Bill of Materials — Fabrics
   StepTrims,               // 05 Bill of Materials — Trims
   StepPackaging,           // 06 Bill of Materials — Packaging (skippable)
-  StepFlatlays,            // 07 Cut & Sew — Technical Flat Lay Diagrams
-  StepSketches,            // 08 Cut & Sew — Construction Details Page 1
-  StepSketches2,           // 09 Cut & Sew — Construction Details Page 2
-  StepConstruction,        // 10 Cut & Sew — Seam & Stitch Specifications
+  StepFlatlays,            // 07 Cut & Sew — Flat Lay
+  StepSketches,            // 08 Cut & Sew — Call Outs (page 1)
+  StepSketches2,           // 09 Cut & Sew — Call Outs (page 2)
+  StepConstruction,        // 10 Cut & Sew — Stitching
   StepPattern,             // 11 Cut & Sew — Pattern & Cutting
-  StepPom,                 // 12 Cut & Sew — POM (sample size)
-  StepSizeMatrix,          // 13 Cut & Sew — Graded Size Matrix (skippable)
+  StepPom,                 // 12 Cut & Sew — POM
+  StepSizeMatrix,          // 13 Cut & Sew — Size Grading (skippable)
   StepColor,               // 14 Embellishments — Colorways
   StepArtwork,             // 15 Embellishments — Artwork & Placement
-  StepTreatments,          // 16 Treatments
-  StepCompliance,          // 17 QC — Compliance & Testing (locked)
-  StepQuality,             // 18 QC — Quality Inspection (locked)
-  StepLabels,              // 19 Packaging — Labels & Packaging (locked)
-  StepOrder,               // 20 Logistics (locked)
-  StepRevision,            // 21 Sign-off
+  StepEmbFlatlay,          // 16 Embellishments — Flat Lay
+  StepEmbCallouts,         // 17 Embellishments — Call Outs
+  StepEmbSizing,           // 18 Embellishments — Sizing & Colors
+  StepTreatments,          // 19 Treatments — Render
+  StepTreatmentCallouts,   // 20 Treatments — Call Outs
+  StepCompliance,          // 21 QC — Compliance & Testing (locked)
+  StepQuality,             // 22 QC — Quality Inspection (locked)
+  StepLabels,              // 23 Packaging — Labels & Packaging (locked)
+  StepOrder,               // 24 Logistics (locked)
+  StepRevision,            // 25 Sign-off
 ];
 
 // Backwards-compat aliases so older references keep resolving during the

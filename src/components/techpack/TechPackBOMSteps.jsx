@@ -210,7 +210,7 @@ function fabricSpec(row) {
     weight:      weightGsm ? `${weightGsm} GSM` : '—',
     weave:       row?.weave || d?.weave || '—',
     millId:      row?.mill_id || d?.mill_id || d?.supplier || row?.supplier || row?.mill || '',
-    cover:       row?.cover_image || row?.front_image_url || d?.cover_image || d?.front_image_url || null,
+    cover:       row?.front_image_url || row?.cover_image || d?.front_image_url || d?.cover_image || null,
     colors:      row?.color_card_images || d?.color_card_images || [],
     unitCost,
     currency:    d.currency || tier?.currency || 'USD',
