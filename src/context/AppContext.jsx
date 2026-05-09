@@ -188,7 +188,7 @@ const PERSISTED_KEYS = [
 const VALID_TABS = new Set([
   'dashboard', 'revenue', 'cashflow', 'ad-units', 'unit-economics',
   'product', 'sell-through', 'fulfillment', 'po-schedule', 'pos', 'opex', 'scenarios', 'integrations',
-  'org-settings', 'creative-engine',
+  'org-settings', 'creative-engine', 'inventory',
 ]);
 
 function readTabFromHash() {
