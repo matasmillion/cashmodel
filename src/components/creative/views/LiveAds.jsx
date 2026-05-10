@@ -3,9 +3,7 @@ import { listAds, saveAd } from '../../../utils/adStore';
 import { checkBudgetGuardrail } from '../../../utils/budgetConfigStore';
 import { callMetaProxy } from '../../../utils/liveDataSync';
 import { AD_STATUSES } from '../../../types/creative';
-
-const FR = { slate: '#3A3A3A', salt: '#F5F0E8', sand: '#EBE5D5', stone: '#716F70' };
-const NAVY = '#1B2741';
+import { FR, AD_STATUS_TOKEN, pillStyle } from '../palette';
 
 export default function LiveAds() {
   const [ads, setAds] = useState(null);
@@ -24,7 +22,7 @@ export default function LiveAds() {
   useEffect(() => { refresh(); }, []);
 
   const weeklyPct = guardrail ? Math.min(1, guardrail.weeklySpend / (guardrail.config?.weekly_cap || 2000)) : 0;
-  const barColor = weeklyPct >= 0.9 ? '#A32D2D' : weeklyPct >= 0.7 ? '#854F0B' : NAVY;
+  const barColor = weeklyPct >= 0.9 ? FR.red : weeklyPct >= 0.7 ? FR.amber : FR.navy;
 
   const handleKill = async (ad) => {
     if (!ad.meta_ad_id) return;
@@ -43,8 +41,6 @@ export default function LiveAds() {
 
   const handleScale = async (ad) => {
     if (!ad.meta_adset_id) return;
-    // Bump daily budget by 30% of current spend (or 30% of $25 if we
-    // don't have spend data yet).
     const baseDailyUsd = (ad.spend_to_date && ad.spend_to_date > 0) ? ad.spend_to_date : 25;
     const newDailyBudgetCents = Math.max(100, Math.round(baseDailyUsd * 100 * 1.3));
     setPending(p => ({ ...p, [ad.id]: 'scaling' }));
@@ -77,20 +73,28 @@ export default function LiveAds() {
 
   return (
     <div>
-      <h2 style={{ fontFamily: 'Cormorant Garamond, Georgia, serif', fontSize: 22, fontWeight: 400, color: FR.slate, marginBottom: 16 }}>
+      <h2 style={{ fontFamily: 'Cormorant Garamond, Georgia, serif', fontSize: 22, fontWeight: 400, color: FR.ink, marginBottom: 16 }}>
         Live Ads
       </h2>
 
-      <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: '12px 16px', marginBottom: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 12, color: FR.slate }}>
-          <span>Weekly Spend</span>
-          <span>${guardrail ? guardrail.weeklySpend.toFixed(2) : '—'} / ${guardrail?.config?.weekly_cap ?? '2,000.00'}</span>
+      <div style={{
+        background: FR.navy, color: '#fff',
+        borderRadius: 12, padding: '14px 18px', marginBottom: 20,
+        boxShadow: '0 1px 0 rgba(0,0,0,0.06)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 12, opacity: 0.92 }}>
+          <span style={{ letterSpacing: '0.04em' }}>WEEKLY SPEND · BUDGET GUARDRAIL</span>
+          <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+            ${guardrail ? guardrail.weeklySpend.toFixed(2) : '—'} / ${guardrail?.config?.weekly_cap?.toFixed?.(2) ?? '2,000.00'}
+          </span>
         </div>
-        <div style={{ height: 6, background: FR.sand, borderRadius: 3, overflow: 'hidden' }}>
+        <div style={{ height: 6, background: 'rgba(255,255,255,0.14)', borderRadius: 3, overflow: 'hidden' }}>
           <div style={{ height: '100%', width: `${weeklyPct * 100}%`, background: barColor, borderRadius: 3, transition: 'width 400ms ease' }} />
         </div>
         {guardrail && !guardrail.config?.writes_enabled && (
-          <p style={{ marginTop: 6, fontSize: 11, color: '#A32D2D' }}>Meta writes are disabled.</p>
+          <p style={{ marginTop: 8, fontSize: 11, color: FR.redLight, margin: '8px 0 0' }}>
+            ⚠ Meta writes are disabled. Set <code>budget_config.writes_enabled = true</code> to re-enable.
+          </p>
         )}
       </div>
 
@@ -99,12 +103,12 @@ export default function LiveAds() {
         : ads.length === 0
         ? <p style={{ fontSize: 13, color: FR.stone }}>No ads published yet.</p>
         : (
-          <div style={{ overflowX: 'auto' }}>
+          <div style={{ overflowX: 'auto', background: '#fff', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 12 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
-                <tr style={{ background: NAVY }}>
-                  {['Ad Name', 'Status', 'Spend', 'Impr.', 'Clicks', 'CPA', 'Rec.', 'Actions'].map(h => (
-                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#fff', fontWeight: 400, fontSize: 11, letterSpacing: '0.05em' }}>{h}</th>
+                <tr style={{ background: FR.navy }}>
+                  {['Ad Name', 'Status', 'Spend', 'Impr.', 'CTR', 'CPA', 'Rec.', 'Actions'].map(h => (
+                    <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#fff', fontWeight: 500, fontSize: 11, letterSpacing: '0.06em' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -113,31 +117,43 @@ export default function LiveAds() {
                   const cpaTarget = guardrail?.config?.cpa_target;
                   const isKillCandidate = ad.cpa && cpaTarget && ad.cpa > cpaTarget * 1.5;
                   const isScaleCandidate = ad.cpa && cpaTarget && ad.cpa < cpaTarget * 0.7;
-                  const rowBg = isKillCandidate ? '#FDECEA' : i % 2 === 0 ? '#fff' : '#fafaf8';
+                  const rowBg = isKillCandidate ? FR.redLight : isScaleCandidate ? FR.greenLight : (i % 2 === 0 ? '#fff' : FR.saltLight);
                   const isPending = !!pending[ad.id];
+                  const ctr = ad.impressions ? ((ad.clicks || 0) / ad.impressions) * 100 : null;
+                  const statusToken = AD_STATUS_TOKEN[ad.status] || AD_STATUS_TOKEN.paused;
                   return (
-                    <tr key={ad.id} style={{ background: rowBg, borderBottom: '0.5px solid rgba(58,58,58,0.06)' }}>
-                      <td style={{ padding: '8px 12px', fontFamily: 'ui-monospace, SF Mono, Menlo, monospace', color: FR.slate }}>{ad.ad_name}</td>
-                      <td style={{ padding: '8px 12px', color: FR.stone, textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.06em' }}>{ad.status}</td>
-                      <td style={{ padding: '8px 12px', color: FR.slate }}>${(ad.spend_to_date || 0).toFixed(2)}</td>
-                      <td style={{ padding: '8px 12px', color: FR.slate }}>{(ad.impressions || 0).toLocaleString()}</td>
-                      <td style={{ padding: '8px 12px', color: FR.slate }}>{(ad.clicks || 0).toLocaleString()}</td>
-                      <td style={{ padding: '8px 12px', color: isKillCandidate ? '#A32D2D' : isScaleCandidate ? '#3B6D11' : FR.slate }}>
-                        {ad.cpa ? `$${ad.cpa.toFixed(2)}` : '—'}
+                    <tr key={ad.id} style={{ background: rowBg, borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                      <td style={{ padding: '10px 14px', fontFamily: 'ui-monospace, SF Mono, Menlo, monospace', color: FR.ink, fontSize: 11.5 }}>
+                        {ad.ad_name}
                       </td>
-                      <td style={{ padding: '8px 12px', color: FR.stone }}>{ad.recommendation || '—'}</td>
-                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '10px 14px' }}>
+                        <span style={pillStyle(statusToken)}>{statusToken.label}</span>
+                      </td>
+                      <td style={{ padding: '10px 14px', color: FR.ink, fontVariantNumeric: 'tabular-nums' }}>${(ad.spend_to_date || 0).toFixed(2)}</td>
+                      <td style={{ padding: '10px 14px', color: FR.ink, fontVariantNumeric: 'tabular-nums' }}>{(ad.impressions || 0).toLocaleString()}</td>
+                      <td style={{ padding: '10px 14px', color: FR.stone, fontVariantNumeric: 'tabular-nums' }}>{ctr ? `${ctr.toFixed(2)}%` : '—'}</td>
+                      <td style={{
+                        padding: '10px 14px',
+                        color: isKillCandidate ? FR.red : isScaleCandidate ? FR.green : FR.ink,
+                        fontWeight: (isKillCandidate || isScaleCandidate) ? 600 : 400,
+                        fontVariantNumeric: 'tabular-nums',
+                      }}>
+                        {ad.cpa ? `$${ad.cpa.toFixed(2)}` : '—'}
+                        {cpaTarget && ad.cpa ? <span style={{ fontSize: 10, color: FR.stone, marginLeft: 4 }}>/ ${cpaTarget}</span> : null}
+                      </td>
+                      <td style={{ padding: '10px 14px', color: FR.stone, textTransform: 'capitalize' }}>{ad.recommendation || '—'}</td>
+                      <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
                         {ad.status === 'paused' && (
-                          <button onClick={() => handleResume(ad)} disabled={isPending} style={btn('#3B6D11')}>Resume</button>
+                          <button onClick={() => handleResume(ad)} disabled={isPending} style={btnScale}>Resume</button>
                         )}
                         {(ad.status === 'active' || ad.status === 'scaled') && (
                           <>
-                            <button onClick={() => handleKill(ad)} disabled={isPending} style={btn('#A32D2D')}>Kill</button>
-                            <button onClick={() => handleScale(ad)} disabled={isPending} style={{ ...btn('#854F0B'), marginLeft: 4 }}>Scale +30%</button>
+                            <button onClick={() => handleKill(ad)} disabled={isPending} style={btnKill}>Kill</button>
+                            <button onClick={() => handleScale(ad)} disabled={isPending} style={{ ...btnScale, marginLeft: 6 }}>Scale +30%</button>
                           </>
                         )}
                         {errs[ad.id] && (
-                          <p style={{ fontSize: 10, color: '#A32D2D', margin: '4px 0 0', maxWidth: 200, wordBreak: 'break-word' }}>{errs[ad.id]}</p>
+                          <p style={{ fontSize: 10, color: FR.red, margin: '4px 0 0', maxWidth: 200, wordBreak: 'break-word' }}>{errs[ad.id]}</p>
                         )}
                       </td>
                     </tr>
@@ -151,10 +167,14 @@ export default function LiveAds() {
   );
 }
 
-function btn(color) {
-  return {
-    fontSize: 11, padding: '4px 10px', borderRadius: 5,
-    border: `0.5px solid ${color}`, color, background: 'transparent',
-    cursor: 'pointer',
-  };
-}
+const btnKill = {
+  fontSize: 11, fontWeight: 500, padding: '4px 11px', borderRadius: 6,
+  border: '1px solid #FECACA', background: FR.redLight, color: FR.red,
+  cursor: 'pointer',
+};
+
+const btnScale = {
+  fontSize: 11, fontWeight: 500, padding: '4px 11px', borderRadius: 6,
+  border: '1px solid #A7F3D0', background: FR.greenLight, color: FR.green,
+  cursor: 'pointer',
+};

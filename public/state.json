@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-10T08:52:55.327Z",
+  "lastUpdated": "2026-05-10T09:16:09.826Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "7a34ed4",
+      "date": "2026-05-10T08:53:28+00:00",
+      "message": "fix(creative): save* stores must UPDATE, not UPSERT, partial fields"
+    },
+    {
       "sha": "d4c7743",
       "date": "2026-05-09T17:16:26+00:00",
       "message": "chore: regenerate state.json after merge"
@@ -1087,11 +1092,6 @@
       "sha": "a299e4c",
       "date": "2026-05-09T18:49:03+03:00",
       "message": "Cockpit: default By SKU, scroll-all, full-width labels, every-week ticks, sans KPIs (#100)"
-    },
-    {
-      "sha": "a4457ce",
-      "date": "2026-05-09T18:41:04+03:00",
-      "message": "Inventory: render Shopify variants without a PLM mapping (#99)"
     }
   ]
 }

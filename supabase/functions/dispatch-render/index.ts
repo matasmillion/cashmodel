@@ -319,15 +319,20 @@ serve(async (req) => {
   if (insErr) return json({ error: `Render insert failed: ${insErr.message}` }, 500, origin);
 
   // ── Update sprint status ───────────────────────────────────────────────
-  await supabase
-    .from('sprints')
-    .update({ status: 'rendering', updated_at: now })
-    .eq('id', brief.sprint_id);
+  // Only flip to 'rendering' if at least one variant actually submitted —
+  // otherwise the sprint would be stuck with no work in flight.
+  const anySucceeded = submissions.some(s => s.ok);
+  if (anySucceeded) {
+    await supabase
+      .from('sprints')
+      .update({ status: 'rendering', updated_at: now })
+      .eq('id', brief.sprint_id);
+  }
 
   // Return rows alongside any submission errors so the UI can warn.
   const errors = submissions
     .map((s, i) => (s.ok ? null : { variant_index: i, error: s.error }))
     .filter(Boolean);
 
-  return json({ renders: inserted, errors }, 200, origin);
+  return json({ renders: inserted, errors, all_failed: !anySucceeded }, 200, origin);
 });
