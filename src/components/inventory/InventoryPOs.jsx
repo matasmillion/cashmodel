@@ -6,9 +6,10 @@
 // Click a row → existing PLM Production list detail page.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, X } from 'lucide-react';
-import { listPOs } from '../../utils/productionStore';
+import { Plus, X, Package, AlertCircle, CheckCircle } from 'lucide-react';
+import { listPOs, updatePO } from '../../utils/productionStore';
 import { listTechPacks } from '../../utils/techPackStore';
+import { pushPOToShipHero, updateShipHeroTracking } from '../../utils/shipheroSync';
 import POBuilder from '../POBuilder';
 import { INV, FADE, TYPE, CARD, EYEBROW, PILL, SECTION_TITLE } from './inventoryTokens';
 
@@ -152,19 +153,20 @@ export default function InventoryPOs() {
                 <Th>Placed</Th>
                 <Th>Lands</Th>
                 <Th>Status</Th>
+                <Th>ShipHero</Th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: FADE.slate60 }}>Loading…</td></tr>
+                <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: FADE.slate60 }}>Loading…</td></tr>
               )}
               {!loading && filtered.length === 0 && (
-                <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: FADE.slate60 }}>
+                <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: FADE.slate60 }}>
                   No POs in this status. Create one with + New PO.
                 </td></tr>
               )}
               {!loading && filtered.map(p => (
-                <Row key={p.id} po={p} styleById={styleById} />
+                <Row key={p.id} po={p} styleById={styleById} onChanged={refresh} />
               ))}
             </tbody>
           </table>
@@ -174,38 +176,272 @@ export default function InventoryPOs() {
   );
 }
 
-function Row({ po, styleById }) {
+function Row({ po, styleById, onChanged }) {
+  const [expanded, setExpanded] = useState(false);
   const pack = styleById.get(po.style_id);
   const styleName = pack?.data?.styleName || pack?.style_name || po.style_id || '—';
   const totalCost = (Number(po.units) || 0) * (Number(po.unit_cost_usd) || 0);
 
   return (
-    <tr
-      onClick={() => {
-        window.location.hash = `#plm/production/${po.id}`;
-      }}
-      style={{
-        borderTop: `1px solid ${FADE.slate06}`,
-        cursor: 'pointer',
-      }}
-    >
-      <Td mono>{po.code || '—'}</Td>
-      <Td>{po.vendor_id || '—'}</Td>
-      <Td>{styleName}</Td>
-      <Td right mono>{(Number(po.units) || 0).toLocaleString()}</Td>
-      <Td right mono>{totalCost > 0 ? `$${Math.round(totalCost).toLocaleString()}` : '—'}</Td>
-      <Td>{formatDate(po.placed_at)}</Td>
-      <Td>{formatDate(po.expected_landing)}</Td>
-      <Td>
-        <span style={{
-          ...PILL,
-          background: STATUS_PILL[po.status]?.bg || FADE.slate06,
-          color: STATUS_PILL[po.status]?.fg || FADE.slate60,
-          border: 'none',
+    <>
+      <tr
+        onClick={() => setExpanded(e => !e)}
+        style={{
+          borderTop: `1px solid ${FADE.slate06}`,
+          cursor: 'pointer',
+        }}
+      >
+        <Td mono>{po.code || '—'}</Td>
+        <Td>{po.vendor_id || '—'}</Td>
+        <Td>{styleName}</Td>
+        <Td right mono>{(Number(po.units) || 0).toLocaleString()}</Td>
+        <Td right mono>{totalCost > 0 ? `$${Math.round(totalCost).toLocaleString()}` : '—'}</Td>
+        <Td>{formatDate(po.placed_at)}</Td>
+        <Td>{formatDate(po.expected_landing)}</Td>
+        <Td>
+          <span style={{
+            ...PILL,
+            background: STATUS_PILL[po.status]?.bg || FADE.slate06,
+            color: STATUS_PILL[po.status]?.fg || FADE.slate60,
+            border: 'none',
+          }}>
+            {STATUS_PILL[po.status]?.label || po.status}
+          </span>
+        </Td>
+        <Td>
+          <ShipHeroStatus po={po} />
+        </Td>
+      </tr>
+      {expanded && (
+        <ExpandedRow po={po} onChanged={onChanged} />
+      )}
+    </>
+  );
+}
+
+// ── ShipHero status pill ────────────────────────────────────────────────
+
+function ShipHeroStatus({ po }) {
+  if (po.shiphero_po_id) {
+    return (
+      <span style={{
+        ...PILL,
+        background: 'rgba(107,142,107,0.15)',
+        color: INV.good,
+        border: 'none',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+      }} title={`Synced ${po.shiphero_synced_at ? new Date(po.shiphero_synced_at).toLocaleString() : ''}`}>
+        <CheckCircle size={9} /> Synced
+      </span>
+    );
+  }
+  if (po.shiphero_sync_error) {
+    return (
+      <span style={{
+        ...PILL,
+        background: 'rgba(168,84,60,0.10)',
+        color: INV.bad,
+        border: 'none',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+      }} title={po.shiphero_sync_error}>
+        <AlertCircle size={9} /> Error
+      </span>
+    );
+  }
+  return (
+    <span style={{
+      ...PILL,
+      background: FADE.slate06,
+      color: FADE.slate60,
+      border: 'none',
+    }}>
+      Not synced
+    </span>
+  );
+}
+
+// ── Expanded row — tracking entry + manual ShipHero push ────────────────
+
+function ExpandedRow({ po, onChanged }) {
+  const [tracking, setTracking] = useState(po.tracking_number || '');
+  const [carrier, setCarrier]   = useState(po.shipping_carrier || '');
+  const [busy, setBusy]         = useState(false);
+  const [msg, setMsg]           = useState(null);
+  const [err, setErr]           = useState(null);
+
+  async function handleManualPush(e) {
+    e.stopPropagation();
+    setBusy(true); setErr(null); setMsg(null);
+    try {
+      const result = await pushPOToShipHero(po);
+      // Persist the result on the PO. PO_EDITABLE_FIELDS allows these
+      // shiphero_* fields, so updatePO accepts them directly.
+      await updatePO(po.id, {
+        shiphero_po_id:     result.shipheroPoId,
+        shiphero_synced_at: new Date().toISOString(),
+        shiphero_sync_error: null,
+      });
+      setMsg(`Synced as ${result.shipheroPoNumber}`);
+      onChanged?.();
+    } catch (e2) {
+      setErr(e2.message || String(e2));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handlePushTracking(e) {
+    e.stopPropagation();
+    setBusy(true); setErr(null); setMsg(null);
+    try {
+      // Persist tracking on the PO first so it survives even if ShipHero
+      // is down.
+      await updatePO(po.id, {
+        tracking_number:  tracking,
+        shipping_carrier: carrier,
+      });
+      // Push to ShipHero.
+      await updateShipHeroTracking({ ...po, tracking_number: tracking, shipping_carrier: carrier },
+        { trackingNumber: tracking, carrier });
+      setMsg('Tracking pushed to ShipHero');
+      onChanged?.();
+    } catch (e2) {
+      setErr(e2.message || String(e2));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const canPushTracking = Boolean(po.shiphero_po_id) && tracking.trim().length > 0;
+
+  return (
+    <tr style={{ background: 'rgba(58,58,58,0.015)', borderTop: `1px solid ${FADE.slate06}` }}>
+      <td colSpan={9} style={{ padding: '14px 18px' }}>
+        <div style={{
+          display: 'flex',
+          gap: 24,
+          alignItems: 'flex-start',
+          flexWrap: 'wrap',
         }}>
-          {STATUS_PILL[po.status]?.label || po.status}
-        </span>
-      </Td>
+          {/* Tracking entry */}
+          <div style={{ flex: 1, minWidth: 260 }}>
+            <div style={{ ...EYEBROW, fontSize: 9, marginBottom: 6 }}>Tracking</div>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+              <input
+                value={tracking}
+                onChange={(e) => setTracking(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                placeholder="Tracking number"
+                style={{
+                  flex: 2,
+                  padding: '6px 10px',
+                  border: `1px solid ${FADE.slate10}`,
+                  borderRadius: 4,
+                  fontFamily: TYPE.mono,
+                  fontSize: 11,
+                  outline: 'none',
+                }}
+              />
+              <input
+                value={carrier}
+                onChange={(e) => setCarrier(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                placeholder="Carrier (UPS, FedEx, DHL, …)"
+                style={{
+                  flex: 1,
+                  padding: '6px 10px',
+                  border: `1px solid ${FADE.slate10}`,
+                  borderRadius: 4,
+                  fontFamily: TYPE.sans,
+                  fontSize: 11,
+                  outline: 'none',
+                }}
+              />
+            </div>
+            <button
+              onClick={handlePushTracking}
+              disabled={busy || !canPushTracking}
+              style={{
+                padding: '6px 12px',
+                background: busy || !canPushTracking ? FADE.slate10 : INV.slate,
+                color: INV.salt,
+                border: 'none',
+                borderRadius: 4,
+                fontSize: 10,
+                fontFamily: TYPE.sans,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                cursor: busy || !canPushTracking ? 'default' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <Package size={10} /> Push tracking to ShipHero
+            </button>
+            {!po.shiphero_po_id && (
+              <p style={{ fontSize: 10, color: FADE.slate60, marginTop: 6, fontFamily: TYPE.sans }}>
+                Push the PO to ShipHero first (auto-fires when status = placed) before pushing tracking.
+              </p>
+            )}
+          </div>
+
+          {/* Manual ShipHero actions */}
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <div style={{ ...EYEBROW, fontSize: 9, marginBottom: 6 }}>ShipHero</div>
+            {po.shiphero_po_id ? (
+              <p style={{
+                fontSize: 11,
+                fontFamily: TYPE.mono,
+                color: INV.slate,
+                margin: '0 0 6px',
+              }}>
+                ID: {po.shiphero_po_id}
+              </p>
+            ) : (
+              <p style={{ fontSize: 10, color: FADE.slate60, fontFamily: TYPE.sans, margin: '0 0 6px' }}>
+                Not yet synced. Auto-push fires on status = placed.
+              </p>
+            )}
+            <button
+              onClick={handleManualPush}
+              disabled={busy}
+              style={{
+                padding: '6px 12px',
+                background: busy ? FADE.slate10 : 'transparent',
+                color: INV.slate,
+                border: `1px solid ${INV.slate}`,
+                borderRadius: 4,
+                fontSize: 10,
+                fontFamily: TYPE.sans,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                cursor: busy ? 'default' : 'pointer',
+              }}
+            >
+              {po.shiphero_po_id ? 'Re-push to ShipHero' : 'Push to ShipHero'}
+            </button>
+          </div>
+        </div>
+
+        {(msg || err) && (
+          <div style={{
+            marginTop: 10,
+            padding: '6px 10px',
+            borderRadius: 4,
+            fontSize: 10,
+            background: err ? 'rgba(168,84,60,0.08)' : 'rgba(107,142,107,0.10)',
+            color: err ? INV.bad : INV.good,
+            border: `1px solid ${err ? 'rgba(168,84,60,0.20)' : 'rgba(107,142,107,0.20)'}`,
+          }}>
+            {err || msg}
+          </div>
+        )}
+      </td>
     </tr>
   );
 }
