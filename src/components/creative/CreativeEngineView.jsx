@@ -7,6 +7,11 @@
 
 import { useEffect, useState } from 'react';
 import { parseCreativeHash, setCreativeHash, normalizeCreativeLegacyHash } from '../../utils/creativeRouting';
+import { listSprints } from '../../utils/sprintStore';
+import { listRenders } from '../../utils/renderStore';
+import { listAds } from '../../utils/adStore';
+import { listDiscussions } from '../../utils/discussionStore';
+import { SPRINT_STATUSES, RENDER_STATUSES, AD_STATUSES } from '../../types/creative';
 import CreativeMetricStrip from './CreativeMetricStrip';
 import TodayView from './views/TodayView';
 import KnowledgeFiles from './views/KnowledgeFiles';
@@ -20,25 +25,28 @@ import LiveAds from './views/LiveAds';
 import CreativeLibrary from './views/CreativeLibrary';
 import LearningArchive from './views/LearningArchive';
 import DiscussionView from './dialogs/DiscussionView';
+import { FR, KEYFRAMES } from './palette';
 
-const FR = { slate: '#3A3A3A', salt: '#F5F0E8', sand: '#EBE5D5', stone: '#716F70' };
-
-const TABS = [
-  { view: 'today', label: 'Today' },
-  { view: 'sprints', label: 'Sprints' },
-  { view: 'brief', label: 'Brief' },
-  { view: 'jobs', label: 'Jobs' },
-  { view: 'production', label: 'Production' },
-  { view: 'queue', label: 'Render Queue' },
-  { view: 'ads', label: 'Live Ads' },
-  { view: 'library', label: 'Library' },
-  { view: 'learnings', label: 'Learnings' },
-  { view: 'pulse', label: 'Pulse' },
-  { view: 'knowledge', label: 'Knowledge' },
+const TAB_GROUPS = [
+  // Order chosen for the operator's flow: top-of-funnel → bottom-of-funnel
+  { view: 'today',      label: 'Today' },
+  { view: 'sprints',    label: 'Sprints' },
+  { view: 'brief',      label: 'Brief',         badgeKind: 'briefPending' },
+  { view: 'production', label: 'Production',    badgeKind: 'production' },
+  { view: 'queue',      label: 'Render Queue',  badgeKind: 'queue' },
+  { view: 'ads',        label: 'Live Ads',      badgeKind: 'liveAds' },
+  { view: 'learnings',  label: 'Learnings',     badgeKind: 'pendingDiscussions' },
+  { view: 'library',    label: 'Library' },
+  { view: 'knowledge',  label: 'Knowledge' },
+  { view: 'jobs',       label: 'Jobs' },
+  { view: 'pulse',      label: 'Pulse' },
 ];
+
+const COUNT_POLL_MS = 60_000;
 
 export default function CreativeEngineView() {
   const [route, setRoute] = useState(() => parseCreativeHash());
+  const [counts, setCounts] = useState({});
 
   useEffect(() => {
     normalizeCreativeLegacyHash();
@@ -47,47 +55,92 @@ export default function CreativeEngineView() {
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
+  useEffect(() => {
+    let alive = true;
+    const refresh = async () => {
+      const [sprints, renders, ads, discussions] = await Promise.all([
+        listSprints(),
+        listRenders(),
+        listAds(),
+        listDiscussions({ finalized: false }),
+      ]);
+      if (!alive) return;
+      setCounts({
+        briefPending:        sprints.filter(s => s.status === SPRINT_STATUSES.BRIEF_READY).length,
+        production:          renders.filter(r => r.status === RENDER_STATUSES.PROCESSING).length,
+        queue:               renders.filter(r => r.status === RENDER_STATUSES.DONE).length,
+        liveAds:             ads.filter(a => a.status === AD_STATUSES.ACTIVE).length,
+        pendingDiscussions:  discussions.length,
+      });
+    };
+    refresh();
+    const id = setInterval(refresh, COUNT_POLL_MS);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+
   const { view, id, subAction } = route;
 
   return (
     <div>
+      <style>{KEYFRAMES}</style>
+
       {/* Module header */}
-      <div style={{ marginBottom: 20 }}>
+      <div style={{ marginBottom: 22 }}>
         <h1 style={{
           fontFamily: 'Cormorant Garamond, Georgia, serif',
-          fontWeight: 400, fontSize: 28, color: FR.slate,
-          letterSpacing: '0.04em', margin: 0,
+          fontWeight: 400, fontSize: 28, color: FR.ink,
+          letterSpacing: '0.01em', margin: 0,
         }}>
           Creative Engine
         </h1>
-        <p style={{ fontSize: 12, color: FR.stone, marginTop: 2 }}>
-          4-week ad testing sprint loop — constrain · hypothesize · brief · render · evaluate · learn
+        <p style={{ fontSize: 12, color: FR.stone, marginTop: 4 }}>
+          4-week sprint loop · constrain → hypothesize → brief → render → evaluate → learn
         </p>
       </div>
 
       {/* Metric strip (auto-refreshes every 60s) */}
       <CreativeMetricStrip />
 
-      {/* Tab bar */}
-      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 24, borderBottom: '0.5px solid rgba(58,58,58,0.08)', paddingBottom: 8 }}>
-        {TABS.map(tab => {
-          const isActive = view === tab.view || (tab.view === 'brief' && view === 'brief');
+      {/* Tab bar — V5 style: underline accent on active, colored count badges */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 0,
+        marginBottom: 24,
+        borderBottom: '1px solid rgba(0,0,0,0.08)',
+        flexWrap: 'wrap',
+      }}>
+        {TAB_GROUPS.map(tab => {
+          const isActive = view === tab.view;
+          const count = tab.badgeKind ? counts[tab.badgeKind] : null;
+          const badgeColor = badgeColorFor(tab.badgeKind);
           return (
             <button
               key={tab.view}
               onClick={() => setCreativeHash({ view: tab.view })}
               style={{
-                fontSize: 12, padding: '5px 12px', borderRadius: 6,
-                background: isActive ? FR.slate : 'transparent',
-                color: isActive ? FR.salt : FR.stone,
+                fontSize: 13, padding: '11px 14px',
+                background: 'transparent',
+                color: isActive ? FR.ink : FR.stone,
+                fontWeight: isActive ? 500 : 400,
                 border: 'none', cursor: 'pointer',
-                transition: 'background 120ms ease, color 120ms ease',
+                borderBottom: isActive ? `2px solid ${FR.ink}` : '2px solid transparent',
+                marginBottom: -1,
                 fontFamily: 'inherit',
+                display: 'inline-flex', alignItems: 'center', gap: 7,
+                transition: 'color .12s ease',
+                whiteSpace: 'nowrap',
               }}
-              onMouseEnter={e => { if (!isActive) { e.currentTarget.style.color = FR.slate; } }}
+              onMouseEnter={e => { if (!isActive) { e.currentTarget.style.color = FR.ink; } }}
               onMouseLeave={e => { if (!isActive) { e.currentTarget.style.color = FR.stone; } }}
             >
               {tab.label}
+              {count > 0 && (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  background: badgeColor.bg, color: badgeColor.fg,
+                  borderRadius: 10, fontSize: 10, padding: '1px 7px', fontWeight: 600,
+                  minWidth: 18, height: 16, lineHeight: 1,
+                }}>{count}</span>
+              )}
             </button>
           );
         })}
@@ -117,4 +170,15 @@ export default function CreativeEngineView() {
       </div>
     </div>
   );
+}
+
+function badgeColorFor(kind) {
+  switch (kind) {
+    case 'briefPending':       return { bg: FR.blueLight,   fg: FR.blue };
+    case 'production':         return { bg: FR.amberLight,  fg: FR.amber };
+    case 'queue':              return { bg: FR.purpleLight, fg: FR.purple };
+    case 'liveAds':            return { bg: FR.greenLight,  fg: FR.green };
+    case 'pendingDiscussions': return { bg: FR.creatorBg,   fg: FR.creatorFg };
+    default:                   return { bg: 'rgba(0,0,0,0.06)', fg: FR.stone };
+  }
 }
