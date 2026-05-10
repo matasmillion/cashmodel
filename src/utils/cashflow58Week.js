@@ -75,6 +75,12 @@ export function generateCashflow58({
   subscriptions = [],
   creditCards = [],
   loans = {},
+  // Live actuals from Shopify / Meta sync, keyed by Monday ISO date.
+  // Each entry: { revenue, orders, adSpend, impressions, clicks }.
+  // Used to fill weeks between the seeded historical block and "this Monday"
+  // — and to overlay actuals onto historical seed where the live numbers
+  // differ from the workbook snapshot.
+  actualsHistory = {},
   // eslint-disable-next-line no-unused-vars
   manualPOs = [],
   todayMonday = currentMondayISO(),
@@ -104,6 +110,7 @@ export function generateCashflow58({
     const date = addWeeks(horizonStart, i);
     const prev = i > 0 ? out[i - 1] : null;
     const hist = histByDate[date];
+    const live = actualsHistory[date] || null;
     const isHistorical = date < todayMonday;
     const isCurrent = date === todayMonday;
     const dt = new Date(date + 'T00:00:00');
@@ -112,23 +119,36 @@ export function generateCashflow58({
     const useGrowth = date >= C.growthSwitchDate ? C.h2Growth : C.h1Growth;
 
     // ── Drivers (rows 5–8) ──────────────────────────────────────────────
-    let dailyAdSpend, fbAdSpend, shopifyRevenue, cogsRate;
-    if (hist) {
-      dailyAdSpend = hist.dailyAdSpend;
+    // Precedence: live actuals (Shopify/Meta) > seeded historical block >
+    // current-week seed > projection. Live always wins so the model
+    // self-corrects as integrations re-sync.
+    let dailyAdSpend, fbAdSpend, shopifyRevenue, cogsRate = C.cogsRate;
+    const liveRevenue = live?.revenue;
+    const liveAdSpend = live?.adSpend;
+
+    if (liveAdSpend != null) {
+      fbAdSpend = liveAdSpend;
+      dailyAdSpend = fbAdSpend / 7;
+    } else if (hist) {
       fbAdSpend = hist.fbAdSpend;
-      shopifyRevenue = hist.shopifyRevenue;
-      cogsRate = hist.cogsRate;
+      dailyAdSpend = hist.dailyAdSpend;
     } else if (isCurrent) {
-      // Anchor on live-synced seed values when available; fall back to projection
       fbAdSpend = seed.adSpend ?? (prev ? prev.dailyAdSpend * useGrowth * 7 : 539);
       dailyAdSpend = fbAdSpend / 7;
-      shopifyRevenue = seed.revenue ?? fbAdSpend / C.mer;
-      cogsRate = C.cogsRate;
     } else {
       dailyAdSpend = (prev ? prev.dailyAdSpend : (seed.adSpend ?? 539) / 7) * useGrowth;
       fbAdSpend = dailyAdSpend * 7;
+    }
+
+    if (liveRevenue != null) {
+      shopifyRevenue = liveRevenue;
+    } else if (hist) {
+      shopifyRevenue = hist.shopifyRevenue;
+      cogsRate = hist.cogsRate;
+    } else if (isCurrent) {
+      shopifyRevenue = seed.revenue ?? fbAdSpend / C.mer;
+    } else {
       shopifyRevenue = fbAdSpend / C.mer;
-      cogsRate = C.cogsRate;
     }
 
     // ── Inflows (rows 42–44) ────────────────────────────────────────────
@@ -250,9 +270,14 @@ export function generateCashflow58({
     const inventory = hist ? hist.inventory : (prev?.inventory ?? 0) + transferToWC;
 
     // ── Working capital cash (row 23) ───────────────────────────────────
-    const workingCapital = hist
-      ? hist.workingCapital
-      : (prev?.workingCapital ?? 0) - transferToWC;
+    // Anchor on Plaid live balance when this is "today's Monday" — that's
+    // the real-money truth. Historical block wins for past weeks; future
+    // weeks roll forward from the prior week (mirroring COGS deduction).
+    const workingCapital = isCurrent && seed.workingCapital != null
+      ? seed.workingCapital
+      : hist
+        ? hist.workingCapital
+        : (prev?.workingCapital ?? 0) - transferToWC;
 
     // ── Total assets (row 24) ───────────────────────────────────────────
     const totalAssets = totalCashOnHand + inventory;

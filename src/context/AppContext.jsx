@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useMemo, useEffect, useRef, useState } from 'react';
 import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, OPEX_WAREHOUSE, CREDIT_CARDS, LOANS, AD_UNIT_TYPES, DEFAULT_EVENTS } from '../data/seedData';
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
-import { syncShopifyActuals, syncShopifyInventory, syncMetaActuals, syncMercuryActuals, syncPlaidActuals, listPlaidItems } from '../utils/liveDataSync';
+import { syncShopifyActuals, syncShopifyInventory, syncMetaActuals, syncPlaidActuals, listPlaidItems } from '../utils/liveDataSync';
 import { migrateManualPOsToStore } from '../utils/productionStore';
 import { migrateLegacyInventoryHash } from '../utils/inventoryRouting';
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
@@ -19,8 +19,12 @@ function saveIntegrations(data) {
   window.dispatchEvent(new CustomEvent('integrations-updated'));
 }
 
-// Pulls current-week actuals from any connected integrations and pushes them
-// into the seed. Returns a summary so the UI can show sync state.
+// Pulls actuals from every connected integration and pushes them into the
+// seed. Plaid is the single source of truth for bank + card balances now
+// (Mercury accounts surface through Plaid). Shopify and Meta provide the
+// past 13 weeks of revenue / ad spend, all of which we persist into
+// state.actualsHistory so the engine can fill the gap between the seeded
+// historical block and "this Monday" without projecting.
 async function runAutoSync(dispatch) {
   const creds = loadIntegrations();
   const now = new Date().toISOString();
@@ -28,6 +32,7 @@ async function runAutoSync(dispatch) {
   let changed = false;
   const errors = {};
   const sources = [];
+  const syncedAtBySource = {};
 
   const tasks = [];
 
@@ -35,16 +40,24 @@ async function runAutoSync(dispatch) {
     sources.push('shopify');
     tasks.push(
       syncShopifyActuals().then(weeks => {
+        // Persist every week so the engine can fill gap weeks with real revenue
+        const byDate = Object.fromEntries(
+          weeks.filter(w => w.revenue != null).map(w => [w.startDate, { revenue: w.revenue, orders: w.orders }])
+        );
+        dispatch({ type: 'MERGE_ACTUALS', payload: { source: 'shopify', byDate } });
+
         const current = weeks.find(w => w.isCurrent);
-        if (!current) return;
-        dispatch({ type: 'UPDATE_SEED', payload: { revenue: current.revenue, date: current.startDate } });
+        if (current) {
+          dispatch({ type: 'UPDATE_SEED', payload: { revenue: current.revenue, date: current.startDate } });
+        }
+        syncedAtBySource.shopify = now;
         updated.shopify = {
           ...creds.shopify,
           syncedAt: now,
           lastSync: {
             syncedAt: now,
-            currentWeekRevenue: current.revenue,
-            currentWeekOrders: current.orders,
+            currentWeekRevenue: current?.revenue ?? null,
+            currentWeekOrders: current?.orders ?? null,
             weeks,
           },
         };
@@ -71,17 +84,24 @@ async function runAutoSync(dispatch) {
     sources.push('meta');
     tasks.push(
       syncMetaActuals(creds.meta).then(weeks => {
+        const byDate = Object.fromEntries(
+          weeks.filter(w => w.adSpend != null).map(w => [w.startDate, { adSpend: w.adSpend, impressions: w.impressions, clicks: w.clicks }])
+        );
+        dispatch({ type: 'MERGE_ACTUALS', payload: { source: 'meta', byDate } });
+
         const current = weeks.find(w => w.isCurrent);
-        if (!current) return;
-        dispatch({ type: 'UPDATE_SEED', payload: { adSpend: current.adSpend } });
+        if (current) {
+          dispatch({ type: 'UPDATE_SEED', payload: { adSpend: current.adSpend } });
+        }
+        syncedAtBySource.meta = now;
         updated.meta = {
           ...creds.meta,
           syncedAt: now,
           lastSync: {
             syncedAt: now,
-            currentWeekSpend: current.adSpend,
-            currentWeekImpressions: current.impressions,
-            currentWeekClicks: current.clicks,
+            currentWeekSpend: current?.adSpend ?? null,
+            currentWeekImpressions: current?.impressions ?? null,
+            currentWeekClicks: current?.clicks ?? null,
             weeks,
           },
         };
@@ -93,81 +113,66 @@ async function runAutoSync(dispatch) {
     );
   }
 
-  if (creds.mercury?.connected) {
-    sources.push('mercury');
-    tasks.push(
-      syncMercuryActuals().then(({ accounts, primaryBalance }) => {
-        dispatch({
-          type: 'UPDATE_SEED',
-          payload: {
-            totalCash: Math.round(primaryBalance * 100) / 100,
-            sbMain: Math.round(primaryBalance * 100) / 100,
-          },
-        });
-        updated.mercury = {
-          ...creds.mercury,
-          syncedAt: now,
-          lastSync: { syncedAt: now, primaryBalance, accountCount: accounts.length },
-        };
-        changed = true;
-      }).catch(err => {
-        errors.mercury = err.message;
-        console.warn('[auto-sync] Mercury:', err.message);
-      }),
-    );
-  }
-
-  // Plaid (Mercury / Chase / AMEX / any connected institution). All of the
-  // user's bank + card data flows through Plaid now, so this is the source of
-  // truth for the cashflow's "Cash on Hand" and "OPEX CARDS" rows.
+  // Plaid: now the single source of truth for all bank + card balances.
+  // Mercury accounts surface here too (Plaid links directly to Mercury), so
+  // the legacy mercury-proxy task is gone — keeping it caused a race where
+  // whichever promise resolved last won, often serving stale Mercury cache
+  // even after Plaid had fresh data.
   tasks.push((async () => {
     const items = await listPlaidItems().catch(() => []);
     if (!items || items.length === 0) return;
     sources.push('plaid');
     try {
-      const { totals, depositoryAccounts, creditAccounts } = await syncPlaidActuals();
+      // realTime: true on auto-sync so the user always sees today's
+      // balances on login. /accounts/balance/get costs ~$0.10/call but the
+      // value of correct cash on hand vastly outweighs that.
+      const { totals, depositoryAccounts, creditAccounts } = await syncPlaidActuals({ realTime: true });
 
-      // Bank accounts → bucketed by name (operating / sales tax / corp tax /
-      // working capital). The cashflow engine reads these to anchor the
-      // current week's balance-sheet rows.
       const bucketed = bucketDepositoryAccounts(depositoryAccounts);
-      dispatch({
-        type: 'UPDATE_SEED',
-        payload: {
-          totalCash: totals.depository,
-          sbMain: bucketed.operating,
-          sbSalesTax: -Math.abs(bucketed.salesTax),     // shown as negative on the BS
-          sbCorpTax: -Math.abs(bucketed.corporateTax),
-          workingCapital: bucketed.workingCapital,
-          bankAccounts: bucketed.accounts,
-        },
-      });
+      const seedPayload = {
+        totalCash: totals.depository,
+        sbMain: bucketed.operating,
+        sbSalesTax: -Math.abs(bucketed.salesTax),
+        sbCorpTax: -Math.abs(bucketed.corporateTax),
+        workingCapital: bucketed.workingCapital,
+        bankAccounts: bucketed.accounts,
+      };
 
-      // Credit cards & loans → match by mask first (most reliable), then by
-      // name pattern (catches AMEX Plum which Plaid surfaces without a mask).
       for (const a of creditAccounts) {
+        const cashflowKey = classifyCreditAccount(a);
+        if (cashflowKey) seedPayload[cashflowKey + 'Balance'] = a.balance;
+        // Best-effort sync to the legacy state.creditCards array for any
+        // other UI (POBuilder, etc.) — cashflow engine only reads seed.X
         const seedId = cardIdFromMask(a.mask);
         if (seedId) {
           dispatch({ type: 'UPDATE_CREDIT_CARD', payload: { id: seedId, updates: { balance: a.balance } } });
         }
-        const cashflowKey = classifyCreditAccount(a);
-        if (cashflowKey) {
-          dispatch({
-            type: 'UPDATE_SEED',
-            payload: { [cashflowKey + 'Balance']: a.balance },
-          });
-        }
       }
+
+      dispatch({ type: 'UPDATE_SEED', payload: seedPayload });
+
+      if (depositoryAccounts.length === 0 && creditAccounts.length === 0) {
+        errors.plaid = 'Plaid returned no accounts — re-link your institutions';
+      }
+
+      syncedAtBySource.plaid = now;
     } catch (err) {
       errors.plaid = err.message;
       console.warn('[auto-sync] Plaid:', err.message);
     }
   })());
 
-  if (tasks.length === 0) return { sources: [], errors: {}, syncedAt: null };
+  if (tasks.length === 0) return { sources: [], errors: {}, syncedAt: null, bySource: {} };
   await Promise.allSettled(tasks);
+
+  // Stamp the seed with sync timestamps so the UI can show "Synced 4m ago"
+  // and surface staleness if a source quietly fails.
+  if (Object.keys(syncedAtBySource).length) {
+    dispatch({ type: 'UPDATE_SEED', payload: { syncedAt: now, syncedAtBySource } });
+  }
+
   if (changed) saveIntegrations(updated);
-  return { sources, errors, syncedAt: now };
+  return { sources, errors, syncedAt: now, bySource: syncedAtBySource };
 }
 
 const AppContext = createContext();
@@ -184,6 +189,12 @@ const initialState = {
   scheduledAdUnits: [],
   events: DEFAULT_EVENTS,
   rateCard: null,
+  // Per-week actuals from Shopify / Meta / Plaid, keyed by Monday ISO date.
+  // Each entry merges fields from any source that synced for that week:
+  //   { '2026-04-27': { revenue, orders, adSpend, impressions, clicks } }
+  // The cashflow engine prefers actuals over historical seed and projection
+  // for any week we have data for.
+  actualsHistory: {},
   scenarios: [
     { id: 'base', name: 'Base Case', assumptions: { ...DEFAULT_ASSUMPTIONS }, isActive: true },
   ],
@@ -194,7 +205,7 @@ const initialState = {
 const PERSISTED_KEYS = [
   'products', 'seed', 'assumptions', 'subscriptions', 'warehouse',
   'creditCards', 'loans', 'adUnitTypes', 'scheduledAdUnits', 'events',
-  'rateCard', 'scenarios', 'activeScenarioId',
+  'rateCard', 'actualsHistory', 'scenarios', 'activeScenarioId',
 ];
 
 // Top-level routes. The legacy 'sell-through', 'po-schedule', and 'pos'
@@ -217,7 +228,7 @@ function readTabFromHash() {
 // Bump when the shape of `assumptions` (or other persisted state) changes
 // in a way that needs older localStorage payloads to be force-corrected.
 // Migrations run at load time and overwrite the offending fields in-place.
-const STATE_SCHEMA_VERSION = 2;
+const STATE_SCHEMA_VERSION = 3;
 
 function migrateState(saved) {
   const v = saved.schemaVersion || 1;
@@ -235,6 +246,12 @@ function migrateState(saved) {
         assumptions: { ...(s.assumptions || {}), fulfillmentPercent: 0.09 },
       }));
     }
+  }
+
+  if (v < 3) {
+    // v3: actualsHistory introduced. Initialise to empty so reducers
+    // don't have to defend against undefined.
+    out.actualsHistory = saved.actualsHistory || {};
   }
 
   out.schemaVersion = STATE_SCHEMA_VERSION;
@@ -333,6 +350,17 @@ function reducer(state, action) {
 
     case 'UPDATE_SEED':
       return { ...state, seed: { ...state.seed, ...action.payload } };
+
+    case 'MERGE_ACTUALS': {
+      // Merges a {date → {field: value}} map into actualsHistory. Fields
+      // from a new source overlay any existing entry for the same week.
+      const { byDate } = action.payload;
+      const merged = { ...(state.actualsHistory || {}) };
+      for (const [date, fields] of Object.entries(byDate)) {
+        merged[date] = { ...(merged[date] || {}), ...fields };
+      }
+      return { ...state, actualsHistory: merged };
+    }
 
     case 'UPDATE_LOANS':
       return { ...state, loans: { ...state.loans, ...action.payload } };

@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-10T12:10:53.383Z",
+  "lastUpdated": "2026-05-10T08:58:48.886Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -793,7 +793,7 @@
         "cost": 116,
         "category": "Mandatory",
         "active": true,
-        "billingDate": null
+        "billingDate": 20
       },
       {
         "id": "clo3d",
@@ -854,7 +854,7 @@
       "Revenue/Cost",
       "Luxury"
     ],
-    "billingDatesConfigured": 15
+    "billingDatesConfigured": 16
   },
   "fulfillment": {
     "status": "partial",
@@ -1044,24 +1044,9 @@
   ],
   "changelog": [
     {
-      "sha": "c7b2ca5",
-      "date": "2026-05-10T12:17:54+03:00",
-      "message": "Merge pull request #113 from matasmillion/claude/setup-creative-engine-P2LMR"
-    },
-    {
-      "sha": "f3b7e69",
-      "date": "2026-05-10T09:17:45+00:00",
-      "message": "Merge remote-tracking branch 'origin/main' into claude/setup-creative-engine-P2LMR"
-    },
-    {
-      "sha": "b24cb69",
-      "date": "2026-05-10T09:16:36+00:00",
-      "message": "feat(creative): visual polish + audit fixes (palette, lane chips, status colors)"
-    },
-    {
-      "sha": "7a34ed4",
-      "date": "2026-05-10T08:53:28+00:00",
-      "message": "fix(creative): save* stores must UPDATE, not UPSERT, partial fields"
+      "sha": "62229e0",
+      "date": "2026-05-10T08:57:37+00:00",
+      "message": "cashflow audit: fix Plaid 404, drop Mercury race, anchor on live actuals"
     },
     {
       "sha": "3e8e30d",
@@ -1072,11 +1057,6 @@
       "sha": "8cd2dd6",
       "date": "2026-05-09T20:21:31+03:00",
       "message": "cut-sew: full rebuild — 7-tab builder, multi-page preview, tech pack seeding (#108)"
-    },
-    {
-      "sha": "d4c7743",
-      "date": "2026-05-09T17:16:26+00:00",
-      "message": "chore: regenerate state.json after merge"
     },
     {
       "sha": "ddc2283",
@@ -1092,6 +1072,26 @@
       "sha": "259c193",
       "date": "2026-05-09T20:09:32+03:00",
       "message": "Inventory Phase 7: agent · retire legacy pages · CLAUDE.md conventions (#106)"
+    },
+    {
+      "sha": "11873f5",
+      "date": "2026-05-09T17:00:33+00:00",
+      "message": "feat: close creative engine loose ends — slack actions, dm, seed flow"
+    },
+    {
+      "sha": "db9802a",
+      "date": "2026-05-09T19:54:32+03:00",
+      "message": "Inventory Phase 6: Forecast tab — assumptions strip, bridge chart, calendar (#105)"
+    },
+    {
+      "sha": "309e662",
+      "date": "2026-05-09T19:52:08+03:00",
+      "message": "cut-sew: 2-col builder with sticky live BOM preview + autosave (#104)"
+    },
+    {
+      "sha": "299d4fe",
+      "date": "2026-05-09T19:49:28+03:00",
+      "message": "Inventory Phase 5: Sell-Through · POs · Open-to-Buy tabs (#103)"
     }
   ]
 }

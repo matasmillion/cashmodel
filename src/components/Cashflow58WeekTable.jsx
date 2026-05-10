@@ -130,6 +130,18 @@ const COL_W_LEFT = 80;   // column A
 const COL_W_LABEL = 220; // column B
 const COL_W_DATA = 88;
 
+function formatSyncAge(iso) {
+  if (!iso) return '';
+  const secs = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (secs < 60) return 'synced just now';
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `synced ${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `synced ${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `synced ${days}d ago`;
+}
+
 export default function Cashflow58WeekTable() {
   const { state } = useApp();
   const [showHistorical, setShowHistorical] = useState(false);
@@ -140,7 +152,8 @@ export default function Cashflow58WeekTable() {
     subscriptions: state.subscriptions,
     creditCards: state.creditCards,
     loans: state.loans,
-  }), [state.assumptions, state.seed, state.subscriptions, state.creditCards, state.loans]);
+    actualsHistory: state.actualsHistory,
+  }), [state.assumptions, state.seed, state.subscriptions, state.creditCards, state.loans, state.actualsHistory]);
 
   const visibleWeeks = useMemo(
     () => showHistorical ? weeks : weeks.filter(w => !w.isHistorical),
@@ -194,7 +207,10 @@ export default function Cashflow58WeekTable() {
             13 Week Cashflow
           </h3>
           <p className="text-xs mt-1" style={{ color: FR.stone }}>
-            {visibleWeeks.length} weeks · live from Plaid + OPEX · ports the workbook 1:1
+            {visibleWeeks.length} weeks · live from Plaid + Shopify + Meta + OPEX
+            {state.seed?.syncedAt && (
+              <> · <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{formatSyncAge(state.seed.syncedAt)}</span></>
+            )}
           </p>
         </div>
         <button
