@@ -29,6 +29,12 @@ export const CASHFLOW_DEFAULTS = {
   shopifyCapitalRate: 0.06,
   profitPercentForWC: 0.09,
   growthSwitchDate: '2026-08-03',
+  // Manual H2 daily-spend reset on growthSwitchDate. Workbook stepped
+  // from ~$128 (last H1 week) to $150 (first H2 week) as a planning
+  // override, then compounded at H2 rate. Without this, daily spend
+  // continuously compounds through the boundary and undershoots the H2
+  // target by ~15% across the rest of the year.
+  h2StartingDailySpend: 150,
   // Fixed overhead (fired on specific weeks of the projection)
   rdMonthlyAmount: 180,
   interestPayment: 125,
@@ -38,6 +44,11 @@ export const CASHFLOW_DEFAULTS = {
   fulfillmentAdminWeekly: 149.50,
   // Creative as % of ad spend (Excel A56 = 0)
   creativePercentOfAdSpend: 0,
+  // Ads-payable and fulfillment-payable both pay down on a 4-week
+  // (~monthly) cadence, anchored on the current Monday so the first
+  // projected paydown lands on this week. Real cadence drifts with
+  // statement closing dates — Plaid actuals override on past weeks.
+  paydownEveryNWeeks: 4,
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -189,6 +200,11 @@ export function generateCashflow58({
     } else if (hist) {
       fbAdSpend = hist.fbAdSpend;
       dailyAdSpend = hist.dailyAdSpend;
+    } else if (date === C.growthSwitchDate && C.h2StartingDailySpend != null) {
+      // Manual reset on the H1→H2 boundary so daily spend steps to a
+      // planned H2 target instead of compounding from the last H1 week.
+      dailyAdSpend = C.h2StartingDailySpend;
+      fbAdSpend = dailyAdSpend * 7;
     } else if (isCurrent) {
       fbAdSpend = seed.adSpend ?? (prev ? prev.dailyAdSpend * useGrowth * 7 : 539);
       dailyAdSpend = fbAdSpend / 7;
@@ -263,29 +279,44 @@ export function generateCashflow58({
     const weeksFromInterest = Math.round((dt - new Date(interestAnchor + 'T00:00:00')) / (7 * 86400000));
     const interest = (weeksFromInterest >= 0 && weeksFromInterest % 4 === 0) ? C.interestPayment : 0;
 
+    // ── Paydown cadence ─────────────────────────────────────────────────
+    // Both ads payable and fulfillment payable pay down every N weeks
+    // (default 4) anchored on todayMonday, mirroring the workbook's
+    // ~monthly statement cycle. Plaid transaction actuals will override
+    // these on past weeks.
+    const weeksFromToday = Math.round((dt - new Date(todayMonday + 'T00:00:00')) / (7 * 86_400_000));
+    // First paydown is 1 week after todayMonday (statement cycle closes at the
+    // end of the current week, gets paid down the following Monday). Then
+    // every paydownEveryNWeeks. Matches the workbook's 5/4 → 6/1 → 6/29 …
+    // ads-paid cadence when projection-start = 4/27.
+    const isPaydownWeek = !isHistorical && weeksFromToday >= 1 && (weeksFromToday % C.paydownEveryNWeeks === 1);
+
     // ── Fulfillment payable (rows 28 & 62) ──────────────────────────────
-    // Outflow paid this week = previous balance, then accrue this week's bill.
+    // Workbook lags accruals by 1 week — this week's payable rolls in
+    // PRIOR week's revenue × fulfillment %. Matches statement-cycle
+    // reality: shipped this week → invoiced next week.
     let fulfillmentPaid = 0;
     let fulfillmentPayable;
     if (hist) {
       fulfillmentPayable = hist.fulfillmentPayable;
-      fulfillmentPaid = prev ? prev.fulfillmentPayable : 0;
+      fulfillmentPaid = isPaydownWeek ? (prev ? prev.fulfillmentPayable : 0) : 0;
     } else {
-      fulfillmentPaid = prev ? prev.fulfillmentPayable : 0;
-      const accrual = shopifyRevenue * C.fulfillmentPercent;
+      fulfillmentPaid = isPaydownWeek ? (prev?.fulfillmentPayable ?? 0) : 0;
+      const accrual = (prev?.shopifyRevenue ?? 0) * C.fulfillmentPercent;
       fulfillmentPayable = (prev?.fulfillmentPayable ?? 0) - fulfillmentPaid + accrual + C.fulfillmentAdminWeekly;
     }
 
     // ── Ads payable (rows 27 & 47) ──────────────────────────────────────
-    // Excel pattern: pay full prior balance once a month (week of month #1).
+    // Same 1-week lag — this week's payable rolls in PRIOR week's ad
+    // spend (matches Meta billing: charged this week, statement closes
+    // next week).
     let adsPaid = 0;
     let adsPayable;
     if (hist) {
       adsPayable = hist.adsPayable;
     } else {
-      const isFirstWeekOfMonth = dt.getDate() <= 7;
-      adsPaid = isFirstWeekOfMonth ? (prev?.adsPayable ?? 0) : 0;
-      adsPayable = (prev?.adsPayable ?? 0) + fbAdSpend - adsPaid;
+      adsPaid = isPaydownWeek ? (prev?.adsPayable ?? 0) : 0;
+      adsPayable = (prev?.adsPayable ?? 0) + (prev?.fbAdSpend ?? 0) - adsPaid;
     }
 
     // ── Outflows (row 64) ───────────────────────────────────────────────
@@ -306,18 +337,24 @@ export function generateCashflow58({
       shopifyCapRepayment = hist.shopifyCapRepayment;
     } else if (isCurrent) {
       // Current week is anchored on live Plaid balances (Mercury → seed)
-      shopifyPayouts = onlineStore;
+      shopifyPayouts = 0; // projection-only — would double-count onlineStore
       sbMain = seed.sbMain ?? (prev?.totalCashOnHand ?? 0) + netCashFlow - transferToWC;
       sbSalesTax = seed.sbSalesTax ?? prev?.sbSalesTax ?? 0;
       sbCorpTax = seed.sbCorpTax ?? prev?.sbCorpTax ?? 0;
-      shopifyCapRepayment = -payShopifyCapital;
+      // Shopify Capital repayment is already captured in netCashFlow via
+      // payShopifyCapital, so this row is informational only and stays 0
+      // for projection (workbook left it blank).
+      shopifyCapRepayment = 0;
     } else {
-      shopifyPayouts = onlineStore; // simplification: payouts = online store inflow
+      // Projection rows: collapse cash to a single sbMain bucket. Treating
+      // shopifyPayouts as a separate line double-counts with onlineStore
+      // (which already feeds netCashFlow → sbMain).
+      shopifyPayouts = 0;
       // SB Main = prev Total Cash + Net Cash Flow - Transfer to WC (Excel R12)
       sbMain = (prev?.totalCashOnHand ?? 0) + netCashFlow - transferToWC;
       sbSalesTax = prev?.sbSalesTax ?? 0;
       sbCorpTax = prev?.sbCorpTax ?? 0;
-      shopifyCapRepayment = -payShopifyCapital;
+      shopifyCapRepayment = 0;
     }
     const totalCashOnHand = hist
       ? hist.totalCashOnHand ?? (sbMain + (sbSalesTax || 0) + (sbCorpTax || 0) + (shopifyCapRepayment || 0))
@@ -337,7 +374,10 @@ export function generateCashflow58({
         : (prev?.workingCapital ?? 0) - transferToWC;
 
     // ── Total assets (row 24) ───────────────────────────────────────────
-    const totalAssets = totalCashOnHand + inventory;
+    // Cash + inventory + working capital. Working capital is the 2465
+    // bank account, which IS an asset. (The workbook's pre-Aug formula
+    // omits it — that's a workbook bug; the post-Aug formula is right.)
+    const totalAssets = totalCashOnHand + inventory + workingCapital;
 
     // ── Total liabilities (row 37) ──────────────────────────────────────
     const totalLiabilities = adsPayable + fulfillmentPayable + chase5718 + amexPlum + amexBlue + shopifyCapital + longTermLoan;

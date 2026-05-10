@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-10T10:12:40.682Z",
+  "lastUpdated": "2026-05-10T12:20:08.533Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "b9c1929",
+      "date": "2026-05-10T10:13:51+00:00",
+      "message": "cashflow: rolling horizon, Plaid card-payment actuals, Meta proxy"
+    },
+    {
       "sha": "6e76620",
       "date": "2026-05-10T08:57:37+00:00",
       "message": "cashflow audit: fix Plaid 404, drop Mercury race, anchor on live actuals"
@@ -1087,11 +1092,6 @@
       "sha": "309e662",
       "date": "2026-05-09T19:52:08+03:00",
       "message": "cut-sew: 2-col builder with sticky live BOM preview + autosave (#104)"
-    },
-    {
-      "sha": "299d4fe",
-      "date": "2026-05-09T19:49:28+03:00",
-      "message": "Inventory Phase 5: Sell-Through · POs · Open-to-Buy tabs (#103)"
     }
   ]
 }
