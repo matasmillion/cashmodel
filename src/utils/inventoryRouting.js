@@ -71,8 +71,8 @@ export function setInventoryHash(parts) {
 }
 
 /**
- * Legacy redirects: old `#sell-through` and `#po-schedule` should land on
- * the new inventory views. Call once on app boot.
+ * Legacy redirects: pre-Phase-7 standalone routes should land on the
+ * new inventory views. Bookmarks survive. Called once on app boot.
  */
 export function migrateLegacyInventoryHash() {
   const h = window.location.hash || '';
@@ -81,7 +81,7 @@ export function migrateLegacyInventoryHash() {
 
   if (first === 'sell-through') {
     setInventoryHash({ view: 'sell-through' });
-  } else if (first === 'po-schedule') {
+  } else if (first === 'po-schedule' || first === 'pos' || first === 'new-po') {
     setInventoryHash({ view: 'pos' });
   }
 }

@@ -3,6 +3,7 @@ import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, O
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
 import { syncShopifyActuals, syncShopifyInventory, syncMetaActuals, syncMercuryActuals, syncPlaidActuals, listPlaidItems } from '../utils/liveDataSync';
 import { migrateManualPOsToStore } from '../utils/productionStore';
+import { migrateLegacyInventoryHash } from '../utils/inventoryRouting';
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { useCurrentUser, useCurrentOrg } from '../lib/auth';
 import { bucketDepositoryAccounts, classifyCreditAccount, cardIdFromMask } from '../utils/bankAccountMap';
@@ -196,9 +197,12 @@ const PERSISTED_KEYS = [
   'rateCard', 'scenarios', 'activeScenarioId',
 ];
 
+// Top-level routes. The legacy 'sell-through', 'po-schedule', and 'pos'
+// tabs were retired in Phase 7B/C; they now live under #inventory/* and
+// inventoryRouting.migrateLegacyInventoryHash() redirects bookmarks.
 const VALID_TABS = new Set([
   'dashboard', 'revenue', 'cashflow', 'ad-units', 'unit-economics',
-  'product', 'sell-through', 'fulfillment', 'po-schedule', 'pos', 'opex', 'scenarios', 'integrations',
+  'product', 'fulfillment', 'opex', 'scenarios', 'integrations',
   'org-settings', 'creative-engine', 'inventory',
 ]);
 
@@ -375,6 +379,12 @@ export function AppProvider({ children }) {
       setAutoSyncState({ status: 'error', sources: [], errors: { _: err.message }, syncedAt: null });
     }
   }
+
+  // Migrate legacy hashes (#sell-through, #po-schedule, #pos, #new-po)
+  // to their new #inventory/* homes once on boot. Bookmarks survive.
+  useEffect(() => {
+    migrateLegacyInventoryHash();
+  }, []);
 
   // Sync activeTab with URL hash. Only touches the first segment, so nested
   // routing inside a tab (e.g. #product/styles/abc/5) is preserved when the

@@ -10,6 +10,7 @@ import InventoryOTB from './InventoryOTB';
 import InventoryPOs from './InventoryPOs';
 import InventoryForecast from './InventoryForecast';
 import SkuDetail from './SkuDetail';
+import InventoryAgentChat from './InventoryAgentChat';
 
 const FR = {
   slate: '#3A3A3A',
@@ -104,6 +105,9 @@ export default function InventoryView() {
       {currentView === 'pos'          && <InventoryPOs />}
       {currentView === 'forecast'     && <InventoryForecast />}
       {currentView === 'sku' && route.sku && <SkuDetail sku={route.sku} />}
+
+      {/* Floating agent — accessible from every inventory tab. */}
+      <InventoryAgentChat />
     </div>
   );
 }
