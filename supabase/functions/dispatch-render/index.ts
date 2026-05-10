@@ -219,6 +219,25 @@ serve(async (req) => {
 
   const prompt = (brief.prompt_blueprint as string) || (brief.hook as string) || '';
 
+  // Per-variant prompt mutations. We deliberately don't render 4
+  // identical clips — the strategist's whole point of variant-testing
+  // is to vary the angle, not the seed. Each variant biases a
+  // different beat from the brief: hook, payoff, key feeling, full
+  // shot list. fal models follow these natural-language framings
+  // reliably (tested on nano-banana-2/edit, 2026-05-10).
+  const aiVariantPrompts = (() => {
+    const hook       = (brief.hook as string) || '';
+    const payoff     = (brief.payoff as string) || '';
+    const feeling    = (brief.key_feeling as string) || '';
+    const shotList   = Array.isArray(brief.shot_list) ? (brief.shot_list as string[]).join(' ') : '';
+    return [
+      `${prompt}\n\nVARIANT FRAMING — open hard on the hook: "${hook}". Hold this image for the first 1.5 seconds before any movement.`,
+      `${prompt}\n\nVARIANT FRAMING — lead with the payoff first: "${payoff}". Reverse the conventional reveal order.`,
+      `${prompt}\n\nVARIANT FRAMING — emphasize the texture and key feeling: "${feeling}". Tighter framing, slower pacing, more material/garment detail.`,
+      `${prompt}\n\nVARIANT FRAMING — full shot list: ${shotList}. Default brief execution.`,
+    ];
+  })();
+
   let plan: DispatchPlan;
 
   if (lane === 'ai') {
@@ -232,8 +251,8 @@ serve(async (req) => {
     plan = {
       provider: 'fal',
       apiKey,
-      variants: Array.from({ length: AI_VARIANT_COUNT }, () => ({
-        payload: { prompt },
+      variants: aiVariantPrompts.slice(0, AI_VARIANT_COUNT).map(p => ({
+        payload: { prompt: p },
       })),
       submit: (key, payload) => submitFalJob(key, modelPath, payload),
     };
