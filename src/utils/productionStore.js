@@ -158,6 +158,11 @@ export async function createPO(input = {}) {
 const PO_EDITABLE_FIELDS = new Set([
   'units', 'unit_cost_usd', 'lead_days', 'notes', 'vendor_id', 'style_id', 'size_break',
   'payment_schedule', 'expected_landing', 'collection_name', 'freight_method', 'line_items',
+  // ShipHero sync fields — operator enters tracking + carrier when the
+  // factory sends them; the value flows into ShipHero via updateShipHeroTracking.
+  // shiphero_* are written by the auto-push hook AND the manual re-push path.
+  'tracking_number', 'shipping_carrier',
+  'shiphero_po_id', 'shiphero_synced_at', 'shiphero_sync_error',
 ]);
 
 export async function updatePO(id, patch = {}) {
@@ -300,7 +305,61 @@ export async function transitionPO(id, newStatus, payload = {}) {
     } catch (err) { console.error('notifyNewPO:', err); }
   }
 
+  // ShipHero: auto-push the PO when it transitions to `placed` (or
+  // re-pushes when manually re-placed). Fire-and-forget — ShipHero
+  // downtime never blocks the local transition. On success, annotates
+  // the PO with shiphero_po_id + shiphero_synced_at; on failure,
+  // shiphero_sync_error is recorded so the operator can retry.
+  if (newStatus === 'placed' && !next.shiphero_po_id) {
+    autoPushToShipHero(next).catch(err => {
+      console.warn('shiphero auto-push:', err.message);
+    });
+  }
+
   return next;
+}
+
+async function autoPushToShipHero(po) {
+  // Lazy import to avoid a circular dep with shipheroSync (which lazily
+  // pulls listMappings via a separate path).
+  const { isShipHeroConnected, pushPOToShipHero } = await import('./shipheroSync');
+  if (!(await isShipHeroConnected())) return; // org hasn't connected ShipHero yet
+
+  let result, errMsg = null;
+  try {
+    result = await pushPOToShipHero(po);
+  } catch (err) {
+    errMsg = err.message || String(err);
+    console.warn('[shiphero] push failed for', po.code, '—', errMsg);
+  }
+
+  // Persist the result (or error) onto the PO. We bypass updatePO's
+  // EDITABLE_FIELDS guard by writing through the same low-level path.
+  const patch = result
+    ? {
+        shiphero_po_id:     result.shipheroPoId,
+        shiphero_synced_at: new Date().toISOString(),
+        shiphero_sync_error: null,
+      }
+    : { shiphero_sync_error: errMsg };
+
+  const rows = readLocal(PO_KEY);
+  const idx = rows.findIndex(r => r.id === po.id);
+  if (idx >= 0) {
+    rows[idx] = { ...rows[idx], ...patch, updated_at: new Date().toISOString() };
+    writeLocal(PO_KEY, rows);
+  }
+
+  const orgId = getCurrentOrgIdSync();
+  if (IS_SUPABASE_ENABLED && orgId) {
+    try {
+      const db = await getAuthedSupabase();
+      await db.from('purchase_orders')
+        .update(patch)
+        .eq('id', po.id)
+        .eq('organization_id', orgId);
+    } catch (err) { console.error('[shiphero] persist patch:', err); }
+  }
 }
 
 async function recomputeAtomRollups(actuals) {
