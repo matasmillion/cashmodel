@@ -16,7 +16,7 @@
 //   Profit % (0.09)         → CONST.profitPercentForWC
 //   Growth switch date      → CONST.growthSwitchDate (Aug 3, 2026)
 
-import { HISTORICAL_WEEKS, CARD_PAYMENT_SCHEDULE, CASHFLOW_HORIZON_START, CASHFLOW_HORIZON_WEEKS } from '../data/historicalCashflow';
+import { HISTORICAL_WEEKS, CARD_PAYMENT_SCHEDULE, CASHFLOW_HORIZON_WEEKS, getCashflowHorizonStart } from '../data/historicalCashflow';
 import { buildOpexBuckets, gaForWeek } from './opexBuckets';
 
 export const CASHFLOW_DEFAULTS = {
@@ -65,6 +65,59 @@ function paymentForCard(date, cardKey, schedule) {
     .reduce((sum, s) => sum + s[cardKey], 0);
 }
 
+// Rule-based forward payment generator. Used when the static schedule
+// runs out (e.g. the rolling horizon extends past 2027-03-08). The rules
+// match the cadence we see in the workbook:
+//
+//   CHASE 5718  → $180 on the first Monday of each month, starting Aug 3, 2026
+//   AMEX BLUE   → $175 every Monday from Aug 24, 2026 onward;
+//                 $173 every 4th Monday (28-day cycle) before that
+//   AMEX PLUM   → variable + paid off post Jun 2026 → $0
+//   LT Loan     → $0 (interest is a separate weekly outflow)
+//
+// Shopify Capital is not a static rule — it's revenue × 6% computed inline.
+const RULE_GEN_CARDS = ['chase5718', 'amexBlue'];
+
+function ruleBasedPayment(date, cardKey) {
+  const d = new Date(date + 'T00:00:00');
+
+  if (cardKey === 'chase5718') {
+    // First Monday of the month, $180. Effective Aug 3, 2026.
+    if (date < '2026-08-03') return 0;
+    return d.getDate() <= 7 ? 180 : 0;
+  }
+
+  if (cardKey === 'amexBlue') {
+    // Weekly $175 from Aug 24, 2026
+    if (date >= '2026-08-24') return 175;
+    // Otherwise ~monthly $173 (every 4th Monday from the Feb 2 anchor)
+    const anchor = new Date('2026-02-02T00:00:00');
+    const weeksFromAnchor = Math.round((d - anchor) / (7 * 86_400_000));
+    return weeksFromAnchor >= 0 && weeksFromAnchor % 4 === 0 ? 173 : 0;
+  }
+
+  return 0;
+}
+
+// Look up a card payment for a given week. Precedence:
+//   1. Live actuals from Plaid transactions (cardPaymentsActuals)
+//   2. Hand-baked entry in CARD_PAYMENT_SCHEDULE
+//   3. Rule-based generator (only for RULE_GEN_CARDS)
+function paymentForCardWithFallback(date, cardKey, schedule, actuals) {
+  const live = actuals?.[date]?.[cardKey];
+  if (live != null) return live;
+
+  // Static schedule covers 2026-02-02 → 2027-03-08. Use it for that window.
+  const fromSchedule = paymentForCard(date, cardKey, schedule);
+  if (fromSchedule > 0) return fromSchedule;
+  if (date >= '2026-02-02' && date <= '2027-03-08') return 0;
+
+  // Outside the schedule window, fall back to rules so the rolling horizon
+  // keeps producing sensible projected payments past 2027-03-08.
+  if (RULE_GEN_CARDS.includes(cardKey)) return ruleBasedPayment(date, cardKey);
+  return 0;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Engine
 // ────────────────────────────────────────────────────────────────────────────
@@ -81,10 +134,14 @@ export function generateCashflow58({
   // — and to overlay actuals onto historical seed where the live numbers
   // differ from the workbook snapshot.
   actualsHistory = {},
+  // Live card payments aggregated from Plaid transactions, keyed by Monday
+  // ISO date → { chase5718, amexPlum, amexBlue, ltLoan }. Overrides both the
+  // static schedule and the rule-based generator for any week we have data.
+  cardPaymentsActuals = {},
   // eslint-disable-next-line no-unused-vars
   manualPOs = [],
   todayMonday = currentMondayISO(),
-  horizonStart = CASHFLOW_HORIZON_START,
+  horizonStart = getCashflowHorizonStart(todayMonday),
   weeks = CASHFLOW_HORIZON_WEEKS,
 } = {}) {
   const C = { ...CASHFLOW_DEFAULTS, ...assumptions };
@@ -157,11 +214,11 @@ export function generateCashflow58({
     const totalInflows = onlineStore + transferToWC;
 
     // ── Card / loan repayments (rows 50–54) ─────────────────────────────
-    const payChase = paymentForCard(date, 'chase5718', schedule);
-    const payAmexPlum = paymentForCard(date, 'amexPlum', schedule);
-    const payAmexBlue = paymentForCard(date, 'amexBlue', schedule);
+    const payChase = paymentForCardWithFallback(date, 'chase5718', schedule, cardPaymentsActuals);
+    const payAmexPlum = paymentForCardWithFallback(date, 'amexPlum', schedule, cardPaymentsActuals);
+    const payAmexBlue = paymentForCardWithFallback(date, 'amexBlue', schedule, cardPaymentsActuals);
     const payShopifyCapital = shopifyRevenue * C.shopifyCapitalRate;
-    const payLtLoan = paymentForCard(date, 'ltLoan', schedule);
+    const payLtLoan = paymentForCardWithFallback(date, 'ltLoan', schedule, cardPaymentsActuals);
 
     // ── Card / loan rolling balances (rows 31–35) ───────────────────────
     let chase5718, amexPlum, amexBlue, shopifyCapital, longTermLoan;

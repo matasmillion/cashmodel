@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useMemo, useEffect, useRef, useState } from 'react';
 import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, OPEX_WAREHOUSE, CREDIT_CARDS, LOANS, AD_UNIT_TYPES, DEFAULT_EVENTS } from '../data/seedData';
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
-import { syncShopifyActuals, syncShopifyInventory, syncMetaActuals, syncPlaidActuals, listPlaidItems } from '../utils/liveDataSync';
+import { syncShopifyActuals, syncShopifyInventory, syncMetaActuals, syncPlaidActuals, syncPlaidCardPayments, listPlaidItems } from '../utils/liveDataSync';
 import { migrateManualPOsToStore } from '../utils/productionStore';
 import { migrateLegacyInventoryHash } from '../utils/inventoryRouting';
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
@@ -155,6 +155,20 @@ async function runAutoSync(dispatch) {
         errors.plaid = 'Plaid returned no accounts — re-link your institutions';
       }
 
+      // Past 90d of card payments → cardPaymentsActuals. The engine
+      // prefers these over the static schedule and the rule generator
+      // for any week we have transaction data for.
+      try {
+        const cardPayments = await syncPlaidCardPayments();
+        if (Object.keys(cardPayments).length) {
+          dispatch({ type: 'SET_CARD_PAYMENT_ACTUALS', payload: cardPayments });
+        }
+      } catch (err) {
+        // Non-fatal — balances already updated; payments stay on the
+        // static schedule until next sync.
+        console.warn('[auto-sync] Plaid card payments:', err.message);
+      }
+
       syncedAtBySource.plaid = now;
     } catch (err) {
       errors.plaid = err.message;
@@ -195,6 +209,10 @@ const initialState = {
   // The cashflow engine prefers actuals over historical seed and projection
   // for any week we have data for.
   actualsHistory: {},
+  // Per-week credit-card payments aggregated from Plaid transactions, keyed
+  // by Monday ISO date → { chase5718, amexPlum, amexBlue, ltLoan }. Highest
+  // precedence source for the engine's card-payment outflow rows.
+  cardPaymentsActuals: {},
   scenarios: [
     { id: 'base', name: 'Base Case', assumptions: { ...DEFAULT_ASSUMPTIONS }, isActive: true },
   ],
@@ -205,7 +223,7 @@ const initialState = {
 const PERSISTED_KEYS = [
   'products', 'seed', 'assumptions', 'subscriptions', 'warehouse',
   'creditCards', 'loans', 'adUnitTypes', 'scheduledAdUnits', 'events',
-  'rateCard', 'actualsHistory', 'scenarios', 'activeScenarioId',
+  'rateCard', 'actualsHistory', 'cardPaymentsActuals', 'scenarios', 'activeScenarioId',
 ];
 
 // Top-level routes. The legacy 'sell-through', 'po-schedule', and 'pos'
@@ -228,7 +246,7 @@ function readTabFromHash() {
 // Bump when the shape of `assumptions` (or other persisted state) changes
 // in a way that needs older localStorage payloads to be force-corrected.
 // Migrations run at load time and overwrite the offending fields in-place.
-const STATE_SCHEMA_VERSION = 3;
+const STATE_SCHEMA_VERSION = 4;
 
 function migrateState(saved) {
   const v = saved.schemaVersion || 1;
@@ -252,6 +270,11 @@ function migrateState(saved) {
     // v3: actualsHistory introduced. Initialise to empty so reducers
     // don't have to defend against undefined.
     out.actualsHistory = saved.actualsHistory || {};
+  }
+
+  if (v < 4) {
+    // v4: cardPaymentsActuals introduced (Plaid-sourced).
+    out.cardPaymentsActuals = saved.cardPaymentsActuals || {};
   }
 
   out.schemaVersion = STATE_SCHEMA_VERSION;
@@ -361,6 +384,11 @@ function reducer(state, action) {
       }
       return { ...state, actualsHistory: merged };
     }
+
+    case 'SET_CARD_PAYMENT_ACTUALS':
+      // Replaces cardPaymentsActuals with the latest sweep (Plaid is the
+      // source of truth — no need to merge with stale entries).
+      return { ...state, cardPaymentsActuals: action.payload };
 
     case 'UPDATE_LOANS':
       return { ...state, loans: { ...state.loans, ...action.payload } };

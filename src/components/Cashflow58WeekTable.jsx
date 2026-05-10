@@ -153,7 +153,8 @@ export default function Cashflow58WeekTable() {
     creditCards: state.creditCards,
     loans: state.loans,
     actualsHistory: state.actualsHistory,
-  }), [state.assumptions, state.seed, state.subscriptions, state.creditCards, state.loans, state.actualsHistory]);
+    cardPaymentsActuals: state.cardPaymentsActuals,
+  }), [state.assumptions, state.seed, state.subscriptions, state.creditCards, state.loans, state.actualsHistory, state.cardPaymentsActuals]);
 
   const visibleWeeks = useMemo(
     () => showHistorical ? weeks : weeks.filter(w => !w.isHistorical),
