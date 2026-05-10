@@ -107,7 +107,7 @@ export default function LiveAds() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: FR.navy }}>
-                  {['Ad Name', 'Status', 'Spend', 'Impr.', 'CTR', 'CPA', 'Rec.', 'Actions'].map(h => (
+                  {['Ad Name', 'Status', 'Spend', 'Impr.', 'CTR', 'CPA', 'ROAS', 'Freq.', 'Rec.', 'Actions'].map(h => (
                     <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#fff', fontWeight: 500, fontSize: 11, letterSpacing: '0.06em' }}>{h}</th>
                   ))}
                 </tr>
@@ -130,8 +130,18 @@ export default function LiveAds() {
                         <span style={pillStyle(statusToken)}>{statusToken.label}</span>
                       </td>
                       <td style={{ padding: '10px 14px', color: FR.ink, fontVariantNumeric: 'tabular-nums' }}>${(ad.spend_to_date || 0).toFixed(2)}</td>
-                      <td style={{ padding: '10px 14px', color: FR.ink, fontVariantNumeric: 'tabular-nums' }}>{(ad.impressions || 0).toLocaleString()}</td>
-                      <td style={{ padding: '10px 14px', color: FR.stone, fontVariantNumeric: 'tabular-nums' }}>{ctr ? `${ctr.toFixed(2)}%` : '—'}</td>
+                      <td style={{ padding: '10px 14px', color: FR.ink, fontVariantNumeric: 'tabular-nums' }}>
+                        {(ad.impressions || 0).toLocaleString()}
+                        {ad.impressions != null && ad.impressions < 3000 && (
+                          <span title="Below statistical floor — recommendations are noise" style={{ fontSize: 10, color: FR.amber, marginLeft: 4 }}>·</span>
+                        )}
+                      </td>
+                      <td style={{
+                        padding: '10px 14px',
+                        color: ctr != null && ctr < 0.5 ? FR.red : FR.stone,
+                        fontWeight: ctr != null && ctr < 0.5 ? 600 : 400,
+                        fontVariantNumeric: 'tabular-nums',
+                      }}>{ctr != null ? `${ctr.toFixed(2)}%` : '—'}</td>
                       <td style={{
                         padding: '10px 14px',
                         color: isKillCandidate ? FR.red : isScaleCandidate ? FR.green : FR.ink,
@@ -141,7 +151,25 @@ export default function LiveAds() {
                         {ad.cpa ? `$${ad.cpa.toFixed(2)}` : '—'}
                         {cpaTarget && ad.cpa ? <span style={{ fontSize: 10, color: FR.stone, marginLeft: 4 }}>/ ${cpaTarget}</span> : null}
                       </td>
-                      <td style={{ padding: '10px 14px', color: FR.stone, textTransform: 'capitalize' }}>{ad.recommendation || '—'}</td>
+                      <td style={{
+                        padding: '10px 14px',
+                        color: ad.roas != null && ad.roas >= 2 ? FR.green : ad.roas != null && ad.roas < 1 ? FR.red : FR.ink,
+                        fontWeight: ad.roas != null && (ad.roas >= 2 || ad.roas < 1) ? 600 : 400,
+                        fontVariantNumeric: 'tabular-nums',
+                      }}>
+                        {ad.roas != null ? `${ad.roas.toFixed(2)}x` : '—'}
+                      </td>
+                      <td style={{
+                        padding: '10px 14px',
+                        color: ad.frequency != null && ad.frequency > 2.5 ? FR.amber : FR.stone,
+                        fontWeight: ad.frequency != null && ad.frequency > 2.5 ? 600 : 400,
+                        fontVariantNumeric: 'tabular-nums',
+                      }}>
+                        {ad.frequency != null ? ad.frequency.toFixed(2) : '—'}
+                      </td>
+                      <td style={{ padding: '10px 14px', color: FR.stone, fontSize: 11 }}>
+                        {recommendationLabel(ad.recommendation)}
+                      </td>
                       <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
                         {ad.status === 'paused' && (
                           <button onClick={() => handleResume(ad)} disabled={isPending} style={btnScale}>Resume</button>
@@ -165,6 +193,17 @@ export default function LiveAds() {
         )}
     </div>
   );
+}
+
+function recommendationLabel(rec) {
+  if (!rec) return '—';
+  switch (rec) {
+    case 'kill':                return 'Kill (CPA over)';
+    case 'scale':               return 'Scale (CPA under)';
+    case 'kill_dead_creative':  return 'Kill (CTR < 0.5%)';
+    case 'pause_fatigued':      return 'Pause (freq > 2.5)';
+    default:                    return rec.replace(/_/g, ' ');
+  }
 }
 
 const btnKill = {
