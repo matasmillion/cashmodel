@@ -96,7 +96,7 @@ export async function saveLibraryItem(id, updates) {
   const orgId = getCurrentOrgIdSync();
   if (IS_SUPABASE_ENABLED && orgId) {
     const db = await getAuthedSupabase();
-    const { error } = await db.from('creative_library').upsert({ ...merged, organization_id: orgId }).eq('id', id);
+    const { error } = await db.from('creative_library').update({ ...updates, updated_at: now }).eq('id', id);
     if (error) console.error('saveLibraryItem:', error);
   }
   return merged;

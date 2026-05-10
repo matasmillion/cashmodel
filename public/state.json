@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-09T17:15:44.419Z",
+  "lastUpdated": "2026-05-10T08:52:55.327Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "d4c7743",
+      "date": "2026-05-09T17:16:26+00:00",
+      "message": "chore: regenerate state.json after merge"
+    },
+    {
       "sha": "8b21b61",
       "date": "2026-05-09T17:15:39+00:00",
       "message": "Merge remote-tracking branch 'origin/main' into claude/setup-creative-engine-P2LMR"
@@ -1087,11 +1092,6 @@
       "sha": "a4457ce",
       "date": "2026-05-09T18:41:04+03:00",
       "message": "Inventory: render Shopify variants without a PLM mapping (#99)"
-    },
-    {
-      "sha": "315fe67",
-      "date": "2026-05-09T18:39:20+03:00",
-      "message": "fabric: General Sans name, vendor subtitle, mill finishes in selection flow + BOM exec labels (#98)"
     }
   ]
 }

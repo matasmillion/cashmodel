@@ -123,7 +123,7 @@ export async function saveBrief(id, updates) {
   const orgId = getCurrentOrgIdSync();
   if (IS_SUPABASE_ENABLED && orgId) {
     const db = await getAuthedSupabase();
-    const { error } = await db.from('briefs').upsert({ ...merged, organization_id: orgId }).eq('id', id);
+    const { error } = await db.from('briefs').update({ ...updates, updated_at: now }).eq('id', id);
     if (error) console.error('saveBrief:', error);
   }
   return merged;
