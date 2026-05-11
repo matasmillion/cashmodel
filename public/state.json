@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-11T07:45:46.817Z",
+  "lastUpdated": "2026-05-11T11:55:02.531Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,54 +1044,54 @@
   ],
   "changelog": [
     {
-      "sha": "457d79e",
-      "date": "2026-05-11T10:43:33+03:00",
-      "message": "cashflow: stop anchoring current week on Meta/Shopify mid-week partials (#119)"
+      "sha": "e5e0489",
+      "date": "2026-05-11T14:44:13+03:00",
+      "message": "cashflow: drop Shopify Capital sub-label except on API error (#146)"
     },
     {
-      "sha": "245874e",
-      "date": "2026-05-11T10:38:42+03:00",
-      "message": "cashflow: fix ad spend pulling — substring CBO match + smarter fallback (#118)"
+      "sha": "cfc02bb",
+      "date": "2026-05-11T13:45:31+03:00",
+      "message": "cashflow: Shopify Capital outstanding = original loan − paid remittances (#145)"
     },
     {
-      "sha": "0953538",
-      "date": "2026-05-11T10:30:30+03:00",
-      "message": "cashflow: date display, Meta CBO daily spend, editable Weekly Growth + MER (#117)"
+      "sha": "1d47900",
+      "date": "2026-05-11T13:38:10+03:00",
+      "message": "cashflow: Shopify Capital — try ADVANCE types + add operator override (#144)"
     },
     {
-      "sha": "ddad585",
-      "date": "2026-05-11T10:14:13+03:00",
-      "message": "cashflow audit + reconciliation: Plaid 404, Mercury race, timezone, rolling horizon (#111)"
+      "sha": "38e0df1",
+      "date": "2026-05-11T13:30:58+03:00",
+      "message": "cashflow: Shopify Capital outstanding via per-type queries (was returning $0) (#143)"
     },
     {
-      "sha": "73b66b0",
-      "date": "2026-05-10T15:13:14+03:00",
-      "message": "cut-sew: rebuild builder to match TechPackBuilder 3-column layout (#116)"
+      "sha": "17267a3",
+      "date": "2026-05-11T13:27:32+03:00",
+      "message": "cashflow: live Shopify Capital outstanding from netted lending ledger (#142)"
     },
     {
-      "sha": "bb928fa",
-      "date": "2026-05-10T15:12:55+03:00",
-      "message": "Merge pull request #115 from matasmillion/claude/creative-engine-audit-fixes-002"
+      "sha": "506f740",
+      "date": "2026-05-11T13:16:56+03:00",
+      "message": "cashflow: Shopify Capital repayment via GraphQL with proper type filter (#141)"
     },
     {
-      "sha": "58dedb5",
-      "date": "2026-05-10T12:12:15+00:00",
-      "message": "feat(creative): per-variant prompts, ROAS + frequency, configurable targeting"
+      "sha": "f7aeab5",
+      "date": "2026-05-11T13:08:56+03:00",
+      "message": "cashflow: gray italic Sales Tax + Corp Tax rows, strip 'Foreign Resource' from labels (#140)"
     },
     {
-      "sha": "c7b2ca5",
-      "date": "2026-05-10T12:17:54+03:00",
-      "message": "Merge pull request #113 from matasmillion/claude/setup-creative-engine-P2LMR"
+      "sha": "4099fc9",
+      "date": "2026-05-11T13:05:34+03:00",
+      "message": "cashflow: clean payouts row + fix Total Assets double-count (#139)"
     },
     {
-      "sha": "f3b7e69",
-      "date": "2026-05-10T09:17:45+00:00",
-      "message": "Merge remote-tracking branch 'origin/main' into claude/setup-creative-engine-P2LMR"
+      "sha": "977faea",
+      "date": "2026-05-11T13:01:49+03:00",
+      "message": "fix(proxies): shopify-proxy and mercury-proxy use Clerk JWT auth (#138)"
     },
     {
-      "sha": "b24cb69",
-      "date": "2026-05-10T09:16:36+00:00",
-      "message": "feat(creative): visual polish + audit fixes (palette, lane chips, status colors)"
+      "sha": "0d15e28",
+      "date": "2026-05-11T12:57:00+03:00",
+      "message": "cashflow: rename Cash Balance + WC above TCOH (gray) + detailed payouts diagnostic (#137)"
     }
   ]
 }
