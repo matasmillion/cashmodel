@@ -604,18 +604,22 @@ export async function syncShopifyCapitalOutstanding() {
   // signed amounts across them. We also surface the per-type breakdown
   // so the operator can verify which kinds of lending tx were captured.
   const TYPES = [
-    'lending_credit',                          // loan disbursement (+)
-    'lending_credit_reversal',                 // (rare)
-    'lending_capital_remittance',              // each repayment (−)
-    'lending_capital_remittance_reversal',     // (rare)
-    'lending_credit_remittance',               // (rare)
-    'lending_credit_remittance_reversal',      // (rare)
-    'lending_debit',                           // (rare)
-    'lending_debit_reversal',                  // (rare)
-    'lending_capital_refund',                  // (rare)
-    'lending_capital_refund_reversal',         // (rare)
-    'lending_credit_refund',                   // (rare)
-    'lending_credit_refund_reversal',          // (rare)
+    // Disbursement candidates (loan principal in, positive amounts)
+    'advance',                                 // cash advance disbursement
+    'advance_funding',                         // alt name for disbursement
+    'lending_credit',                          // legacy disbursement type
+    'lending_credit_reversal',
+    // Repayment candidates (money leaving the merchant, negative amounts)
+    'lending_capital_remittance',              // each daily repayment (−)
+    'lending_capital_remittance_reversal',
+    'lending_credit_remittance',
+    'lending_credit_remittance_reversal',
+    'lending_debit',
+    'lending_debit_reversal',
+    'lending_capital_refund',
+    'lending_capital_refund_reversal',
+    'lending_credit_refund',
+    'lending_credit_refund_reversal',
   ];
 
   const breakdown = {};
