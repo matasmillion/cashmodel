@@ -1063,6 +1063,132 @@ export async function callPlaidProxy(action, payload = {}) {
   return data;
 }
 
+/**
+ * End-to-end probe of the plaid-proxy edge function so the operator
+ * can see WHICH layer is failing without DevTools. Tests:
+ *
+ *   1. Project root      — does the Supabase project URL respond at
+ *                          all? If 404/000 here, the project is paused
+ *                          (free tier auto-pauses after 7d idle) or
+ *                          the project URL is wrong.
+ *   2. CORS preflight    — OPTIONS to plaid-proxy. Should return 204
+ *                          + Access-Control-Allow-Origin. If "Failed
+ *                          to fetch" here, the function isn't deployed
+ *                          or CORS is misconfigured.
+ *   3. Unauth POST       — POST with no body. Function should respond
+ *                          with 400/401/JSON-with-error and CORS
+ *                          headers. Proves the function is alive.
+ *   4. Authed POST       — POST with action='link-token/create'.
+ *                          Full round-trip including Clerk JWT auth +
+ *                          credential lookup + Plaid call.
+ *
+ * Each step captures status, response body, and any thrown error.
+ * Returns the full result for verbatim rendering.
+ */
+export async function probePlaidEdgeFunction() {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  const results = {
+    supabaseUrl,
+    steps: [],
+  };
+
+  async function step(name, hint, fn) {
+    const started = Date.now();
+    try {
+      const out = await fn();
+      results.steps.push({
+        name,
+        hint,
+        ok: out.ok !== false,
+        ...out,
+        elapsedMs: Date.now() - started,
+      });
+    } catch (err) {
+      results.steps.push({
+        name,
+        hint,
+        ok: false,
+        error: err.message,
+        elapsedMs: Date.now() - started,
+      });
+    }
+  }
+
+  await step(
+    '1. Project root reachable',
+    'Confirms the Supabase project is alive. If this fails, the project is most likely paused — free-tier Supabase projects auto-pause after 7 days of inactivity. Restore it in the Supabase dashboard.',
+    async () => {
+      const res = await fetch(`${supabaseUrl}/rest/v1/`, {
+        method: 'GET',
+        headers: { apikey: anonKey },
+      });
+      return { status: res.status, statusText: res.statusText };
+    },
+  );
+
+  await step(
+    '2. plaid-proxy CORS preflight',
+    'OPTIONS request to the function. Should return 200/204 with Access-Control-Allow-Origin. If this fails or the header is missing, the function is not deployed or its CORS handling is broken.',
+    async () => {
+      const res = await fetch(`${supabaseUrl}/functions/v1/plaid-proxy`, {
+        method: 'OPTIONS',
+        headers: {
+          'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers': 'authorization,apikey,content-type',
+        },
+      });
+      return {
+        status: res.status,
+        statusText: res.statusText,
+        accessControlAllowOrigin: res.headers.get('access-control-allow-origin'),
+        accessControlAllowMethods: res.headers.get('access-control-allow-methods'),
+      };
+    },
+  );
+
+  await step(
+    '3. plaid-proxy unauth POST',
+    'POST with the anon key but no Clerk JWT — the function should respond 401 with a JSON body. If "Failed to fetch", the function is crashing on startup or not deployed. If 401 JSON, the function is alive.',
+    async () => {
+      const res = await fetch(`${supabaseUrl}/functions/v1/plaid-proxy`, {
+        method: 'POST',
+        headers: { apikey: anonKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'link-token/create' }),
+      });
+      const text = await res.text();
+      let body;
+      try { body = JSON.parse(text); } catch { body = { raw: text.slice(0, 500) }; }
+      return { status: res.status, statusText: res.statusText, body };
+    },
+  );
+
+  await step(
+    '4. plaid-proxy authed POST (link-token/create)',
+    'Full round-trip with the user\'s Clerk JWT. If this succeeds, sync should work too. If it errors with a Plaid error code, that error is on the Plaid item itself (e.g. ITEM_LOGIN_REQUIRED).',
+    async () => {
+      const token = await getClerkToken();
+      if (!token) return { ok: false, status: null, error: 'No Clerk JWT — not signed in' };
+      const res = await fetch(`${supabaseUrl}/functions/v1/plaid-proxy`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'link-token/create' }),
+      });
+      const text = await res.text();
+      let body;
+      try { body = JSON.parse(text); } catch { body = { raw: text.slice(0, 500) }; }
+      return { status: res.status, statusText: res.statusText, body };
+    },
+  );
+
+  return results;
+}
+
 /** Returns a short-lived link_token that Plaid Link needs to open. */
 export async function createPlaidLinkToken() {
   const data = await callPlaidProxy('link-token/create');
