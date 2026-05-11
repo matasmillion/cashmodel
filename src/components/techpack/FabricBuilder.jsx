@@ -612,7 +612,7 @@ export default function FabricBuilder({ fabric, onBack }) {
           {/* Mill finishes (NEW) */}
           <div style={CARD_STYLE}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <h4 style={{ ...SECTION_TITLE, marginBottom: 0 }}>Mill finishes</h4>
+              <h4 style={{ ...SECTION_TITLE, marginBottom: 0 }}>Fabric finishes</h4>
               <span style={{ fontSize: 9, color: FR.stone }}>internal · adds to base price</span>
             </div>
             {finishes.length === 0 && (

@@ -11,6 +11,7 @@ import { listFabrics } from '../../utils/fabricStore';
 import { listComponentPacks, getComponentPack } from '../../utils/componentPackStore';
 import { getAssetUrl } from '../../utils/plmAssets';
 import { FABRIC_GARMENT_AREAS, MILL_FINISH_CATALOG, FINISH_EXECUTED_AT } from '../../utils/fabricLibrary';
+import VendorPicker from './VendorPicker';
 
 // Cover images in fabric / component pack rows are stored as Supabase
 // Storage paths, not URLs. The browser can't render them directly — we
@@ -299,7 +300,7 @@ function MillFinishesPanel({ entry, libraryFinishes, onChange }) {
   return (
     <div style={{ paddingTop: 6, paddingBottom: 6, borderTop: `0.5px solid ${FR.sand}` }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>Mill Finishes</span>
+        <span style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>Fabric Finishes</span>
         {isOverridden && finishes.length === 0 && libraryFinishes.length > 0 && (
           <button
             onClick={() => onChange(null)}
@@ -308,19 +309,30 @@ function MillFinishesPanel({ entry, libraryFinishes, onChange }) {
         )}
       </div>
       {finishes.map((f, fi) => (
-        <div key={fi} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-          <div style={{ flex: 1, fontSize: 10, color: FR.slate, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
-          <select
-            value={f.executed_at || 'mill'}
-            onChange={e => updateFinish(fi, { executed_at: e.target.value })}
-            style={{ fontSize: 9, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '2px 3px', color: FR.stone, background: FR.white, outline: 'none', maxWidth: 90 }}
-          >
-            {FINISH_EXECUTED_AT.map(opt => <option key={opt.id} value={opt.id}>{EXEC_LABEL[opt.id]}</option>)}
-          </select>
-          <button
-            onClick={() => removeFinish(fi)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: FR.stone, fontSize: 14, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
-          >×</button>
+        <div key={fi} style={{ marginBottom: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div style={{ flex: 1, fontSize: 10, color: FR.slate, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
+            <select
+              value={f.executed_at || 'mill'}
+              onChange={e => updateFinish(fi, { executed_at: e.target.value })}
+              style={{ fontSize: 9, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '2px 3px', color: FR.stone, background: FR.white, outline: 'none', maxWidth: 90 }}
+            >
+              {FINISH_EXECUTED_AT.map(opt => <option key={opt.id} value={opt.id}>{EXEC_LABEL[opt.id]}</option>)}
+            </select>
+            <button
+              onClick={() => removeFinish(fi)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: FR.stone, fontSize: 14, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
+            >×</button>
+          </div>
+          {f.executed_at === 'secondary' && (
+            <div style={{ marginTop: 4 }}>
+              <VendorPicker
+                value={f.vendor_id}
+                onChange={v => updateFinish(fi, { vendor_id: v })}
+                placeholder="Pick the secondary finishing facility…"
+              />
+            </div>
+          )}
         </div>
       ))}
       <select

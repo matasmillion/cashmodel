@@ -93,8 +93,14 @@ export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFi
   const placementResolved = useResolved(fabric.garment_placement_image_url);
   const ribImgResolved = useResolved(fabric.ribbing_image_url);
 
-  // Cost / unit headline: base + finishes × yield
-  const baseUsd = parseFloat(fabric.price_per_meter_usd || 0);
+  // Cost / unit headline: base + finishes × yield.
+  // Mirrors fabricUnitCost() fallback chain so preview matches left-column cost.
+  const _d = fabric.data || fabric;
+  const _gsm = parseFloat(fabric.weight_gsm ?? _d?.weight_gsm) || 0;
+  const _widthCm = parseFloat(fabric.width_cm ?? _d?.width_cm) || 0;
+  const _kgUsd = parseFloat(fabric.price_per_kg_usd ?? _d?.price_per_kg_usd) || 0;
+  const _fromKg = (_kgUsd && _gsm && _widthCm) ? _kgUsd * (_gsm * _widthCm / 100000) : 0;
+  const baseUsd = parseFloat(fabric.price_per_meter_usd) || parseFloat(_d?.price_per_meter_usd) || _fromKg || 0;
   const finishesUsd = finishes.reduce((s, f) => s + (parseFloat(f.delta_per_meter_usd) || 0), 0);
   const allInUsd = baseUsd + finishesUsd;
   const m = parseFloat(yieldM || 0) || 0;
