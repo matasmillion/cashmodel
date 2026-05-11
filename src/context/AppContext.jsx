@@ -96,6 +96,8 @@ async function runAutoSync(dispatch, { realTime = false } = {}) {
             shopifyPayoutsUnmatchedPaidTotal: info.unmatchedPaidTotal,
             shopifyPayoutsUnmatchedPaidDetail: info.unmatchedPaidPayouts,
             shopifyPayoutsReconciliationSkipped: info.reconciliationSkipped,
+            shopifyPayoutsReconciliationSkipReason: info.reconciliationSkipReason,
+            shopifyPayoutsErrors: info.errors,
             shopifyPayoutsPendingSyncedAt: now,
           },
         });
