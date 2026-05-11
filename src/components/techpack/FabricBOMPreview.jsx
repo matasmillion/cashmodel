@@ -132,7 +132,7 @@ function PageBody(props) { return <FabricBOMPreviewBody {...props} />; }
 // TechPackPagePreview's PageFabrics so the tech pack live preview and the
 // library card render through one component. The wrapper above adds the
 // salt background + slate header + soil divider for the standalone view.
-export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFinishes, chosenNotes, chosenPlacementImage, chosenPlacementNotes, yieldM }) {
+export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFinishes, chosenNotes, chosenPlacementImage, chosenPlacementNotes, yieldM, chosenPricePerMeterUsd = null }) {
   const allColors = fabric.color_card_images || [];
   const finishes = chosenFinishes != null ? chosenFinishes : (fabric.mill_finishes || []);
   const notes = chosenNotes != null ? chosenNotes : (fabric.notes || '');
@@ -144,13 +144,15 @@ export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFi
   const ribImgResolved = useResolved(fabric.ribbing_image_url);
 
   // Cost / unit headline: base + finishes × yield.
-  // Mirrors fabricUnitCost() fallback chain so preview matches left-column cost.
+  // chosenPricePerMeterUsd (set in the BOM step) takes priority over the
+  // library's price_per_meter_usd so that per-style cost overrides show here.
   const _d = fabric.data || fabric;
   const _gsm = parseFloat(fabric.weight_gsm ?? _d?.weight_gsm) || 0;
   const _widthCm = parseFloat(fabric.width_cm ?? _d?.width_cm) || 0;
   const _kgUsd = parseFloat(fabric.price_per_kg_usd ?? _d?.price_per_kg_usd) || 0;
   const _fromKg = (_kgUsd && _gsm && _widthCm) ? _kgUsd * (_gsm * _widthCm / 100000) : 0;
-  const baseUsd = parseFloat(fabric.price_per_meter_usd) || parseFloat(_d?.price_per_meter_usd) || _fromKg || 0;
+  const _libraryBaseUsd = parseFloat(fabric.price_per_meter_usd) || parseFloat(_d?.price_per_meter_usd) || _fromKg || 0;
+  const baseUsd = chosenPricePerMeterUsd != null ? (parseFloat(chosenPricePerMeterUsd) || 0) : _libraryBaseUsd;
   const finishesUsd = finishes.reduce((s, f) => s + (parseFloat(f.delta_per_meter_usd) || 0), 0);
   const allInUsd = baseUsd + finishesUsd;
   const m = parseFloat(yieldM || 0) || 0;
@@ -361,6 +363,7 @@ export default function FabricBOMPreview({
   chosenPlacementImage = null,
   chosenPlacementNotes = null,
   yieldM = null,
+  chosenPricePerMeterUsd = null,
   styleNumber = null,
   pageLabel = null,
 }) {
@@ -382,7 +385,7 @@ export default function FabricBOMPreview({
       )}
       <text x={PAGE_W - 40} y="50" textAnchor="end" fontSize="8" fill={FR.sand} letterSpacing="2">PAGE {pageTag}</text>
       <rect x="0" y="70" width={PAGE_W} height="2" fill={FR.soil} />
-      <PageBody fabric={fabric} chosenColor={chosenColor} chosenArea={chosenArea} chosenFinishes={chosenFinishes} chosenNotes={chosenNotes} chosenPlacementImage={chosenPlacementImage} chosenPlacementNotes={chosenPlacementNotes} yieldM={yieldM} />
+      <PageBody fabric={fabric} chosenColor={chosenColor} chosenArea={chosenArea} chosenFinishes={chosenFinishes} chosenNotes={chosenNotes} chosenPlacementImage={chosenPlacementImage} chosenPlacementNotes={chosenPlacementNotes} yieldM={yieldM} chosenPricePerMeterUsd={chosenPricePerMeterUsd} />
       <text x="40" y="775" fontSize="9" fill={FR.stone}>{styleInfo}</text>
       <text x={PAGE_W - 40} y="775" textAnchor="end" fontSize="9" fill={FR.stone}>PAGE {pageTag}</text>
     </svg>
