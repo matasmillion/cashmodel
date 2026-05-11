@@ -26,8 +26,14 @@ function pickAccountName(bankAccounts, role, fallback, preferMask) {
     (preferMask && bankAccounts.find(a => a.mask === preferMask)) ||
     bankAccounts.find(a => a.role === role);
   if (!match) return fallback;
+  // Strip "Foreign Resource" / "- Foreign Resource" from the Plaid account
+  // name — it's the brand and reading it on every row is noise.
+  const cleanName = (match.name || '')
+    .replace(/[\s-]*foreign\s*resource/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
   const lastFour = match.mask ? `(${match.mask})` : '';
-  return `${match.name} ${lastFour}`.trim();
+  return `${cleanName} ${lastFour}`.trim();
 }
 
 // Section spec — the order is the workbook's row order. Each row carries:
@@ -45,9 +51,9 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
   // Mercury sub-account, available). Renamed to "Cash Balance" per
   // operator since the row is no longer pinned to a single account.
   const operatingLabel = 'Cash Balance';
-  const salesTaxLabel = pickAccountName(accs, 'salesTax', 'SB - Sales Tax (6735)');
-  const corpTaxLabel = pickAccountName(accs, 'corporateTax', 'SB - Corporate Tax (6735)');
-  const wcLabel = pickAccountName(accs, 'workingCapital', 'Working Capital (2465)');
+  const salesTaxLabel = pickAccountName(accs, 'salesTax', 'Sales Tax (6735)');
+  const corpTaxLabel = pickAccountName(accs, 'corporateTax', 'Corporate Tax (8298)');
+  const wcLabel = pickAccountName(accs, 'workingCapital', 'Working Capital (5125)');
   const fulfillmentLabel = pickAccountName(accs, 'fulfillment', 'Mercury Fulfillment (7301)');
   const marketingLabel = pickAccountName(accs, 'marketing', 'Mercury Marketing (3135)');
   const pct = v => `${Math.round(v * 100)}%`;
@@ -87,8 +93,8 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
     // Total Cash On Hand so the breakdown is visible without
     // double-counting.
     { key: 'workingCapital',     label: wcLabel,               kind: 'balance', subRow: true },
-    { key: 'sbSalesTax',         label: salesTaxLabel,         kind: 'balance', informational: true },
-    { key: 'sbCorpTax',          label: corpTaxLabel,          kind: 'balance' },
+    { key: 'sbSalesTax',         label: salesTaxLabel,         kind: 'balance', subRow: true },
+    { key: 'sbCorpTax',          label: corpTaxLabel,          kind: 'balance', subRow: true },
     { key: 'shopifyCapRepayment',label: 'Shopify Capital Repayment', kind: 'balance' },
     { key: '_poMilestonesPending', label: 'PO Milestones',     kind: 'pending' },
     { key: 'totalCashOnHand',    label: 'Total Cash On Hand',  kind: 'subtotal' },
