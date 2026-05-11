@@ -26,10 +26,19 @@ const PATTERNS = [
 // Mask → role overrides. Wins over name-based PATTERNS so a renamed
 // Mercury sub-account can't accidentally re-bucket itself.
 const DEPOSITORY_MASK_MAP = {
+  // Mercury checking (Foreign Resource) — the sole "operating cash"
+  // account. sbMain pins to this mask specifically so renamed Treasury /
+  // Vault / Savings sub-accounts don't silently sum into it.
+  '6848': 'operating',
   // Mercury sub-account that funds 3PL / shipping invoices. Balance is
   // surfaced on the cashflow as the "Mercury Fulfillment (7301)" row.
   '7301': 'fulfillment',
 };
+
+// The single Mercury account that backs the "Operating Cash" cashflow row.
+// sbMain = balance of this exact account, not a sum of operating-classified
+// sub-accounts.
+export const OPERATING_MASK = '6848';
 
 export function classifyAccount(nameOrAcc = '') {
   // Accept either a string (legacy) or the account object so mask

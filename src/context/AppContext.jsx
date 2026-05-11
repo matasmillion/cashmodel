@@ -6,7 +6,7 @@ import { migrateManualPOsToStore } from '../utils/productionStore';
 import { migrateLegacyInventoryHash } from '../utils/inventoryRouting';
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { useCurrentUser, useCurrentOrg } from '../lib/auth';
-import { bucketDepositoryAccounts, classifyCreditAccount, cardIdFromMask } from '../utils/bankAccountMap';
+import { bucketDepositoryAccounts, classifyCreditAccount, cardIdFromMask, OPERATING_MASK } from '../utils/bankAccountMap';
 
 const LOCAL_STORAGE_KEY = 'cashmodel_state';
 const INTEGRATIONS_KEY = 'cashmodel_integrations';
@@ -211,9 +211,22 @@ async function runAutoSync(dispatch) {
       const { totals, depositoryAccounts, creditAccounts } = await syncPlaidActuals({ realTime: true });
 
       const bucketed = bucketDepositoryAccounts(depositoryAccounts);
+      // Operating Cash row pins to the Mercury checking account ending in
+      // OPERATING_MASK ('6848') specifically — NOT the sum of every
+      // operating-classified sub-account. Treasury / Vault / Savings
+      // balances are still visible in seed.bankAccounts but don't
+      // contaminate sbMain.
+      const operatingAccount = depositoryAccounts.find(a => a.mask === OPERATING_MASK);
+      if (!operatingAccount) {
+        console.warn(
+          `[auto-sync] No Mercury depository account with mask ${OPERATING_MASK} found. ` +
+          `Falling back to summed operating bucket ($${bucketed.operating}). ` +
+          `Accounts seen: ${depositoryAccounts.map(a => `${a.name}(${a.mask})`).join(', ') || 'none'}`,
+        );
+      }
       const seedPayload = {
         totalCash: totals.depository,
-        sbMain: bucketed.operating,
+        sbMain: operatingAccount ? operatingAccount.balance : bucketed.operating,
         sbSalesTax: -Math.abs(bucketed.salesTax),
         sbCorpTax: -Math.abs(bucketed.corporateTax),
         workingCapital: bucketed.workingCapital,

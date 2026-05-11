@@ -17,9 +17,14 @@ const FR = {
 };
 
 // Find a Plaid-classified bank account (or null) given seed.bankAccounts and a role.
-function pickAccountName(bankAccounts, role, fallback) {
+// If preferMask is provided, an account with that exact mask wins over a generic
+// role match — used so the Operating Cash label can pin to mask 6848 even when
+// other Mercury sub-accounts (Treasury, Vault, Savings) are also role=operating.
+function pickAccountName(bankAccounts, role, fallback, preferMask) {
   if (!bankAccounts || !bankAccounts.length) return fallback;
-  const match = bankAccounts.find(a => a.role === role);
+  const match =
+    (preferMask && bankAccounts.find(a => a.mask === preferMask)) ||
+    bankAccounts.find(a => a.role === role);
   if (!match) return fallback;
   const lastFour = match.mask ? `(${match.mask})` : '';
   return `${match.name} ${lastFour}`.trim();
@@ -36,7 +41,7 @@ function pickAccountName(bankAccounts, role, fallback) {
 // as a single row spanning across the table with a date appended.
 function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
   const accs = seed.bankAccounts;
-  const operatingLabel = pickAccountName(accs, 'operating', 'SB - Main (9773)');
+  const operatingLabel = pickAccountName(accs, 'operating', 'Mercury Operating (6848)', '6848');
   const salesTaxLabel = pickAccountName(accs, 'salesTax', 'SB - Sales Tax (6735)');
   const corpTaxLabel = pickAccountName(accs, 'corporateTax', 'SB - Corporate Tax (6735)');
   const wcLabel = pickAccountName(accs, 'workingCapital', 'Working Capital (2465)');
