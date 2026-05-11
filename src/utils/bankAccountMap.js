@@ -15,6 +15,7 @@ const PATTERNS = [
   { role: 'salesTax',       test: /\b(sales\s*tax|state\s*tax|nexus)\b/i },
   { role: 'corporateTax',   test: /\b(corp(orate)?\s*tax|federal\s*tax|fed\s*tax|income\s*tax|irs)\b/i },
   { role: 'workingCapital', test: /\b(working\s*capital|wc|po\s*(reserve|fund)|inventory|vendor|supplier|inventory\s*float)\b/i },
+  { role: 'fulfillment',    test: /\b(fulfillment|fulfilment|shipping|3pl|warehouse)\b/i },
   // Mercury default sub-account names ("Treasury", "Vault", "Reserve",
   // "Savings", "High Yield") all act as the user's main store of cash
   // unless the name explicitly says otherwise — bucket them as operating
@@ -22,7 +23,24 @@ const PATTERNS = [
   { role: 'operating',      test: /\b(operating|main|primary|checking|ops|treasury|vault|reserve|holding|savings|high\s*yield|hy)\b/i },
 ];
 
-export function classifyAccount(name = '') {
+// Mask → role overrides. Wins over name-based PATTERNS so a renamed
+// Mercury sub-account can't accidentally re-bucket itself.
+const DEPOSITORY_MASK_MAP = {
+  // Mercury sub-account that funds 3PL / shipping invoices. Balance is
+  // surfaced on the cashflow as the "Mercury Fulfillment (7301)" row.
+  '7301': 'fulfillment',
+};
+
+export function classifyAccount(nameOrAcc = '') {
+  // Accept either a string (legacy) or the account object so mask
+  // overrides can win over name-based pattern matching.
+  if (typeof nameOrAcc === 'object' && nameOrAcc !== null) {
+    if (nameOrAcc.mask && DEPOSITORY_MASK_MAP[nameOrAcc.mask]) {
+      return DEPOSITORY_MASK_MAP[nameOrAcc.mask];
+    }
+    return classifyAccount(nameOrAcc.name || '');
+  }
+  const name = nameOrAcc;
   for (const p of PATTERNS) {
     if (p.test.test(name)) return p.role;
   }
@@ -37,14 +55,15 @@ export function classifyAccount(name = '') {
  *   salesTax: number,
  *   corporateTax: number,
  *   workingCapital: number,
+ *   fulfillment: number,
  *   total: number,
  *   accounts: Array<{role, name, mask, balance, institution}>,
  * }}
  */
 export function bucketDepositoryAccounts(accounts = []) {
-  const buckets = { operating: 0, salesTax: 0, corporateTax: 0, workingCapital: 0, total: 0 };
+  const buckets = { operating: 0, salesTax: 0, corporateTax: 0, workingCapital: 0, fulfillment: 0, total: 0 };
   const tagged = accounts.map(a => {
-    const role = classifyAccount(a.name);
+    const role = classifyAccount(a);
     buckets.total += a.balance || 0;
     // Anything we can't classify rolls into operating so cash-on-hand stays correct.
     const target = role === 'other' ? 'operating' : role;

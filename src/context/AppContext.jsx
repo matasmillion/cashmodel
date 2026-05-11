@@ -217,6 +217,9 @@ async function runAutoSync(dispatch) {
         sbSalesTax: -Math.abs(bucketed.salesTax),
         sbCorpTax: -Math.abs(bucketed.corporateTax),
         workingCapital: bucketed.workingCapital,
+        // Mercury 7301 sub-account balance (classified by mask). Drives
+        // the "Mercury Fulfillment (7301)" cashflow row.
+        mercuryFulfillmentBalance: bucketed.fulfillment,
         bankAccounts: bucketed.accounts,
       };
 

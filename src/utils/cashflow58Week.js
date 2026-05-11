@@ -360,13 +360,16 @@ export function generateCashflow58({
     const netCashFlow = totalInflows - totalOutflows;
 
     // ── Cash on hand (rows 11–21) ───────────────────────────────────────
-    let shopifyPayouts, sbMain, sbSalesTax, sbCorpTax, shopifyCapRepayment;
+    let shopifyPayouts, sbMain, sbSalesTax, sbCorpTax, shopifyCapRepayment, mercuryFulfillment;
     if (hist) {
       shopifyPayouts = hist.shopifyPayouts;
       sbMain = hist.sbMain;
       sbSalesTax = hist.sbSalesTax;
       sbCorpTax = hist.sbCorpTax;
       shopifyCapRepayment = hist.shopifyCapRepayment;
+      // Historical seed pre-dates the fulfillment classification — there
+      // was no separate fulfillment bucket before today. Default to 0.
+      mercuryFulfillment = hist.mercuryFulfillment ?? 0;
     } else if (isCurrent) {
       // Current week is anchored on live Plaid balances (Mercury → seed)
       // Shopify Payouts = scheduled + in_transit payouts from Shopify
@@ -381,6 +384,8 @@ export function generateCashflow58({
       // shopify_capital_payment) that haven't yet settled. Live from
       // syncShopifyCapitalRepayment → seed.shopifyCapitalPending.
       shopifyCapRepayment = seed.shopifyCapitalPending ?? 0;
+      // Mercury fulfillment sub-account (mask 7301) balance from Plaid.
+      mercuryFulfillment = seed.mercuryFulfillmentBalance ?? 0;
     } else {
       // Projection rows: collapse cash to a single sbMain bucket. Treating
       // shopifyPayouts as a separate line double-counts with onlineStore
@@ -391,17 +396,21 @@ export function generateCashflow58({
       sbSalesTax = prev?.sbSalesTax ?? 0;
       sbCorpTax = prev?.sbCorpTax ?? 0;
       shopifyCapRepayment = 0;
+      // Future weeks: roll fulfillment balance forward unchanged. We
+      // don't project sub-account drift; the next sync corrects it.
+      mercuryFulfillment = prev?.mercuryFulfillment ?? 0;
     }
     // TCOH composition:
-    //   + sbMain           — operating cash
-    //   + sbCorpTax        — corporate tax reserve (still funds the biz)
-    //   + shopifyPayouts   — pending captured-but-not-settled (current week only)
-    //   - sbSalesTax       — EXCLUDED. Held on behalf of states, never funds ops.
+    //   + sbMain              — operating cash
+    //   + sbCorpTax           — corporate tax reserve (still funds the biz)
+    //   + shopifyPayouts      — pending captured-but-not-settled (current week)
+    //   + mercuryFulfillment  — Mercury 7301 cash earmarked for 3PL (spendable)
+    //   - sbSalesTax          — EXCLUDED. Held for state remittance, never funds ops.
     //   - shopifyCapRepayment — EXCLUDED. Pending OUTFLOW (Capital deduction
-    //                          about to leave), not cash on hand.
+    //                           about to leave), not cash on hand.
     const totalCashOnHand = hist
-      ? hist.totalCashOnHand ?? (sbMain + (sbCorpTax || 0) + (shopifyPayouts || 0))
-      : sbMain + sbCorpTax + shopifyPayouts;
+      ? hist.totalCashOnHand ?? (sbMain + (sbCorpTax || 0) + (shopifyPayouts || 0) + (mercuryFulfillment || 0))
+      : sbMain + sbCorpTax + shopifyPayouts + mercuryFulfillment;
 
     // ── Inventory (row 22) ──────────────────────────────────────────────
     const inventory = hist ? hist.inventory : (prev?.inventory ?? 0) + transferToWC;
@@ -452,6 +461,7 @@ export function generateCashflow58({
       sbSalesTax,
       sbCorpTax,
       shopifyCapRepayment,
+      mercuryFulfillment,
       totalCashOnHand,
       inventory,
       workingCapital,

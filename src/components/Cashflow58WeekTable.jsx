@@ -40,6 +40,7 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
   const salesTaxLabel = pickAccountName(accs, 'salesTax', 'SB - Sales Tax (6735)');
   const corpTaxLabel = pickAccountName(accs, 'corporateTax', 'SB - Corporate Tax (6735)');
   const wcLabel = pickAccountName(accs, 'workingCapital', 'Working Capital (2465)');
+  const fulfillmentLabel = pickAccountName(accs, 'fulfillment', 'Mercury Fulfillment (7301)');
   const pct = v => `${Math.round(v * 100)}%`;
 
   return [
@@ -59,6 +60,7 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
       leftLabel: 'Profit %', leftValue: pct(C.profitPercentForWC) },
     { key: 'sbSalesTax',         label: salesTaxLabel,         kind: 'balance', informational: true },
     { key: 'sbCorpTax',          label: corpTaxLabel,          kind: 'balance' },
+    { key: 'mercuryFulfillment', label: fulfillmentLabel,      kind: 'balance' },
     { key: 'shopifyCapRepayment',label: 'Shopify Capital Repayment', kind: 'balance' },
     { key: '_poMilestonesPending', label: 'PO Milestones',     kind: 'pending' },
     { key: 'totalCashOnHand',    label: 'Total Cash On Hand',  kind: 'subtotal' },
