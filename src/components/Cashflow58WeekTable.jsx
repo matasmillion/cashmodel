@@ -45,15 +45,16 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
   return [
     { header: true, label: 'Revenue Run Rate As Of', anchorKey: 'date' },
     { key: 'shopifyRevenue', label: 'Shopify Store',  kind: 'driver',
-      leftLabel: 'H1 Growth', leftValue: pct(C.h1Growth - 1) },
+      leftLabel: 'Weekly Growth', leftValue: pct(C.weeklyGrowth - 1),
+      leftEditableKey: 'weeklyGrowth', leftEditableType: 'growth' },
     { key: 'dailyAdSpend',   label: 'Daily Spend',     kind: 'driver' },
     { key: 'fbAdSpend',      label: 'FB Ad Spend',     kind: 'driver',
-      leftLabel: 'MER', leftValue: pct(C.mer) },
+      leftLabel: 'MER', leftValue: pct(C.mer),
+      leftEditableKey: 'mer', leftEditableType: 'percent' },
     { key: 'cogsRate',       label: 'COGS %',          kind: 'percent' },
 
     { header: true, label: 'Balance Sheet As Of', anchorKey: 'date' },
-    { key: 'shopifyPayouts',     label: 'Shopify Payouts',     kind: 'balance',
-      leftLabel: 'Weekly Growth', leftValue: pct(C.h2Growth - 1) },
+    { key: 'shopifyPayouts',     label: 'Shopify Payouts',     kind: 'balance' },
     { key: 'sbMain',             label: operatingLabel,        kind: 'balance',
       leftLabel: 'Profit %', leftValue: pct(C.profitPercentForWC) },
     { key: 'sbSalesTax',         label: salesTaxLabel,         kind: 'balance' },
@@ -143,7 +144,7 @@ function formatSyncAge(iso) {
 }
 
 export default function Cashflow58WeekTable() {
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
   const [showHistorical, setShowHistorical] = useState(false);
 
   const weeks = useMemo(() => generateCashflow58({
@@ -293,7 +294,7 @@ export default function Cashflow58WeekTable() {
             {sections.map((row, ri) => (
               row.header
                 ? <SectionHeader key={ri} row={row} weeks={visibleWeeks} />
-                : <DataRow key={ri} row={row} weeks={visibleWeeks} prevRow={sections[ri - 1]} currentWeekIndex={currentWeekIndex} />
+                : <DataRow key={ri} row={row} weeks={visibleWeeks} prevRow={sections[ri - 1]} currentWeekIndex={currentWeekIndex} assumptions={state.assumptions} dispatch={dispatch} />
             ))}
           </tbody>
         </table>
@@ -322,7 +323,67 @@ function SectionHeader({ row, weeks }) {
   );
 }
 
-function DataRow({ row, weeks, prevRow, currentWeekIndex }) {
+function EditableLeftValue({ rawValue, editableType, onCommit }) {
+  // rawValue is the assumption itself (e.g. 1.04 or 0.33). Display:
+  //   editableType='growth'  → "4%"   (value 1.04 shown as 4%)
+  //   editableType='percent' → "33%"  (value 0.33 shown as 33%)
+  const toDisplay = (v) => {
+    if (editableType === 'growth') return `${Math.round((v - 1) * 100)}%`;
+    return `${Math.round(v * 100)}%`;
+  };
+  const fromDisplay = (s) => {
+    const n = parseFloat(s.replace('%', '').trim());
+    if (!Number.isFinite(n)) return null;
+    return editableType === 'growth' ? 1 + n / 100 : n / 100;
+  };
+
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(toDisplay(rawValue));
+
+  const commit = () => {
+    const next = fromDisplay(draft);
+    if (next != null && next !== rawValue) onCommit(next);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') { setDraft(toDisplay(rawValue)); setEditing(false); }
+        }}
+        style={{
+          width: '100%', textAlign: 'right', border: `1px solid ${FR.blue}`, borderRadius: 3,
+          padding: '0 4px', fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          color: FR.slate, background: 'white', outline: 'none',
+        }}
+      />
+    );
+  }
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      title="Click to edit"
+      onClick={() => { setDraft(toDisplay(rawValue)); setEditing(true); }}
+      onKeyDown={e => { if (e.key === 'Enter') { setDraft(toDisplay(rawValue)); setEditing(true); } }}
+      style={{
+        color: FR.slate, fontSize: 11, textAlign: 'right',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        cursor: 'pointer', borderBottom: `1px dashed rgba(31,58,87,0.35)`,
+      }}
+    >
+      {toDisplay(rawValue)}
+    </div>
+  );
+}
+
+function DataRow({ row, weeks, prevRow, currentWeekIndex, assumptions, dispatch }) {
   const isSubtotal = row.kind === 'subtotal' || row.kind === 'subtotal-out';
   const rowBg = isSubtotal ? 'rgba(235,229,213,0.25)' : 'transparent';
 
@@ -331,6 +392,10 @@ function DataRow({ row, weeks, prevRow, currentWeekIndex }) {
   // Always show leftValue when present (it's the row directly under leftLabel)
   const leftCellTop = row.leftLabel || '';
   const leftCellBottom = row.leftValue || '';
+  const isEditable = !!row.leftEditableKey;
+  const rawValue = isEditable
+    ? (assumptions?.[row.leftEditableKey] ?? CASHFLOW_DEFAULTS[row.leftEditableKey])
+    : null;
 
   return (
     <tr style={{ background: rowBg }}>
@@ -341,7 +406,13 @@ function DataRow({ row, weeks, prevRow, currentWeekIndex }) {
             {leftCellTop}
           </div>
         )}
-        {leftCellBottom && (
+        {isEditable ? (
+          <EditableLeftValue
+            rawValue={rawValue}
+            editableType={row.leftEditableType}
+            onCommit={(next) => dispatch({ type: 'UPDATE_ASSUMPTIONS', payload: { [row.leftEditableKey]: next } })}
+          />
+        ) : leftCellBottom && (
           <div style={{ color: FR.slate, fontSize: 11, textAlign: 'right', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
             {leftCellBottom}
           </div>

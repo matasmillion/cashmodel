@@ -532,6 +532,57 @@ export async function syncMetaActuals(creds) {
   });
 }
 
+/**
+ * Pulls today's daily_budget from the Meta CBO campaign named "Acquisition"
+ * (case-insensitive). This is the FORWARD-LOOKING daily ad spend the user
+ * has set in Ads Manager — the cashflow projection uses it to anchor the
+ * current and future weeks' ad spend, rather than backing into it from
+ * historical insights (which lag behind plan changes).
+ *
+ * Meta returns daily_budget in the account's MINOR currency unit (cents
+ * for USD), so we divide by 100. Returns null if no matching campaign is
+ * found or the call fails — caller falls back to insights-based spend.
+ */
+export async function syncMetaDailyBudget(creds, campaignName = 'Acquisition') {
+  if (!creds?.connected || !creds.accountId) return null;
+  const accountId = creds.accountId.startsWith('act_') ? creds.accountId : `act_${creds.accountId}`;
+  let response;
+  try {
+    response = await callMetaProxy({
+      method: 'GET',
+      path: `${accountId}/campaigns`,
+      body: {
+        fields: 'id,name,daily_budget,status,effective_status',
+        limit: 200,
+      },
+    });
+  } catch (err) {
+    // Legacy fallback (token client-side) if proxy unavailable.
+    if (creds.token) {
+      const url = `https://graph.facebook.com/v19.0/${accountId}/campaigns?fields=id,name,daily_budget,status,effective_status&limit=200&access_token=${creds.token}`;
+      const res = await fetch(url);
+      response = await res.json();
+    } else {
+      throw err;
+    }
+  }
+  if (response?.error) throw new Error(response.error.message || 'Meta campaigns API error');
+
+  const target = campaignName.toLowerCase();
+  const match = (response?.data || []).find(c => (c.name || '').toLowerCase() === target);
+  if (!match || !match.daily_budget) return null;
+
+  // Meta returns budget as a string in minor units (cents).
+  const cents = parseInt(match.daily_budget, 10);
+  if (!Number.isFinite(cents)) return null;
+  return {
+    dailyBudget: cents / 100,
+    campaignId: match.id,
+    campaignName: match.name,
+    status: match.effective_status || match.status,
+  };
+}
+
 // ─── Mercury (credentials in Supabase, calls via edge function proxy) ───────
 
 /**
@@ -807,7 +858,10 @@ export async function syncPlaidCardPayments() {
   };
 
   const mondayOf = (iso) => {
-    const d = new Date(iso + 'T00:00:00');
+    // Local-midnight parse — `new Date('YYYY-MM-DDT00:00:00')` is UTC in
+    // some browsers, which shifts the date by 1 day in negative timezones.
+    const [yy, mm, dd0] = iso.split('-').map(Number);
+    const d = new Date(yy, mm - 1, dd0);
     const day = d.getDay();
     d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
     // LOCAL ISO so the date matches getPast13Weeks / cashflow engine keys.

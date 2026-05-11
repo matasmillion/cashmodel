@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useMemo, useEffect, useRef, useState } from 'react';
 import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, OPEX_WAREHOUSE, CREDIT_CARDS, LOANS, AD_UNIT_TYPES, DEFAULT_EVENTS } from '../data/seedData';
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
-import { syncShopifyActuals, syncShopifyInventory, syncMetaActuals, syncPlaidActuals, syncPlaidCardPayments, listPlaidItems } from '../utils/liveDataSync';
+import { syncShopifyActuals, syncShopifyInventory, syncMetaActuals, syncMetaDailyBudget, syncPlaidActuals, syncPlaidCardPayments, listPlaidItems } from '../utils/liveDataSync';
 import { migrateManualPOsToStore } from '../utils/productionStore';
 import { migrateLegacyInventoryHash } from '../utils/inventoryRouting';
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
@@ -109,6 +109,26 @@ async function runAutoSync(dispatch) {
       }).catch(err => {
         errors.meta = err.message;
         console.warn('[auto-sync] Meta:', err.message);
+      }),
+    );
+
+    // Also fetch the forward-looking daily budget from the CBO campaign
+    // named "Acquisition". The engine uses this to anchor projected daily
+    // ad spend (instead of backing into it from historical insights).
+    tasks.push(
+      syncMetaDailyBudget(creds.meta).then(info => {
+        if (info?.dailyBudget != null) {
+          dispatch({
+            type: 'UPDATE_SEED',
+            payload: {
+              metaDailyBudget: info.dailyBudget,
+              metaCampaignName: info.campaignName,
+              metaCampaignStatus: info.status,
+            },
+          });
+        }
+      }).catch(err => {
+        console.warn('[auto-sync] Meta daily budget:', err.message);
       }),
     );
   }
@@ -246,7 +266,7 @@ function readTabFromHash() {
 // Bump when the shape of `assumptions` (or other persisted state) changes
 // in a way that needs older localStorage payloads to be force-corrected.
 // Migrations run at load time and overwrite the offending fields in-place.
-const STATE_SCHEMA_VERSION = 4;
+const STATE_SCHEMA_VERSION = 5;
 
 function migrateState(saved) {
   const v = saved.schemaVersion || 1;
@@ -275,6 +295,23 @@ function migrateState(saved) {
   if (v < 4) {
     // v4: cardPaymentsActuals introduced (Plaid-sourced).
     out.cardPaymentsActuals = saved.cardPaymentsActuals || {};
+  }
+
+  if (v < 5) {
+    // v5: collapse h1Growth / h2Growth into a single editable weeklyGrowth.
+    // Drops growthSwitchDate + h2StartingDailySpend + weeklyGrowthH1/H2
+    // legacy fields. Preserves any user-set value by preferring h1Growth
+    // (closer to their operating reality).
+    const collapse = (a) => {
+      if (!a) return a;
+      const wg = a.weeklyGrowth ?? a.h1Growth ?? a.weeklyGrowthH1 ?? 1.04;
+      const { h1Growth, h2Growth, weeklyGrowthH1, weeklyGrowthH2, growthSwitchDate, h2StartingDailySpend, ...rest } = a;
+      return { ...rest, weeklyGrowth: wg };
+    };
+    out.assumptions = collapse(saved.assumptions);
+    if (Array.isArray(saved.scenarios)) {
+      out.scenarios = saved.scenarios.map(s => ({ ...s, assumptions: collapse(s.assumptions) }));
+    }
   }
 
   out.schemaVersion = STATE_SCHEMA_VERSION;

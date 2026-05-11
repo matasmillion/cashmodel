@@ -91,10 +91,8 @@ export const DEFAULT_ASSUMPTIONS = {
   nol: 50000,
   nolMax: 0.80,
 
-  // 13-week cashflow constants (mirrors xlsx column-A scalars)
-  h1Growth: 1.04,
-  h2Growth: 1.07,
-  growthSwitchDate: '2026-08-03',
+  // 13-week cashflow editable assumptions
+  weeklyGrowth: 1.04,
   ppPercent: 0.04,
   fulfillmentPercent: 0.09,
   shopifyCapitalRate: 0.06,
@@ -105,8 +103,6 @@ export const DEFAULT_ASSUMPTIONS = {
   paymentProcessingPercent: 0.04,
   creativePercent: 0.06,
   interestFrequencyWeeks: 4,
-  weeklyGrowthH1: 1.04,
-  weeklyGrowthH2: 1.07,
   mer: 0.33,
 };
 
