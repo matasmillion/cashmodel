@@ -75,21 +75,31 @@ serve(async (req) => {
   }
 
   // ── 1. Verify caller session ────────────────────────────────────────────
+  // We use Clerk for auth, not Supabase native auth. Decode the JWT
+  // payload directly (mirror plaid-proxy). RLS is still enforced
+  // because we pass the JWT through to Supabase, which reads the
+  // org_id claim from it when evaluating policies.
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return json({ error: 'Missing Authorization header — sign in first' }, 401, origin);
   }
   const jwt = authHeader.slice('Bearer '.length);
 
+  let userId: string | null = null;
+  let orgId: string | null = null;
+  try {
+    const payload = JSON.parse(atob(jwt.split('.')[1]));
+    userId = payload.sub || null;
+    orgId = payload.org_id || null;
+  } catch {
+    return json({ error: 'Invalid session token' }, 401, origin);
+  }
+  if (!userId) return json({ error: 'Invalid session token' }, 401, origin);
+  if (!orgId) return json({ error: 'No active organization — create one first' }, 403, origin);
+
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
   });
-
-  const { data: userData, error: userErr } = await supabase.auth.getUser(jwt);
-  if (userErr || !userData?.user) {
-    return json({ error: 'Invalid session token' }, 401, origin);
-  }
-  const userId = userData.user.id;
 
   // ── 2. Look up this user's Shopify credentials ──────────────────────────
   // RLS ensures the query only returns rows owned by userId.
