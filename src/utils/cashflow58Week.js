@@ -271,18 +271,21 @@ export function generateCashflow58({
       chase5718 = seed.chase5718Balance ?? Math.max(0, (prev?.chase5718 ?? cardOpening.chase5718) - payChase);
       amexPlum = seed.amexPlumBalance ?? Math.max(0, (prev?.amexPlum ?? cardOpening.amexPlum) - payAmexPlum);
       amexBlue = seed.amexBlueBalance ?? Math.max(0, (prev?.amexBlue ?? cardOpening.amexBlue) - payAmexBlue);
-      // Shopify Capital precedence:
-      //   1. Operator override (seed.shopifyCapitalOutstandingOverride)
-      //      — wins when the API result doesn't match Shopify's own
-      //      Capital page (e.g. loan disbursement not in balance
-      //      transactions for legacy contracts).
-      //   2. Live outstanding from Shopify (netted balance tx ledger).
-      //   3. Prior-week projection (offline fallback).
-      shopifyCapital = seed.shopifyCapitalOutstandingOverride != null && seed.shopifyCapitalOutstandingOverride !== ''
-        ? Number(seed.shopifyCapitalOutstandingOverride) || 0
-        : seed.shopifyCapitalOutstanding != null
-          ? seed.shopifyCapitalOutstanding
-          : (prev?.shopifyCapital ?? cardOpening.shopifyCapital) - payShopifyCapital;
+      // Shopify Capital outstanding:
+      //   outstanding = originalLoan − sum of PAID remittances
+      //
+      // Pending remittances (still appearing on the Shopify Capital
+      // Repayment row) intentionally do NOT reduce this balance — that
+      // money hasn't actually left yet. It rolls into outstanding next
+      // week when Shopify settles those remittances into a paid payout.
+      //
+      // If the operator hasn't entered the original loan yet, fall back
+      // to the prior-week projection so the row doesn't go to zero.
+      const originalLoan = Number(seed.shopifyCapitalOriginalLoan);
+      const paidTotal = Number(seed.shopifyCapitalPaidRepaymentsTotal) || 0;
+      shopifyCapital = Number.isFinite(originalLoan) && originalLoan > 0
+        ? Math.max(0, Math.round((originalLoan - paidTotal) * 100) / 100)
+        : (prev?.shopifyCapital ?? cardOpening.shopifyCapital) - payShopifyCapital;
       longTermLoan = (prev?.longTermLoan ?? cardOpening.longTermLoan) - payLtLoan;
     } else {
       const opening = prev ?? {
