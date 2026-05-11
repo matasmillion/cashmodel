@@ -258,7 +258,12 @@ async function runAutoSync(dispatch) {
         workingCapital: bucketed.workingCapital,
         // Mercury 7301 sub-account balance (classified by mask). Drives
         // the "Mercury Fulfillment (7301)" cashflow row.
+        // Mercury 7301 / 3135 balances — surfaced as gray italic sub-rows
+        // UNDER Fulfillment Payable / Ads Payable in the cashflow, NOT
+        // as their own line items. They represent the cash earmarked
+        // toward each short-term liability.
         mercuryFulfillmentBalance: bucketed.fulfillment,
+        mercuryMarketingBalance: bucketed.marketing,
         bankAccounts: bucketed.accounts,
         // Persisted diagnostic so the Integrations panel can render
         // exactly what failed in the last auto-sync, even before the

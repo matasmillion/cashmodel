@@ -360,57 +360,53 @@ export function generateCashflow58({
     const netCashFlow = totalInflows - totalOutflows;
 
     // ── Cash on hand (rows 11–21) ───────────────────────────────────────
-    let shopifyPayouts, sbMain, sbSalesTax, sbCorpTax, shopifyCapRepayment, mercuryFulfillment;
+    let shopifyPayouts, sbMain, sbSalesTax, sbCorpTax, shopifyCapRepayment,
+        mercuryFulfillment, mercuryMarketing;
     if (hist) {
       shopifyPayouts = hist.shopifyPayouts;
       sbMain = hist.sbMain;
       sbSalesTax = hist.sbSalesTax;
       sbCorpTax = hist.sbCorpTax;
       shopifyCapRepayment = hist.shopifyCapRepayment;
-      // Historical seed pre-dates the fulfillment classification — there
-      // was no separate fulfillment bucket before today. Default to 0.
       mercuryFulfillment = hist.mercuryFulfillment ?? 0;
+      mercuryMarketing = hist.mercuryMarketing ?? 0;
     } else if (isCurrent) {
-      // Current week is anchored on live Plaid balances (Mercury → seed)
-      // Shopify Payouts = scheduled + in_transit payouts from Shopify
-      // Payments that haven't yet settled to Mercury. Live from
-      // syncShopifyPayoutsPending → seed.shopifyPayoutsPending.
+      // Current week is anchored on live Plaid balances (Mercury → seed).
       shopifyPayouts = seed.shopifyPayoutsPending ?? 0;
       sbMain = seed.sbMain ?? (prev?.totalCashOnHand ?? 0) + netCashFlow - transferToWC;
       sbSalesTax = seed.sbSalesTax ?? prev?.sbSalesTax ?? 0;
       sbCorpTax = seed.sbCorpTax ?? prev?.sbCorpTax ?? 0;
-      // Shopify Capital repayment: pending balance-transaction deductions
-      // from the Shopify Balance "Capital" sub-account (source_type
-      // shopify_capital_payment) that haven't yet settled. Live from
-      // syncShopifyCapitalRepayment → seed.shopifyCapitalPending.
       shopifyCapRepayment = seed.shopifyCapitalPending ?? 0;
-      // Mercury fulfillment sub-account (mask 7301) balance from Plaid.
+      // Mercury sub-accounts (available balance, after pending outflows).
+      // These are NOT part of Total Cash On Hand — they're earmarked
+      // toward Fulfillment Payable / Ads Payable respectively and show
+      // as informational gray italic sub-rows under each liability.
       mercuryFulfillment = seed.mercuryFulfillmentBalance ?? 0;
+      mercuryMarketing = seed.mercuryMarketingBalance ?? 0;
     } else {
-      // Projection rows: collapse cash to a single sbMain bucket. Treating
-      // shopifyPayouts as a separate line double-counts with onlineStore
-      // (which already feeds netCashFlow → sbMain).
       shopifyPayouts = 0;
-      // SB Main = prev Total Cash + Net Cash Flow - Transfer to WC (Excel R12)
       sbMain = (prev?.totalCashOnHand ?? 0) + netCashFlow - transferToWC;
       sbSalesTax = prev?.sbSalesTax ?? 0;
       sbCorpTax = prev?.sbCorpTax ?? 0;
       shopifyCapRepayment = 0;
-      // Future weeks: roll fulfillment balance forward unchanged. We
-      // don't project sub-account drift; the next sync corrects it.
+      // Future weeks: roll sub-account balances forward; next sync corrects.
       mercuryFulfillment = prev?.mercuryFulfillment ?? 0;
+      mercuryMarketing = prev?.mercuryMarketing ?? 0;
     }
     // TCOH composition:
-    //   + sbMain              — operating cash
+    //   + sbMain              — Operating Cash (Mercury 6848, available)
     //   + sbCorpTax           — corporate tax reserve (still funds the biz)
     //   + shopifyPayouts      — pending captured-but-not-settled (current week)
-    //   + mercuryFulfillment  — Mercury 7301 cash earmarked for 3PL (spendable)
     //   - sbSalesTax          — EXCLUDED. Held for state remittance, never funds ops.
-    //   - shopifyCapRepayment — EXCLUDED. Pending OUTFLOW (Capital deduction
-    //                           about to leave), not cash on hand.
+    //   - shopifyCapRepayment — EXCLUDED. Pending OUTFLOW.
+    //   - mercuryFulfillment  — EXCLUDED. 7301 is earmarked toward
+    //                           Fulfillment Payable; shown as gray sub-row
+    //                           under that liability, not counted in cash.
+    //   - mercuryMarketing    — EXCLUDED. Same logic — earmarked toward
+    //                           Ads Payable.
     const totalCashOnHand = hist
-      ? hist.totalCashOnHand ?? (sbMain + (sbCorpTax || 0) + (shopifyPayouts || 0) + (mercuryFulfillment || 0))
-      : sbMain + sbCorpTax + shopifyPayouts + mercuryFulfillment;
+      ? hist.totalCashOnHand ?? (sbMain + (sbCorpTax || 0) + (shopifyPayouts || 0))
+      : sbMain + sbCorpTax + shopifyPayouts;
 
     // ── Inventory (row 22) ──────────────────────────────────────────────
     const inventory = hist ? hist.inventory : (prev?.inventory ?? 0) + transferToWC;
@@ -462,6 +458,7 @@ export function generateCashflow58({
       sbCorpTax,
       shopifyCapRepayment,
       mercuryFulfillment,
+      mercuryMarketing,
       totalCashOnHand,
       inventory,
       workingCapital,

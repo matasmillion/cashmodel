@@ -815,6 +815,7 @@ function PlaidCard({ dispatch }) {
           sbCorpTax: -Math.abs(bucketed.corporateTax),
           workingCapital: bucketed.workingCapital,
           mercuryFulfillmentBalance: bucketed.fulfillment,
+          mercuryMarketingBalance: bucketed.marketing,
           bankAccounts: bucketed.accounts,
         },
       });

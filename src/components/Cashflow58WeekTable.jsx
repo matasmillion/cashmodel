@@ -46,6 +46,7 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
   const corpTaxLabel = pickAccountName(accs, 'corporateTax', 'SB - Corporate Tax (6735)');
   const wcLabel = pickAccountName(accs, 'workingCapital', 'Working Capital (2465)');
   const fulfillmentLabel = pickAccountName(accs, 'fulfillment', 'Mercury Fulfillment (7301)');
+  const marketingLabel = pickAccountName(accs, 'marketing', 'Mercury Marketing (3135)');
   const pct = v => `${Math.round(v * 100)}%`;
 
   return [
@@ -65,7 +66,6 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
       leftLabel: 'Profit %', leftValue: pct(C.profitPercentForWC) },
     { key: 'sbSalesTax',         label: salesTaxLabel,         kind: 'balance', informational: true },
     { key: 'sbCorpTax',          label: corpTaxLabel,          kind: 'balance' },
-    { key: 'mercuryFulfillment', label: fulfillmentLabel,      kind: 'balance' },
     { key: 'shopifyCapRepayment',label: 'Shopify Capital Repayment', kind: 'balance' },
     { key: '_poMilestonesPending', label: 'PO Milestones',     kind: 'pending' },
     { key: 'totalCashOnHand',    label: 'Total Cash On Hand',  kind: 'subtotal' },
@@ -74,8 +74,13 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
     { key: 'totalAssets',        label: 'Total Assets',        kind: 'subtotal' },
 
     { header: true, label: 'ST Liabilities' },
-    { key: 'adsPayable',         label: 'Ads Payable (Chase 7248 + Meta)', kind: 'balance' },
-    { key: 'fulfillmentPayable', label: 'Fullfillment Payable (2907)', kind: 'balance' },
+    { key: 'adsPayable',         label: 'Ads Payable',                 kind: 'balance' },
+    // Mercury 3135 — cash earmarked toward Ads Payable. Gray italic so
+    // the operator can see how funded the liability is at a glance.
+    { key: 'mercuryMarketing',   label: marketingLabel,                kind: 'balance', subRow: true },
+    { key: 'fulfillmentPayable', label: 'Fulfillment Payable',         kind: 'balance' },
+    // Mercury 7301 — cash earmarked toward Fulfillment Payable.
+    { key: 'mercuryFulfillment', label: fulfillmentLabel,              kind: 'balance', subRow: true },
 
     { header: true, label: 'LT Liabilities' },
     { key: 'chase5718',     label: 'CHASE 5718',     kind: 'balance', leftLabel: 'OPEX CARDS' },
@@ -395,6 +400,11 @@ function EditableLeftValue({ rawValue, editableType, onCommit }) {
 
 function DataRow({ row, weeks, prevRow, currentWeekIndex, assumptions, dispatch }) {
   const isSubtotal = row.kind === 'subtotal' || row.kind === 'subtotal-out';
+  const isSubRow = !!row.subRow;
+  // Sub-rows (gray italic) sit visually attached to the row above
+  // them — Mercury 3135 under Ads Payable, Mercury 7301 under
+  // Fulfillment Payable. They show how much cash is set aside toward
+  // that liability so the operator can see the funding gap.
   const rowBg = isSubtotal ? 'rgba(235,229,213,0.25)' : 'transparent';
 
   // If the previous row in the same group had the same leftLabel, skip rendering it
@@ -406,6 +416,9 @@ function DataRow({ row, weeks, prevRow, currentWeekIndex, assumptions, dispatch 
   const rawValue = isEditable
     ? (assumptions?.[row.leftEditableKey] ?? CASHFLOW_DEFAULTS[row.leftEditableKey])
     : null;
+
+  const labelColor = isSubRow ? FR.stone : FR.slate;
+  const labelStyle = isSubRow ? { fontStyle: 'italic', fontSize: 10.5, paddingLeft: 18 } : {};
 
   return (
     <tr style={{ background: rowBg }}>
@@ -430,9 +443,10 @@ function DataRow({ row, weeks, prevRow, currentWeekIndex, assumptions, dispatch 
       </td>
       <td className="sticky px-3 py-1"
           style={{
-            background: 'white', color: FR.slate, fontWeight: isSubtotal ? 600 : 400,
+            background: 'white', color: labelColor, fontWeight: isSubtotal ? 600 : 400,
             position: 'sticky', left: COL_W_LEFT, zIndex: 9, minWidth: COL_W_LABEL,
             borderRight: `1px solid ${FR.sand}`,
+            ...labelStyle,
           }}>
         {row.label}
       </td>
@@ -442,15 +456,19 @@ function DataRow({ row, weeks, prevRow, currentWeekIndex, assumptions, dispatch 
         const display = row.kind === 'pending'
           ? <span style={{ color: FR.stone, fontStyle: 'italic', fontSize: 10 }}>pending</span>
           : fmt(v, row.kind);
-        const color = colorFor(v, row.kind, w.isHistorical, isCurrentCol, row.informational);
+        // Sub-rows always render in muted stone italic regardless of sign —
+        // they're informational ("cash earmarked toward this liability"),
+        // not part of any P&L.
+        const color = isSubRow ? FR.stone : colorFor(v, row.kind, w.isHistorical, isCurrentCol, row.informational);
         return (
           <td key={wi} className="px-2 py-1 text-right border-l tabular-nums"
               style={{
                 color, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                 fontWeight: isSubtotal ? 600 : 400,
+                fontStyle: isSubRow ? 'italic' : undefined,
                 borderColor: FR.sand,
                 background: isCurrentCol ? 'rgba(31,58,87,0.06)' : undefined,
-                fontSize: 11,
+                fontSize: isSubRow ? 10.5 : 11,
               }}>
             {display}
           </td>
