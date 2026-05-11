@@ -810,7 +810,11 @@ export async function syncPlaidCardPayments() {
     const d = new Date(iso + 'T00:00:00');
     const day = d.getDay();
     d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
-    return d.toISOString().slice(0, 10);
+    // LOCAL ISO so the date matches getPast13Weeks / cashflow engine keys.
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
   };
 
   const out = {};

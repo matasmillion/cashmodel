@@ -55,10 +55,23 @@ export const CASHFLOW_DEFAULTS = {
 // Date helpers
 // ────────────────────────────────────────────────────────────────────────────
 
+// Format a Date as YYYY-MM-DD using LOCAL time components.
+// We deliberately avoid `.toISOString().slice(0,10)` because that converts
+// to UTC first and silently shifts the date by 1 day in any timezone east
+// of UTC. liveDataSync.getPast13Weeks already uses local-time keys, so all
+// date lookups (actualsHistory, cardPaymentsActuals, growth switch, etc.)
+// must match that convention.
+function toLocalISODate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function addWeeks(isoDate, n) {
   const d = new Date(isoDate + 'T00:00:00');
   d.setDate(d.getDate() + n * 7);
-  return d.toISOString().slice(0, 10);
+  return toLocalISODate(d);
 }
 
 function currentMondayISO() {
@@ -67,7 +80,7 @@ function currentMondayISO() {
   const monday = new Date(today);
   monday.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
   monday.setHours(0, 0, 0, 0);
-  return monday.toISOString().slice(0, 10);
+  return toLocalISODate(monday);
 }
 
 function paymentForCard(date, cardKey, schedule) {
