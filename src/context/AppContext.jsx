@@ -6,7 +6,7 @@ import { migrateManualPOsToStore } from '../utils/productionStore';
 import { migrateLegacyInventoryHash } from '../utils/inventoryRouting';
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { useCurrentUser, useCurrentOrg } from '../lib/auth';
-import { bucketDepositoryAccounts, classifyCreditAccount, cardIdFromMask, OPERATING_MASK } from '../utils/bankAccountMap';
+import { bucketDepositoryAccounts, classifyCreditAccount, cardIdFromMask } from '../utils/bankAccountMap';
 
 const LOCAL_STORAGE_KEY = 'cashmodel_state';
 const INTEGRATIONS_KEY = 'cashmodel_integrations';
@@ -235,26 +235,33 @@ async function runAutoSync(dispatch, { realTime = false } = {}) {
       const { totals, depositoryAccounts, creditAccounts, itemErrors } = plaidResult;
 
       const bucketed = bucketDepositoryAccounts(depositoryAccounts);
-      // Operating Cash row pins to the Mercury checking account ending in
-      // OPERATING_MASK ('6848') specifically — NOT the sum of every
-      // operating-classified sub-account.
-      const operatingAccount = depositoryAccounts.find(a => a.mask === OPERATING_MASK);
-      if (!operatingAccount) {
+      // Operating Cash row = SUM of every Mercury depository account
+      // (available balances). Per operator: "the operating cash row
+      // needs to be our total cash balance in Mercury."  We identify
+      // Mercury by institution_name, NOT by the operating-classified
+      // bucket (which would include Shopify Balance's "Main 9773" and
+      // similar). If no Mercury items are visible (e.g. Plaid item
+      // errored), leave sbMain undefined so the reducer keeps the
+      // previous value instead of overwriting with a misleading sum.
+      const mercuryAccounts = depositoryAccounts.filter(
+        a => /mercury/i.test(a.institution || ''),
+      );
+      const mercuryTotal = Math.round(
+        mercuryAccounts.reduce((s, a) => s + (a.balance || 0), 0) * 100,
+      ) / 100;
+      if (mercuryAccounts.length === 0) {
         console.warn(
-          `[auto-sync] No Mercury depository account with mask ${OPERATING_MASK} found. ` +
-          `Accounts seen: ${depositoryAccounts.map(a => `${a.name}(${a.mask})`).join(', ') || 'none'}. ` +
+          `[auto-sync] No Mercury depository accounts found in Plaid response. ` +
+          `Accounts seen: ${depositoryAccounts.map(a => `${a.institution}/${a.name}(${a.mask})`).join(', ') || 'none'}. ` +
           `Item errors: ${itemErrors?.length ? JSON.stringify(itemErrors) : 'none'}`,
         );
       }
       const seedPayload = {
         totalCash: totals.depository,
-        // CRITICAL: when 6848 is missing (e.g. Mercury item errored / not
-        // linked), DO NOT fall back to bucketed.operating — that's a sum
-        // of *other* depository accounts (Shopify Balance etc.) which
-        // produces a misleading number like the $6,441 the operator saw.
-        // Leaving sbMain undefined here means the reducer's spread
-        // preserves the previous value rather than overwriting with junk.
-        ...(operatingAccount ? { sbMain: operatingAccount.balance } : {}),
+        // Only overwrite sbMain when we actually have Mercury data. If
+        // Mercury's Plaid item errored, the reducer's spread keeps the
+        // last good value rather than wiping it to 0.
+        ...(mercuryAccounts.length > 0 ? { sbMain: mercuryTotal } : {}),
         sbSalesTax: -Math.abs(bucketed.salesTax),
         sbCorpTax: -Math.abs(bucketed.corporateTax),
         workingCapital: bucketed.workingCapital,

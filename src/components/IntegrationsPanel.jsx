@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ShoppingBag, BarChart3, CreditCard, Mail, Truck, CheckCircle, XCircle, Loader, ChevronDown, ChevronUp, ExternalLink, RefreshCw, Copy, Server, Landmark, Plus, Trash2, Sparkles, Film, Camera, Wand2, Hash, Globe } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { useApp } from '../context/AppContext';
-import { bucketDepositoryAccounts, classifyCreditAccount, cardIdFromMask, OPERATING_MASK } from '../utils/bankAccountMap';
+import { bucketDepositoryAccounts, classifyCreditAccount, cardIdFromMask } from '../utils/bankAccountMap';
 import {
   syncShopifyActuals, syncMetaActuals, testShopifyProxy,
   saveShopifyCredentials, loadShopifyIntegration, deleteShopifyCredentials,
@@ -792,25 +792,26 @@ function PlaidCard({ dispatch }) {
         });
       }
 
-      // Mirror the auto-sync wire-up exactly — same role bucketing, same
-      // 6848 pin for sbMain. Previously this handler overwrote sbMain
-      // with the full depository sum, which contradicted the pin and
-      // re-introduced the "Operating Cash = summed bucket" bug every
-      // time the button was clicked.
+      // Mirror the auto-sync wire-up exactly — Operating Cash = sum of
+      // all Mercury depository accounts (filtered by institution name).
       const bucketed = bucketDepositoryAccounts(depositoryAccounts);
-      const operatingAccount = depositoryAccounts.find(a => a.mask === OPERATING_MASK);
-      if (!operatingAccount) {
+      const mercuryAccounts = depositoryAccounts.filter(
+        a => /mercury/i.test(a.institution || ''),
+      );
+      const mercuryTotal = Math.round(
+        mercuryAccounts.reduce((s, a) => s + (a.balance || 0), 0) * 100,
+      ) / 100;
+      if (mercuryAccounts.length === 0) {
         console.warn(
-          `[manual sync] No Mercury depository account with mask ${OPERATING_MASK} — ` +
-          `falling back to summed operating bucket ($${bucketed.operating}). ` +
-          `Accounts seen: ${depositoryAccounts.map(a => `${a.name}(${a.mask})`).join(', ') || 'none'}`,
+          `[manual sync] No Mercury depository accounts found. ` +
+          `Accounts seen: ${depositoryAccounts.map(a => `${a.institution}/${a.name}(${a.mask})`).join(', ') || 'none'}`,
         );
       }
       dispatch({
         type: 'UPDATE_SEED',
         payload: {
           totalCash: totals.depository,
-          sbMain: operatingAccount ? operatingAccount.balance : bucketed.operating,
+          ...(mercuryAccounts.length > 0 ? { sbMain: mercuryTotal } : {}),
           sbSalesTax: -Math.abs(bucketed.salesTax),
           sbCorpTax: -Math.abs(bucketed.corporateTax),
           workingCapital: bucketed.workingCapital,
