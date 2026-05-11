@@ -37,6 +37,7 @@ const ALLOWED_PATHS = [
   'locations.json',
   'shopify_payments/payouts.json',
   'shopify_payments/balance.json',
+  'shopify_payments/balance/transactions.json',
   'customers/count.json',
   'graphql.json',
 ];

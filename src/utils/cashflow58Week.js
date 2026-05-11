@@ -376,10 +376,11 @@ export function generateCashflow58({
       sbMain = seed.sbMain ?? (prev?.totalCashOnHand ?? 0) + netCashFlow - transferToWC;
       sbSalesTax = seed.sbSalesTax ?? prev?.sbSalesTax ?? 0;
       sbCorpTax = seed.sbCorpTax ?? prev?.sbCorpTax ?? 0;
-      // Shopify Capital repayment is already captured in netCashFlow via
-      // payShopifyCapital, so this row is informational only and stays 0
-      // for projection (workbook left it blank).
-      shopifyCapRepayment = 0;
+      // Shopify Capital repayment: pending balance-transaction deductions
+      // from the Shopify Balance "Capital" sub-account (source_type
+      // shopify_capital_payment) that haven't yet settled. Live from
+      // syncShopifyCapitalRepayment → seed.shopifyCapitalPending.
+      shopifyCapRepayment = seed.shopifyCapitalPending ?? 0;
     } else {
       // Projection rows: collapse cash to a single sbMain bucket. Treating
       // shopifyPayouts as a separate line double-counts with onlineStore
@@ -391,19 +392,16 @@ export function generateCashflow58({
       sbCorpTax = prev?.sbCorpTax ?? 0;
       shopifyCapRepayment = 0;
     }
-    // Sales Tax (SB 6735) is intentionally EXCLUDED from this sum. The
-    // account only ever holds sales tax collected on behalf of states and
-    // pays it out on remittance — it never funds anything else. The row
-    // still surfaces seed.sbSalesTax so the operator can see the reserve,
-    // but it's informational only (renderer grays it out).
-    //
-    // shopifyPayouts IS included — the current-week seeded value
-    // represents real money already captured but not yet in Mercury.
-    // Projection rows keep it at 0 (avoiding double-count with
-    // onlineStore → sbMain in netCashFlow).
+    // TCOH composition:
+    //   + sbMain           — operating cash
+    //   + sbCorpTax        — corporate tax reserve (still funds the biz)
+    //   + shopifyPayouts   — pending captured-but-not-settled (current week only)
+    //   - sbSalesTax       — EXCLUDED. Held on behalf of states, never funds ops.
+    //   - shopifyCapRepayment — EXCLUDED. Pending OUTFLOW (Capital deduction
+    //                          about to leave), not cash on hand.
     const totalCashOnHand = hist
-      ? hist.totalCashOnHand ?? (sbMain + (sbCorpTax || 0) + (shopifyCapRepayment || 0) + (shopifyPayouts || 0))
-      : sbMain + sbCorpTax + shopifyCapRepayment + shopifyPayouts;
+      ? hist.totalCashOnHand ?? (sbMain + (sbCorpTax || 0) + (shopifyPayouts || 0))
+      : sbMain + sbCorpTax + shopifyPayouts;
 
     // ── Inventory (row 22) ──────────────────────────────────────────────
     const inventory = hist ? hist.inventory : (prev?.inventory ?? 0) + transferToWC;

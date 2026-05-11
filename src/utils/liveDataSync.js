@@ -309,6 +309,65 @@ export async function syncShopifyPayoutsPending() {
   return { pendingTotal, payouts: collected };
 }
 
+/**
+ * Pulls pending Shopify Capital repayments from the Shopify Payments
+ * balance transactions endpoint. The operator described these as
+ * transactions where:
+ *   - status / state is pending (the deduction hasn't yet been applied
+ *     to a paid payout)
+ *   - source_type / type indicates a Capital repayment
+ *   - description references "repayment" and the account is "Capital"
+ *
+ * Shopify's REST balance/transactions endpoint exposes these as
+ * `source_type === 'shopify_capital_payment'` (or `type` on older API
+ * versions). Pending status is inferred from `payout_status` not being
+ * `paid` (i.e. null / pending / scheduled / in_transit).
+ *
+ * Returns: { pendingTotal: number, repayments: Array<{id, amount, date, status, source_type}> }
+ *
+ * Requires the `read_shopify_payments_payouts` scope (same as payouts).
+ */
+export async function syncShopifyCapitalRepayment() {
+  let data;
+  try {
+    data = await callShopifyProxy('shopify_payments/balance/transactions.json', { limit: 250 });
+  } catch (err) {
+    console.warn('[shopify capital] balance/transactions fetch failed:', err.message);
+    return { pendingTotal: 0, repayments: [] };
+  }
+
+  const txs = data?.transactions || [];
+  const repayments = [];
+  for (const t of txs) {
+    const sourceType = (t.source_type || t.type || '').toLowerCase();
+    const isCapital = sourceType.includes('capital');
+    if (!isCapital) continue;
+
+    // Pending = not yet associated with a paid payout. Shopify marks
+    // settled deductions with payout_status === 'paid'.
+    const payoutStatus = (t.payout_status || '').toLowerCase();
+    const isPending = payoutStatus !== 'paid';
+    if (!isPending) continue;
+
+    // amount is a negative string for repayments (money leaving the
+    // Shopify Balance). Use the absolute value for the "amount owed
+    // this week" display.
+    const amt = Math.abs(parseFloat(t.amount));
+    if (!Number.isFinite(amt)) continue;
+
+    repayments.push({
+      id: t.id,
+      amount: amt,
+      date: t.processed_at || t.created_at,
+      status: payoutStatus || 'pending',
+      source_type: t.source_type || t.type,
+    });
+  }
+
+  const pendingTotal = Math.round(repayments.reduce((s, r) => s + r.amount, 0) * 100) / 100;
+  return { pendingTotal, repayments };
+}
+
 // ─── Shopify variants + per-day sales (Sell-Through page) ────────────────────
 
 /**

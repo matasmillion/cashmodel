@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useMemo, useEffect, useRef, useState } from 'react';
 import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, OPEX_WAREHOUSE, CREDIT_CARDS, LOANS, AD_UNIT_TYPES, DEFAULT_EVENTS } from '../data/seedData';
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
-import { syncShopifyActuals, syncShopifyInventory, syncMetaActuals, syncMetaDailyBudget, syncMetaBalanceOwed, syncPlaidActuals, syncPlaidCardPayments, syncShopifyPayoutsPending, syncPlaidPendingCharges, listPlaidItems } from '../utils/liveDataSync';
+import { syncShopifyActuals, syncShopifyInventory, syncShopifyCapitalRepayment, syncMetaActuals, syncMetaDailyBudget, syncMetaBalanceOwed, syncPlaidActuals, syncPlaidCardPayments, syncShopifyPayoutsPending, syncPlaidPendingCharges, listPlaidItems } from '../utils/liveDataSync';
 import { migrateManualPOsToStore } from '../utils/productionStore';
 import { migrateLegacyInventoryHash } from '../utils/inventoryRouting';
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
@@ -95,6 +95,24 @@ async function runAutoSync(dispatch) {
       }).catch(err => {
         errors.shopifyPayouts = err.message;
         console.warn('[auto-sync] Shopify pending payouts:', err.message);
+      }),
+    );
+
+    // Pending Shopify Capital repayments (balance transactions with
+    // source_type "shopify_capital_payment" that haven't settled yet).
+    tasks.push(
+      syncShopifyCapitalRepayment().then(info => {
+        dispatch({
+          type: 'UPDATE_SEED',
+          payload: {
+            shopifyCapitalPending: info.pendingTotal,
+            shopifyCapitalPendingDetail: info.repayments,
+            shopifyCapitalPendingSyncedAt: now,
+          },
+        });
+      }).catch(err => {
+        errors.shopifyCapital = err.message;
+        console.warn('[auto-sync] Shopify Capital repayment:', err.message);
       }),
     );
   }
