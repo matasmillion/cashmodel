@@ -745,15 +745,24 @@ function PlaidCard({ dispatch }) {
     }
   }
 
-  async function handleSync() {
+  async function handleSync(opts = {}) {
     if (items.length === 0) return;
     setSyncStatus('syncing');
     setSyncErr('');
     setSyncDiagnostic(null);
     try {
-      // Manual click = real-time refresh (hits the bank, costs ~$0.10/account).
-      // Auto-sync on page load uses the cached endpoint (free).
-      const { totals, depositoryAccounts, creditAccounts, itemErrors } = await syncPlaidActuals({ realTime: true });
+      // Default: cached endpoint (free, instant). Plaid keeps these
+      // current via background syncs so for cashflow purposes this is
+      // the right default — and it sidesteps the edge-function timeout
+      // that the real-time endpoint hits when 4+ banks are linked
+      // (each /accounts/balance/get takes 10-30s and Promise.all blows
+      // past Supabase's response budget → browser shows "Failed to fetch").
+      //
+      // Pass { realTime: true } via the optional "Force real-time"
+      // affordance for an explicit live refresh.
+      const realTime = opts.realTime === true;
+      const { totals, depositoryAccounts, creditAccounts, itemErrors } =
+        await syncPlaidActuals({ realTime });
 
       // Any Plaid item that errored (e.g. ITEM_LOGIN_REQUIRED on Mercury)
       // is surfaced as a partial-success diagnostic so the operator sees
@@ -908,23 +917,45 @@ function PlaidCard({ dispatch }) {
             />
           )}
           {hasItems && (
-            <button
-              type="button"
-              onClick={handleSync}
-              disabled={syncStatus === 'syncing'}
-              className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm"
-              style={{
-                background: syncStatus === 'ok' ? FR.green : syncStatus === 'error' ? FR.red : FR.soil,
-                color: 'white', border: 'none',
-                cursor: syncStatus === 'syncing' ? 'not-allowed' : 'pointer',
-              }}>
-              {syncStatus === 'syncing' ? <Loader size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-              {syncStatus === 'syncing' ? 'Syncing…'
-                : syncStatus === 'ok' ? 'Synced — balances pushed to model'
-                : 'Sync balances'}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => handleSync()}
+                disabled={syncStatus === 'syncing'}
+                className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm"
+                style={{
+                  background: syncStatus === 'ok' ? FR.green : syncStatus === 'error' ? FR.red : FR.soil,
+                  color: 'white', border: 'none',
+                  cursor: syncStatus === 'syncing' ? 'not-allowed' : 'pointer',
+                }}>
+                {syncStatus === 'syncing' ? <Loader size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                {syncStatus === 'syncing' ? 'Syncing…'
+                  : syncStatus === 'ok' ? 'Synced — balances pushed to model'
+                  : 'Sync balances'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSync({ realTime: true })}
+                disabled={syncStatus === 'syncing'}
+                title="Forces /accounts/balance/get on every bank — slow, ~$0.10/account. Use only if cached balances look stale."
+                className="text-xs underline"
+                style={{
+                  background: 'transparent', color: FR.stone, border: 'none',
+                  cursor: syncStatus === 'syncing' ? 'not-allowed' : 'pointer',
+                }}>
+                Force real-time
+              </button>
+            </>
           )}
         </div>
+
+        {state.seed?.syncedAtBySource?.plaid && (
+          <p className="text-[11px]" style={{ color: FR.stone }}>
+            Last auto-sync (cached): <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+              {new Date(state.seed.syncedAtBySource.plaid).toLocaleString()}
+            </span>
+          </p>
+        )}
 
         {connectStatus === 'error' && connectErr && (
           <p className="text-xs" style={{ color: FR.red }}>{connectErr}</p>
