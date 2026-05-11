@@ -401,14 +401,19 @@ export async function syncShopifyPayoutsPending({
   days = 7,
 } = {}) {
   const reported = [];
+  // Capture per-stage errors so the UI can show *why* the row is $0
+  // instead of just "skipped".
+  const errors = {};
   // 1. Shopify-reported pending (scheduled + in_transit).
   for (const status of ['scheduled', 'in_transit']) {
     let data;
     try {
       data = await callShopifyProxy('shopify_payments/payouts.json', { status, limit: 250 });
     } catch (err) {
-      // 403 = scope missing, 404 = store doesn't have Shopify Payments enabled.
+      // 403 = scope missing (need read_shopify_payments_payouts),
+      // 404 = store doesn't have Shopify Payments enabled.
       console.warn(`[shopify payouts] ${status} fetch failed:`, err.message);
+      errors[`shopify_${status}`] = err.message;
       continue;
     }
     for (const p of (data?.payouts || [])) {
@@ -423,6 +428,7 @@ export async function syncShopifyPayoutsPending({
   let unmatchedPaidTotal = 0;
   let unmatchedPaidPayouts = [];
   let reconciliationSkipped = false;
+  let reconciliationSkipReason = null;
 
   if (reconcileMercuryMask) {
     try {
@@ -431,32 +437,37 @@ export async function syncShopifyPayoutsPending({
       const sinceStr =
         `${sinceDate.getFullYear()}-${String(sinceDate.getMonth() + 1).padStart(2, '0')}-${String(sinceDate.getDate()).padStart(2, '0')}`;
 
-      const paidData = await callShopifyProxy('shopify_payments/payouts.json', {
-        status: 'paid',
-        date_min: sinceStr,
-        limit: 250,
-      });
+      let paidData;
+      try {
+        paidData = await callShopifyProxy('shopify_payments/payouts.json', {
+          status: 'paid',
+          date_min: sinceStr,
+          limit: 250,
+        });
+      } catch (err) {
+        errors.shopify_paid = err.message;
+        throw err;
+      }
       const paidPayouts = (paidData?.payouts || [])
         .map(p => ({ id: p.id, date: p.date, amount: parseFloat(p.amount) }))
         .filter(p => Number.isFinite(p.amount) && p.amount > 0);
 
-      const deposits = await syncMercuryDeposits({ mask: reconcileMercuryMask, days });
-      if (deposits == null) {
+      const depositsResult = await syncMercuryDeposits({ mask: reconcileMercuryMask, days });
+      if (depositsResult == null) {
         // Mercury 6848 not visible through Plaid — skip reconciliation
         // so we don't falsely flag every paid payout as missing.
         reconciliationSkipped = true;
-        console.warn(
-          `[shopify payouts] Mercury mask ${reconcileMercuryMask} not found in any linked Plaid item — ` +
-          `skipping paid-vs-Mercury reconciliation. Operating Cash row reflects Shopify-reported pending only.`,
-        );
+        reconciliationSkipReason = `Mercury mask ${reconcileMercuryMask} not visible through Plaid — every Plaid item either errored or doesn't contain that account. Most common cause: the Mercury Plaid item was linked without the transactions product (or its token is expired). Re-link Mercury from Integrations.`;
+        console.warn(`[shopify payouts] ${reconciliationSkipReason}`);
       } else {
-        const recon = reconcileShopifyPaidWithMercury(paidPayouts, deposits);
+        const recon = reconcileShopifyPaidWithMercury(paidPayouts, depositsResult);
         unmatchedPaidTotal = recon.unmatchedTotal;
         unmatchedPaidPayouts = recon.unmatched;
       }
     } catch (err) {
       console.warn('[shopify payouts] paid reconciliation failed:', err.message);
       reconciliationSkipped = true;
+      reconciliationSkipReason = reconciliationSkipReason || err.message;
     }
   }
 
@@ -468,6 +479,8 @@ export async function syncShopifyPayoutsPending({
     unmatchedPaidTotal,
     unmatchedPaidPayouts,
     reconciliationSkipped,
+    reconciliationSkipReason,
+    errors,
   };
 }
 

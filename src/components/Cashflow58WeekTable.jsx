@@ -42,9 +42,9 @@ function pickAccountName(bankAccounts, role, fallback, preferMask) {
 function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
   const accs = seed.bankAccounts;
   // Operating Cash = total Mercury depository balance (sum of every
-  // Mercury sub-account, available). Fixed label instead of pickAccountName
-  // since we're no longer pinning to a single mask.
-  const operatingLabel = 'Operating Cash (Mercury total)';
+  // Mercury sub-account, available). Renamed to "Cash Balance" per
+  // operator since the row is no longer pinned to a single account.
+  const operatingLabel = 'Cash Balance';
   const salesTaxLabel = pickAccountName(accs, 'salesTax', 'SB - Sales Tax (6735)');
   const corpTaxLabel = pickAccountName(accs, 'corporateTax', 'SB - Corporate Tax (6735)');
   const wcLabel = pickAccountName(accs, 'workingCapital', 'Working Capital (2465)');
@@ -55,17 +55,25 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
   // Shopify Payouts breakdown — exposed as a gray italic sub-line so the
   // operator can tell whether a $0 row is legitimately empty, or whether
   // reconciliation was skipped (Mercury not linked) or just hasn't found
-  // any unmatched paid payouts in the 7-day window.
+  // any unmatched paid payouts in the 7-day window. Surfaces specific
+  // error reasons so we don't have to guess.
   const reported = seed.shopifyPayoutsReportedPending;
   const unmatched = seed.shopifyPayoutsUnmatchedPaidTotal;
   const reconcileSkipped = seed.shopifyPayoutsReconciliationSkipped;
+  const reconcileReason = seed.shopifyPayoutsReconciliationSkipReason;
+  const shopifyErrors = seed.shopifyPayoutsErrors || {};
   const fmtUsd = v => `$${(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   let payoutsSubLabel = null;
   if (reported != null || unmatched != null || reconcileSkipped) {
     const parts = [];
     parts.push(`Shopify-reported pending: ${fmtUsd(reported)}`);
+    // If the scheduled/in_transit calls failed, say so explicitly.
+    const shopifyErr = shopifyErrors.shopify_scheduled || shopifyErrors.shopify_in_transit;
+    if (shopifyErr) {
+      parts.push(`Shopify API error: ${shopifyErr.slice(0, 120)}`);
+    }
     if (reconcileSkipped) {
-      parts.push('Mercury reconcile: skipped');
+      parts.push(`Mercury reconcile skipped${reconcileReason ? ': ' + reconcileReason.slice(0, 180) : ''}`);
     } else {
       parts.push(`Paid not yet in Mercury 6848 (last 7d): ${fmtUsd(unmatched)}`);
     }
@@ -87,13 +95,17 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
     { key: 'shopifyPayouts',     label: 'Shopify Payouts',     kind: 'balance', subLabel: payoutsSubLabel },
     { key: 'sbMain',             label: operatingLabel,        kind: 'balance',
       leftLabel: 'Profit %', leftValue: pct(C.profitPercentForWC) },
+    // Working Capital lives WITHIN the Mercury cash balance — it's not
+    // separately spendable cash. Operator wants it gray + italic above
+    // Total Cash On Hand so the breakdown is visible without
+    // double-counting.
+    { key: 'workingCapital',     label: wcLabel,               kind: 'balance', subRow: true },
     { key: 'sbSalesTax',         label: salesTaxLabel,         kind: 'balance', informational: true },
     { key: 'sbCorpTax',          label: corpTaxLabel,          kind: 'balance' },
     { key: 'shopifyCapRepayment',label: 'Shopify Capital Repayment', kind: 'balance' },
     { key: '_poMilestonesPending', label: 'PO Milestones',     kind: 'pending' },
     { key: 'totalCashOnHand',    label: 'Total Cash On Hand',  kind: 'subtotal' },
     { key: 'inventory',          label: 'Inventory',           kind: 'balance' },
-    { key: 'workingCapital',     label: wcLabel,               kind: 'balance' },
     { key: 'totalAssets',        label: 'Total Assets',        kind: 'subtotal' },
 
     { header: true, label: 'ST Liabilities' },
