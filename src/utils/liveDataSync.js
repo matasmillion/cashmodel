@@ -568,18 +568,53 @@ export async function syncMetaDailyBudget(creds, campaignName = 'Acquisition') {
   }
   if (response?.error) throw new Error(response.error.message || 'Meta campaigns API error');
 
+  // Substring match (case-insensitive) — most operators name their CBOs
+  // with date suffixes or brand prefixes ("Acquisition - May 2026",
+  // "[FR] Acquisition"). Filter to active campaigns with a daily_budget;
+  // if more than one matches, sum them — the operator may be running
+  // multiple acquisition CBOs in parallel.
   const target = campaignName.toLowerCase();
-  const match = (response?.data || []).find(c => (c.name || '').toLowerCase() === target);
-  if (!match || !match.daily_budget) return null;
+  const all = response?.data || [];
+  const matches = all.filter(c => {
+    const nameOk = (c.name || '').toLowerCase().includes(target);
+    const hasBudget = c.daily_budget != null && c.daily_budget !== '0';
+    const isActive = !c.effective_status
+      || c.effective_status === 'ACTIVE'
+      || c.effective_status === 'IN_PROCESS'
+      || c.effective_status === 'CAMPAIGN_PAUSED';   // include paused so user can plan ahead
+    return nameOk && hasBudget && isActive;
+  });
+
+  if (!matches.length) {
+    // Log every campaign name we did see, so the operator can fix
+    // either the campaign name or the configured `campaignName` arg.
+    const seen = all.map(c => `${c.name || '(unnamed)'} [${c.effective_status || c.status || '?'}, budget=${c.daily_budget ?? 'null'}]`);
+    console.warn(
+      `[meta CBO] No campaign matched "${campaignName}". Campaigns visible to this token (${seen.length}):`,
+      seen,
+    );
+    return null;
+  }
 
   // Meta returns budget as a string in minor units (cents).
-  const cents = parseInt(match.daily_budget, 10);
-  if (!Number.isFinite(cents)) return null;
+  const totalCents = matches.reduce((sum, c) => {
+    const cents = parseInt(c.daily_budget, 10);
+    return Number.isFinite(cents) ? sum + cents : sum;
+  }, 0);
+
+  if (matches.length > 1) {
+    console.info(
+      `[meta CBO] Matched ${matches.length} campaigns containing "${campaignName}"; summing daily budgets:`,
+      matches.map(c => `${c.name} = $${parseInt(c.daily_budget, 10) / 100}`),
+    );
+  }
+
   return {
-    dailyBudget: cents / 100,
-    campaignId: match.id,
-    campaignName: match.name,
-    status: match.effective_status || match.status,
+    dailyBudget: totalCents / 100,
+    campaignCount: matches.length,
+    campaignId: matches[0].id,
+    campaignName: matches.map(c => c.name).join(' + '),
+    status: matches[0].effective_status || matches[0].status,
   };
 }
 

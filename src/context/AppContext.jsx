@@ -113,8 +113,8 @@ async function runAutoSync(dispatch) {
     );
 
     // Also fetch the forward-looking daily budget from the CBO campaign
-    // named "Acquisition". The engine uses this to anchor projected daily
-    // ad spend (instead of backing into it from historical insights).
+    // named "Acquisition" (substring match). The engine uses this to
+    // anchor projected daily ad spend.
     tasks.push(
       syncMetaDailyBudget(creds.meta).then(info => {
         if (info?.dailyBudget != null) {
@@ -124,10 +124,17 @@ async function runAutoSync(dispatch) {
               metaDailyBudget: info.dailyBudget,
               metaCampaignName: info.campaignName,
               metaCampaignStatus: info.status,
+              metaDailyBudgetSyncedAt: now,
             },
           });
+        } else {
+          // No matching campaign — surface so the operator can see the
+          // mismatch in the sync indicator instead of silently using
+          // partial Meta insights.
+          errors.metaBudget = 'No active CBO matching "Acquisition" found — see console';
         }
       }).catch(err => {
+        errors.metaBudget = `Meta CBO sync failed: ${err.message}`;
         console.warn('[auto-sync] Meta daily budget:', err.message);
       }),
     );
