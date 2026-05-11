@@ -136,10 +136,17 @@ async function runAutoSync(dispatch, { realTime = false } = {}) {
           payload: {
             shopifyCapitalOutstanding: info.outstanding,
             shopifyCapitalOutstandingTxCount: info.txCount,
+            shopifyCapitalOutstandingBreakdown: info.breakdown,
             shopifyCapitalOutstandingError: info.error || null,
             shopifyCapitalOutstandingSyncedAt: now,
           },
         });
+        // Verbose console log so the operator can spot-check by type
+        // without having to dig into seed in DevTools.
+        console.info(
+          `[shopify capital] outstanding=$${info.outstanding} from ${info.txCount} tx`,
+          info.breakdown,
+        );
       }).catch(err => {
         errors.shopifyCapitalOutstanding = err.message;
         console.warn('[auto-sync] Shopify Capital outstanding:', err.message);

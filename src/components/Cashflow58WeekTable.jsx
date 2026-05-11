@@ -116,7 +116,27 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
     { key: 'amexPlum',      label: 'AMEX PLUM 0000', kind: 'balance' },
     { key: 'amexBlue',      label: 'AMEX BLUE 71005', kind: 'balance' },
     { key: 'shopifyCapital',label: 'Shopify Capital', kind: 'balance',
-      subLabel: seed.shopifyCapitalOutstandingError ? `Shopify API error: ${String(seed.shopifyCapitalOutstandingError).slice(0, 160)}` : null },
+      subLabel: (() => {
+        if (seed.shopifyCapitalOutstandingError) {
+          return `Shopify API error: ${String(seed.shopifyCapitalOutstandingError).slice(0, 160)}`;
+        }
+        // When live outstanding is 0 but we found NO lending tx at all,
+        // surface the breakdown so we can see which types Shopify
+        // returned (or didn't). Healthy state: positive outstanding,
+        // no sub-label.
+        const bk = seed.shopifyCapitalOutstandingBreakdown;
+        const txCount = seed.shopifyCapitalOutstandingTxCount;
+        if (bk && (!seed.shopifyCapitalOutstanding || seed.shopifyCapitalOutstanding === 0)) {
+          const nonZero = Object.entries(bk).filter(([, v]) => v.count > 0);
+          if (nonZero.length === 0) {
+            return `No LENDING_* balance transactions found (txCount=${txCount ?? 0}). Either the loan ledger is empty or the Shopify token lacks read_shopify_payments_payouts scope.`;
+          }
+          return 'Lending tx by type: ' + nonZero
+            .map(([t, v]) => `${t}=${v.count}/$${v.sum}`)
+            .join(' · ').slice(0, 180);
+        }
+        return null;
+      })() },
     { key: 'longTermLoan',  label: 'Long Term Loan',  kind: 'balance' },
     { key: 'totalLiabilities',  label: 'Total Liabilities', kind: 'subtotal' },
     { key: 'totalEquity',       label: 'Total Equity',      kind: 'subtotal' },
