@@ -116,6 +116,7 @@ async function runAutoSync(dispatch, { realTime = false } = {}) {
           payload: {
             shopifyCapitalPending: info.pendingTotal,
             shopifyCapitalPendingDetail: info.repayments,
+            shopifyCapitalPendingError: info.error || null,
             shopifyCapitalPendingSyncedAt: now,
           },
         });

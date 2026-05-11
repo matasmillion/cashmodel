@@ -485,57 +485,90 @@ export async function syncShopifyPayoutsPending({
 }
 
 /**
- * Pulls pending Shopify Capital repayments from the Shopify Payments
- * balance transactions endpoint. The operator described these as
- * transactions where:
- *   - status / state is pending (the deduction hasn't yet been applied
- *     to a paid payout)
- *   - source_type / type indicates a Capital repayment
- *   - description references "repayment" and the account is "Capital"
+ * Pulls pending Shopify Capital repayments via the Admin GraphQL API.
  *
- * Shopify's REST balance/transactions endpoint exposes these as
- * `source_type === 'shopify_capital_payment'` (or `type` on older API
- * versions). Pending status is inferred from `payout_status` not being
- * `paid` (i.e. null / pending / scheduled / in_transit).
+ * Why GraphQL over REST: the GraphQL schema has typed enums for both
+ * the transaction type (`LENDING_CAPITAL_REMITTANCE`) and the associated
+ * payout status (`PAID / SCHEDULED / PENDING / ACTION_REQUIRED / FAILED /
+ * CANCELED`). The REST `shopify_payments/balance/transactions.json`
+ * endpoint uses ad-hoc string values that don't always include the
+ * substring "capital" we were filtering on — that's why the row read $0
+ * even when there were 3 pending remittances in the operator's account.
  *
- * Returns: { pendingTotal: number, repayments: Array<{id, amount, date, status, source_type}> }
+ * Pending = associated payout status is NOT `PAID`. PAID means the
+ * money has already been settled into a Mercury deposit (the operator
+ * sees it land in 6848 and our reconciliation would catch it). Anything
+ * else — SCHEDULED, PENDING, ACTION_REQUIRED — is still money owed to
+ * Shopify Capital that hasn't actually left yet.
  *
- * Requires the `read_shopify_payments_payouts` scope (same as payouts).
+ * Requires the `read_shopify_payments_payouts` scope (or
+ * `read_shopify_payments_accounts`). Same scope used by syncShopifyPayoutsPending.
+ *
+ * Returns: {
+ *   pendingTotal: number,                          // sum of |amount| across pending remittances
+ *   repayments: Array<{id, amount, date, status, type}>,
+ *   error?: string,                                // top-level error if the call failed
+ * }
  */
 export async function syncShopifyCapitalRepayment() {
+  // Pull the most recent 100 lending_capital_remittance balance
+  // transactions, regardless of payout state. We filter on the client
+  // because the GraphQL `query` filter for transaction_type doesn't
+  // support combined status filters cleanly.
+  const gqlQuery = `
+    query CapitalRemittances {
+      shopifyPaymentsAccount {
+        balanceTransactions(
+          first: 100,
+          sortKey: PROCESSED_AT,
+          reverse: true,
+          query: "transaction_type:lending_capital_remittance"
+        ) {
+          edges {
+            node {
+              id
+              type
+              amount { amount currencyCode }
+              transactionDate
+              associatedPayout { id status }
+            }
+          }
+        }
+      }
+    }
+  `;
+
   let data;
   try {
-    data = await callShopifyProxy('shopify_payments/balance/transactions.json', { limit: 250 });
+    data = await callShopifyProxy('graphql.json', null, { query: gqlQuery });
   } catch (err) {
-    console.warn('[shopify capital] balance/transactions fetch failed:', err.message);
-    return { pendingTotal: 0, repayments: [] };
+    console.warn('[shopify capital] GraphQL fetch failed:', err.message);
+    return { pendingTotal: 0, repayments: [], error: err.message };
+  }
+  if (data?.errors?.length) {
+    const msg = data.errors.map(e => e.message).join('; ');
+    console.warn('[shopify capital] GraphQL errors:', msg);
+    return { pendingTotal: 0, repayments: [], error: msg };
   }
 
-  const txs = data?.transactions || [];
+  const edges = data?.data?.shopifyPaymentsAccount?.balanceTransactions?.edges || [];
   const repayments = [];
-  for (const t of txs) {
-    const sourceType = (t.source_type || t.type || '').toLowerCase();
-    const isCapital = sourceType.includes('capital');
-    if (!isCapital) continue;
-
-    // Pending = not yet associated with a paid payout. Shopify marks
-    // settled deductions with payout_status === 'paid'.
-    const payoutStatus = (t.payout_status || '').toLowerCase();
-    const isPending = payoutStatus !== 'paid';
-    if (!isPending) continue;
-
-    // amount is a negative string for repayments (money leaving the
-    // Shopify Balance). Use the absolute value for the "amount owed
-    // this week" display.
-    const amt = Math.abs(parseFloat(t.amount));
+  for (const edge of edges) {
+    const t = edge?.node;
+    if (!t) continue;
+    const payoutStatus = t.associatedPayout?.status || null;
+    // PAID = already settled. Anything else (SCHEDULED, PENDING,
+    // ACTION_REQUIRED, FAILED, CANCELED, or null) is still owed to
+    // Shopify Capital from the operator's perspective.
+    if (payoutStatus === 'PAID') continue;
+    const amt = Math.abs(parseFloat(t.amount?.amount));
     if (!Number.isFinite(amt)) continue;
-
     repayments.push({
       id: t.id,
       amount: amt,
-      date: t.processed_at || t.created_at,
-      status: payoutStatus || 'pending',
-      source_type: t.source_type || t.type,
+      date: t.transactionDate,
+      status: payoutStatus || 'PENDING',
+      type: t.type,
     });
   }
 
