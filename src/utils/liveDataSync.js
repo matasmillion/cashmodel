@@ -1264,16 +1264,36 @@ export async function syncPlaidActuals({ realTime = false } = {}) {
       const limit = a.balances?.limit ?? null;
 
       if (a.type === 'depository') {
-        depositoryTotal += current;
+        // Depository accounts use AVAILABLE balance, not current. Plaid's
+        // `available` is current minus pending outflows + pending inflows
+        // — i.e. the actual spendable cash. The Mercury "Available" field
+        // in the dashboard matches this. Using `current` over-counts by
+        // including money already on its way out (e.g. the $1,283 wire
+        // that's pending on the 7301 fulfillment account).
+        const balance = available ?? current;
+        depositoryTotal += balance;
         depositoryAccounts.push({
           institution: item.institution_name,
           name: a.name,
           mask: a.mask,
           subtype: a.subtype,
-          balance: current,
+          balance,
+          // Raw values still surfaced for diagnostics — the cashflow
+          // engine uses `balance` (= available), but the integrations
+          // panel can show both if needed.
+          current,
           available,
         });
       } else if (a.type === 'credit') {
+        // Credit cards use `current` — the amount currently owed. We
+        // DO NOT use `available` here (available = limit - current,
+        // confusingly different semantic). Pending CHARGES (purchases
+        // not yet posted) are added separately via syncPlaidPendingCharges
+        // and summed into the cashflow's Ads Payable row, since `current`
+        // typically EXCLUDES pending purchases. Pending PAYMENTS (money
+        // moving from a depository account to the card) are ignored —
+        // the payment hasn't actually left yet, so we still owe the
+        // full balance.
         creditTotal += current;
         creditAccounts.push({
           institution: item.institution_name,

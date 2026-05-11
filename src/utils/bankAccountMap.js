@@ -30,9 +30,13 @@ const DEPOSITORY_MASK_MAP = {
   // account. sbMain pins to this mask specifically so renamed Treasury /
   // Vault / Savings sub-accounts don't silently sum into it.
   '6848': 'operating',
-  // Mercury sub-account that funds 3PL / shipping invoices. Balance is
-  // surfaced on the cashflow as the "Mercury Fulfillment (7301)" row.
+  // Mercury sub-account that funds 3PL / shipping invoices. Surfaced
+  // as a gray italic sub-row UNDER Fulfillment Payable in the cashflow
+  // — it's not its own line item; it's the cash side of that liability.
   '7301': 'fulfillment',
+  // Mercury sub-account that funds Meta / Chase 7248 ad payments.
+  // Surfaced the same way under Ads Payable.
+  '3135': 'marketing',
 };
 
 // The single Mercury account that backs the "Operating Cash" cashflow row.
@@ -65,12 +69,13 @@ export function classifyAccount(nameOrAcc = '') {
  *   corporateTax: number,
  *   workingCapital: number,
  *   fulfillment: number,
+ *   marketing: number,
  *   total: number,
  *   accounts: Array<{role, name, mask, balance, institution}>,
  * }}
  */
 export function bucketDepositoryAccounts(accounts = []) {
-  const buckets = { operating: 0, salesTax: 0, corporateTax: 0, workingCapital: 0, fulfillment: 0, total: 0 };
+  const buckets = { operating: 0, salesTax: 0, corporateTax: 0, workingCapital: 0, fulfillment: 0, marketing: 0, total: 0 };
   const tagged = accounts.map(a => {
     const role = classifyAccount(a);
     buckets.total += a.balance || 0;
