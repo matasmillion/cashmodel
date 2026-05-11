@@ -272,7 +272,7 @@ function fabricSpec(row) {
   };
 }
 
-// ─── Mill Finishes inline editor (per fabric slot in StepFabrics) ────────────
+// ─── Fabric Finishes inline editor (per fabric slot in StepFabrics) ─────────
 
 const EXEC_LABEL = { mill: 'At mill', secondary: 'Secondary', at_treatment: 'Wash house' };
 
@@ -568,7 +568,7 @@ export function StepFabrics({ data, set }) {
                     {spec?.vendor?.phone && <div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 10 }}>{spec.vendor.phone}</div>}
                   </div>
                 </div>
-                {/* Mill Finishes — per-style override; falls back to library defaults */}
+                {/* Fabric Finishes — per-style override; falls back to library defaults */}
                 <MillFinishesPanel
                   entry={entry}
                   libraryFinishes={spec?.finishes || []}

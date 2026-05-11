@@ -201,8 +201,8 @@ export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFi
         </g>
       )}
 
-      {/* MILL FINISHES — chip line with execution location label */}
-      <text x="40" y="580" fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="1.2">MILL FINISHES</text>
+      {/* FABRIC FINISHES — chip line with execution location label + facility */}
+      <text x="40" y="580" fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="1.2">FABRIC FINISHES</text>
       {finishes.length === 0 ? (
         <text x="40" y="606" fontSize="11" fill={FR.stone} fontStyle="italic">— none specified</text>
       ) : (
@@ -210,16 +210,23 @@ export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFi
           {finishes.slice(0, 5).map((f, i) => {
             const badge = execBadge(f.executed_at);
             const xStart = 40 + i * 200;
+            const isSecondary = f.executed_at === 'secondary';
+            const facilityName = isSecondary && f.vendor_id ? clamp(esc(f.vendor_id), 26) : '';
             return (
               <g key={i}>
-                <rect x={xStart} y={588} width={186} height={38} fill={badge.fill} rx="3" />
-                <text x={xStart + 10} y={604} fontSize="11" fill={FR.slate}>{clamp(esc(f.name || 'Finish'), 22)}</text>
+                <rect x={xStart} y={588} width={186} height={56} fill={badge.fill} rx="3" />
+                <text x={xStart + 10} y={604} fontSize="11" fill={FR.slate} fontWeight="bold">{clamp(esc(f.name || 'Finish'), 22)}</text>
                 <text x={xStart + 176} y={604} textAnchor="end" fontSize="9" fill={badge.stroke} fontFamily="ui-monospace, Menlo, monospace">
                   {f.delta_per_meter_cny ? `+¥${parseFloat(f.delta_per_meter_cny).toFixed(2)}` : ''}
                 </text>
                 <text x={xStart + 10} y={620} fontSize="8" fill={badge.stroke} fontFamily="ui-monospace, Menlo, monospace" letterSpacing="0.5">
-                  {badge.label}
+                  WHERE: {badge.label}
                 </text>
+                {isSecondary && (
+                  <text x={xStart + 10} y={636} fontSize="8" fill={FR.slate} fontFamily="ui-monospace, Menlo, monospace" letterSpacing="0.3">
+                    AT: {facilityName || '— pick facility'}
+                  </text>
+                )}
               </g>
             );
           })}
@@ -232,15 +239,15 @@ export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFi
       )}
 
       {/* VENDOR + COST — clean horizontal strip at the bottom */}
-      <line x1="40" y1="638" x2={PAGE_W - 40} y2="638" stroke={FR.sand} strokeWidth="0.5" />
-      <text x="40" y="668" fontSize="9" fill={FR.stone} letterSpacing="0.4">VENDOR</text>
-      <text x="40" y="690" fontSize="14" fill={FR.slate} fontWeight="bold">{clamp(esc(fabric.mill_id || '—'), 40)}</text>
-      <text x="40" y="710" fontSize="10" fill={FR.stone}>
+      <line x1="40" y1="656" x2={PAGE_W - 40} y2="656" stroke={FR.sand} strokeWidth="0.5" />
+      <text x="40" y="680" fontSize="9" fill={FR.stone} letterSpacing="0.4">MAIN FABRIC VENDOR</text>
+      <text x="40" y="702" fontSize="14" fill={FR.slate} fontWeight="bold">{clamp(esc(fabric.mill_id || '—'), 40)}</text>
+      <text x="40" y="722" fontSize="10" fill={FR.stone}>
         {esc(fabric.composition || '—')} · {fabric.weight_gsm ? `${fabric.weight_gsm} GSM` : '—'}
       </text>
 
-      <text x={PAGE_W - 40} y="668" textAnchor="end" fontSize="9" fill={FR.stone} letterSpacing="0.4">{costLabel.toUpperCase()}</text>
-      <text x={PAGE_W - 40} y="708" textAnchor="end" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="44" fill={FR.soil}>
+      <text x={PAGE_W - 40} y="680" textAnchor="end" fontSize="9" fill={FR.stone} letterSpacing="0.4">{costLabel.toUpperCase()}</text>
+      <text x={PAGE_W - 40} y="722" textAnchor="end" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="44" fill={FR.soil}>
         ${costPerUnit ? costPerUnit.toFixed(2) : '0.00'}
       </text>
     </g>

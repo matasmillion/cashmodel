@@ -609,7 +609,7 @@ export default function FabricBuilder({ fabric, onBack }) {
             </div>
           </div>
 
-          {/* Mill finishes (NEW) */}
+          {/* Fabric finishes */}
           <div style={CARD_STYLE}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <h4 style={{ ...SECTION_TITLE, marginBottom: 0 }}>Fabric finishes</h4>
