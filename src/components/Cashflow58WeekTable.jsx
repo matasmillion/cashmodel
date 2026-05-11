@@ -57,7 +57,7 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
     { key: 'shopifyPayouts',     label: 'Shopify Payouts',     kind: 'balance' },
     { key: 'sbMain',             label: operatingLabel,        kind: 'balance',
       leftLabel: 'Profit %', leftValue: pct(C.profitPercentForWC) },
-    { key: 'sbSalesTax',         label: salesTaxLabel,         kind: 'balance' },
+    { key: 'sbSalesTax',         label: salesTaxLabel,         kind: 'balance', informational: true },
     { key: 'sbCorpTax',          label: corpTaxLabel,          kind: 'balance' },
     { key: 'shopifyCapRepayment',label: 'Shopify Capital Repayment', kind: 'balance' },
     { key: '_poMilestonesPending', label: 'PO Milestones',     kind: 'pending' },
@@ -118,8 +118,11 @@ function fmt(v, kind) {
   return formatCurrency(v);
 }
 
-function colorFor(v, kind, isHistorical, isCurrent) {
+function colorFor(v, kind, isHistorical, isCurrent, informational) {
   if (v == null || kind === 'pending' || kind === 'index') return FR.slate;
+  // Informational rows (e.g. Sales Tax reserve) are decoupled from Total
+  // Cash — render in muted stone regardless of sign or week.
+  if (informational) return FR.stone;
   if (isCurrent) return FR.blue;
   if (isHistorical) return FR.slate;
   if (kind === 'subtotal' || kind === 'inflow') return v > 0 ? FR.good : v < 0 ? FR.bad : FR.slate;
@@ -432,7 +435,7 @@ function DataRow({ row, weeks, prevRow, currentWeekIndex, assumptions, dispatch 
         const display = row.kind === 'pending'
           ? <span style={{ color: FR.stone, fontStyle: 'italic', fontSize: 10 }}>pending</span>
           : fmt(v, row.kind);
-        const color = colorFor(v, row.kind, w.isHistorical, isCurrentCol);
+        const color = colorFor(v, row.kind, w.isHistorical, isCurrentCol, row.informational);
         return (
           <td key={wi} className="px-2 py-1 text-right border-l tabular-nums"
               style={{

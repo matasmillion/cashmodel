@@ -381,14 +381,19 @@ export function generateCashflow58({
       sbCorpTax = prev?.sbCorpTax ?? 0;
       shopifyCapRepayment = 0;
     }
-    // Future weeks keep shopifyPayouts = 0 so projection doesn't
-    // double-count with the onlineStore → sbMain inflow that feeds
-    // netCashFlow. Current week's seeded pending payouts ARE additive —
-    // they represent real money already captured but not yet swept into
-    // Mercury, so they belong in cash-on-hand.
+    // Sales Tax (SB 6735) is intentionally EXCLUDED from this sum. The
+    // account only ever holds sales tax collected on behalf of states and
+    // pays it out on remittance — it never funds anything else. The row
+    // still surfaces seed.sbSalesTax so the operator can see the reserve,
+    // but it's informational only (renderer grays it out).
+    //
+    // shopifyPayouts IS included — the current-week seeded value
+    // represents real money already captured but not yet in Mercury.
+    // Projection rows keep it at 0 (avoiding double-count with
+    // onlineStore → sbMain in netCashFlow).
     const totalCashOnHand = hist
-      ? hist.totalCashOnHand ?? (sbMain + (sbSalesTax || 0) + (sbCorpTax || 0) + (shopifyCapRepayment || 0) + (shopifyPayouts || 0))
-      : sbMain + sbSalesTax + sbCorpTax + shopifyCapRepayment + shopifyPayouts;
+      ? hist.totalCashOnHand ?? (sbMain + (sbCorpTax || 0) + (shopifyCapRepayment || 0) + (shopifyPayouts || 0))
+      : sbMain + sbCorpTax + shopifyCapRepayment + shopifyPayouts;
 
     // ── Inventory (row 22) ──────────────────────────────────────────────
     const inventory = hist ? hist.inventory : (prev?.inventory ?? 0) + transferToWC;
