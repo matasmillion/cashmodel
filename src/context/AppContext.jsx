@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useMemo, useEffect, useRef, useState } from 'react';
 import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, OPEX_WAREHOUSE, CREDIT_CARDS, LOANS, AD_UNIT_TYPES, DEFAULT_EVENTS } from '../data/seedData';
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
-import { syncShopifyActuals, syncShopifyInventory, syncShopifyCapitalRepayment, syncMetaActuals, syncMetaDailyBudget, syncMetaBalanceOwed, syncPlaidActuals, syncPlaidCardPayments, syncShopifyPayoutsPending, syncPlaidPendingCharges, listPlaidItems } from '../utils/liveDataSync';
+import { syncShopifyActuals, syncShopifyInventory, syncShopifyCapitalRepayment, syncShopifyCapitalOutstanding, syncMetaActuals, syncMetaDailyBudget, syncMetaBalanceOwed, syncPlaidActuals, syncPlaidCardPayments, syncShopifyPayoutsPending, syncPlaidPendingCharges, listPlaidItems } from '../utils/liveDataSync';
 import { migrateManualPOsToStore } from '../utils/productionStore';
 import { migrateLegacyInventoryHash } from '../utils/inventoryRouting';
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
@@ -123,6 +123,26 @@ async function runAutoSync(dispatch, { realTime = false } = {}) {
       }).catch(err => {
         errors.shopifyCapital = err.message;
         console.warn('[auto-sync] Shopify Capital repayment:', err.message);
+      }),
+    );
+
+    // Live Shopify Capital OUTSTANDING balance — drives the LT
+    // Liabilities "Shopify Capital" row. Computed by netting all
+    // LENDING_* balance transactions (loan disbursement + remittances).
+    tasks.push(
+      syncShopifyCapitalOutstanding().then(info => {
+        dispatch({
+          type: 'UPDATE_SEED',
+          payload: {
+            shopifyCapitalOutstanding: info.outstanding,
+            shopifyCapitalOutstandingTxCount: info.txCount,
+            shopifyCapitalOutstandingError: info.error || null,
+            shopifyCapitalOutstandingSyncedAt: now,
+          },
+        });
+      }).catch(err => {
+        errors.shopifyCapitalOutstanding = err.message;
+        console.warn('[auto-sync] Shopify Capital outstanding:', err.message);
       }),
     );
   }
