@@ -116,30 +116,23 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
     { key: 'amexPlum',      label: 'AMEX PLUM 0000', kind: 'balance' },
     { key: 'amexBlue',      label: 'AMEX BLUE 71005', kind: 'balance' },
     { key: 'shopifyCapital',label: 'Shopify Capital', kind: 'balance',
-      leftLabel: 'Override $',
-      leftEditableKey: 'shopifyCapitalOutstandingOverride',
+      leftLabel: 'Original loan $',
+      leftEditableKey: 'shopifyCapitalOriginalLoan',
       leftEditableType: 'dollar',
       leftEditableTarget: 'seed',
       subLabel: (() => {
         if (seed.shopifyCapitalOutstandingError) {
           return `Shopify API error: ${String(seed.shopifyCapitalOutstandingError).slice(0, 160)}`;
         }
-        // When live outstanding is 0 but we found NO lending tx at all,
-        // surface the breakdown so we can see which types Shopify
-        // returned (or didn't). Healthy state: positive outstanding,
-        // no sub-label.
-        const bk = seed.shopifyCapitalOutstandingBreakdown;
-        const txCount = seed.shopifyCapitalOutstandingTxCount;
-        if (bk && (!seed.shopifyCapitalOutstanding || seed.shopifyCapitalOutstanding === 0)) {
-          const nonZero = Object.entries(bk).filter(([, v]) => v.count > 0);
-          if (nonZero.length === 0) {
-            return `No LENDING_* balance transactions found (txCount=${txCount ?? 0}). Either the loan ledger is empty or the Shopify token lacks read_shopify_payments_payouts scope.`;
-          }
-          return 'Lending tx by type: ' + nonZero
-            .map(([t, v]) => `${t}=${v.count}/$${v.sum}`)
-            .join(' · ').slice(0, 180);
+        const originalLoan = Number(seed.shopifyCapitalOriginalLoan) || 0;
+        if (!originalLoan) {
+          return 'Set Original loan $ in column A to enable auto-calc (outstanding = original − paid remittances)';
         }
-        return null;
+        const paid = Number(seed.shopifyCapitalPaidRepaymentsTotal) || 0;
+        const paidCount = seed.shopifyCapitalPaidCount ?? 0;
+        const pendingCount = seed.shopifyCapitalPendingCount ?? 0;
+        return `Paid back so far: $${paid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ` +
+               `(${paidCount} settled · ${pendingCount} pending — pending doesn't reduce this row until it settles)`;
       })() },
     { key: 'longTermLoan',  label: 'Long Term Loan',  kind: 'balance' },
     { key: 'totalLiabilities',  label: 'Total Liabilities', kind: 'subtotal' },

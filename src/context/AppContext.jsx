@@ -134,18 +134,16 @@ async function runAutoSync(dispatch, { realTime = false } = {}) {
         dispatch({
           type: 'UPDATE_SEED',
           payload: {
-            shopifyCapitalOutstanding: info.outstanding,
-            shopifyCapitalOutstandingTxCount: info.txCount,
-            shopifyCapitalOutstandingBreakdown: info.breakdown,
+            shopifyCapitalPaidRepaymentsTotal: info.paidRepaymentsTotal,
+            shopifyCapitalPaidCount: info.paidCount,
+            shopifyCapitalPendingCount: info.pendingCount,
             shopifyCapitalOutstandingError: info.error || null,
             shopifyCapitalOutstandingSyncedAt: now,
           },
         });
-        // Verbose console log so the operator can spot-check by type
-        // without having to dig into seed in DevTools.
         console.info(
-          `[shopify capital] outstanding=$${info.outstanding} from ${info.txCount} tx`,
-          info.breakdown,
+          `[shopify capital] paid repayments=$${info.paidRepaymentsTotal} ` +
+          `from ${info.paidCount} paid + ${info.pendingCount} pending remittances`,
         );
       }).catch(err => {
         errors.shopifyCapitalOutstanding = err.message;
