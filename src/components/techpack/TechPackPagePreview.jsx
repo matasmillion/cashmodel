@@ -542,6 +542,7 @@ function PageFabrics({ d, fabricsById = {} }) {
       chosenColor={chosenColor}
       chosenArea={entry.role || null}
       chosenFinishes={entry.chosenFinishes || null}
+      chosenNotes={entry.chosenNotes != null ? entry.chosenNotes : null}
       yieldM={entry.metersPerUnit || null}
     />
   );

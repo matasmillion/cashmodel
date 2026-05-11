@@ -778,28 +778,32 @@ export default function FabricBuilder({ fabric, onBack }) {
             </div>
           )}
 
-          {/* CLO3D + notes */}
+          {/* Fabric notes — surfaces in the live preview's FABRIC NOTES band */}
           <div style={CARD_STYLE}>
-            <h4 style={SECTION_TITLE}>CLO3D &amp; notes</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <Field label=".ZFAB file (CLO3D)">
-                <FileSlot
-                  value={draft.zfab_file_url}
-                  onChange={v => set({ zfab_file_url: v })}
-                  accept=".zfab,.zprj"
-                  hint="Drop a .zfab fabric asset"
-                />
-              </Field>
-              <Field label="Notes">
-                <textarea
-                  value={draft.notes || ''}
-                  onChange={e => set({ notes: e.target.value })}
-                  rows={4}
-                  placeholder="Compatibility, care, certifications…"
-                  style={{ ...INPUT_STYLE, resize: 'vertical' }}
-                />
-              </Field>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <h4 style={{ ...SECTION_TITLE, marginBottom: 0 }}>Fabric notes</h4>
+              <span style={{ fontSize: 9, color: FR.stone }}>shown on every tech pack that uses this fabric</span>
             </div>
+            <textarea
+              value={draft.notes || ''}
+              onChange={e => set({ notes: e.target.value })}
+              rows={3}
+              placeholder="Compatibility, care, certifications, mill quirks the factory rep should know…"
+              style={{ ...INPUT_STYLE, resize: 'vertical', width: '100%', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          {/* CLO3D asset */}
+          <div style={CARD_STYLE}>
+            <h4 style={SECTION_TITLE}>CLO3D</h4>
+            <Field label=".ZFAB file (CLO3D)">
+              <FileSlot
+                value={draft.zfab_file_url}
+                onChange={v => set({ zfab_file_url: v })}
+                accept=".zfab,.zprj"
+                hint="Drop a .zfab fabric asset"
+              />
+            </Field>
           </div>
 
           {/* Documents — AI parser sources, certifications, vendor PDFs, chats */}
