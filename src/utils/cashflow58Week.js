@@ -215,22 +215,24 @@ export function generateCashflow58({
       dailyAdSpend = hist.dailyAdSpend;
     } else if (isCurrent) {
       // Anchor on the CBO daily budget the operator has configured in
-      // Ads Manager today. Falls back to seed.adSpend (this-week insights)
-      // if budget hasn't synced yet, then to a continuation of the
-      // historical trend.
+      // Ads Manager today. If that hasn't synced, prefer the PRIOR
+      // week's full-week actual ad spend over `seed.adSpend` — Meta's
+      // current-week insights show partial spend (only the hours that
+      // have elapsed in this week), so anchoring on it understates by
+      // 80–95% on a Monday morning.
       if (metaDailyBudget != null) {
         dailyAdSpend = metaDailyBudget;
-      } else if (seed.adSpend != null) {
-        dailyAdSpend = seed.adSpend / 7;
-      } else if (prev) {
+      } else if (prev?.dailyAdSpend != null && prev.dailyAdSpend > 0) {
         dailyAdSpend = prev.dailyAdSpend * useGrowth;
+      } else if (seed.adSpend != null && seed.adSpend > 0) {
+        dailyAdSpend = seed.adSpend / 7;
       } else {
         dailyAdSpend = 539 / 7;
       }
       fbAdSpend = dailyAdSpend * 7;
     } else {
-      // Future week: compound prev daily spend at the H1/H2 growth rate.
-      const seedDaily = metaDailyBudget ?? (seed.adSpend != null ? seed.adSpend / 7 : 539 / 7);
+      // Future week: compound prev daily spend at the weekly growth rate.
+      const seedDaily = metaDailyBudget ?? (seed.adSpend != null && seed.adSpend > 0 ? seed.adSpend / 7 : 539 / 7);
       dailyAdSpend = (prev ? prev.dailyAdSpend : seedDaily) * useGrowth;
       fbAdSpend = dailyAdSpend * 7;
     }
