@@ -671,6 +671,7 @@ function PlaidLauncher({ linkToken, onSuccess, disabled, label }) {
 }
 
 function PlaidCard({ dispatch }) {
+  const { state } = useApp();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [linkToken, setLinkToken] = useState(null);
@@ -678,6 +679,16 @@ function PlaidCard({ dispatch }) {
   const [connectErr, setConnectErr] = useState('');
   const [syncStatus, setSyncStatus] = useState(null);
   const [syncErr, setSyncErr] = useState('');
+  // Full structured diagnostic from the last failed sync. Includes the
+  // request stage (config/auth/network/http), the proxy URL, status code,
+  // response body, and any per-Plaid-item errors. Rendered verbatim so the
+  // operator can see what's actually failing without DevTools.
+  //
+  // On mount, hydrate from seed.plaidAutoSyncDiagnostic so the operator
+  // sees what the last auto-sync hit even before they click the manual
+  // sync button. Manual sync overwrites with its own result.
+  const persistedDiagnostic = state.seed?.plaidAutoSyncDiagnostic || null;
+  const [syncDiagnostic, setSyncDiagnostic] = useState(persistedDiagnostic);
   const [lastSync, setLastSync] = useState(null);
   const [open, setOpen] = useState(false);
 
@@ -738,10 +749,23 @@ function PlaidCard({ dispatch }) {
     if (items.length === 0) return;
     setSyncStatus('syncing');
     setSyncErr('');
+    setSyncDiagnostic(null);
     try {
       // Manual click = real-time refresh (hits the bank, costs ~$0.10/account).
       // Auto-sync on page load uses the cached endpoint (free).
-      const { totals, depositoryAccounts, creditAccounts } = await syncPlaidActuals({ realTime: true });
+      const { totals, depositoryAccounts, creditAccounts, itemErrors } = await syncPlaidActuals({ realTime: true });
+
+      // Any Plaid item that errored (e.g. ITEM_LOGIN_REQUIRED on Mercury)
+      // is surfaced as a partial-success diagnostic so the operator sees
+      // exactly which institution needs re-linking, rather than silently
+      // dropping that institution's accounts and quietly using stale data.
+      if (itemErrors && itemErrors.length) {
+        setSyncDiagnostic({
+          stage: 'plaid-item-errors',
+          summary: `${itemErrors.length} Plaid item(s) returned an error — their accounts are missing from this sync.`,
+          itemErrors,
+        });
+      }
 
       // Mirror the auto-sync wire-up exactly — same role bucketing, same
       // 6848 pin for sbMain. Previously this handler overwrote sbMain
@@ -797,6 +821,15 @@ function PlaidCard({ dispatch }) {
     } catch (err) {
       setSyncStatus('error');
       setSyncErr(err.message);
+      // err.diagnostic is attached by callPlaidProxy with stage / url /
+      // status / response body. Falling back to a synthetic diagnostic
+      // if the error didn't come from there (e.g. an error in our own
+      // post-processing code).
+      setSyncDiagnostic(err.diagnostic || {
+        stage: 'client',
+        cause: err.message,
+        stack: err.stack ? String(err.stack).split('\n').slice(0, 6).join('\n') : null,
+      });
     }
   }
 
@@ -899,6 +932,9 @@ function PlaidCard({ dispatch }) {
         {syncStatus === 'error' && syncErr && (
           <p className="text-xs" style={{ color: FR.red }}>{syncErr}</p>
         )}
+        {syncDiagnostic && (
+          <PlaidDiagnosticBox diagnostic={syncDiagnostic} />
+        )}
 
         {lastSync && (
           <div className="p-2 rounded-lg text-xs" style={{ background: 'white', border: `1px solid ${FR.sand}` }}>
@@ -926,6 +962,107 @@ function PlaidCard({ dispatch }) {
  * last-4 either in the id or in the card name. Keep this conservative —
  * if we can't confidently match, return null and the user updates manually.
  */
+/**
+ * Renders the full diagnostic block when a Plaid sync fails or partially
+ * succeeds. Operator-readable; surfaces:
+ *   - the stage (network / http / plaid-item-errors / client)
+ *   - the request URL + status code when the proxy returned a non-2xx
+ *   - the actual response body
+ *   - per-Plaid-item errors with institution name + Plaid error_code
+ *
+ * Mostly verbatim — no synthesis. If we can't tell the operator exactly
+ * what's wrong, render the raw shape and let them paste it for support.
+ */
+function PlaidDiagnosticBox({ diagnostic }) {
+  const d = diagnostic || {};
+  const isItemErrors = d.stage === 'plaid-item-errors';
+  const headline = isItemErrors
+    ? d.summary
+    : d.stage === 'network'  ? `Network error reaching the Plaid proxy (${d.action || 'unknown action'})`
+    : d.stage === 'http'     ? `Plaid proxy returned HTTP ${d.status} ${d.statusText || ''}`.trim()
+    : d.stage === 'auth'     ? 'Not signed in'
+    : d.stage === 'config'   ? 'Supabase not configured'
+    : d.stage === 'client'   ? 'Client-side error while processing the sync result'
+    : 'Plaid sync failed';
+
+  return (
+    <div className="mt-2 p-3 rounded-lg text-xs space-y-2"
+         style={{ background: '#FFF7F2', border: '1px solid #E8C8B5', color: FR.slate }}>
+      <div className="font-semibold" style={{ color: FR.red }}>
+        {headline}
+      </div>
+
+      {d.hint && (
+        <div style={{ color: FR.stone }}>{d.hint}</div>
+      )}
+
+      {(d.url || d.action) && (
+        <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11 }}>
+          {d.action && <div><span style={{ color: FR.stone }}>action:</span> {d.action}</div>}
+          {d.url && <div><span style={{ color: FR.stone }}>url:</span> {d.url}</div>}
+          {d.status && (
+            <div><span style={{ color: FR.stone }}>status:</span> {d.status} {d.statusText || ''}</div>
+          )}
+        </div>
+      )}
+
+      {d.cause && (
+        <div style={{ color: FR.stone }}>
+          <span style={{ fontWeight: 600 }}>cause:</span> {d.cause}
+        </div>
+      )}
+
+      {d.stack && (
+        <pre style={{
+          background: 'white', border: '1px solid #EBE5D5', borderRadius: 4, padding: 6,
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10,
+          color: FR.slate, overflow: 'auto', maxHeight: 120, whiteSpace: 'pre-wrap',
+        }}>{d.stack}</pre>
+      )}
+
+      {d.body && (
+        <details>
+          <summary style={{ cursor: 'pointer', color: FR.stone, fontSize: 11 }}>
+            response body
+          </summary>
+          <pre style={{
+            background: 'white', border: '1px solid #EBE5D5', borderRadius: 4, padding: 6,
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10,
+            color: FR.slate, overflow: 'auto', maxHeight: 200, whiteSpace: 'pre-wrap',
+          }}>{JSON.stringify(d.body, null, 2)}</pre>
+        </details>
+      )}
+
+      {isItemErrors && Array.isArray(d.itemErrors) && d.itemErrors.length > 0 && (
+        <div className="space-y-1">
+          {d.itemErrors.map((e, i) => (
+            <div key={i} className="p-2 rounded"
+                 style={{ background: 'white', border: '1px solid #EBE5D5' }}>
+              <div style={{ fontWeight: 600 }}>{e.institution}</div>
+              <div style={{ color: FR.stone, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10 }}>
+                item_id: {e.item_id}
+              </div>
+              <div style={{ marginTop: 2 }}>
+                {typeof e.error === 'string' ? e.error : (
+                  <pre style={{
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10,
+                    whiteSpace: 'pre-wrap', margin: 0,
+                  }}>{JSON.stringify(e.error, null, 2)}</pre>
+                )}
+              </div>
+              {typeof e.error === 'object' && e.error?.error_code === 'ITEM_LOGIN_REQUIRED' && (
+                <div style={{ marginTop: 4, color: FR.red, fontSize: 11 }}>
+                  → Click <strong>Remove</strong> on this institution above and re-link it via "Connect another account".
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function guessCardIdFromMask(mask) {
   const knownCards = [
     { id: 'chase-5718', last4: '5718' },
