@@ -79,9 +79,12 @@ async function runAutoSync(dispatch) {
       }),
     );
 
-    // Pending Shopify Payments payouts (scheduled + in_transit) — money
-    // already captured but not yet settled to Mercury. Drives the
-    // "Shopify Payouts" cashflow row.
+    // Pending Shopify Payments payouts — drives the "Shopify Payouts"
+    // cashflow row. Two components:
+    //   1. scheduled + in_transit (Shopify-reported pending)
+    //   2. Shopify-reported "paid" in last 7d that don't yet show up
+    //      as a deposit in Mercury Operating Cash (6848) — money the
+    //      operator hasn't actually received yet.
     tasks.push(
       syncShopifyPayoutsPending().then(info => {
         dispatch({
@@ -89,6 +92,10 @@ async function runAutoSync(dispatch) {
           payload: {
             shopifyPayoutsPending: info.pendingTotal,
             shopifyPayoutsPendingDetail: info.payouts,
+            shopifyPayoutsReportedPending: info.reportedPendingTotal,
+            shopifyPayoutsUnmatchedPaidTotal: info.unmatchedPaidTotal,
+            shopifyPayoutsUnmatchedPaidDetail: info.unmatchedPaidPayouts,
+            shopifyPayoutsReconciliationSkipped: info.reconciliationSkipped,
             shopifyPayoutsPendingSyncedAt: now,
           },
         });
