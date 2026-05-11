@@ -10,6 +10,8 @@
 //   chosenArea     — 'Body' | 'Lining' | … (defaults to fabric.default_garment_area)
 //   chosenFinishes — array overriding fabric.mill_finishes (per-style picks)
 //   chosenNotes    — string overriding fabric.notes (per-style annotations)
+//   chosenPlacementImage — Storage path / URL overriding fabric.garment_placement_image_url
+//   chosenPlacementNotes — string overriding fabric.garment_placement_notes
 //   yieldM         — meters per unit, used for cost / unit headline
 //   styleNumber    — top-right code (FW26-BB-HO-0002) when rendered into a tech pack
 //   pageLabel      — e.g. '03 / 24'
@@ -130,13 +132,15 @@ function PageBody(props) { return <FabricBOMPreviewBody {...props} />; }
 // TechPackPagePreview's PageFabrics so the tech pack live preview and the
 // library card render through one component. The wrapper above adds the
 // salt background + slate header + soil divider for the standalone view.
-export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFinishes, chosenNotes, yieldM }) {
+export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFinishes, chosenNotes, chosenPlacementImage, chosenPlacementNotes, yieldM }) {
   const allColors = fabric.color_card_images || [];
   const finishes = chosenFinishes != null ? chosenFinishes : (fabric.mill_finishes || []);
   const notes = chosenNotes != null ? chosenNotes : (fabric.notes || '');
+  const placementImage = chosenPlacementImage != null ? chosenPlacementImage : (fabric.garment_placement_image_url || '');
+  const placementNotes = chosenPlacementNotes != null ? chosenPlacementNotes : (fabric.garment_placement_notes || '');
   const area = chosenArea || fabric.default_garment_area || 'Body';
   const isKnit = (fabric.category || 'knit') === 'knit';
-  const placementResolved = useResolved(fabric.garment_placement_image_url);
+  const placementResolved = useResolved(placementImage);
   const ribImgResolved = useResolved(fabric.ribbing_image_url);
 
   // Cost / unit headline: base + finishes × yield.
@@ -239,9 +243,9 @@ export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFi
           </g>
         )
       }
-      {fabric.garment_placement_notes && (
+      {placementNotes && (
         <text x="860" y="408" textAnchor="middle" fontSize="9" fill={FR.stone} fontStyle="italic">
-          {clamp(esc(fabric.garment_placement_notes), 38)}
+          {clamp(esc(placementNotes), 38)}
         </text>
       )}
 
@@ -355,6 +359,8 @@ export default function FabricBOMPreview({
   chosenArea = null,
   chosenFinishes = null,
   chosenNotes = null,
+  chosenPlacementImage = null,
+  chosenPlacementNotes = null,
   yieldM = null,
   styleNumber = null,
   pageLabel = null,
@@ -377,7 +383,7 @@ export default function FabricBOMPreview({
       )}
       <text x={PAGE_W - 40} y="50" textAnchor="end" fontSize="8" fill={FR.sand} letterSpacing="2">PAGE {pageTag}</text>
       <rect x="0" y="70" width={PAGE_W} height="2" fill={FR.soil} />
-      <PageBody fabric={fabric} chosenColor={chosenColor} chosenArea={chosenArea} chosenFinishes={chosenFinishes} chosenNotes={chosenNotes} yieldM={yieldM} />
+      <PageBody fabric={fabric} chosenColor={chosenColor} chosenArea={chosenArea} chosenFinishes={chosenFinishes} chosenNotes={chosenNotes} chosenPlacementImage={chosenPlacementImage} chosenPlacementNotes={chosenPlacementNotes} yieldM={yieldM} />
       <text x="40" y="775" fontSize="9" fill={FR.stone}>{styleInfo}</text>
       <text x={PAGE_W - 40} y="775" textAnchor="end" fontSize="9" fill={FR.stone}>PAGE {pageTag}</text>
     </svg>

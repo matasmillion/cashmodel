@@ -178,6 +178,10 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     const coverIdx = STEPS.findIndex(s => s.id === 'cover');
     return coverIdx >= 0 ? coverIdx : 0;
   });
+  // Sub-page index within the Fabrics step. When the operator picks two or
+  // three fabrics the sidebar surfaces virtual 03.1, 03.2 entries that share
+  // step=fabricsIdx but flip the active fabric in the preview.
+  const [fabricPageIdx, setFabricPageIdx] = useState(0);
   const [data, setData] = useState(pack.data || DEFAULT_DATA);
   const [images, setImages] = useState(pack.images || []);
   const [library, setLibrary] = useState(pack.library || DEFAULT_LIBRARY);
@@ -864,16 +868,36 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
                       )}
                     </div>
                   )}
-                  <button onClick={() => setStep(i)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 16px', border: 'none', cursor: 'pointer', background: i === step ? FR.white : 'transparent', borderLeft: i === step ? `3px solid ${FR.soil}` : '3px solid transparent' }}>
-                    <span style={{ fontSize: 10, color: stepSkipped ? '#C0392B' : (i === step ? FR.soil : FR.stone), fontWeight: 700, width: 18, fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace" }}>
+                  <button onClick={() => { setStep(i); setFabricPageIdx(0); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 16px', border: 'none', cursor: 'pointer', background: i === step && fabricPageIdx === 0 ? FR.white : 'transparent', borderLeft: i === step && fabricPageIdx === 0 ? `3px solid ${FR.soil}` : '3px solid transparent' }}>
+                    <span style={{ fontSize: 10, color: stepSkipped ? '#C0392B' : (i === step && fabricPageIdx === 0 ? FR.soil : FR.stone), fontWeight: 700, width: 18, fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace" }}>
                       {stepSkipped ? '×' : s.icon}
                     </span>
-                    <span style={{ fontSize: 11, color: i === step ? FR.slate : FR.stone, textAlign: 'left', flex: 1, textDecoration: stepSkipped ? 'line-through' : 'none', opacity: stepSkipped ? 0.55 : (stepLocked ? 0.5 : 1) }}>
+                    <span style={{ fontSize: 11, color: i === step && fabricPageIdx === 0 ? FR.slate : FR.stone, textAlign: 'left', flex: 1, textDecoration: stepSkipped ? 'line-through' : 'none', opacity: stepSkipped ? 0.55 : (stepLocked ? 0.5 : 1) }}>
                       {s.title}
                     </span>
                     {stepLocked && !stepSkipped && <span style={{ fontSize: 10, color: FR.stone }}>🔒</span>}
                   </button>
+                  {/* Sub-pages for the Fabrics step — one extra row per
+                      additional picked fabric so each gets its own preview. */}
+                  {s.id === 'fabrics' && (data.pickedFabrics || []).filter(p => p?.fabricId).length > 1 && (
+                    (data.pickedFabrics || []).filter(p => p?.fabricId).slice(1).map((_, j) => {
+                      const subIdx = j + 1;
+                      const active = i === step && fabricPageIdx === subIdx;
+                      return (
+                        <button key={`fab-sub-${subIdx}`}
+                          onClick={() => { setStep(i); setFabricPageIdx(subIdx); }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '6px 16px 6px 28px', border: 'none', cursor: 'pointer', background: active ? FR.white : 'transparent', borderLeft: active ? `3px solid ${FR.soil}` : '3px solid transparent' }}>
+                          <span style={{ fontSize: 10, color: active ? FR.soil : FR.stone, fontWeight: 700, width: 26, fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace" }}>
+                            {`${s.icon}.${subIdx}`}
+                          </span>
+                          <span style={{ fontSize: 11, color: active ? FR.slate : FR.stone, textAlign: 'left', flex: 1 }}>
+                            {s.title}
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
               );
             })}
@@ -926,7 +950,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
             <div style={{ fontSize: 9, color: FR.stone, letterSpacing: 2, fontWeight: 600, textTransform: 'uppercase' }}>Live Preview</div>
             <div style={{ fontSize: 9, color: FR.stone }}>Page {step + 1} / {STEPS.length}</div>
           </div>
-          <TechPackPagePreview data={data} images={previewImages} step={step} skippedSteps={skippedSteps} treatmentsById={treatmentsById} componentsById={componentsById} fabricsById={fabricsById} />
+          <TechPackPagePreview data={data} images={previewImages} step={step} skippedSteps={skippedSteps} treatmentsById={treatmentsById} componentsById={componentsById} fabricsById={fabricsById} fabricPageIdx={fabricPageIdx} />
         </div>
       </div>
     </div>

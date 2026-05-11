@@ -12,6 +12,7 @@ import { listComponentPacks, getComponentPack } from '../../utils/componentPackS
 import { getAssetUrl } from '../../utils/plmAssets';
 import { FABRIC_GARMENT_AREAS, MILL_FINISH_CATALOG, FINISH_EXECUTED_AT } from '../../utils/fabricLibrary';
 import VendorPicker from './VendorPicker';
+import SimpleImageSlot from './SimpleImageSlot';
 
 // Cover images in fabric / component pack rows are stored as Supabase
 // Storage paths, not URLs. The browser can't render them directly — we
@@ -268,6 +269,8 @@ function fabricSpec(row) {
     colors:      row?.color_card_images || d?.color_card_images || [],
     finishes:    row?.mill_finishes || d?.mill_finishes || [],
     notes:       row?.notes || d?.notes || '',
+    placementImage: row?.garment_placement_image_url || d?.garment_placement_image_url || '',
+    placementNotes: row?.garment_placement_notes || d?.garment_placement_notes || '',
     unitCost,
     currency:    d.currency || tier?.currency || 'USD',
   };
@@ -390,6 +393,69 @@ function FabricNotesPanel({ entry, libraryNotes, onChange }) {
           boxSizing: 'border-box',
         }}
       />
+    </div>
+  );
+}
+
+// ─── Placement override inline editor (per fabric slot in StepFabrics) ─────
+//
+// Mirrors FabricNotesPanel + MillFinishesPanel: writes to
+// `entry.chosenPlacementImage` (Storage path or data URL) and
+// `entry.chosenPlacementNotes` (string) as per-style overrides, falling
+// back to the library fields when null. Surfaces in the FabricBOMPreview
+// PLACEMENT silhouette so each tech pack can show a different placement
+// without mutating the shared library fabric.
+
+function PlacementOverridePanel({ entry, libraryImage, libraryNotes, fabricId, onChangeImage, onChangeNotes }) {
+  const isImageOverridden = entry.chosenPlacementImage != null;
+  const isNotesOverridden = entry.chosenPlacementNotes != null;
+  const imageValue = isImageOverridden ? entry.chosenPlacementImage : libraryImage;
+  const notesValue = isNotesOverridden ? entry.chosenPlacementNotes : libraryNotes;
+  const anyOverride = isImageOverridden || isNotesOverridden;
+
+  return (
+    <div style={{ paddingTop: 6, paddingBottom: 6, borderTop: `0.5px solid ${FR.sand}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>Placement on garment</span>
+        {anyOverride && (libraryImage || libraryNotes) && (
+          <button
+            onClick={() => { onChangeImage(null); onChangeNotes(null); }}
+            style={{ fontSize: 9, color: FR.stone, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+          >Reset to library</button>
+        )}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: 8, alignItems: 'flex-start' }}>
+        <SimpleImageSlot
+          value={imageValue || ''}
+          onChange={v => onChangeImage(v || null)}
+          label=""
+          hint="2:3"
+          height={100}
+          assetScope="fabrics"
+          assetOwnerId={fabricId ? `slot-${fabricId}` : 'slot'}
+          assetSlot="placement-override"
+        />
+        <textarea
+          value={notesValue || ''}
+          onChange={e => onChangeNotes(e.target.value)}
+          rows={4}
+          placeholder={libraryNotes ? '— inheriting library placement notes —' : 'e.g. Main body and hood; not sleeves'}
+          style={{
+            width: '100%',
+            fontSize: 10,
+            lineHeight: 1.4,
+            border: `0.5px solid ${FR.sand}`,
+            borderRadius: 3,
+            padding: '4px 6px',
+            color: FR.slate,
+            background: '#fff',
+            outline: 'none',
+            resize: 'vertical',
+            fontFamily: "'Inter', sans-serif",
+            boxSizing: 'border-box',
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -627,6 +693,16 @@ export function StepFabrics({ data, set }) {
                   entry={entry}
                   libraryNotes={spec?.notes || ''}
                   onChange={notes => setSlot(i, { ...entry, chosenNotes: notes })}
+                />
+
+                {/* Per-style placement (image + notes) — same override pattern */}
+                <PlacementOverridePanel
+                  entry={entry}
+                  libraryImage={spec?.placementImage || ''}
+                  libraryNotes={spec?.placementNotes || ''}
+                  fabricId={entry.fabricId}
+                  onChangeImage={v => setSlot(i, { ...entry, chosenPlacementImage: v })}
+                  onChangeNotes={v => setSlot(i, { ...entry, chosenPlacementNotes: v })}
                 />
 
                 <div style={{ paddingTop: 6, borderTop: `0.5px solid ${FR.sand}` }}>
