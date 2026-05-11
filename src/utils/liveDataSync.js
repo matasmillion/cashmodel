@@ -597,67 +597,92 @@ export async function syncShopifyCapitalRepayment() {
  * Returns: { outstanding: number, txCount: number, error?: string }
  */
 export async function syncShopifyCapitalOutstanding() {
-  const gqlQuery = `
-    query CapitalLedger($cursor: String) {
-      shopifyPaymentsAccount {
-        balanceTransactions(
-          first: 100,
-          after: $cursor,
-          sortKey: PROCESSED_AT,
-          query: "transaction_type:lending_credit OR transaction_type:lending_capital_remittance OR transaction_type:lending_credit_remittance OR transaction_type:lending_debit OR transaction_type:lending_capital_refund OR transaction_type:lending_credit_refund OR transaction_type:lending_credit_reversal OR transaction_type:lending_debit_reversal OR transaction_type:lending_capital_remittance_reversal OR transaction_type:lending_credit_remittance_reversal OR transaction_type:lending_capital_refund_reversal OR transaction_type:lending_credit_refund_reversal"
-        ) {
-          pageInfo { hasNextPage endCursor }
-          edges {
-            node {
-              id
-              type
-              amount { amount currencyCode }
-              transactionDate
-            }
+  // Shopify's `query` filter doesn't reliably honor OR-d transaction_type
+  // clauses — the previous attempt returned empty results, so the row
+  // floored at $0. Instead, run separate queries per transaction type
+  // (server-side filter is well-supported for single values) and sum
+  // signed amounts across them. We also surface the per-type breakdown
+  // so the operator can verify which kinds of lending tx were captured.
+  const TYPES = [
+    'lending_credit',                          // loan disbursement (+)
+    'lending_credit_reversal',                 // (rare)
+    'lending_capital_remittance',              // each repayment (−)
+    'lending_capital_remittance_reversal',     // (rare)
+    'lending_credit_remittance',               // (rare)
+    'lending_credit_remittance_reversal',      // (rare)
+    'lending_debit',                           // (rare)
+    'lending_debit_reversal',                  // (rare)
+    'lending_capital_refund',                  // (rare)
+    'lending_capital_refund_reversal',         // (rare)
+    'lending_credit_refund',                   // (rare)
+    'lending_credit_refund_reversal',          // (rare)
+  ];
+
+  const breakdown = {};
+  let outstanding = 0;
+  let txCount = 0;
+
+  for (const type of TYPES) {
+    const gqlQuery = `
+      query CapitalTypeLedger($cursor: String, $q: String!) {
+        shopifyPaymentsAccount {
+          balanceTransactions(
+            first: 100,
+            after: $cursor,
+            sortKey: PROCESSED_AT,
+            query: $q
+          ) {
+            pageInfo { hasNextPage endCursor }
+            edges { node { id type amount { amount } transactionDate } }
           }
         }
       }
+    `;
+    let typeSum = 0;
+    let typeCount = 0;
+    let cursor = null;
+    // 10 pages × 100 = up to 1000 rows of this single type
+    for (let page = 0; page < 10; page++) {
+      let data;
+      try {
+        data = await callShopifyProxy('graphql.json', null, {
+          query: gqlQuery,
+          variables: { cursor, q: `transaction_type:${type}` },
+        });
+      } catch (err) {
+        console.warn(`[shopify capital outstanding] ${type} fetch failed:`, err.message);
+        return { outstanding: 0, txCount: 0, breakdown, error: err.message };
+      }
+      if (data?.errors?.length) {
+        const msg = data.errors.map(e => e.message).join('; ');
+        console.warn(`[shopify capital outstanding] ${type} errors:`, msg);
+        return { outstanding: 0, txCount: 0, breakdown, error: msg };
+      }
+      const conn = data?.data?.shopifyPaymentsAccount?.balanceTransactions;
+      if (!conn) break;
+      for (const edge of (conn.edges || [])) {
+        const t = edge?.node;
+        if (!t) continue;
+        const amt = parseFloat(t.amount?.amount);
+        if (!Number.isFinite(amt)) continue;
+        typeSum += amt;
+        typeCount += 1;
+      }
+      if (!conn.pageInfo?.hasNextPage) break;
+      cursor = conn.pageInfo.endCursor;
     }
-  `;
-
-  let outstanding = 0;
-  let txCount = 0;
-  let cursor = null;
-  for (let page = 0; page < 10; page++) {
-    let data;
-    try {
-      data = await callShopifyProxy('graphql.json', null, { query: gqlQuery, variables: { cursor } });
-    } catch (err) {
-      console.warn('[shopify capital outstanding] GraphQL fetch failed:', err.message);
-      return { outstanding: 0, txCount: 0, error: err.message };
-    }
-    if (data?.errors?.length) {
-      const msg = data.errors.map(e => e.message).join('; ');
-      console.warn('[shopify capital outstanding] GraphQL errors:', msg);
-      return { outstanding: 0, txCount: 0, error: msg };
-    }
-
-    const conn = data?.data?.shopifyPaymentsAccount?.balanceTransactions;
-    if (!conn) break;
-    for (const edge of (conn.edges || [])) {
-      const t = edge?.node;
-      if (!t) continue;
-      const amt = parseFloat(t.amount?.amount);
-      if (!Number.isFinite(amt)) continue;
-      // Sum signed amounts. LENDING_CREDIT (+) bumps outstanding up;
-      // LENDING_CAPITAL_REMITTANCE (-) pays it down. The accumulated
-      // total IS the remaining principal.
-      outstanding += amt;
-      txCount += 1;
-    }
-    if (!conn.pageInfo?.hasNextPage) break;
-    cursor = conn.pageInfo.endCursor;
+    breakdown[type] = { sum: Math.round(typeSum * 100) / 100, count: typeCount };
+    outstanding += typeSum;
+    txCount += typeCount;
   }
 
-  // Floor at 0 — a paid-off loan with extra fees could drift slightly
-  // negative; that's just noise.
+  // Sign convention: LENDING_CREDIT amounts are positive (money in /
+  // loan principal); remittances and refunds back to Shopify are
+  // negative. Sum of all signed amounts = remaining principal owed.
+  // Floor at 0 to avoid showing a negative "outstanding" from rounding /
+  // fees if the loan is fully repaid.
   const result = Math.max(0, Math.round(outstanding * 100) / 100);
-  return { outstanding: result, txCount };
+  return { outstanding: result, txCount, breakdown };
 }
 
 // ─── Shopify variants + per-day sales (Sell-Through page) ────────────────────
