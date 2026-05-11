@@ -359,7 +359,10 @@ export function generateCashflow58({
       shopifyCapRepayment = hist.shopifyCapRepayment;
     } else if (isCurrent) {
       // Current week is anchored on live Plaid balances (Mercury → seed)
-      shopifyPayouts = 0; // projection-only — would double-count onlineStore
+      // Shopify Payouts = scheduled + in_transit payouts from Shopify
+      // Payments that haven't yet settled to Mercury. Live from
+      // syncShopifyPayoutsPending → seed.shopifyPayoutsPending.
+      shopifyPayouts = seed.shopifyPayoutsPending ?? 0;
       sbMain = seed.sbMain ?? (prev?.totalCashOnHand ?? 0) + netCashFlow - transferToWC;
       sbSalesTax = seed.sbSalesTax ?? prev?.sbSalesTax ?? 0;
       sbCorpTax = seed.sbCorpTax ?? prev?.sbCorpTax ?? 0;
@@ -378,9 +381,14 @@ export function generateCashflow58({
       sbCorpTax = prev?.sbCorpTax ?? 0;
       shopifyCapRepayment = 0;
     }
+    // Future weeks keep shopifyPayouts = 0 so projection doesn't
+    // double-count with the onlineStore → sbMain inflow that feeds
+    // netCashFlow. Current week's seeded pending payouts ARE additive —
+    // they represent real money already captured but not yet swept into
+    // Mercury, so they belong in cash-on-hand.
     const totalCashOnHand = hist
-      ? hist.totalCashOnHand ?? (sbMain + (sbSalesTax || 0) + (sbCorpTax || 0) + (shopifyCapRepayment || 0))
-      : sbMain + sbSalesTax + sbCorpTax + shopifyCapRepayment;
+      ? hist.totalCashOnHand ?? (sbMain + (sbSalesTax || 0) + (sbCorpTax || 0) + (shopifyCapRepayment || 0) + (shopifyPayouts || 0))
+      : sbMain + sbSalesTax + sbCorpTax + shopifyCapRepayment + shopifyPayouts;
 
     // ── Inventory (row 22) ──────────────────────────────────────────────
     const inventory = hist ? hist.inventory : (prev?.inventory ?? 0) + transferToWC;
