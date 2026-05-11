@@ -67,7 +67,7 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
     { key: 'totalAssets',        label: 'Total Assets',        kind: 'subtotal' },
 
     { header: true, label: 'ST Liabilities' },
-    { key: 'adsPayable',         label: 'Ads Payable (01000)',         kind: 'balance' },
+    { key: 'adsPayable',         label: 'Ads Payable (Chase 7248 + Meta)', kind: 'balance' },
     { key: 'fulfillmentPayable', label: 'Fullfillment Payable (2907)', kind: 'balance' },
 
     { header: true, label: 'LT Liabilities' },
@@ -85,7 +85,7 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
       leftLabel: 'PP %', leftValue: pct(C.ppPercent) },
     { key: 'transferToWC',    label: 'Transfer to WC',           kind: 'outflow' },
     { key: 'totalInflows',    label: 'Total Inflows',            kind: 'subtotal' },
-    { key: 'adsPaid',         label: 'Ads Payable (01000)',      kind: 'outflow', leftLabel: 'Variable Overhead' },
+    { key: 'adsPaid',         label: 'Ads Payable',              kind: 'outflow', leftLabel: 'Variable Overhead' },
     { key: 'fulfillmentPaid', label: 'Fullfillment Payable (2907)', kind: 'outflow' },
     { key: 'payChase',        label: 'CHASE 5718',     kind: 'outflow', leftLabel: 'Working Capital' },
     { key: 'payAmexPlum',     label: 'AMEX PLUM 0000', kind: 'outflow' },

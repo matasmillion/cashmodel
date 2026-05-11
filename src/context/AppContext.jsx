@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useMemo, useEffect, useRef, useState } from 'react';
 import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, OPEX_WAREHOUSE, CREDIT_CARDS, LOANS, AD_UNIT_TYPES, DEFAULT_EVENTS } from '../data/seedData';
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
-import { syncShopifyActuals, syncShopifyInventory, syncMetaActuals, syncMetaDailyBudget, syncPlaidActuals, syncPlaidCardPayments, syncShopifyPayoutsPending, listPlaidItems } from '../utils/liveDataSync';
+import { syncShopifyActuals, syncShopifyInventory, syncMetaActuals, syncMetaDailyBudget, syncMetaBalanceOwed, syncPlaidActuals, syncPlaidCardPayments, syncShopifyPayoutsPending, syncPlaidPendingCharges, listPlaidItems } from '../utils/liveDataSync';
 import { migrateManualPOsToStore } from '../utils/productionStore';
 import { migrateLegacyInventoryHash } from '../utils/inventoryRouting';
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
@@ -131,6 +131,24 @@ async function runAutoSync(dispatch) {
       }),
     );
 
+    // Current unpaid balance with Meta — feeds the Ads Payable row.
+    tasks.push(
+      syncMetaBalanceOwed(creds.meta).then(info => {
+        if (info?.balanceOwed != null) {
+          dispatch({
+            type: 'UPDATE_SEED',
+            payload: {
+              metaBalanceOwed: info.balanceOwed,
+              metaBalanceOwedSyncedAt: now,
+            },
+          });
+        }
+      }).catch(err => {
+        errors.metaBalance = err.message;
+        console.warn('[auto-sync] Meta balance owed:', err.message);
+      }),
+    );
+
     // Also fetch the forward-looking daily budget from the CBO campaign
     // named "Acquisition" (substring match). The engine uses this to
     // anchor projected daily ad spend.
@@ -213,6 +231,21 @@ async function runAutoSync(dispatch) {
         // Non-fatal — balances already updated; payments stay on the
         // static schedule until next sync.
         console.warn('[auto-sync] Plaid card payments:', err.message);
+      }
+
+      // Pending (unposted) charges per card. Used by Ads Payable:
+      //   today = chase7248 balance + chase7248 pending + Meta owed
+      try {
+        const pending = await syncPlaidPendingCharges();
+        const pendingPayload = {};
+        for (const [cardKey, amount] of Object.entries(pending)) {
+          pendingPayload[cardKey + 'PendingCharges'] = amount;
+        }
+        if (Object.keys(pendingPayload).length) {
+          dispatch({ type: 'UPDATE_SEED', payload: pendingPayload });
+        }
+      } catch (err) {
+        console.warn('[auto-sync] Plaid pending charges:', err.message);
       }
 
       syncedAtBySource.plaid = now;

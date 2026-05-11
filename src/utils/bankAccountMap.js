@@ -60,6 +60,9 @@ export function bucketDepositoryAccounts(accounts = []) {
 const CARD_MASK_MAP = {
   '5718': 'chase-5718',
   '1005': 'amex-blue',
+  // Chase 7248 is the active ads card — its balance + pending charges
+  // drive the Ads Payable cashflow row alongside Meta's amount-owed.
+  '7248': 'chase-7248',
 };
 export function cardIdFromMask(mask) {
   if (!mask) return null;
@@ -67,16 +70,20 @@ export function cardIdFromMask(mask) {
 }
 
 // Classify Plaid credit-card account → key used by the cashflow engine.
-// (chase5718 / amexBlue / amexPlum). Falls back to a name-based match if mask
-// isn't recognised — handy for the AMEX Plum which has no last-4 from Plaid.
+// (chase5718 / chase7248 / amexBlue / amexPlum). Falls back to a name-based
+// match if mask isn't recognised — handy for AMEX Plum which has no last-4.
 export function classifyCreditAccount({ mask, name = '', subtype = '' }) {
   if (mask && CARD_MASK_MAP[mask]) {
     const id = CARD_MASK_MAP[mask];
-    return id === 'chase-5718' ? 'chase5718' : id === 'amex-blue' ? 'amexBlue' : null;
+    if (id === 'chase-5718') return 'chase5718';
+    if (id === 'chase-7248') return 'chase7248';
+    if (id === 'amex-blue') return 'amexBlue';
+    return null;
   }
   const lc = name.toLowerCase();
   if (lc.includes('plum')) return 'amexPlum';
   if (lc.includes('blue')) return 'amexBlue';
+  if (lc.includes('7248')) return 'chase7248';
   if (lc.includes('chase')) return 'chase5718';
   return null;
 }
