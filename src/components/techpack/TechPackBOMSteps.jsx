@@ -5,7 +5,7 @@
 // holds thin references and renders the picker UI.
 
 import React, { useEffect, useState } from 'react';
-import { FR, GARMENT_YIELDS } from './techPackConstants';
+import { FR, GARMENT_YIELDS, yieldForProductType } from './techPackConstants';
 import { SectionTitle, AssetImage } from './TechPackPrimitives';
 import { listFabrics } from '../../utils/fabricStore';
 import { listComponentPacks, getComponentPack } from '../../utils/componentPackStore';
@@ -594,6 +594,7 @@ export function StepFabrics({ data, set }) {
 
   function commitFabric(slotIdx, item, colorChoice, area) {
     const role = area || picked[slotIdx]?.role || item.default_garment_area || FABRIC_GARMENT_AREAS[0] || '';
+    const autoYield = yieldForProductType(data.productType);
     setSlot(slotIdx, {
       fabricId:   item.id,
       role,
@@ -602,6 +603,7 @@ export function StepFabrics({ data, set }) {
       colorLabel: colorChoice?.label || '',
       colorHex:   colorChoice?.hex || '',
       colorUrl:   colorChoice?.url || '',
+      ...(autoYield != null ? { metersPerUnit: autoYield, yieldIsActual: false } : {}),
     });
   }
 

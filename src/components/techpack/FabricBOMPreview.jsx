@@ -171,16 +171,6 @@ export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFi
   // Vendor contact for the main mill + each secondary facility on finishes.
   const mainVendor = vendorContact(fabric.mill_id);
 
-  // Area can be a single value ("Body") or a comma-joined multi-select
-  // ("Body, Lining"). The top-right chip is fixed-width so we shorten long
-  // combos to "BODY +1" / "BODY +2", while the placement label spells them out.
-  const areaItems = String(area).split(',').map(s => s.trim()).filter(Boolean);
-  const chipText = areaItems.length <= 1
-    ? esc(area).toUpperCase()
-    : (areaItems.join(' · ').length <= 14
-        ? areaItems.join(' · ').toUpperCase()
-        : `${areaItems[0]} +${areaItems.length - 1}`.toUpperCase());
-
   return (
     <g>
       {/* Title row */}
@@ -189,11 +179,6 @@ export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFi
       </text>
       <text x="40" y="134" fontSize="10" fill={FR.stone}>
         {clamp(esc([fabric.mill_id, fabric.composition, fabric.weight_gsm ? `${fabric.weight_gsm} GSM` : null].filter(Boolean).join(' · ') || '—'), 80)}
-      </text>
-      {/* Area chip top-right of title */}
-      <rect x={PAGE_W - 40 - 110} y="92" width="110" height="26" fill={FR.slate} rx="3" />
-      <text x={PAGE_W - 40 - 55} y="110" textAnchor="middle" fontSize="11" fontWeight="bold" fill={FR.salt} letterSpacing="0.6">
-        {chipText}
       </text>
 
       {/* ─── HERO ROW: Photos + Color Selection + Placement ─────────────── */}
@@ -238,25 +223,27 @@ export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFi
         </g>
       )}
 
-      {/* PLACEMENT — silhouette in the right column. Label appends the area(s) */}
+      {/* PLACEMENT — 2:3 portrait silhouette (width=147, height=220). Label shows
+          area name in slate so it reads as content, not a header. */}
       <text x="750" y="160" fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="1.2">
-        PLACEMENT ON GARMENT: {clamp(esc(area), 24).toUpperCase()}
+        {'PLACEMENT ON GARMENT: '}
+        <tspan fill={FR.slate} fontWeight="500" letterSpacing="0.2">{clamp(esc(area), 28)}</tspan>
       </text>
-      <rect x="750" y="170" width="220" height="220" fill={FR.salt} stroke={FR.sand} strokeWidth="0.5" />
+      <rect x="750" y="170" width="147" height="220" fill={FR.salt} stroke={FR.sand} strokeWidth="0.5" />
       {placementResolved
-        ? <image href={placementResolved} x="750" y="170" width="220" height="220" preserveAspectRatio="xMidYMid meet" />
+        ? <image href={placementResolved} x="750" y="170" width="147" height="220" preserveAspectRatio="xMidYMid meet" />
         : (
           <g>
             <g stroke={FR.slate} strokeWidth="1" fill="#fff">
-              <path d="M 825 196 L 840 186 L 890 186 L 905 196 L 915 208 L 910 218 L 898 216 L 898 378 L 835 378 L 835 216 L 823 218 L 818 208 Z" />
-              <path d="M 853 186 Q 865 198 877 186" fill="none" />
+              <path d="M 790 196 L 802 186 L 843 186 L 855 196 L 863 208 L 859 218 L 849 216 L 849 378 L 798 378 L 798 216 L 788 218 L 784 208 Z" />
+              <path d="M 812 186 Q 822 196 832 186" fill="none" />
             </g>
-            <rect x="838" y="220" width="57" height="155" fill={FR.soil} opacity="0.30" />
+            <rect x="800" y="220" width="47" height="155" fill={FR.soil} opacity="0.30" />
           </g>
         )
       }
       {placementNotes && (
-        <text x="860" y="408" textAnchor="middle" fontSize="9" fill={FR.stone} fontStyle="italic">
+        <text x="823" y="408" textAnchor="middle" fontSize="9" fill={FR.stone} fontStyle="italic">
           {clamp(esc(placementNotes), 38)}
         </text>
       )}
