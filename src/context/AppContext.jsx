@@ -212,10 +212,25 @@ async function runAutoSync(dispatch) {
     if (!items || items.length === 0) return;
     sources.push('plaid');
     try {
-      // realTime: true on auto-sync so the user always sees today's
-      // balances on login. /accounts/balance/get costs ~$0.10/call but the
-      // value of correct cash on hand vastly outweighs that.
-      const { totals, depositoryAccounts, creditAccounts } = await syncPlaidActuals({ realTime: true });
+      // Auto-sync uses the CACHED Plaid endpoint (/accounts/get) — free
+      // with the Transactions product, and instant. The real-time
+      // endpoint (/accounts/balance/get) fires a fresh call to each
+      // bank in parallel — with 4+ linked items it routinely times out
+      // and surfaces as "Failed to fetch", which blocks every seed
+      // dispatch below (including the 6848 pin). Plaid keeps cached
+      // balances current via background syncs, so for cashflow purposes
+      // this is the right default. Manual "Sync balances" button still
+      // forces real-time when the operator explicitly clicks it.
+      let plaidResult;
+      try {
+        plaidResult = await syncPlaidActuals({ realTime: false });
+      } catch (err) {
+        // Even cached failed — try one more time before giving up so a
+        // transient blip doesn't leave sbMain stale.
+        console.warn('[auto-sync] Plaid cached fetch failed, retrying once:', err.message);
+        plaidResult = await syncPlaidActuals({ realTime: false });
+      }
+      const { totals, depositoryAccounts, creditAccounts } = plaidResult;
 
       const bucketed = bucketDepositoryAccounts(depositoryAccounts);
       // Operating Cash row pins to the Mercury checking account ending in
