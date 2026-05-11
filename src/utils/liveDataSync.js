@@ -268,6 +268,47 @@ export async function syncShopifyActuals(/* creds unused — proxy holds creds *
   });
 }
 
+/**
+ * Pulls Shopify Payments payouts that have been created but haven't yet
+ * settled to the operator's bank account (Mercury). The Shopify "Shopify
+ * Payouts" cashflow row shows this number so the operator can see money
+ * that's already invoiced/captured but not yet swept to Operating Cash.
+ *
+ * Status meanings (per Shopify Admin API docs):
+ *   `scheduled`   → settlement date set, not yet sent
+ *   `in_transit`  → ACH sent, not yet credited at the bank
+ *   `paid`        → cleared (already reflected in Mercury → not pending)
+ *   `failed`      → bounced — excluded
+ *   `cancelled`   → excluded
+ *
+ * REST endpoint: GET /shopify_payments/payouts.json?status={status}
+ * Requires `read_shopify_payments_payouts` scope.
+ *
+ * @returns {Promise<{ pendingTotal: number, payouts: Array<{date, amount, status, id}> }>}
+ */
+export async function syncShopifyPayoutsPending() {
+  const collected = [];
+  // Pull both statuses separately — Shopify doesn't take a comma-list here.
+  for (const status of ['scheduled', 'in_transit']) {
+    let data;
+    try {
+      data = await callShopifyProxy('shopify_payments/payouts.json', { status, limit: 250 });
+    } catch (err) {
+      // 403 = scope missing, 404 = store doesn't have Shopify Payments enabled.
+      // Either way, fail soft and surface 0 pending so the row doesn't break.
+      console.warn(`[shopify payouts] ${status} fetch failed:`, err.message);
+      continue;
+    }
+    for (const p of (data?.payouts || [])) {
+      const amt = parseFloat(p.amount);
+      if (!Number.isFinite(amt)) continue;
+      collected.push({ id: p.id, date: p.date, amount: amt, status: p.status });
+    }
+  }
+  const pendingTotal = Math.round(collected.reduce((s, p) => s + p.amount, 0) * 100) / 100;
+  return { pendingTotal, payouts: collected };
+}
+
 // ─── Shopify variants + per-day sales (Sell-Through page) ────────────────────
 
 /**
