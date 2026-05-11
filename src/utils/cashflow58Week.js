@@ -271,7 +271,12 @@ export function generateCashflow58({
       chase5718 = seed.chase5718Balance ?? Math.max(0, (prev?.chase5718 ?? cardOpening.chase5718) - payChase);
       amexPlum = seed.amexPlumBalance ?? Math.max(0, (prev?.amexPlum ?? cardOpening.amexPlum) - payAmexPlum);
       amexBlue = seed.amexBlueBalance ?? Math.max(0, (prev?.amexBlue ?? cardOpening.amexBlue) - payAmexBlue);
-      shopifyCapital = (prev?.shopifyCapital ?? cardOpening.shopifyCapital) - payShopifyCapital;
+      // Shopify Capital: prefer live outstanding from Shopify (netted
+      // from balance transactions). Fall back to the prior-week
+      // projection if the live pull failed.
+      shopifyCapital = seed.shopifyCapitalOutstanding != null
+        ? seed.shopifyCapitalOutstanding
+        : (prev?.shopifyCapital ?? cardOpening.shopifyCapital) - payShopifyCapital;
       longTermLoan = (prev?.longTermLoan ?? cardOpening.longTermLoan) - payLtLoan;
     } else {
       const opening = prev ?? {

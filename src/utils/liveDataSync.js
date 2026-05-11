@@ -576,6 +576,90 @@ export async function syncShopifyCapitalRepayment() {
   return { pendingTotal, repayments };
 }
 
+/**
+ * Computes the live Shopify Capital outstanding balance by netting every
+ * lending-type balance transaction on the Shopify Payments account.
+ *
+ * Why this works: Shopify records the original loan disbursement as a
+ * positive `LENDING_CREDIT` balance transaction and each remittance as a
+ * negative `LENDING_CAPITAL_REMITTANCE`. Sum of all lending-type amounts
+ * (signed) = current outstanding balance (the same number shown in the
+ * Shopify Admin → Finances → Capital page).
+ *
+ * Why not just query a `capital.outstanding` field: there isn't one in
+ * the Admin GraphQL surface. `shopifyPaymentsAccount.balance` is the
+ * Shopify Payments cash balance, NOT the Capital loan principal. The
+ * balance-transaction stream is the only authoritative source.
+ *
+ * Paginates through up to 1000 lending transactions (10 pages × 100) —
+ * ~2.7 years of daily remittances, sufficient to capture a full loan.
+ *
+ * Returns: { outstanding: number, txCount: number, error?: string }
+ */
+export async function syncShopifyCapitalOutstanding() {
+  const gqlQuery = `
+    query CapitalLedger($cursor: String) {
+      shopifyPaymentsAccount {
+        balanceTransactions(
+          first: 100,
+          after: $cursor,
+          sortKey: PROCESSED_AT,
+          query: "transaction_type:lending_credit OR transaction_type:lending_capital_remittance OR transaction_type:lending_credit_remittance OR transaction_type:lending_debit OR transaction_type:lending_capital_refund OR transaction_type:lending_credit_refund OR transaction_type:lending_credit_reversal OR transaction_type:lending_debit_reversal OR transaction_type:lending_capital_remittance_reversal OR transaction_type:lending_credit_remittance_reversal OR transaction_type:lending_capital_refund_reversal OR transaction_type:lending_credit_refund_reversal"
+        ) {
+          pageInfo { hasNextPage endCursor }
+          edges {
+            node {
+              id
+              type
+              amount { amount currencyCode }
+              transactionDate
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  let outstanding = 0;
+  let txCount = 0;
+  let cursor = null;
+  for (let page = 0; page < 10; page++) {
+    let data;
+    try {
+      data = await callShopifyProxy('graphql.json', null, { query: gqlQuery, variables: { cursor } });
+    } catch (err) {
+      console.warn('[shopify capital outstanding] GraphQL fetch failed:', err.message);
+      return { outstanding: 0, txCount: 0, error: err.message };
+    }
+    if (data?.errors?.length) {
+      const msg = data.errors.map(e => e.message).join('; ');
+      console.warn('[shopify capital outstanding] GraphQL errors:', msg);
+      return { outstanding: 0, txCount: 0, error: msg };
+    }
+
+    const conn = data?.data?.shopifyPaymentsAccount?.balanceTransactions;
+    if (!conn) break;
+    for (const edge of (conn.edges || [])) {
+      const t = edge?.node;
+      if (!t) continue;
+      const amt = parseFloat(t.amount?.amount);
+      if (!Number.isFinite(amt)) continue;
+      // Sum signed amounts. LENDING_CREDIT (+) bumps outstanding up;
+      // LENDING_CAPITAL_REMITTANCE (-) pays it down. The accumulated
+      // total IS the remaining principal.
+      outstanding += amt;
+      txCount += 1;
+    }
+    if (!conn.pageInfo?.hasNextPage) break;
+    cursor = conn.pageInfo.endCursor;
+  }
+
+  // Floor at 0 — a paid-off loan with extra fees could drift slightly
+  // negative; that's just noise.
+  const result = Math.max(0, Math.round(outstanding * 100) / 100);
+  return { outstanding: result, txCount };
+}
+
 // ─── Shopify variants + per-day sales (Sell-Through page) ────────────────────
 
 /**
