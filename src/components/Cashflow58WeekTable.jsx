@@ -120,20 +120,9 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
       leftEditableKey: 'shopifyCapitalOriginalLoan',
       leftEditableType: 'dollar',
       leftEditableTarget: 'seed',
-      subLabel: (() => {
-        if (seed.shopifyCapitalOutstandingError) {
-          return `Shopify API error: ${String(seed.shopifyCapitalOutstandingError).slice(0, 160)}`;
-        }
-        const originalLoan = Number(seed.shopifyCapitalOriginalLoan) || 0;
-        if (!originalLoan) {
-          return 'Set Original loan $ in column A to enable auto-calc (outstanding = original − paid remittances)';
-        }
-        const paid = Number(seed.shopifyCapitalPaidRepaymentsTotal) || 0;
-        const paidCount = seed.shopifyCapitalPaidCount ?? 0;
-        const pendingCount = seed.shopifyCapitalPendingCount ?? 0;
-        return `Paid back so far: $${paid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ` +
-               `(${paidCount} settled · ${pendingCount} pending — pending doesn't reduce this row until it settles)`;
-      })() },
+      subLabel: seed.shopifyCapitalOutstandingError
+        ? `Shopify API error: ${String(seed.shopifyCapitalOutstandingError).slice(0, 160)}`
+        : null },
     { key: 'longTermLoan',  label: 'Long Term Loan',  kind: 'balance' },
     { key: 'totalLiabilities',  label: 'Total Liabilities', kind: 'subtotal' },
     { key: 'totalEquity',       label: 'Total Equity',      kind: 'subtotal' },
