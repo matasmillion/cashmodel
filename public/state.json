@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-11T07:43:14.619Z",
+  "lastUpdated": "2026-05-11T07:45:46.817Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,9 +1044,9 @@
   ],
   "changelog": [
     {
-      "sha": "668d4fe",
-      "date": "2026-05-11T07:42:33+00:00",
-      "message": "cashflow: stop anchoring current week on Meta/Shopify mid-week partials"
+      "sha": "457d79e",
+      "date": "2026-05-11T10:43:33+03:00",
+      "message": "cashflow: stop anchoring current week on Meta/Shopify mid-week partials (#119)"
     },
     {
       "sha": "245874e",
