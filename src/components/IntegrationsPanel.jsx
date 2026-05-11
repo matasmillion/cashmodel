@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ShoppingBag, BarChart3, CreditCard, Mail, Truck, CheckCircle, XCircle, Loader, ChevronDown, ChevronUp, ExternalLink, RefreshCw, Copy, Server, Landmark, Plus, Trash2, Sparkles, Film, Camera, Wand2, Hash, Globe } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { useApp } from '../context/AppContext';
+import { bucketDepositoryAccounts, classifyCreditAccount, cardIdFromMask, OPERATING_MASK } from '../utils/bankAccountMap';
 import {
   syncShopifyActuals, syncMetaActuals, testShopifyProxy,
   saveShopifyCredentials, loadShopifyIntegration, deleteShopifyCredentials,
@@ -742,25 +743,46 @@ function PlaidCard({ dispatch }) {
       // Auto-sync on page load uses the cached endpoint (free).
       const { totals, depositoryAccounts, creditAccounts } = await syncPlaidActuals({ realTime: true });
 
-      // Push depository cash into the seed (supplements Mercury if they overlap,
-      // so pick whichever feels right — for now Plaid wins if present).
-      if (totals.depository > 0) {
-        dispatch({
-          type: 'UPDATE_SEED',
-          payload: {
-            totalCash: totals.depository,
-            sbMain: totals.depository,
-          },
-        });
+      // Mirror the auto-sync wire-up exactly — same role bucketing, same
+      // 6848 pin for sbMain. Previously this handler overwrote sbMain
+      // with the full depository sum, which contradicted the pin and
+      // re-introduced the "Operating Cash = summed bucket" bug every
+      // time the button was clicked.
+      const bucketed = bucketDepositoryAccounts(depositoryAccounts);
+      const operatingAccount = depositoryAccounts.find(a => a.mask === OPERATING_MASK);
+      if (!operatingAccount) {
+        console.warn(
+          `[manual sync] No Mercury depository account with mask ${OPERATING_MASK} — ` +
+          `falling back to summed operating bucket ($${bucketed.operating}). ` +
+          `Accounts seen: ${depositoryAccounts.map(a => `${a.name}(${a.mask})`).join(', ') || 'none'}`,
+        );
       }
+      dispatch({
+        type: 'UPDATE_SEED',
+        payload: {
+          totalCash: totals.depository,
+          sbMain: operatingAccount ? operatingAccount.balance : bucketed.operating,
+          sbSalesTax: -Math.abs(bucketed.salesTax),
+          sbCorpTax: -Math.abs(bucketed.corporateTax),
+          workingCapital: bucketed.workingCapital,
+          mercuryFulfillmentBalance: bucketed.fulfillment,
+          bankAccounts: bucketed.accounts,
+        },
+      });
 
-      // Match credit accounts by last-4 mask to existing cards and push balances.
+      // Match credit accounts by last-4 mask to existing cards and push
+      // both the legacy state.creditCards entry AND the cashflow engine's
+      // seed.<key>Balance fields (so Ads Payable + LT Liabilities rows
+      // refresh in step with auto-sync).
       for (const a of creditAccounts) {
         if (!a.mask) continue;
-        // Our card IDs sometimes contain the mask (e.g. 'chase-5718'); fallback to name substring.
-        const id = guessCardIdFromMask(a.mask);
-        if (id) {
-          dispatch({ type: 'UPDATE_CREDIT_CARD', payload: { id, updates: { balance: a.balance } } });
+        const cashflowKey = classifyCreditAccount(a);
+        if (cashflowKey) {
+          dispatch({ type: 'UPDATE_SEED', payload: { [cashflowKey + 'Balance']: a.balance } });
+        }
+        const seedId = cardIdFromMask(a.mask) || guessCardIdFromMask(a.mask);
+        if (seedId) {
+          dispatch({ type: 'UPDATE_CREDIT_CARD', payload: { id: seedId, updates: { balance: a.balance } } });
         }
       }
 
