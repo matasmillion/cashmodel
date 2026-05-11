@@ -25,7 +25,7 @@ function saveIntegrations(data) {
 // past 13 weeks of revenue / ad spend, all of which we persist into
 // state.actualsHistory so the engine can fill the gap between the seeded
 // historical block and "this Monday" without projecting.
-async function runAutoSync(dispatch) {
+async function runAutoSync(dispatch, { realTime = false } = {}) {
   const creds = loadIntegrations();
   const now = new Date().toISOString();
   const updated = { ...creds };
@@ -223,11 +223,13 @@ async function runAutoSync(dispatch) {
       // forces real-time when the operator explicitly clicks it.
       let plaidResult;
       try {
-        plaidResult = await syncPlaidActuals({ realTime: false });
+        plaidResult = await syncPlaidActuals({ realTime });
       } catch (err) {
         // Even cached failed — try one more time before giving up so a
-        // transient blip doesn't leave sbMain stale.
-        console.warn('[auto-sync] Plaid cached fetch failed, retrying once:', err.message);
+        // transient blip doesn't leave sbMain stale. Falls back to
+        // cached on retry even if the caller asked for real-time, so
+        // we get *something* fresh into the seed.
+        console.warn(`[auto-sync] Plaid ${realTime ? 'real-time' : 'cached'} fetch failed, retrying with cached:`, err.message);
         plaidResult = await syncPlaidActuals({ realTime: false });
       }
       const { totals, depositoryAccounts, creditAccounts, itemErrors } = plaidResult;
@@ -599,10 +601,13 @@ export function AppProvider({ children }) {
   const userIdRef = useRef(null);
 
   // Wrap runAutoSync so we can track status in React state.
-  async function triggerAutoSync() {
+  // `realTime` flag is forwarded to the Plaid layer — true = force a
+  // live /accounts/balance/get pull (slow, ~$0.10/account, used by the
+  // cashflow page's "Force real-time" button). Default false = cached.
+  async function triggerAutoSync({ realTime = false } = {}) {
     setAutoSyncState(s => ({ ...s, status: 'syncing', errors: {} }));
     try {
-      const result = await runAutoSync(dispatch);
+      const result = await runAutoSync(dispatch, { realTime });
       if (!result || result.sources.length === 0) {
         setAutoSyncState({ status: 'idle', sources: [], errors: {}, syncedAt: null });
         return;

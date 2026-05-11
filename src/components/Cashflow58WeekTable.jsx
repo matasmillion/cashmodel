@@ -159,8 +159,9 @@ function formatSyncAge(iso) {
 }
 
 export default function Cashflow58WeekTable() {
-  const { state, dispatch } = useApp();
+  const { state, dispatch, autoSyncState, triggerAutoSync } = useApp();
   const [showHistorical, setShowHistorical] = useState(false);
+  const syncing = autoSyncState?.status === 'syncing';
 
   const weeks = useMemo(() => generateCashflow58({
     assumptions: state.assumptions,
@@ -230,17 +231,39 @@ export default function Cashflow58WeekTable() {
             )}
           </p>
         </div>
-        <button
-          onClick={() => setShowHistorical(s => !s)}
-          className="text-xs px-3 py-1.5 rounded-lg border"
-          style={{
-            background: showHistorical ? FR.slate : 'transparent',
-            color: showHistorical ? FR.salt : FR.slate,
-            borderColor: FR.sand, fontFamily: "'Inter', sans-serif",
-          }}
-        >
-          {showHistorical ? 'Hide historical' : 'Show 12 weeks of historical'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowHistorical(s => !s)}
+            className="text-xs px-3 py-1.5 rounded-lg border"
+            style={{
+              background: showHistorical ? FR.slate : 'transparent',
+              color: showHistorical ? FR.salt : FR.slate,
+              borderColor: FR.sand, fontFamily: "'Inter', sans-serif",
+            }}
+          >
+            {showHistorical ? 'Hide historical' : 'Show 12 weeks of historical'}
+          </button>
+          <button
+            onClick={() => triggerAutoSync({ realTime: true })}
+            disabled={syncing}
+            title="Force live refresh from Plaid + Shopify + Meta. Hits /accounts/balance/get on every bank (~$0.10/account, 10-30s)."
+            className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5"
+            style={{
+              background: syncing ? FR.sand : FR.slate,
+              color: syncing ? FR.stone : FR.salt,
+              border: 'none', fontFamily: "'Inter', sans-serif",
+              cursor: syncing ? 'not-allowed' : 'pointer',
+            }}
+          >
+            <span style={{
+              display: 'inline-block',
+              width: 8, height: 8, borderRadius: '50%',
+              background: syncing ? FR.stone : '#7DBE7D',
+              animation: syncing ? 'pulse 1.4s ease-in-out infinite' : undefined,
+            }} />
+            {syncing ? 'Refreshing…' : 'Force real-time refresh'}
+          </button>
+        </div>
       </div>
 
       <div className="overflow-x-auto scrollbar-thin">
