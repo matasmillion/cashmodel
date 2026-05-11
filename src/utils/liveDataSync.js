@@ -269,44 +269,206 @@ export async function syncShopifyActuals(/* creds unused — proxy holds creds *
 }
 
 /**
- * Pulls Shopify Payments payouts that have been created but haven't yet
- * settled to the operator's bank account (Mercury). The Shopify "Shopify
- * Payouts" cashflow row shows this number so the operator can see money
- * that's already invoiced/captured but not yet swept to Operating Cash.
+ * Returns deposit transactions (money entering the account) for the
+ * Mercury depository sub-account with the given mask, over the trailing
+ * `days` window. Pulled via Plaid /transactions/get on every connected
+ * Plaid item.
+ *
+ * Plaid amount sign convention: positive = money OUT of the account,
+ * negative = money IN. So a deposit / credit has amount < 0.
+ *
+ * Returns null if the mask isn't visible in any connected Plaid item
+ * (so callers can distinguish "no deposits" from "account not linked").
+ *
+ * @param {{ mask: string, days?: number }} opts
+ * @returns {Promise<null | Array<{date: string, amount: number, name: string, pending: boolean}>>}
+ */
+export async function syncMercuryDeposits({ mask, days = 7 }) {
+  const items = await listPlaidItems().catch(() => []);
+  if (!items?.length) return null;
+
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  const toISODate = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const sinceStr = toISODate(since);
+  const todayStr = toISODate(new Date());
+
+  let foundMask = false;
+  const deposits = [];
+  for (const item of items) {
+    let txData;
+    try {
+      txData = await callPlaidProxy('transactions/get', {
+        item_id: item.item_id,
+        start_date: sinceStr,
+        end_date: todayStr,
+      });
+    } catch (err) {
+      console.warn('[mercury deposits] transactions/get failed:', err.message);
+      continue;
+    }
+    const targetAccountId = (txData.accounts || []).find(a => a.mask === mask)?.account_id;
+    if (!targetAccountId) continue;
+    foundMask = true;
+    for (const tx of (txData.transactions || [])) {
+      if (tx.account_id !== targetAccountId) continue;
+      // Plaid: positive amount = money out, negative = money in.
+      if (tx.amount >= 0) continue;
+      deposits.push({
+        date: tx.date,
+        amount: Math.round(Math.abs(tx.amount) * 100) / 100,
+        name: tx.name || '',
+        pending: !!tx.pending,
+      });
+    }
+  }
+  return foundMask ? deposits : null;
+}
+
+/**
+ * Match Shopify-reported "paid" payouts against actual Mercury deposits.
+ * Match rule: same amount (±$0.01) within ±3 days of the payout date.
+ *
+ * Returns the SUM (and detail) of Shopify payouts that ARE reported as
+ * paid by Shopify but DON'T yet show up as a deposit in Mercury — money
+ * the operator hasn't received yet, even though Shopify thinks it's
+ * settled.
+ *
+ * @param {Array<{id, date, amount}>} paidPayouts — Shopify paid payouts in the window
+ * @param {Array<{date, amount}>} deposits — Mercury credits in the window
+ * @returns {{ unmatchedTotal: number, unmatched: Array<{id, date, amount}> }}
+ */
+function reconcileShopifyPaidWithMercury(paidPayouts, deposits) {
+  const unmatched = [];
+  const usedDeposits = new Set();
+  for (const p of paidPayouts) {
+    const pAmt = Math.abs(parseFloat(p.amount));
+    if (!Number.isFinite(pAmt)) continue;
+    const pDate = new Date(p.date);
+    const matchIdx = deposits.findIndex((d, i) => {
+      if (usedDeposits.has(i)) return false;
+      if (Math.abs(d.amount - pAmt) > 0.01) return false;
+      const dDate = new Date(d.date);
+      const diffDays = Math.abs((dDate - pDate) / 86400000);
+      return diffDays <= 3;
+    });
+    if (matchIdx === -1) {
+      unmatched.push({ id: p.id, date: p.date, amount: pAmt });
+    } else {
+      usedDeposits.add(matchIdx);
+    }
+  }
+  const unmatchedTotal = Math.round(unmatched.reduce((s, p) => s + p.amount, 0) * 100) / 100;
+  return { unmatchedTotal, unmatched };
+}
+
+/**
+ * Pulls Shopify Payments payouts that haven't yet settled to Mercury
+ * Operating Cash. Two components:
+ *
+ *   1. Shopify-reported pending: status in {scheduled, in_transit}.
+ *   2. Shopify-reported paid in the last `days` window that haven't
+ *      yet appeared as a deposit in the Mercury account with the
+ *      `reconcileMercuryMask` mask (default '6848' = Operating Cash).
+ *      This catches the gap where Shopify marks a payout as paid but
+ *      the ACH hasn't actually landed in Mercury yet.
  *
  * Status meanings (per Shopify Admin API docs):
  *   `scheduled`   → settlement date set, not yet sent
  *   `in_transit`  → ACH sent, not yet credited at the bank
- *   `paid`        → cleared (already reflected in Mercury → not pending)
- *   `failed`      → bounced — excluded
- *   `cancelled`   → excluded
+ *   `paid`        → Shopify says cleared (we still verify against Mercury)
+ *   `failed` / `cancelled` → excluded
  *
- * REST endpoint: GET /shopify_payments/payouts.json?status={status}
- * Requires `read_shopify_payments_payouts` scope.
+ * If the Mercury mask isn't linked through Plaid yet, the reconciliation
+ * step is skipped (we only return Shopify-reported pending) — we'd rather
+ * under-count than mark every paid payout as missing.
  *
- * @returns {Promise<{ pendingTotal: number, payouts: Array<{date, amount, status, id}> }>}
+ * Requires `read_shopify_payments_payouts` Admin scope.
+ *
+ * @param {{ reconcileMercuryMask?: string, days?: number }} opts
+ * @returns {Promise<{
+ *   pendingTotal: number,
+ *   payouts: Array<{date, amount, status, id}>,
+ *   reportedPendingTotal: number,
+ *   unmatchedPaidTotal: number,
+ *   unmatchedPaidPayouts: Array<{id, date, amount}>,
+ *   reconciliationSkipped: boolean,
+ * }>}
  */
-export async function syncShopifyPayoutsPending() {
-  const collected = [];
-  // Pull both statuses separately — Shopify doesn't take a comma-list here.
+export async function syncShopifyPayoutsPending({
+  reconcileMercuryMask = '6848',
+  days = 7,
+} = {}) {
+  const reported = [];
+  // 1. Shopify-reported pending (scheduled + in_transit).
   for (const status of ['scheduled', 'in_transit']) {
     let data;
     try {
       data = await callShopifyProxy('shopify_payments/payouts.json', { status, limit: 250 });
     } catch (err) {
       // 403 = scope missing, 404 = store doesn't have Shopify Payments enabled.
-      // Either way, fail soft and surface 0 pending so the row doesn't break.
       console.warn(`[shopify payouts] ${status} fetch failed:`, err.message);
       continue;
     }
     for (const p of (data?.payouts || [])) {
       const amt = parseFloat(p.amount);
       if (!Number.isFinite(amt)) continue;
-      collected.push({ id: p.id, date: p.date, amount: amt, status: p.status });
+      reported.push({ id: p.id, date: p.date, amount: amt, status: p.status });
     }
   }
-  const pendingTotal = Math.round(collected.reduce((s, p) => s + p.amount, 0) * 100) / 100;
-  return { pendingTotal, payouts: collected };
+  const reportedPendingTotal = Math.round(reported.reduce((s, p) => s + p.amount, 0) * 100) / 100;
+
+  // 2. Shopify-paid-but-not-in-Mercury reconciliation.
+  let unmatchedPaidTotal = 0;
+  let unmatchedPaidPayouts = [];
+  let reconciliationSkipped = false;
+
+  if (reconcileMercuryMask) {
+    try {
+      const sinceDate = new Date();
+      sinceDate.setDate(sinceDate.getDate() - days);
+      const sinceStr =
+        `${sinceDate.getFullYear()}-${String(sinceDate.getMonth() + 1).padStart(2, '0')}-${String(sinceDate.getDate()).padStart(2, '0')}`;
+
+      const paidData = await callShopifyProxy('shopify_payments/payouts.json', {
+        status: 'paid',
+        date_min: sinceStr,
+        limit: 250,
+      });
+      const paidPayouts = (paidData?.payouts || [])
+        .map(p => ({ id: p.id, date: p.date, amount: parseFloat(p.amount) }))
+        .filter(p => Number.isFinite(p.amount) && p.amount > 0);
+
+      const deposits = await syncMercuryDeposits({ mask: reconcileMercuryMask, days });
+      if (deposits == null) {
+        // Mercury 6848 not visible through Plaid — skip reconciliation
+        // so we don't falsely flag every paid payout as missing.
+        reconciliationSkipped = true;
+        console.warn(
+          `[shopify payouts] Mercury mask ${reconcileMercuryMask} not found in any linked Plaid item — ` +
+          `skipping paid-vs-Mercury reconciliation. Operating Cash row reflects Shopify-reported pending only.`,
+        );
+      } else {
+        const recon = reconcileShopifyPaidWithMercury(paidPayouts, deposits);
+        unmatchedPaidTotal = recon.unmatchedTotal;
+        unmatchedPaidPayouts = recon.unmatched;
+      }
+    } catch (err) {
+      console.warn('[shopify payouts] paid reconciliation failed:', err.message);
+      reconciliationSkipped = true;
+    }
+  }
+
+  const pendingTotal = Math.round((reportedPendingTotal + unmatchedPaidTotal) * 100) / 100;
+  return {
+    pendingTotal,
+    payouts: reported,
+    reportedPendingTotal,
+    unmatchedPaidTotal,
+    unmatchedPaidPayouts,
+    reconciliationSkipped,
+  };
 }
 
 /**
