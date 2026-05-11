@@ -158,7 +158,7 @@ export const OPEX_SUBSCRIPTIONS = [
   { id: 'foreplay', name: 'Foreplay', cost: 65, category: 'Revenue/Cost', active: false, billingDate: null },
   { id: 'claude', name: 'Claude', cost: 100, category: 'Mandatory', active: true, billingDate: 12 },
   { id: 'openclaw', name: 'Openclaw', cost: 80, category: 'Mandatory', active: false, billingDate: null },
-  { id: 'computer', name: 'Computer', cost: 116, category: 'Mandatory', active: true, billingDate: null },
+  { id: 'computer', name: 'Computer', cost: 116, category: 'Mandatory', active: true, billingDate: 20 },
   { id: 'clo3d', name: 'Clo3d', cost: 25, category: 'Luxury', active: true, billingDate: 9 },
   { id: 'bof', name: 'BOF', cost: 5, category: 'Luxury', active: true, billingDate: 28 },
   { id: 'microsoft', name: 'Microsoft', cost: 10, category: 'Luxury', active: true, billingDate: 13 },

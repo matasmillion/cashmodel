@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-10T12:10:53.383Z",
+  "lastUpdated": "2026-05-11T07:03:51.984Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -793,7 +793,7 @@
         "cost": 116,
         "category": "Mandatory",
         "active": true,
-        "billingDate": null
+        "billingDate": 20
       },
       {
         "id": "clo3d",
@@ -854,7 +854,7 @@
       "Revenue/Cost",
       "Luxury"
     ],
-    "billingDatesConfigured": 15
+    "billingDatesConfigured": 16
   },
   "fulfillment": {
     "status": "partial",
@@ -1044,6 +1044,41 @@
   ],
   "changelog": [
     {
+      "sha": "e1cabd3",
+      "date": "2026-05-11T06:54:29+00:00",
+      "message": "cashflow: fix UTC date shift that killed all sync lookups"
+    },
+    {
+      "sha": "2fa2924",
+      "date": "2026-05-10T12:21:01+00:00",
+      "message": "cashflow: full workbook reconciliation — six structural fixes"
+    },
+    {
+      "sha": "424897b",
+      "date": "2026-05-10T10:13:51+00:00",
+      "message": "cashflow: rolling horizon, Plaid card-payment actuals, Meta proxy"
+    },
+    {
+      "sha": "acedc79",
+      "date": "2026-05-10T08:57:37+00:00",
+      "message": "cashflow audit: fix Plaid 404, drop Mercury race, anchor on live actuals"
+    },
+    {
+      "sha": "73b66b0",
+      "date": "2026-05-10T15:13:14+03:00",
+      "message": "cut-sew: rebuild builder to match TechPackBuilder 3-column layout (#116)"
+    },
+    {
+      "sha": "bb928fa",
+      "date": "2026-05-10T15:12:55+03:00",
+      "message": "Merge pull request #115 from matasmillion/claude/creative-engine-audit-fixes-002"
+    },
+    {
+      "sha": "58dedb5",
+      "date": "2026-05-10T12:12:15+00:00",
+      "message": "feat(creative): per-variant prompts, ROAS + frequency, configurable targeting"
+    },
+    {
       "sha": "c7b2ca5",
       "date": "2026-05-10T12:17:54+03:00",
       "message": "Merge pull request #113 from matasmillion/claude/setup-creative-engine-P2LMR"
@@ -1057,41 +1092,6 @@
       "sha": "b24cb69",
       "date": "2026-05-10T09:16:36+00:00",
       "message": "feat(creative): visual polish + audit fixes (palette, lane chips, status colors)"
-    },
-    {
-      "sha": "7a34ed4",
-      "date": "2026-05-10T08:53:28+00:00",
-      "message": "fix(creative): save* stores must UPDATE, not UPSERT, partial fields"
-    },
-    {
-      "sha": "3e8e30d",
-      "date": "2026-05-09T20:52:05+03:00",
-      "message": "fix: resolve conflict markers in CutSewBuilder.jsx (#110)"
-    },
-    {
-      "sha": "8cd2dd6",
-      "date": "2026-05-09T20:21:31+03:00",
-      "message": "cut-sew: full rebuild — 7-tab builder, multi-page preview, tech pack seeding (#108)"
-    },
-    {
-      "sha": "d4c7743",
-      "date": "2026-05-09T17:16:26+00:00",
-      "message": "chore: regenerate state.json after merge"
-    },
-    {
-      "sha": "ddc2283",
-      "date": "2026-05-09T20:16:07+03:00",
-      "message": "Merge pull request #107 from matasmillion/claude/setup-creative-engine-P2LMR"
-    },
-    {
-      "sha": "8b21b61",
-      "date": "2026-05-09T17:15:39+00:00",
-      "message": "Merge remote-tracking branch 'origin/main' into claude/setup-creative-engine-P2LMR"
-    },
-    {
-      "sha": "259c193",
-      "date": "2026-05-09T20:09:32+03:00",
-      "message": "Inventory Phase 7: agent · retire legacy pages · CLAUDE.md conventions (#106)"
     }
   ]
 }

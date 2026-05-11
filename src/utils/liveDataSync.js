@@ -475,28 +475,48 @@ export async function fetchShopifyVariantSalesByDay({ days = 90 } = {}) {
  * Returns an array of { startDate, endDate, label, adSpend, impressions, clicks }.
  */
 export async function syncMetaActuals(creds) {
-  if (!creds?.connected || !creds.accountId || !creds.token) {
+  if (!creds?.connected || !creds.accountId) {
     throw new Error('Meta Ads not connected');
   }
 
   const weeks = getPast13Weeks();
   const accountId = creds.accountId.startsWith('act_') ? creds.accountId : `act_${creds.accountId}`;
-  const token = creds.token;
 
   const since = weeks[0].startDate;
   const until = weeks[12].endDate;
 
-  const url = `https://graph.facebook.com/v19.0/${accountId}/insights?fields=spend,impressions,clicks&time_increment=7&time_range[since]=${since}&time_range[until]=${until}&access_token=${token}`;
-
-  let data = [];
+  // Route the call through the meta-proxy Edge Function so the access_token
+  // stays server-side (in user_integrations.token, RLS-protected). The proxy
+  // already supports arbitrary GET paths, so we just hand it the insights
+  // endpoint + the same query params we used to inline in the URL.
+  let response;
   try {
-    const res = await fetch(url);
-    const json = await res.json();
-    if (json.error) throw new Error(json.error.message);
-    data = json.data || [];
+    response = await callMetaProxy({
+      method: 'GET',
+      path: `${accountId}/insights`,
+      body: {
+        fields: 'spend,impressions,clicks',
+        time_increment: 7,
+        time_range: JSON.stringify({ since, until }),
+      },
+    });
   } catch (err) {
-    throw new Error(err.message);
+    // Fall back to the legacy direct call only if the proxy isn't reachable
+    // (sign-in not configured locally) AND the legacy token is still in
+    // creds. Surfaces a console warning so this doesn't get missed in dev.
+    if (creds.token) {
+      console.warn('[meta] proxy unreachable, falling back to direct fetch (token exposed):', err.message);
+      const url = `https://graph.facebook.com/v19.0/${accountId}/insights?fields=spend,impressions,clicks&time_increment=7&time_range[since]=${since}&time_range[until]=${until}&access_token=${creds.token}`;
+      const res = await fetch(url);
+      response = await res.json();
+      if (response.error) throw new Error(response.error.message);
+    } else {
+      throw err;
+    }
   }
+
+  if (response?.error) throw new Error(response.error.message || 'Meta Insights API error');
+  const data = response?.data || [];
 
   return weeks.map(week => {
     const match = data.find(d => d.date_start >= week.startDate && d.date_start <= week.endDate);
@@ -642,7 +662,7 @@ export async function callPlaidProxy(action, payload = {}) {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-  const res = await fetch(`${supabaseUrl}/functions/v1/bright-api`, {
+  const res = await fetch(`${supabaseUrl}/functions/v1/plaid-proxy`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -756,6 +776,86 @@ export async function syncPlaidActuals({ realTime = false } = {}) {
     depositoryAccounts,
     creditAccounts,
   };
+}
+
+/**
+ * Pulls the past 90 days of credit-card transactions for every connected
+ * Plaid item, filters to payments (transactions that REDUCE the card
+ * balance), and groups them by Monday-of-week per card.
+ *
+ * Returns: { 'YYYY-MM-DD': { chase5718?: number, amexBlue?: number, ... } }
+ *
+ * Used by the cashflow engine as the highest-precedence source for the
+ * card-payment outflow rows. Anything not covered by a real transaction
+ * falls through to the static schedule, then the rule-based generator.
+ */
+export async function syncPlaidCardPayments() {
+  const items = await listPlaidItems().catch(() => []);
+  if (!items?.length) return {};
+
+  // Map a Plaid credit account → cashflow card key by mask first, then by
+  // name pattern (catches AMEX Plum which Plaid surfaces without a mask).
+  // Inlined to avoid a dependency on bankAccountMap from this file.
+  const MASKS = { '5718': 'chase5718', '1005': 'amexBlue' };
+  const classify = (acc) => {
+    if (acc.mask && MASKS[acc.mask]) return MASKS[acc.mask];
+    const lc = (acc.name || '').toLowerCase();
+    if (lc.includes('plum')) return 'amexPlum';
+    if (lc.includes('blue')) return 'amexBlue';
+    if (lc.includes('chase')) return 'chase5718';
+    return null;
+  };
+
+  const mondayOf = (iso) => {
+    const d = new Date(iso + 'T00:00:00');
+    const day = d.getDay();
+    d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+    // LOCAL ISO so the date matches getPast13Weeks / cashflow engine keys.
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  };
+
+  const out = {};
+  for (const item of items) {
+    let txData;
+    try {
+      txData = await callPlaidProxy('transactions/get', { item_id: item.item_id });
+    } catch (err) {
+      console.warn('[plaid] transactions/get failed for item', item.item_id, err.message);
+      continue;
+    }
+
+    // account_id → card key
+    const cardByAccountId = {};
+    for (const acc of (txData.accounts || [])) {
+      if (acc.type !== 'credit') continue;
+      const key = classify(acc);
+      if (key) cardByAccountId[acc.account_id] = key;
+    }
+    if (!Object.keys(cardByAccountId).length) continue;
+
+    for (const tx of (txData.transactions || [])) {
+      const cardKey = cardByAccountId[tx.account_id];
+      if (!cardKey) continue;
+      // A payment to a credit card lands on the card account as a NEGATIVE
+      // amount (credit reduces balance). Filter on amount sign + payment
+      // category / name pattern so we don't pick up refunds or chargebacks.
+      const isPayment = tx.amount < 0 && (
+        tx.category?.includes('Payment') ||
+        tx.payment_meta?.payee != null ||
+        /payment\s*(received|thank\s*you)/i.test(tx.name || '') ||
+        /autopay/i.test(tx.name || '')
+      );
+      if (!isPayment) continue;
+
+      const monday = mondayOf(tx.date);
+      if (!out[monday]) out[monday] = {};
+      out[monday][cardKey] = Math.round(((out[monday][cardKey] || 0) + Math.abs(tx.amount)) * 100) / 100;
+    }
+  }
+  return out;
 }
 
 // ─── Merge into seed update ───────────────────────────────────────────────────

@@ -83,5 +83,25 @@ export const CARD_PAYMENT_SCHEDULE = [
   { date: '2027-03-08', amexBlue: 175 },
 ];
 
-export const CASHFLOW_HORIZON_START = '2026-02-02';
+// Default horizon shape: 12 weeks of context behind today + 46 weeks ahead
+// = 58 weeks total. The engine resolves this dynamically each render against
+// today's Monday, so the table always shows ~3 months of past + ~11 months of
+// forward projection regardless of when you log in.
+export const CASHFLOW_WEEKS_BEHIND = 12;
 export const CASHFLOW_HORIZON_WEEKS = 58;
+
+/** Returns Monday N weeks before the given Monday ISO. */
+export function getCashflowHorizonStart(currentMondayISO, weeksBehind = CASHFLOW_WEEKS_BEHIND) {
+  const d = new Date(currentMondayISO + 'T00:00:00');
+  d.setDate(d.getDate() - weeksBehind * 7);
+  // Format from LOCAL date components — `.toISOString().slice(0,10)`
+  // shifts the date by 1 day in any timezone east of UTC.
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// Legacy export kept for back-compat with any code still importing it as a
+// constant. New code should call getCashflowHorizonStart(today).
+export const CASHFLOW_HORIZON_START = '2026-02-02';

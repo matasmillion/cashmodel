@@ -9,11 +9,17 @@
 // Classification is name-based — Mercury account names are user-controlled, so
 // we look for keywords. Order matters: more specific keywords first.
 
+// Order matters — the most specific patterns must come first so a name
+// like "Sales Tax Reserve" routes to salesTax (not workingCapital).
 const PATTERNS = [
-  { role: 'salesTax',       test: /\b(sales\s*tax)\b/i },
-  { role: 'corporateTax',   test: /\b(corp(orate)?\s*tax|federal\s*tax|fed\s*tax|income\s*tax)\b/i },
-  { role: 'workingCapital', test: /\b(working\s*capital|wc|po\s*(reserve|fund)|inventory)\b/i },
-  { role: 'operating',      test: /\b(operating|main|primary|checking|ops)\b/i },
+  { role: 'salesTax',       test: /\b(sales\s*tax|state\s*tax|nexus)\b/i },
+  { role: 'corporateTax',   test: /\b(corp(orate)?\s*tax|federal\s*tax|fed\s*tax|income\s*tax|irs)\b/i },
+  { role: 'workingCapital', test: /\b(working\s*capital|wc|po\s*(reserve|fund)|inventory|vendor|supplier|inventory\s*float)\b/i },
+  // Mercury default sub-account names ("Treasury", "Vault", "Reserve",
+  // "Savings", "High Yield") all act as the user's main store of cash
+  // unless the name explicitly says otherwise — bucket them as operating
+  // so the SB Main row reflects total available cash.
+  { role: 'operating',      test: /\b(operating|main|primary|checking|ops|treasury|vault|reserve|holding|savings|high\s*yield|hy)\b/i },
 ];
 
 export function classifyAccount(name = '') {
