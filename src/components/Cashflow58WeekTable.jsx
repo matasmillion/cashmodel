@@ -41,13 +41,36 @@ function pickAccountName(bankAccounts, role, fallback, preferMask) {
 // as a single row spanning across the table with a date appended.
 function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
   const accs = seed.bankAccounts;
-  const operatingLabel = pickAccountName(accs, 'operating', 'Mercury Operating (6848)', '6848');
+  // Operating Cash = total Mercury depository balance (sum of every
+  // Mercury sub-account, available). Fixed label instead of pickAccountName
+  // since we're no longer pinning to a single mask.
+  const operatingLabel = 'Operating Cash (Mercury total)';
   const salesTaxLabel = pickAccountName(accs, 'salesTax', 'SB - Sales Tax (6735)');
   const corpTaxLabel = pickAccountName(accs, 'corporateTax', 'SB - Corporate Tax (6735)');
   const wcLabel = pickAccountName(accs, 'workingCapital', 'Working Capital (2465)');
   const fulfillmentLabel = pickAccountName(accs, 'fulfillment', 'Mercury Fulfillment (7301)');
   const marketingLabel = pickAccountName(accs, 'marketing', 'Mercury Marketing (3135)');
   const pct = v => `${Math.round(v * 100)}%`;
+
+  // Shopify Payouts breakdown — exposed as a gray italic sub-line so the
+  // operator can tell whether a $0 row is legitimately empty, or whether
+  // reconciliation was skipped (Mercury not linked) or just hasn't found
+  // any unmatched paid payouts in the 7-day window.
+  const reported = seed.shopifyPayoutsReportedPending;
+  const unmatched = seed.shopifyPayoutsUnmatchedPaidTotal;
+  const reconcileSkipped = seed.shopifyPayoutsReconciliationSkipped;
+  const fmtUsd = v => `$${(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  let payoutsSubLabel = null;
+  if (reported != null || unmatched != null || reconcileSkipped) {
+    const parts = [];
+    parts.push(`Shopify-reported pending: ${fmtUsd(reported)}`);
+    if (reconcileSkipped) {
+      parts.push('Mercury reconcile: skipped');
+    } else {
+      parts.push(`Paid not yet in Mercury 6848 (last 7d): ${fmtUsd(unmatched)}`);
+    }
+    payoutsSubLabel = parts.join(' · ');
+  }
 
   return [
     { header: true, label: 'Revenue Run Rate As Of', anchorKey: 'date' },
@@ -61,7 +84,7 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
     { key: 'cogsRate',       label: 'COGS %',          kind: 'percent' },
 
     { header: true, label: 'Balance Sheet As Of', anchorKey: 'date' },
-    { key: 'shopifyPayouts',     label: 'Shopify Payouts',     kind: 'balance' },
+    { key: 'shopifyPayouts',     label: 'Shopify Payouts',     kind: 'balance', subLabel: payoutsSubLabel },
     { key: 'sbMain',             label: operatingLabel,        kind: 'balance',
       leftLabel: 'Profit %', leftValue: pct(C.profitPercentForWC) },
     { key: 'sbSalesTax',         label: salesTaxLabel,         kind: 'balance', informational: true },
@@ -472,6 +495,14 @@ function DataRow({ row, weeks, prevRow, currentWeekIndex, assumptions, dispatch 
             ...labelStyle,
           }}>
         {row.label}
+        {row.subLabel && (
+          <div style={{
+            color: FR.stone, fontStyle: 'italic', fontSize: 9.5,
+            lineHeight: 1.2, marginTop: 1, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          }}>
+            {row.subLabel}
+          </div>
+        )}
       </td>
       {weeks.map((w, wi) => {
         const v = w[row.key];
