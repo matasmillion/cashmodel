@@ -9,7 +9,7 @@ import {
   syncMercuryActuals, testMercuryProxy,
   saveMercuryCredentials, loadMercuryIntegration, deleteMercuryCredentials,
   createPlaidLinkToken, exchangePlaidPublicToken, listPlaidItems,
-  removePlaidItem, syncPlaidActuals,
+  removePlaidItem, syncPlaidActuals, probePlaidEdgeFunction,
   saveAnthropicCredentials, loadAnthropicIntegration, deleteAnthropicCredentials, testAnthropicProxy,
   saveFalCredentials, deleteFalCredentials, testFalProxy,
   saveHiggsfieldCredentials, deleteHiggsfieldCredentials, testHiggsfieldProxy,
@@ -691,6 +691,22 @@ function PlaidCard({ dispatch }) {
   const [syncDiagnostic, setSyncDiagnostic] = useState(persistedDiagnostic);
   const [lastSync, setLastSync] = useState(null);
   const [open, setOpen] = useState(false);
+  // Probe result for the "Run diagnostics" button.
+  const [probeResult, setProbeResult] = useState(null);
+  const [probing, setProbing] = useState(false);
+
+  async function handleProbe() {
+    setProbing(true);
+    setProbeResult(null);
+    try {
+      const r = await probePlaidEdgeFunction();
+      setProbeResult(r);
+    } catch (err) {
+      setProbeResult({ error: err.message });
+    } finally {
+      setProbing(false);
+    }
+  }
 
   const refreshItems = useCallback(async () => {
     try {
@@ -945,9 +961,25 @@ function PlaidCard({ dispatch }) {
                 }}>
                 Force real-time
               </button>
+              <button
+                type="button"
+                onClick={handleProbe}
+                disabled={probing}
+                title="Test each layer of the Plaid edge function call independently — project URL, CORS preflight, function deployment, end-to-end."
+                className="text-xs underline"
+                style={{
+                  background: 'transparent', color: FR.stone, border: 'none',
+                  cursor: probing ? 'not-allowed' : 'pointer',
+                }}>
+                {probing ? 'Probing…' : 'Run diagnostics'}
+              </button>
             </>
           )}
         </div>
+
+        {probeResult && (
+          <ProbeResultBox result={probeResult} />
+        )}
 
         {state.seed?.syncedAtBySource?.plaid && (
           <p className="text-[11px]" style={{ color: FR.stone }}>
@@ -1090,6 +1122,58 @@ function PlaidDiagnosticBox({ diagnostic }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Renders the staged Plaid-proxy probe result. Each step shows what was
+ * tested, the outcome (HTTP status / error), the hint for next steps,
+ * and (collapsed) the raw response body.
+ */
+function ProbeResultBox({ result }) {
+  if (!result) return null;
+  if (result.error) {
+    return (
+      <div className="mt-2 p-3 rounded-lg text-xs"
+           style={{ background: '#FFF7F2', border: '1px solid #E8C8B5', color: FR.red }}>
+        Probe failed: {result.error}
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 p-3 rounded-lg text-xs space-y-2"
+         style={{ background: 'white', border: '1px solid #EBE5D5', color: FR.slate }}>
+      <div className="font-semibold" style={{ color: FR.slate }}>
+        Plaid edge function probe
+      </div>
+      <div style={{ color: FR.stone, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10 }}>
+        supabase url: {result.supabaseUrl}
+      </div>
+      {(result.steps || []).map((s, i) => (
+        <div key={i} className="p-2 rounded"
+             style={{ background: s.ok ? '#F2FBF4' : '#FFF7F2', border: `1px solid ${s.ok ? '#C8E2C9' : '#E8C8B5'}` }}>
+          <div style={{ fontWeight: 600, color: s.ok ? FR.green : FR.red }}>
+            {s.ok ? '✓' : '✗'} {s.name} <span style={{ color: FR.stone, fontWeight: 400 }}>({s.elapsedMs}ms)</span>
+          </div>
+          <div style={{ color: FR.stone, marginTop: 2 }}>{s.hint}</div>
+          <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11, marginTop: 4 }}>
+            {s.status != null && <div>status: {s.status} {s.statusText || ''}</div>}
+            {s.accessControlAllowOrigin && <div>CORS Allow-Origin: {s.accessControlAllowOrigin}</div>}
+            {s.error && <div style={{ color: FR.red }}>error: {s.error}</div>}
+          </div>
+          {s.body && (
+            <details style={{ marginTop: 4 }}>
+              <summary style={{ cursor: 'pointer', color: FR.stone, fontSize: 11 }}>response body</summary>
+              <pre style={{
+                background: 'white', border: '1px solid #EBE5D5', borderRadius: 4, padding: 6,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10,
+                color: FR.slate, overflow: 'auto', maxHeight: 200, whiteSpace: 'pre-wrap', margin: 0,
+              }}>{JSON.stringify(s.body, null, 2)}</pre>
+            </details>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
