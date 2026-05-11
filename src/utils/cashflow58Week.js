@@ -329,13 +329,23 @@ export function generateCashflow58({
     }
 
     // ── Ads payable (rows 27 & 47) ──────────────────────────────────────
-    // Same 1-week lag — this week's payable rolls in PRIOR week's ad
-    // spend (matches Meta billing: charged this week, statement closes
-    // next week).
+    // Past weeks: workbook seed value. Current week: real owed total
+    // assembled from live sources —
+    //   chase7248 statement balance  (from Plaid /accounts)
+    // + chase7248 pending charges    (from Plaid /transactions, pending=true)
+    // + Meta amount owed             (from Meta /act_X?fields=balance)
+    // Future weeks: accrual — same 1-week lag as before, rolling prior
+    // week's fbAdSpend into the payable and paying it down on the
+    // 4-week cadence.
     let adsPaid = 0;
     let adsPayable;
     if (hist) {
       adsPayable = hist.adsPayable;
+    } else if (isCurrent) {
+      adsPayable =
+        (seed.chase7248Balance ?? 0) +
+        (seed.chase7248PendingCharges ?? 0) +
+        (seed.metaBalanceOwed ?? 0);
     } else {
       adsPaid = isPaydownWeek ? (prev?.adsPayable ?? 0) : 0;
       adsPayable = (prev?.adsPayable ?? 0) + (prev?.fbAdSpend ?? 0) - adsPaid;

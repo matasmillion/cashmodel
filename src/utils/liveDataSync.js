@@ -988,6 +988,98 @@ export async function syncPlaidCardPayments() {
   return out;
 }
 
+/**
+ * Aggregates UNPOSTED (pending=true) transactions per credit-card account
+ * via Plaid's /transactions/get. Used by the Ads Payable row: today's row
+ * = chase7248 statement balance + chase7248 pending charges + Meta owed.
+ *
+ * Returns: { chase7248?: number, chase5718?: number, amexBlue?: number, amexPlum?: number }
+ *
+ * `tx.amount` for credit cards is POSITIVE for purchases (charges that
+ * increase the balance) and NEGATIVE for payments. We only sum positives
+ * here — pending refunds are intentionally excluded so the operator never
+ * underestimates what they owe.
+ */
+export async function syncPlaidPendingCharges() {
+  const { classifyCreditAccount } = await import('./bankAccountMap');
+  const items = await listPlaidItems().catch(() => []);
+  if (!items?.length) return {};
+
+  const out = {};
+  for (const item of items) {
+    let txData;
+    try {
+      txData = await callPlaidProxy('transactions/get', { item_id: item.item_id });
+    } catch (err) {
+      console.warn('[plaid pending] transactions/get failed for item', item.item_id, err.message);
+      continue;
+    }
+
+    const cardByAccountId = {};
+    for (const acc of (txData.accounts || [])) {
+      if (acc.type !== 'credit') continue;
+      const key = classifyCreditAccount(acc);
+      if (key) cardByAccountId[acc.account_id] = key;
+    }
+    if (!Object.keys(cardByAccountId).length) continue;
+
+    for (const tx of (txData.transactions || [])) {
+      if (!tx.pending) continue;
+      const cardKey = cardByAccountId[tx.account_id];
+      if (!cardKey) continue;
+      // Positive amount = purchase / charge on a credit card.
+      if (tx.amount > 0) {
+        out[cardKey] = Math.round(((out[cardKey] || 0) + tx.amount) * 100) / 100;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Pulls the current outstanding amount owed to Meta from the ad account
+ * details endpoint. `balance` is the unpaid balance in MINOR currency units
+ * (cents for USD). `amount_spent` is cumulative lifetime spend — we don't
+ * use it directly here, but it's returned for visibility.
+ *
+ * Returns null if the account doesn't expose `balance` (some accounts
+ * don't surface it via the v19 Graph API) or if the call fails — caller
+ * defaults to 0 in that case.
+ */
+export async function syncMetaBalanceOwed(creds) {
+  if (!creds?.connected || !creds.accountId) return null;
+  const accountId = creds.accountId.startsWith('act_') ? creds.accountId : `act_${creds.accountId}`;
+  let response;
+  try {
+    response = await callMetaProxy({
+      method: 'GET',
+      path: accountId,
+      body: { fields: 'balance,amount_spent,currency' },
+    });
+  } catch (err) {
+    if (creds.token) {
+      const url = `https://graph.facebook.com/v19.0/${accountId}?fields=balance,amount_spent,currency&access_token=${creds.token}`;
+      const res = await fetch(url);
+      response = await res.json();
+    } else {
+      throw err;
+    }
+  }
+  if (response?.error) throw new Error(response.error.message || 'Meta ad account API error');
+
+  const balanceMinor = response?.balance;
+  if (balanceMinor == null) return null;
+
+  const cents = typeof balanceMinor === 'string' ? parseInt(balanceMinor, 10) : balanceMinor;
+  if (!Number.isFinite(cents)) return null;
+
+  return {
+    balanceOwed: Math.round((cents / 100) * 100) / 100,
+    currency: response.currency || 'USD',
+    amountSpentLifetime: response.amount_spent != null ? parseFloat(response.amount_spent) / 100 : null,
+  };
+}
+
 // ─── Merge into seed update ───────────────────────────────────────────────────
 /**
  * Builds a seed data update object from synced API data.
