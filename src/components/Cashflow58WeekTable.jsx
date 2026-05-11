@@ -116,6 +116,10 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
     { key: 'amexPlum',      label: 'AMEX PLUM 0000', kind: 'balance' },
     { key: 'amexBlue',      label: 'AMEX BLUE 71005', kind: 'balance' },
     { key: 'shopifyCapital',label: 'Shopify Capital', kind: 'balance',
+      leftLabel: 'Override $',
+      leftEditableKey: 'shopifyCapitalOutstandingOverride',
+      leftEditableType: 'dollar',
+      leftEditableTarget: 'seed',
       subLabel: (() => {
         if (seed.shopifyCapitalOutstandingError) {
           return `Shopify API error: ${String(seed.shopifyCapitalOutstandingError).slice(0, 160)}`;
@@ -382,7 +386,7 @@ export default function Cashflow58WeekTable() {
             {sections.map((row, ri) => (
               row.header
                 ? <SectionHeader key={ri} row={row} weeks={visibleWeeks} />
-                : <DataRow key={ri} row={row} weeks={visibleWeeks} prevRow={sections[ri - 1]} currentWeekIndex={currentWeekIndex} assumptions={state.assumptions} dispatch={dispatch} />
+                : <DataRow key={ri} row={row} weeks={visibleWeeks} prevRow={sections[ri - 1]} currentWeekIndex={currentWeekIndex} assumptions={state.assumptions} seed={state.seed} dispatch={dispatch} />
             ))}
           </tbody>
         </table>
@@ -412,17 +416,26 @@ function SectionHeader({ row, weeks }) {
 }
 
 function EditableLeftValue({ rawValue, editableType, onCommit }) {
-  // rawValue is the assumption itself (e.g. 1.04 or 0.33). Display:
-  //   editableType='growth'  → "4%"   (value 1.04 shown as 4%)
-  //   editableType='percent' → "33%"  (value 0.33 shown as 33%)
+  // rawValue display rules by editableType:
+  //   'growth'   → 1.04 → "4%"
+  //   'percent'  → 0.33 → "33%"
+  //   'dollar'   → 16700 → "$16,700" (used for Shopify Capital override)
   const toDisplay = (v) => {
+    if (v == null || v === '') return editableType === 'dollar' ? '$0' : '0%';
     if (editableType === 'growth') return `${Math.round((v - 1) * 100)}%`;
+    if (editableType === 'dollar') {
+      const n = Number(v);
+      return Number.isFinite(n) ? `$${Math.round(n).toLocaleString('en-US')}` : '$0';
+    }
     return `${Math.round(v * 100)}%`;
   };
   const fromDisplay = (s) => {
-    const n = parseFloat(s.replace('%', '').trim());
+    const stripped = s.replace(/[$,%\s]/g, '').trim();
+    const n = parseFloat(stripped);
     if (!Number.isFinite(n)) return null;
-    return editableType === 'growth' ? 1 + n / 100 : n / 100;
+    if (editableType === 'growth') return 1 + n / 100;
+    if (editableType === 'dollar') return n;
+    return n / 100;
   };
 
   const [editing, setEditing] = useState(false);
@@ -471,7 +484,7 @@ function EditableLeftValue({ rawValue, editableType, onCommit }) {
   );
 }
 
-function DataRow({ row, weeks, prevRow, currentWeekIndex, assumptions, dispatch }) {
+function DataRow({ row, weeks, prevRow, currentWeekIndex, assumptions, seed, dispatch }) {
   const isSubtotal = row.kind === 'subtotal' || row.kind === 'subtotal-out';
   const isSubRow = !!row.subRow;
   // Sub-rows (gray italic) sit visually attached to the row above
@@ -486,8 +499,13 @@ function DataRow({ row, weeks, prevRow, currentWeekIndex, assumptions, dispatch 
   const leftCellTop = row.leftLabel || '';
   const leftCellBottom = row.leftValue || '';
   const isEditable = !!row.leftEditableKey;
+  // leftEditableTarget: 'assumptions' (default) | 'seed' — controls
+  // both where the value is read from and which dispatch fires on commit.
+  const editTarget = row.leftEditableTarget || 'assumptions';
   const rawValue = isEditable
-    ? (assumptions?.[row.leftEditableKey] ?? CASHFLOW_DEFAULTS[row.leftEditableKey])
+    ? (editTarget === 'seed'
+        ? seed?.[row.leftEditableKey]
+        : (assumptions?.[row.leftEditableKey] ?? CASHFLOW_DEFAULTS[row.leftEditableKey]))
     : null;
 
   const labelColor = isSubRow ? FR.stone : FR.slate;
@@ -506,7 +524,10 @@ function DataRow({ row, weeks, prevRow, currentWeekIndex, assumptions, dispatch 
           <EditableLeftValue
             rawValue={rawValue}
             editableType={row.leftEditableType}
-            onCommit={(next) => dispatch({ type: 'UPDATE_ASSUMPTIONS', payload: { [row.leftEditableKey]: next } })}
+            onCommit={(next) => dispatch({
+              type: editTarget === 'seed' ? 'UPDATE_SEED' : 'UPDATE_ASSUMPTIONS',
+              payload: { [row.leftEditableKey]: next },
+            })}
           />
         ) : leftCellBottom && (
           <div style={{ color: FR.slate, fontSize: 11, textAlign: 'right', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>

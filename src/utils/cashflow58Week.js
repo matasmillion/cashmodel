@@ -271,12 +271,18 @@ export function generateCashflow58({
       chase5718 = seed.chase5718Balance ?? Math.max(0, (prev?.chase5718 ?? cardOpening.chase5718) - payChase);
       amexPlum = seed.amexPlumBalance ?? Math.max(0, (prev?.amexPlum ?? cardOpening.amexPlum) - payAmexPlum);
       amexBlue = seed.amexBlueBalance ?? Math.max(0, (prev?.amexBlue ?? cardOpening.amexBlue) - payAmexBlue);
-      // Shopify Capital: prefer live outstanding from Shopify (netted
-      // from balance transactions). Fall back to the prior-week
-      // projection if the live pull failed.
-      shopifyCapital = seed.shopifyCapitalOutstanding != null
-        ? seed.shopifyCapitalOutstanding
-        : (prev?.shopifyCapital ?? cardOpening.shopifyCapital) - payShopifyCapital;
+      // Shopify Capital precedence:
+      //   1. Operator override (seed.shopifyCapitalOutstandingOverride)
+      //      — wins when the API result doesn't match Shopify's own
+      //      Capital page (e.g. loan disbursement not in balance
+      //      transactions for legacy contracts).
+      //   2. Live outstanding from Shopify (netted balance tx ledger).
+      //   3. Prior-week projection (offline fallback).
+      shopifyCapital = seed.shopifyCapitalOutstandingOverride != null && seed.shopifyCapitalOutstandingOverride !== ''
+        ? Number(seed.shopifyCapitalOutstandingOverride) || 0
+        : seed.shopifyCapitalOutstanding != null
+          ? seed.shopifyCapitalOutstanding
+          : (prev?.shopifyCapital ?? cardOpening.shopifyCapital) - payShopifyCapital;
       longTermLoan = (prev?.longTermLoan ?? cardOpening.longTermLoan) - payLtLoan;
     } else {
       const opening = prev ?? {
