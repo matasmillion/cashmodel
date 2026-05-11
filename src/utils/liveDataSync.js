@@ -1002,29 +1002,63 @@ export async function syncMercuryActuals(/* creds unused — proxy holds creds *
  */
 export async function callPlaidProxy(action, payload = {}) {
   if (!IS_SUPABASE_ENABLED || !supabase) {
-    throw new Error('Supabase not configured — cannot reach the Plaid proxy');
+    const err = new Error('Supabase not configured — cannot reach the Plaid proxy');
+    err.diagnostic = { stage: 'config', action };
+    throw err;
   }
   const token = await getClerkToken();
-  if (!token) throw new Error('Sign in to use the Plaid proxy');
+  if (!token) {
+    const err = new Error('Sign in to use the Plaid proxy');
+    err.diagnostic = { stage: 'auth', action };
+    throw err;
+  }
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const url = `${supabaseUrl}/functions/v1/plaid-proxy`;
 
-  const res = await fetch(`${supabaseUrl}/functions/v1/plaid-proxy`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      apikey: anonKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ action, ...payload }),
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: anonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ action, ...payload }),
+    });
+  } catch (netErr) {
+    // fetch() itself failed — network, CORS, DNS, or the edge function
+    // didn't return (e.g. timeout). The browser shows this as "Failed to
+    // fetch" with no further detail. Attach what we know so the UI can
+    // render something useful.
+    const err = new Error(`Network error reaching plaid-proxy: ${netErr.message}`);
+    err.diagnostic = {
+      stage: 'network',
+      action,
+      url,
+      cause: netErr.message,
+      hint: 'Edge function unreachable. Likely causes: supabase function not deployed, CORS preflight failure, function timeout (60s), or local network block.',
+    };
+    throw err;
+  }
+
   const text = await res.text();
   let data;
   try { data = JSON.parse(text); } catch { data = { raw: text }; }
   if (!res.ok) {
     const msg = data?.error || data?.errors || `${res.status} ${res.statusText}`;
-    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    const err = new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    err.diagnostic = {
+      stage: 'http',
+      action,
+      url,
+      status: res.status,
+      statusText: res.statusText,
+      body: data,
+    };
+    throw err;
   }
   return data;
 }
@@ -1082,9 +1116,22 @@ export async function syncPlaidActuals({ realTime = false } = {}) {
   let creditTotal = 0;
   const creditAccounts = [];
   const depositoryAccounts = [];
+  // Per-item errors from Plaid (e.g. ITEM_LOGIN_REQUIRED, INVALID_ACCESS_TOKEN).
+  // Plaid-proxy returns 200 with each item's accounts OR error inline so one
+  // bad item doesn't take down the whole sync. Surfacing them here so the UI
+  // can display "Mercury needs to be re-linked" rather than silently dropping
+  // every Mercury account.
+  const itemErrors = [];
 
   for (const item of items) {
-    if (item.error) continue;
+    if (item.error) {
+      itemErrors.push({
+        institution: item.institution_name || item.institution_id || item.item_id,
+        item_id: item.item_id,
+        error: item.error,
+      });
+      continue;
+    }
     for (const a of (item.accounts || [])) {
       const current = a.balances?.current ?? 0;
       const available = a.balances?.available ?? null;
@@ -1117,6 +1164,7 @@ export async function syncPlaidActuals({ realTime = false } = {}) {
 
   return {
     items,
+    itemErrors,
     totals: {
       depository: Math.round(depositoryTotal * 100) / 100,
       credit: Math.round(creditTotal * 100) / 100,

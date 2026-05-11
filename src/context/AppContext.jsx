@@ -230,25 +230,29 @@ async function runAutoSync(dispatch) {
         console.warn('[auto-sync] Plaid cached fetch failed, retrying once:', err.message);
         plaidResult = await syncPlaidActuals({ realTime: false });
       }
-      const { totals, depositoryAccounts, creditAccounts } = plaidResult;
+      const { totals, depositoryAccounts, creditAccounts, itemErrors } = plaidResult;
 
       const bucketed = bucketDepositoryAccounts(depositoryAccounts);
       // Operating Cash row pins to the Mercury checking account ending in
       // OPERATING_MASK ('6848') specifically — NOT the sum of every
-      // operating-classified sub-account. Treasury / Vault / Savings
-      // balances are still visible in seed.bankAccounts but don't
-      // contaminate sbMain.
+      // operating-classified sub-account.
       const operatingAccount = depositoryAccounts.find(a => a.mask === OPERATING_MASK);
       if (!operatingAccount) {
         console.warn(
           `[auto-sync] No Mercury depository account with mask ${OPERATING_MASK} found. ` +
-          `Falling back to summed operating bucket ($${bucketed.operating}). ` +
-          `Accounts seen: ${depositoryAccounts.map(a => `${a.name}(${a.mask})`).join(', ') || 'none'}`,
+          `Accounts seen: ${depositoryAccounts.map(a => `${a.name}(${a.mask})`).join(', ') || 'none'}. ` +
+          `Item errors: ${itemErrors?.length ? JSON.stringify(itemErrors) : 'none'}`,
         );
       }
       const seedPayload = {
         totalCash: totals.depository,
-        sbMain: operatingAccount ? operatingAccount.balance : bucketed.operating,
+        // CRITICAL: when 6848 is missing (e.g. Mercury item errored / not
+        // linked), DO NOT fall back to bucketed.operating — that's a sum
+        // of *other* depository accounts (Shopify Balance etc.) which
+        // produces a misleading number like the $6,441 the operator saw.
+        // Leaving sbMain undefined here means the reducer's spread
+        // preserves the previous value rather than overwriting with junk.
+        ...(operatingAccount ? { sbMain: operatingAccount.balance } : {}),
         sbSalesTax: -Math.abs(bucketed.salesTax),
         sbCorpTax: -Math.abs(bucketed.corporateTax),
         workingCapital: bucketed.workingCapital,
@@ -256,6 +260,15 @@ async function runAutoSync(dispatch) {
         // the "Mercury Fulfillment (7301)" cashflow row.
         mercuryFulfillmentBalance: bucketed.fulfillment,
         bankAccounts: bucketed.accounts,
+        // Persisted diagnostic so the Integrations panel can render
+        // exactly what failed in the last auto-sync, even before the
+        // operator clicks the manual button.
+        plaidAutoSyncDiagnostic: (itemErrors && itemErrors.length) ? {
+          stage: 'plaid-item-errors',
+          summary: `${itemErrors.length} Plaid item(s) errored on auto-sync; their accounts are missing.`,
+          itemErrors,
+          syncedAt: now,
+        } : null,
       };
 
       for (const a of creditAccounts) {
@@ -308,6 +321,19 @@ async function runAutoSync(dispatch) {
     } catch (err) {
       errors.plaid = err.message;
       console.warn('[auto-sync] Plaid:', err.message);
+      // Persist the full diagnostic to seed so IntegrationsPanel can
+      // render it on next mount without the operator needing DevTools.
+      dispatch({
+        type: 'UPDATE_SEED',
+        payload: {
+          plaidAutoSyncDiagnostic: {
+            stage: err.diagnostic?.stage || 'unknown',
+            message: err.message,
+            ...err.diagnostic,
+            syncedAt: now,
+          },
+        },
+      });
     }
   })());
 
