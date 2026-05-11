@@ -142,8 +142,21 @@ function LibraryPickerModal({ title, subtitle, fetchItems, renderItem, getId, on
 // Picking an area moves the flow on to the color picker (or commits if
 // the fabric has no color cards).
 function FabricAreaPickerModal({ fabric, defaultArea, onSelect, onClose }) {
-  const [area, setArea] = useState(defaultArea || fabric?.default_garment_area || 'Body');
+  // Areas can be multi-select. Seed from defaultArea (string or comma-joined),
+  // and fall back to the fabric's library default. Always at least one area.
+  const seedAreas = (() => {
+    if (Array.isArray(defaultArea) && defaultArea.length) return defaultArea;
+    if (typeof defaultArea === 'string' && defaultArea.trim()) {
+      return defaultArea.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    return [fabric?.default_garment_area || 'Body'];
+  })();
+  const [selected, setSelected] = useState(seedAreas);
   const areas = FABRIC_GARMENT_AREAS;
+  const toggle = (a) => {
+    setSelected(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]);
+  };
+  const canContinue = selected.length > 0;
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(58,58,58,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
       <div style={{ background: FR.salt, borderRadius: 8, padding: 22, width: 560, maxWidth: '94vw', border: `0.5px solid rgba(58,58,58,0.15)` }}>
@@ -151,31 +164,35 @@ function FabricAreaPickerModal({ fabric, defaultArea, onSelect, onClose }) {
           <div>
             <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 22, color: FR.slate }}>Where on the garment?</div>
             <div style={{ fontSize: 11, color: FR.stone, marginTop: 4 }}>
-              {fabric?.name || fabric?.mill_fabric_no || 'Selected fabric'} — pick the area this fabric is cut for.
+              {fabric?.name || fabric?.mill_fabric_no || 'Selected fabric'} — pick every area this fabric is cut for (multi-select).
             </div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: FR.stone, lineHeight: 1 }}>×</button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 18 }}>
-          {areas.map(a => (
-            <button key={a} onClick={() => setArea(a)}
-              style={{
-                padding: '10px 8px',
-                background: area === a ? FR.slate : FR.white,
-                color: area === a ? FR.salt : FR.slate,
-                border: `1px solid ${area === a ? FR.slate : FR.sand}`,
-                borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              }}>
-              {a}
-            </button>
-          ))}
+          {areas.map(a => {
+            const active = selected.includes(a);
+            return (
+              <button key={a} onClick={() => toggle(a)}
+                style={{
+                  padding: '10px 8px',
+                  background: active ? FR.slate : FR.white,
+                  color: active ? FR.salt : FR.slate,
+                  border: `1px solid ${active ? FR.slate : FR.sand}`,
+                  borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}>
+                {a}
+              </button>
+            );
+          })}
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button onClick={onClose} style={{ padding: '7px 14px', background: 'none', border: `0.5px solid ${FR.sand}`, borderRadius: 6, cursor: 'pointer', fontSize: 11, color: FR.stone }}>
             Cancel
           </button>
-          <button onClick={() => onSelect(area)}
-            style={{ padding: '7px 18px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+          <button onClick={() => canContinue && onSelect(selected.join(', '))}
+            disabled={!canContinue}
+            style={{ padding: '7px 18px', background: canContinue ? FR.slate : FR.sand, color: FR.salt, border: 'none', borderRadius: 6, cursor: canContinue ? 'pointer' : 'default', fontSize: 11, fontWeight: 600, opacity: canContinue ? 1 : 0.6 }}>
             Continue → {fabric?.color_card_images?.length ? 'pick color' : 'commit'}
           </button>
         </div>
