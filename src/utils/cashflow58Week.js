@@ -198,13 +198,19 @@ export function generateCashflow58({
     const useGrowth = C.weeklyGrowth;
 
     // ── Drivers (rows 5–8) ──────────────────────────────────────────────
-    // Precedence for the week's ad spend:
-    //   • past week → live Meta insights, else seeded workbook actuals
-    //   • current week → Meta CBO "Acquisition" daily budget × 7
-    //   • future weeks → roll forward from prev × weekly growth rate
+    // Precedence:
+    //   PAST weeks → live Meta/Shopify actuals (if they're real, non-zero),
+    //                else seeded workbook actuals.
+    //   CURRENT week → CBO daily budget × 7. Never use this-week live
+    //                  insights — they're mid-week partial (Monday morning
+    //                  = ~5% of a full week) and would understate by 80-95%.
+    //   FUTURE weeks → roll prev daily forward at weeklyGrowth.
     let dailyAdSpend, fbAdSpend, shopifyRevenue, cogsRate = C.cogsRate;
-    const liveRevenue = live?.revenue;
-    const liveAdSpend = live?.adSpend;
+    // Treat zero / falsy as "no data" — Meta insights return 0 for weeks
+    // before the ad account was connected, and partial values are not
+    // representative of the eventual full-week total.
+    const liveAdSpend = isHistorical && live?.adSpend > 0 ? live.adSpend : null;
+    const liveRevenue = isHistorical && live?.revenue > 0 ? live.revenue : null;
     const metaDailyBudget = seed.metaDailyBudget;
 
     if (liveAdSpend != null) {
@@ -214,26 +220,17 @@ export function generateCashflow58({
       fbAdSpend = hist.fbAdSpend;
       dailyAdSpend = hist.dailyAdSpend;
     } else if (isCurrent) {
-      // Anchor on the CBO daily budget the operator has configured in
-      // Ads Manager today. If that hasn't synced, prefer the PRIOR
-      // week's full-week actual ad spend over `seed.adSpend` — Meta's
-      // current-week insights show partial spend (only the hours that
-      // have elapsed in this week), so anchoring on it understates by
-      // 80–95% on a Monday morning.
       if (metaDailyBudget != null) {
         dailyAdSpend = metaDailyBudget;
-      } else if (prev?.dailyAdSpend != null && prev.dailyAdSpend > 0) {
+      } else if (prev?.dailyAdSpend > 0) {
         dailyAdSpend = prev.dailyAdSpend * useGrowth;
-      } else if (seed.adSpend != null && seed.adSpend > 0) {
-        dailyAdSpend = seed.adSpend / 7;
       } else {
         dailyAdSpend = 539 / 7;
       }
       fbAdSpend = dailyAdSpend * 7;
     } else {
-      // Future week: compound prev daily spend at the weekly growth rate.
-      const seedDaily = metaDailyBudget ?? (seed.adSpend != null && seed.adSpend > 0 ? seed.adSpend / 7 : 539 / 7);
-      dailyAdSpend = (prev ? prev.dailyAdSpend : seedDaily) * useGrowth;
+      const seedDaily = metaDailyBudget ?? (prev?.dailyAdSpend > 0 ? prev.dailyAdSpend : 539 / 7);
+      dailyAdSpend = (prev?.dailyAdSpend > 0 ? prev.dailyAdSpend : seedDaily) * useGrowth;
       fbAdSpend = dailyAdSpend * 7;
     }
 
@@ -242,9 +239,10 @@ export function generateCashflow58({
     } else if (hist) {
       shopifyRevenue = hist.shopifyRevenue;
       cogsRate = hist.cogsRate;
-    } else if (isCurrent) {
-      shopifyRevenue = seed.revenue ?? fbAdSpend / C.mer;
     } else {
+      // Current + future weeks: derive from this week's projected ad spend
+      // and MER. Never anchor on seed.revenue (mid-week partial) for
+      // current — same partial-Monday problem as ad spend.
       shopifyRevenue = fbAdSpend / C.mer;
     }
 

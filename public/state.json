@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-11T07:38:14.533Z",
+  "lastUpdated": "2026-05-11T07:43:14.619Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,9 +1044,14 @@
   ],
   "changelog": [
     {
-      "sha": "c4c826a",
-      "date": "2026-05-11T07:37:29+00:00",
-      "message": "cashflow: fix ad spend pulling — substring CBO match + smarter fallback"
+      "sha": "668d4fe",
+      "date": "2026-05-11T07:42:33+00:00",
+      "message": "cashflow: stop anchoring current week on Meta/Shopify mid-week partials"
+    },
+    {
+      "sha": "245874e",
+      "date": "2026-05-11T10:38:42+03:00",
+      "message": "cashflow: fix ad spend pulling — substring CBO match + smarter fallback (#118)"
     },
     {
       "sha": "0953538",
@@ -1087,11 +1092,6 @@
       "sha": "b24cb69",
       "date": "2026-05-10T09:16:36+00:00",
       "message": "feat(creative): visual polish + audit fixes (palette, lane chips, status colors)"
-    },
-    {
-      "sha": "7a34ed4",
-      "date": "2026-05-10T08:53:28+00:00",
-      "message": "fix(creative): save* stores must UPDATE, not UPSERT, partial fields"
     }
   ]
 }
