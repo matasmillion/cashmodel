@@ -267,6 +267,7 @@ function fabricSpec(row) {
     cover:       row?.front_image_url || row?.cover_image || d?.front_image_url || d?.cover_image || null,
     colors:      row?.color_card_images || d?.color_card_images || [],
     finishes:    row?.mill_finishes || d?.mill_finishes || [],
+    notes:       row?.notes || d?.notes || '',
     unitCost,
     currency:    d.currency || tier?.currency || 'USD',
   };
@@ -343,6 +344,52 @@ function MillFinishesPanel({ entry, libraryFinishes, onChange }) {
         <option value="">+ Add finish…</option>
         {allCatalog.map(name => <option key={name} value={name}>{name}</option>)}
       </select>
+    </div>
+  );
+}
+
+// ─── Fabric Notes inline editor (per fabric slot in StepFabrics) ────────────
+//
+// Mirrors MillFinishesPanel: writes to `entry.chosenNotes` as a per-style
+// override, falling back to the library notes when null. Surfaces in the
+// FabricBOMPreview's FABRIC NOTES band so the factory rep sees the tech
+// pack–specific note (not just the library default).
+
+function FabricNotesPanel({ entry, libraryNotes, onChange }) {
+  const value = entry.chosenNotes != null ? entry.chosenNotes : libraryNotes;
+  const isOverridden = entry.chosenNotes != null;
+
+  return (
+    <div style={{ paddingTop: 6, paddingBottom: 6, borderTop: `0.5px solid ${FR.sand}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>Fabric Notes</span>
+        {isOverridden && libraryNotes && (
+          <button
+            onClick={() => onChange(null)}
+            style={{ fontSize: 9, color: FR.stone, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+          >Reset to library</button>
+        )}
+      </div>
+      <textarea
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        rows={2}
+        placeholder={libraryNotes ? '— inheriting library notes; type to override —' : 'Compatibility, care, certifications…'}
+        style={{
+          width: '100%',
+          fontSize: 10,
+          lineHeight: 1.4,
+          border: `0.5px solid ${FR.sand}`,
+          borderRadius: 3,
+          padding: '4px 6px',
+          color: FR.slate,
+          background: '#fff',
+          outline: 'none',
+          resize: 'vertical',
+          fontFamily: "'Inter', sans-serif",
+          boxSizing: 'border-box',
+        }}
+      />
     </div>
   );
 }
@@ -573,6 +620,13 @@ export function StepFabrics({ data, set }) {
                   entry={entry}
                   libraryFinishes={spec?.finishes || []}
                   onChange={finishes => setSlot(i, { ...entry, chosenFinishes: finishes })}
+                />
+
+                {/* Per-style fabric notes — overrides the library notes on this tech pack only */}
+                <FabricNotesPanel
+                  entry={entry}
+                  libraryNotes={spec?.notes || ''}
+                  onChange={notes => setSlot(i, { ...entry, chosenNotes: notes })}
                 />
 
                 <div style={{ paddingTop: 6, borderTop: `0.5px solid ${FR.sand}` }}>
