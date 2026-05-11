@@ -55,6 +55,14 @@ export const CASHFLOW_DEFAULTS = {
 // Date helpers
 // ────────────────────────────────────────────────────────────────────────────
 
+// Parse YYYY-MM-DD as LOCAL midnight, unambiguously. `new Date('YYYY-MM-DD')`
+// or `new Date('YYYY-MM-DDT00:00:00')` is parsed as UTC by some browsers and
+// local by others — using components avoids the ambiguity.
+function parseLocalDate(isoDate) {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 // Format a Date as YYYY-MM-DD using LOCAL time components.
 // We deliberately avoid `.toISOString().slice(0,10)` because that converts
 // to UTC first and silently shifts the date by 1 day in any timezone east
@@ -69,7 +77,7 @@ function toLocalISODate(d) {
 }
 
 function addWeeks(isoDate, n) {
-  const d = new Date(isoDate + 'T00:00:00');
+  const d = parseLocalDate(isoDate);
   d.setDate(d.getDate() + n * 7);
   return toLocalISODate(d);
 }
@@ -103,7 +111,7 @@ function paymentForCard(date, cardKey, schedule) {
 const RULE_GEN_CARDS = ['chase5718', 'amexBlue'];
 
 function ruleBasedPayment(date, cardKey) {
-  const d = new Date(date + 'T00:00:00');
+  const d = parseLocalDate(date);
 
   if (cardKey === 'chase5718') {
     // First Monday of the month, $180. Effective Aug 3, 2026.
@@ -194,18 +202,20 @@ export function generateCashflow58({
     const live = actualsHistory[date] || null;
     const isHistorical = date < todayMonday;
     const isCurrent = date === todayMonday;
-    const dt = new Date(date + 'T00:00:00');
+    const dt = parseLocalDate(date);
     const monthLabel = dt.toLocaleDateString('en-US', { month: 'short' });
     const dateLabel = dt.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
     const useGrowth = date >= C.growthSwitchDate ? C.h2Growth : C.h1Growth;
 
     // ── Drivers (rows 5–8) ──────────────────────────────────────────────
-    // Precedence: live actuals (Shopify/Meta) > seeded historical block >
-    // current-week seed > projection. Live always wins so the model
-    // self-corrects as integrations re-sync.
+    // Precedence for the week's ad spend:
+    //   • past week → live Meta insights, else seeded workbook actuals
+    //   • current week → Meta CBO "Acquisition" daily budget × 7
+    //   • future weeks → roll forward from prev × weekly growth rate
     let dailyAdSpend, fbAdSpend, shopifyRevenue, cogsRate = C.cogsRate;
     const liveRevenue = live?.revenue;
     const liveAdSpend = live?.adSpend;
+    const metaDailyBudget = seed.metaDailyBudget;
 
     if (liveAdSpend != null) {
       fbAdSpend = liveAdSpend;
@@ -213,16 +223,25 @@ export function generateCashflow58({
     } else if (hist) {
       fbAdSpend = hist.fbAdSpend;
       dailyAdSpend = hist.dailyAdSpend;
-    } else if (date === C.growthSwitchDate && C.h2StartingDailySpend != null) {
-      // Manual reset on the H1→H2 boundary so daily spend steps to a
-      // planned H2 target instead of compounding from the last H1 week.
-      dailyAdSpend = C.h2StartingDailySpend;
-      fbAdSpend = dailyAdSpend * 7;
     } else if (isCurrent) {
-      fbAdSpend = seed.adSpend ?? (prev ? prev.dailyAdSpend * useGrowth * 7 : 539);
-      dailyAdSpend = fbAdSpend / 7;
+      // Anchor on the CBO daily budget the operator has configured in
+      // Ads Manager today. Falls back to seed.adSpend (this-week insights)
+      // if budget hasn't synced yet, then to a continuation of the
+      // historical trend.
+      if (metaDailyBudget != null) {
+        dailyAdSpend = metaDailyBudget;
+      } else if (seed.adSpend != null) {
+        dailyAdSpend = seed.adSpend / 7;
+      } else if (prev) {
+        dailyAdSpend = prev.dailyAdSpend * useGrowth;
+      } else {
+        dailyAdSpend = 539 / 7;
+      }
+      fbAdSpend = dailyAdSpend * 7;
     } else {
-      dailyAdSpend = (prev ? prev.dailyAdSpend : (seed.adSpend ?? 539) / 7) * useGrowth;
+      // Future week: compound prev daily spend at the H1/H2 growth rate.
+      const seedDaily = metaDailyBudget ?? (seed.adSpend != null ? seed.adSpend / 7 : 539 / 7);
+      dailyAdSpend = (prev ? prev.dailyAdSpend : seedDaily) * useGrowth;
       fbAdSpend = dailyAdSpend * 7;
     }
 
@@ -285,11 +304,11 @@ export function generateCashflow58({
     const ga = gaForWeek(date, opexBuckets);
     // R&D: $180 every 4 weeks starting week of June 8, 2026 (xlsx pattern)
     const rdAnchor = '2026-06-08';
-    const weeksFromRdAnchor = Math.round((dt - new Date(rdAnchor + 'T00:00:00')) / (7 * 86400000));
+    const weeksFromRdAnchor = Math.round((dt - parseLocalDate(rdAnchor)) / (7 * 86400000));
     const rd = (weeksFromRdAnchor >= 0 && weeksFromRdAnchor % 4 === 0) ? C.rdMonthlyAmount : 0;
     // Interest: $125 every 4 weeks starting same anchor
     const interestAnchor = '2026-08-31';
-    const weeksFromInterest = Math.round((dt - new Date(interestAnchor + 'T00:00:00')) / (7 * 86400000));
+    const weeksFromInterest = Math.round((dt - parseLocalDate(interestAnchor)) / (7 * 86400000));
     const interest = (weeksFromInterest >= 0 && weeksFromInterest % 4 === 0) ? C.interestPayment : 0;
 
     // ── Paydown cadence ─────────────────────────────────────────────────
@@ -297,7 +316,7 @@ export function generateCashflow58({
     // (default 4) anchored on todayMonday, mirroring the workbook's
     // ~monthly statement cycle. Plaid transaction actuals will override
     // these on past weeks.
-    const weeksFromToday = Math.round((dt - new Date(todayMonday + 'T00:00:00')) / (7 * 86_400_000));
+    const weeksFromToday = Math.round((dt - parseLocalDate(todayMonday)) / (7 * 86_400_000));
     // First paydown is 1 week after todayMonday (statement cycle closes at the
     // end of the current week, gets paid down the following Monday). Then
     // every paydownEveryNWeeks. Matches the workbook's 5/4 → 6/1 → 6/29 …

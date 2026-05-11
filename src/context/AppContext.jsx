@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useMemo, useEffect, useRef, useState } from 'react';
 import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, OPEX_WAREHOUSE, CREDIT_CARDS, LOANS, AD_UNIT_TYPES, DEFAULT_EVENTS } from '../data/seedData';
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
-import { syncShopifyActuals, syncShopifyInventory, syncMetaActuals, syncPlaidActuals, syncPlaidCardPayments, listPlaidItems } from '../utils/liveDataSync';
+import { syncShopifyActuals, syncShopifyInventory, syncMetaActuals, syncMetaDailyBudget, syncPlaidActuals, syncPlaidCardPayments, listPlaidItems } from '../utils/liveDataSync';
 import { migrateManualPOsToStore } from '../utils/productionStore';
 import { migrateLegacyInventoryHash } from '../utils/inventoryRouting';
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
@@ -109,6 +109,26 @@ async function runAutoSync(dispatch) {
       }).catch(err => {
         errors.meta = err.message;
         console.warn('[auto-sync] Meta:', err.message);
+      }),
+    );
+
+    // Also fetch the forward-looking daily budget from the CBO campaign
+    // named "Acquisition". The engine uses this to anchor projected daily
+    // ad spend (instead of backing into it from historical insights).
+    tasks.push(
+      syncMetaDailyBudget(creds.meta).then(info => {
+        if (info?.dailyBudget != null) {
+          dispatch({
+            type: 'UPDATE_SEED',
+            payload: {
+              metaDailyBudget: info.dailyBudget,
+              metaCampaignName: info.campaignName,
+              metaCampaignStatus: info.status,
+            },
+          });
+        }
+      }).catch(err => {
+        console.warn('[auto-sync] Meta daily budget:', err.message);
       }),
     );
   }

@@ -92,14 +92,15 @@ export const CASHFLOW_HORIZON_WEEKS = 58;
 
 /** Returns Monday N weeks before the given Monday ISO. */
 export function getCashflowHorizonStart(currentMondayISO, weeksBehind = CASHFLOW_WEEKS_BEHIND) {
-  const d = new Date(currentMondayISO + 'T00:00:00');
+  // Parse as local midnight — `new Date('YYYY-MM-DDT00:00:00')` is treated
+  // as UTC by some browsers, shifting the date in negative-UTC timezones.
+  const [y, m, day] = currentMondayISO.split('-').map(Number);
+  const d = new Date(y, m - 1, day);
   d.setDate(d.getDate() - weeksBehind * 7);
-  // Format from LOCAL date components — `.toISOString().slice(0,10)`
-  // shifts the date by 1 day in any timezone east of UTC.
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  const yy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
 }
 
 // Legacy export kept for back-compat with any code still importing it as a

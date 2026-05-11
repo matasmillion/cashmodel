@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-11T07:03:51.984Z",
+  "lastUpdated": "2026-05-11T07:21:08.437Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,7 +1044,7 @@
   ],
   "changelog": [
     {
-      "sha": "e1cabd3",
+      "sha": "81aae1e",
       "date": "2026-05-11T06:54:29+00:00",
       "message": "cashflow: fix UTC date shift that killed all sync lookups"
     },
