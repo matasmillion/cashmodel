@@ -1,0 +1,70 @@
+name: Deploy Supabase Edge Functions
+
+# Auto-deploys every function under supabase/functions/ to the Supabase
+# project on every push to main. Without this, edge functions live in git
+# but never make it to Supabase — which is how plaid-proxy ended up
+# missing from prod despite the source being in the repo.
+#
+# One-time setup required in this repo's Settings → Secrets → Actions:
+#   - SUPABASE_ACCESS_TOKEN: a personal access token from
+#     https://supabase.com/dashboard/account/tokens
+#   - SUPABASE_PROJECT_REF: the project ref (e.g. vynwmvpabvxlbxvycfcn)
+#
+# Deploy only changes the function source — secrets (PLAID_CLIENT_ID,
+# PLAID_SECRET, etc.) are managed separately in the Supabase dashboard.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+      - '.github/workflows/deploy-functions.yml'
+  # Manual trigger via Actions tab for redeploying after secret-only
+  # changes or after restoring a paused project.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Verify required secrets
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN secret not set. Add it under Settings → Secrets → Actions."
+            exit 1
+          fi
+          if [ -z "$SUPABASE_PROJECT_REF" ]; then
+            echo "::error::SUPABASE_PROJECT_REF secret not set."
+            exit 1
+          fi
+
+      - name: Deploy every function
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          set -e
+          for dir in supabase/functions/*/; do
+            fn=$(basename "$dir")
+            echo "──────────────────────────────────────────────────────"
+            echo "Deploying $fn"
+            echo "──────────────────────────────────────────────────────"
+            supabase functions deploy "$fn" \
+              --project-ref "$SUPABASE_PROJECT_REF" \
+              --no-verify-jwt
+          done
+          echo ""
+          echo "✓ All functions deployed."
