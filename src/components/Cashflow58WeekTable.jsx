@@ -52,32 +52,19 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
   const marketingLabel = pickAccountName(accs, 'marketing', 'Mercury Marketing (3135)');
   const pct = v => `${Math.round(v * 100)}%`;
 
-  // Shopify Payouts breakdown — exposed as a gray italic sub-line so the
-  // operator can tell whether a $0 row is legitimately empty, or whether
-  // reconciliation was skipped (Mercury not linked) or just hasn't found
-  // any unmatched paid payouts in the 7-day window. Surfaces specific
-  // error reasons so we don't have to guess.
-  const reported = seed.shopifyPayoutsReportedPending;
-  const unmatched = seed.shopifyPayoutsUnmatchedPaidTotal;
+  // Shopify Payouts sub-label: only surface a hint when something
+  // ACTUALLY went wrong (scope error, Mercury reconcile skipped, etc.)
+  // — never when it's just a normal $725-pending kind of day. Keeps the
+  // row clean. Breakdown still lives on seed for the curious.
   const reconcileSkipped = seed.shopifyPayoutsReconciliationSkipped;
   const reconcileReason = seed.shopifyPayoutsReconciliationSkipReason;
   const shopifyErrors = seed.shopifyPayoutsErrors || {};
-  const fmtUsd = v => `$${(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const shopifyErr = shopifyErrors.shopify_scheduled || shopifyErrors.shopify_in_transit || shopifyErrors.shopify_paid;
   let payoutsSubLabel = null;
-  if (reported != null || unmatched != null || reconcileSkipped) {
-    const parts = [];
-    parts.push(`Shopify-reported pending: ${fmtUsd(reported)}`);
-    // If the scheduled/in_transit calls failed, say so explicitly.
-    const shopifyErr = shopifyErrors.shopify_scheduled || shopifyErrors.shopify_in_transit;
-    if (shopifyErr) {
-      parts.push(`Shopify API error: ${shopifyErr.slice(0, 120)}`);
-    }
-    if (reconcileSkipped) {
-      parts.push(`Mercury reconcile skipped${reconcileReason ? ': ' + reconcileReason.slice(0, 180) : ''}`);
-    } else {
-      parts.push(`Paid not yet in Mercury 6848 (last 7d): ${fmtUsd(unmatched)}`);
-    }
-    payoutsSubLabel = parts.join(' · ');
+  if (shopifyErr) {
+    payoutsSubLabel = `Shopify API error: ${shopifyErr.slice(0, 160)}`;
+  } else if (reconcileSkipped) {
+    payoutsSubLabel = `Mercury reconcile skipped${reconcileReason ? ': ' + reconcileReason.slice(0, 180) : ''}`;
   }
 
   return [

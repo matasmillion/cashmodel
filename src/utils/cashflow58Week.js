@@ -425,7 +425,15 @@ export function generateCashflow58({
     // Cash + inventory + working capital. Working capital is the 2465
     // bank account, which IS an asset. (The workbook's pre-Aug formula
     // omits it — that's a workbook bug; the post-Aug formula is right.)
-    const totalAssets = totalCashOnHand + inventory + workingCapital;
+    // Total Assets = Total Cash On Hand + Inventory. Working capital
+    // is NOT added separately — the Working Capital sub-account
+    // (Mercury 5125) is already part of Cash Balance (TCOH), so adding
+    // it again would double-count by ~$6k. The workbook's historical
+    // formula included WC because back then WC was a separate
+    // institution (Shopify Balance 2465); now it lives inside Mercury
+    // and is just a sub-row presentation of cash that's already in
+    // TCOH.
+    const totalAssets = totalCashOnHand + inventory;
 
     // ── Total liabilities (row 37) ──────────────────────────────────────
     const totalLiabilities = adsPayable + fulfillmentPayable + chase5718 + amexPlum + amexBlue + shopifyCapital + longTermLoan;
