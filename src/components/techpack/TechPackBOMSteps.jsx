@@ -59,7 +59,7 @@ async function resolveCoverPath(value, version) {
 
 const labelStyle = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' };
 
-// ─── Reusable picker modal ──────────────────────────────────────────────────
+// ─── Reusable picker modal ──────────────────────────────────────────────────────
 // Generic picker that lists items from the library. The caller supplies
 // `fetchItems` (async fn returning rows), `renderItem` (per-row tile), and
 // `getId` (key extractor). Modal closes on select.
@@ -245,7 +245,7 @@ function FabricColorPickerModal({ fabric, onSelect, onSkip, onClose }) {
   );
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function specOf(componentRow) {
   // listComponentPacks returns thin projection rows (cover_image, supplier).
@@ -333,6 +333,17 @@ function MillFinishesPanel({ entry, libraryFinishes, onChange }) {
         <div key={fi} style={{ marginBottom: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <div style={{ flex: 1, fontSize: 10, color: FR.slate, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
+            <span style={{ fontSize: 9, color: FR.stone, flexShrink: 0 }}>$</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={f.delta_per_meter_usd || ''}
+              onChange={e => updateFinish(fi, { delta_per_meter_usd: e.target.value !== '' ? parseFloat(e.target.value) : 0 })}
+              placeholder="0.00"
+              style={{ width: 52, fontSize: 9, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '2px 4px', textAlign: 'right', color: FR.slate, background: FR.white, outline: 'none' }}
+            />
+            <span style={{ fontSize: 8, color: FR.stone, flexShrink: 0 }}>/m</span>
             <select
               value={f.executed_at || 'mill'}
               onChange={e => updateFinish(fi, { executed_at: e.target.value })}
@@ -509,7 +520,7 @@ function EmptyPickerSlot({ onPick, label, hint }) {
   );
 }
 
-// ─── Page 03 — Fabrics ──────────────────────────────────────────────────────
+// ─── Page 03 — Fabrics ───────────────────────────────────────────────────────
 
 export function StepFabrics({ data, set }) {
   const [pickerSlot, setPickerSlot] = useState(null); // 0..2 | null
@@ -608,9 +619,12 @@ export function StepFabrics({ data, set }) {
   }
 
   const fabricsSubtotal = picked.reduce((sum, p) => {
-    const cost = resolved[p?.fabricId]?.unitCost || 0;
+    const specCost = resolved[p?.fabricId]?.unitCost || 0;
+    const baseCost = (p?.chosenPricePerMeterUsd != null ? parseFloat(p.chosenPricePerMeterUsd) : specCost) || 0;
+    const finishes = p?.chosenFinishes ?? (resolved[p?.fabricId]?.finishes || []);
+    const finishCost = finishes.reduce((s, f) => s + (parseFloat(f.delta_per_meter_usd) || 0), 0);
     const mpu = p?.metersPerUnit;
-    return sum + (mpu ? cost * mpu : cost);
+    return sum + (mpu ? (baseCost + finishCost) * mpu : (baseCost + finishCost));
   }, 0);
   const fabricsHaveYield = picked.some(p => p?.metersPerUnit);
   const fabricsAllYield  = picked.length > 0 && picked.every(p => p?.metersPerUnit);
@@ -725,21 +739,53 @@ export function StepFabrics({ data, set }) {
                 />
 
                 <div style={{ paddingTop: 6, borderTop: `0.5px solid ${FR.sand}` }}>
-                  {/* Cost value — shows /unit when yield is known, /m otherwise */}
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6, fontFamily: "ui-monospace, Menlo, monospace" }}>
-                    <span style={{ fontSize: 10, color: FR.stone }}>
-                      {entry.metersPerUnit
-                        ? (entry.yieldIsActual ? 'Cost / unit' : 'Cost / unit (est.)')
-                        : 'Cost / m'}
-                    </span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: FR.slate }}>
-                      {entry.metersPerUnit
-                        ? formatMoney((spec?.unitCost || 0) * entry.metersPerUnit, spec?.currency)
-                        : formatMoney(spec?.unitCost || 0, spec?.currency)}
-                    </span>
+                  {/* Price / m override — editable per-style; falls back to library value */}
+                  <div style={{ marginBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Price / m</span>
+                      <span style={{ fontSize: 9, color: FR.stone }}>$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={entry.chosenPricePerMeterUsd != null ? entry.chosenPricePerMeterUsd : (spec?.unitCost || '')}
+                        onChange={e => setSlot(i, { ...entry, chosenPricePerMeterUsd: e.target.value !== '' ? parseFloat(e.target.value) : null })}
+                        placeholder={spec?.unitCost ? String(spec.unitCost) : '0.00'}
+                        style={{ flex: 1, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '3px 5px', fontSize: 10, color: FR.slate, background: FR.white, outline: 'none' }}
+                      />
+                      {entry.chosenPricePerMeterUsd != null && (
+                        <button
+                          onClick={() => setSlot(i, { ...entry, chosenPricePerMeterUsd: null })}
+                          style={{ fontSize: 9, color: FR.stone, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', flexShrink: 0 }}
+                        >Reset</button>
+                      )}
+                    </div>
+                    {entry.chosenPricePerMeterUsd != null && spec?.unitCost != null && (
+                      <div style={{ marginTop: 2, fontSize: 8, color: FR.stone, fontFamily: 'ui-monospace, Menlo, monospace' }}>
+                        library: ${spec.unitCost.toFixed ? spec.unitCost.toFixed(2) : spec.unitCost} /m
+                      </div>
+                    )}
                   </div>
+
+                  {/* Cost value — shows /unit when yield is known, /m otherwise */}
+                  {(() => {
+                    const basePriceM = (entry.chosenPricePerMeterUsd != null ? parseFloat(entry.chosenPricePerMeterUsd) : spec?.unitCost) || 0;
+                    const finishCost = (entry.chosenFinishes ?? spec?.finishes ?? []).reduce((s, f) => s + (parseFloat(f.delta_per_meter_usd) || 0), 0);
+                    const totalPerM = basePriceM + finishCost;
+                    const costLabel = entry.metersPerUnit
+                      ? (entry.yieldIsActual ? 'Cost / unit' : 'Cost / unit (est.)')
+                      : 'Cost / m';
+                    const costValue = entry.metersPerUnit ? totalPerM * entry.metersPerUnit : totalPerM;
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6, fontFamily: 'ui-monospace, Menlo, monospace', marginBottom: 6 }}>
+                        <span style={{ fontSize: 10, color: FR.stone }}>{costLabel}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: FR.slate }}>{formatMoney(costValue, 'USD')}</span>
+                      </div>
+                    );
+                  })()}
+
                   {/* Yield selector — garment type picks a standard m/unit estimate */}
-                  <div style={{ marginTop: 6 }}>
+                  <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       <span style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Yield</span>
                       <select
@@ -819,7 +865,7 @@ export function StepFabrics({ data, set }) {
   );
 }
 
-// ─── Page 04 — Trims (image-first, 6-card grid) ─────────────────────────────
+// ─── Page 04 — Trims (image-first, 6-card grid) ───────────────────────────────
 
 const MAX_TRIMS = 6;
 
@@ -959,7 +1005,7 @@ export function StepTrims({ data, set, packId }) {
   );
 }
 
-// ─── Page 05 — Packaging ────────────────────────────────────────────────────
+// ─── Page 05 — Packaging ─────────────────────────────────────────────────────
 
 export function StepPackaging({ data, set, packId }) {
   return (
