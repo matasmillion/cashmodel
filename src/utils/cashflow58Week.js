@@ -6,35 +6,25 @@
 // weeks are projected using the formulas below.
 //
 // Column-A scalars in the workbook map to these constants:
-//   H1 weekly growth (1.04) → CONST.h1Growth
-//   H2 weekly growth (1.07) → CONST.h2Growth
+//   Weekly growth (1.04)    → CONST.weeklyGrowth
 //   MER (0.33)              → CONST.mer
 //   COGS % (0.27)           → CONST.cogsRate (overridable per week)
 //   PP %  (0.04)            → CONST.ppPercent
 //   Fulfillment % (0.09)    → CONST.fulfillmentPercent
 //   Shopify Capital % (0.06)→ CONST.shopifyCapitalRate
 //   Profit % (0.09)         → CONST.profitPercentForWC
-//   Growth switch date      → CONST.growthSwitchDate (Aug 3, 2026)
 
 import { HISTORICAL_WEEKS, CARD_PAYMENT_SCHEDULE, CASHFLOW_HORIZON_WEEKS, getCashflowHorizonStart } from '../data/historicalCashflow';
 import { buildOpexBuckets, gaForWeek } from './opexBuckets';
 
 export const CASHFLOW_DEFAULTS = {
-  h1Growth: 1.04,
-  h2Growth: 1.07,
+  weeklyGrowth: 1.04,
   mer: 0.33,
   cogsRate: 0.27,
   ppPercent: 0.04,
   fulfillmentPercent: 0.09,
   shopifyCapitalRate: 0.06,
   profitPercentForWC: 0.09,
-  growthSwitchDate: '2026-08-03',
-  // Manual H2 daily-spend reset on growthSwitchDate. Workbook stepped
-  // from ~$128 (last H1 week) to $150 (first H2 week) as a planning
-  // override, then compounded at H2 rate. Without this, daily spend
-  // continuously compounds through the boundary and undershoots the H2
-  // target by ~15% across the rest of the year.
-  h2StartingDailySpend: 150,
   // Fixed overhead (fired on specific weeks of the projection)
   rdMonthlyAmount: 180,
   interestPayment: 125,
@@ -205,7 +195,7 @@ export function generateCashflow58({
     const dt = parseLocalDate(date);
     const monthLabel = dt.toLocaleDateString('en-US', { month: 'short' });
     const dateLabel = dt.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
-    const useGrowth = date >= C.growthSwitchDate ? C.h2Growth : C.h1Growth;
+    const useGrowth = C.weeklyGrowth;
 
     // ── Drivers (rows 5–8) ──────────────────────────────────────────────
     // Precedence for the week's ad spend:
