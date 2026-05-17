@@ -1,0 +1,1292 @@
+<!doctype html>
+<!--
+  FR / Ad Creative Tool — v1 (Motion-layout variant).
+
+  Same module, same 9 views. Structural layout cloned directly from
+  motionapp.com screenshots so the operator gets a familiar surface.
+  Color substitution only — Motion's palette swapped for FR's
+  (Salt / Slate / Sand + good / warn / bad). No Motion logo, no
+  Motion-specific marketing copy carried over.
+
+  Layout traits matched from screenshots:
+    - Persistent left sidebar nav with workspace switcher + folder tree
+    - Three-up KPI row ("This week at a glance")
+    - Top spending creative card with thumbnail + thought-starter rows
+    - Messaging themes carousel with Top / Just launched tabs
+    - Ad detail as right-side slide-in panel with tabbed header
+    - Inspo with sub-nav (Discover / Trending / Organic / Following)
+    - Pastel category tag chips (recolored to FR neutrals)
+    - Placement breakdown grouped bars + age/gender breakdown bars
+
+  Hash routes (same grammar as v1):
+    #home  #top-creatives  #patterns/{dim}  #themes  #ad/{id}
+    #inspo  #inspo/discover  #inspo/trending  #inspo/organic
+    #inspo/brand/{id}  #chat
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Foreign Resource · Ad Creative Tool</title>
+<style>
+  :root {
+    --slate:       #3A3A3A;
+    --salt:        #F5F0E8;
+    --sand:        #EBE5D5;
+    --soil:        #9A816B;          /* TBD — replace with PDF value */
+    --bg:          #FAFAF9;
+    --card:        #FFFFFF;
+    --line:        rgba(58,58,58,0.10);
+    --line-soft:   rgba(58,58,58,0.06);
+    --hover:       rgba(58,58,58,0.04);
+    --faded:       rgba(58,58,58,0.60);
+    --quiet:       rgba(58,58,58,0.42);
+    --good:        #3B6D11;
+    --warn:        #854F0B;
+    --bad:         #A32D2D;
+    --tag-format:  #EBE5D5;          /* swap Motion purple */
+    --tag-persona: rgba(59,109,17,0.12);
+    --tag-msg:     rgba(133,79,11,0.12);
+    --tag-custom:  rgba(163,45,45,0.10);
+    --sans:        'Inter', 'General Sans', 'Helvetica Neue', system-ui, sans-serif;
+    --mono:        ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+    --sidebar-w:   232px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--slate); font-family: var(--sans); -webkit-font-smoothing: antialiased; font-size: 13px; line-height: 1.5; }
+  a { color: inherit; text-decoration: none; cursor: pointer; }
+  .num { font-variant-numeric: tabular-nums; }
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  /* ─── App shell ──────────────────────────────────────────────────── */
+  .app { display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; }
+
+  /* ─── Sidebar ────────────────────────────────────────────────────── */
+  .sidebar { background: var(--salt); border-right: 1px solid var(--line); padding: 14px 12px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+  .sidebar::-webkit-scrollbar { width: 6px; }
+  .sidebar::-webkit-scrollbar-thumb { background: rgba(58,58,58,0.10); border-radius: 3px; }
+
+  .ws { display: flex; align-items: center; gap: 10px; padding: 8px 8px; border-radius: 8px; cursor: pointer; margin-bottom: 6px; }
+  .ws:hover { background: var(--hover); }
+  .ws .ico { width: 24px; height: 24px; border-radius: 6px; background: var(--slate); color: var(--salt); display: inline-flex; align-items: center; justify-content: center; font-weight: 600; font-size: 11px; flex-shrink: 0; }
+  .ws .nm { font-size: 13px; font-weight: 500; color: var(--slate); flex: 1; }
+  .ws .caret { color: var(--quiet); font-size: 10px; }
+  .ws .panel { width: 22px; height: 22px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; color: var(--quiet); }
+  .ws .panel:hover { background: var(--hover); color: var(--slate); }
+
+  .nav-icons { display: flex; flex-direction: column; align-items: center; gap: 4px; position: absolute; left: 0; top: 56px; width: 36px; padding: 0 6px; }
+  .nav-icons a { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 5px; color: var(--quiet); }
+  .nav-icons a:hover { background: var(--hover); color: var(--slate); }
+  .nav-icons a.active { background: var(--card); color: var(--slate); border: 1px solid var(--line); }
+
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 6px; color: var(--slate); font-size: 13px; cursor: pointer; }
+  .nav-item:hover { background: var(--hover); }
+  .nav-item.active { background: var(--card); border: 1px solid var(--line); }
+  .nav-item .glyph { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; color: var(--faded); font-size: 13px; flex-shrink: 0; }
+  .nav-item .glyph.gr { color: var(--good); }
+  .nav-item .glyph.am { color: var(--warn); }
+  .nav-item .glyph.bd { color: var(--bad); }
+  .nav-item .glyph.so { color: var(--soil); }
+
+  .nav-section { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--quiet); padding: 12px 10px 4px; display: flex; align-items: center; justify-content: space-between; }
+  .nav-section .actions { display: flex; gap: 4px; }
+  .nav-section .actions a { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; color: var(--quiet); font-size: 12px; }
+  .nav-section .actions a:hover { background: var(--hover); color: var(--slate); }
+
+  .nav-tree { display: flex; flex-direction: column; gap: 1px; }
+  .nav-tree > .nav-item { padding-left: 10px; }
+  .nav-tree .group .header { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 6px; cursor: pointer; color: var(--slate); }
+  .nav-tree .group .header:hover { background: var(--hover); }
+  .nav-tree .group .header .caret { color: var(--quiet); font-size: 8px; width: 10px; }
+  .nav-tree .group.open .header .caret { transform: rotate(0); }
+  .nav-tree .group .children { padding-left: 18px; display: flex; flex-direction: column; gap: 1px; }
+  .nav-tree .group:not(.open) .children { display: none; }
+  .nav-tree .nav-item.child { padding: 6px 10px; font-size: 12px; }
+
+  .sidebar-foot { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; padding: 12px 8px 4px; }
+  .sidebar-foot .av { width: 24px; height: 24px; border-radius: 50%; background: var(--slate); color: var(--salt); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+  .sidebar-foot .nm { font-size: 12px; color: var(--slate); }
+  .sidebar-foot .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--good); margin-left: auto; }
+
+  /* ─── Content shell ──────────────────────────────────────────────── */
+  .content { background: var(--bg); min-width: 0; }
+  .topbar { display: flex; align-items: center; gap: 12px; padding: 14px 28px; border-bottom: 1px solid var(--line); background: var(--bg); position: sticky; top: 0; z-index: 30; }
+  .topbar .crumb { font-size: 13px; color: var(--slate); }
+  .topbar .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .topbar .updated { font-size: 11px; color: var(--quiet); }
+  .topbar .icon-btn { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; color: var(--quiet); }
+  .topbar .icon-btn:hover { background: var(--hover); color: var(--slate); }
+  .topbar .icon-btn.brand { background: var(--slate); color: var(--salt); }
+  .topbar .share { background: var(--slate); color: var(--salt); padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; }
+  .topbar .save { padding: 6px 12px; font-size: 12px; color: var(--quiet); border-radius: 6px; }
+  .topbar .save:hover { background: var(--hover); color: var(--slate); }
+
+  main { padding: 32px 36px 140px; max-width: 1320px; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  h1.page-title { font-size: 22px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .page-blurb { font-size: 13px; color: var(--faded); margin: 0 0 28px; line-height: 1.55; max-width: 620px; }
+
+  /* ─── Pills / chips ──────────────────────────────────────────────── */
+  .pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; font-size: 11px; border-radius: 999px; line-height: 1.5; font-weight: 500; }
+  .pill.range { background: var(--card); border: 1px solid var(--line); color: var(--slate); padding: 5px 11px; cursor: pointer; }
+  .pill.range:hover { border-color: var(--quiet); }
+  .pill.range .cal { width: 12px; height: 12px; display: inline-flex; align-items: center; justify-content: center; color: var(--quiet); font-size: 11px; }
+  .pill.tag-fmt   { background: var(--tag-format); color: var(--slate); }
+  .pill.tag-pers  { background: var(--tag-persona); color: var(--good); }
+  .pill.tag-msg   { background: var(--tag-msg); color: var(--warn); }
+  .pill.tag-cust  { background: var(--tag-custom); color: var(--bad); }
+  .pill.tag-neutral { background: rgba(58,58,58,0.06); color: var(--slate); }
+  .pill.status    { padding: 2px 8px; font-size: 10px; }
+  .pill.status.active   { background: rgba(59,109,17,0.10); color: var(--good); }
+  .pill.status.active::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--good); margin-right: 2px; }
+  .pill.status.testing  { background: rgba(133,79,11,0.10); color: var(--warn); }
+  .pill.status.paused   { background: rgba(58,58,58,0.08); color: var(--faded); }
+  .pill.status.killed   { background: rgba(163,45,45,0.10); color: var(--bad); }
+  .pill .ico { width: 12px; height: 12px; display: inline-flex; align-items: center; justify-content: center; }
+
+  .chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 999px; font-size: 12px; color: var(--slate); cursor: pointer; }
+  .chip:hover { border-color: var(--quiet); }
+  .chip .ico { color: var(--faded); font-style: italic; font-family: 'Georgia', serif; font-size: 14px; line-height: 1; }
+
+  .btn { padding: 8px 14px; border-radius: 6px; font-size: 12px; border: 1px solid var(--slate); background: transparent; color: var(--slate); cursor: pointer; font-family: var(--sans); font-weight: 500; }
+  .btn.primary { background: var(--slate); color: var(--salt); }
+  .btn.ghost { border-color: var(--line); color: var(--faded); }
+  .btn:hover:not(.primary) { background: var(--hover); }
+  .btn-cta { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 8px; font-size: 12px; font-weight: 500; background: var(--slate); color: var(--salt); cursor: pointer; }
+  .btn-cta .icoplus { width: 14px; height: 14px; border-radius: 50%; background: rgba(245,240,232,0.18); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; }
+
+  /* ─── Cards ──────────────────────────────────────────────────────── */
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+
+  /* ─── KPI strip (Home: This week at a glance) ────────────────────── */
+  .home-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .home-head h2 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .home-head .right { display: flex; gap: 8px; align-items: center; }
+  .kpi-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--card); overflow: hidden; }
+  .kpi-cell { padding: 18px 22px; border-right: 1px solid var(--line); }
+  .kpi-cell:last-child { border-right: 0; }
+  .kpi-cell .lbl { font-size: 12px; color: var(--faded); margin-bottom: 10px; }
+  .kpi-cell .row { display: flex; align-items: baseline; gap: 10px; }
+  .kpi-cell .val { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; color: var(--slate); }
+  .kpi-cell .delta { font-size: 11px; padding: 2px 6px; border-radius: 4px; }
+  .kpi-cell .delta.good { background: rgba(59,109,17,0.10); color: var(--good); }
+  .kpi-cell .delta.bad  { background: rgba(163,45,45,0.10); color: var(--bad); }
+  .kpi-cell .delta.warn { background: rgba(133,79,11,0.10); color: var(--warn); }
+  .kpi-cell .delta.flat { background: rgba(58,58,58,0.06); color: var(--faded); }
+  .kpi-cell .dash { font-size: 26px; color: var(--quiet); font-weight: 400; }
+
+  /* ─── Top spending creative card ─────────────────────────────────── */
+  .top-spend { margin-top: 28px; padding: 0; overflow: hidden; }
+  .top-spend .inner { display: grid; grid-template-columns: 268px 1fr; gap: 0; }
+  .top-spend .thumb { aspect-ratio: 9/16; background: linear-gradient(160deg, #7A7268 0%, #3F3933 100%); position: relative; }
+  .top-spend .thumb .play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.92); display: flex; align-items: center; justify-content: center; }
+  .top-spend .thumb .play::after { content: ''; border-left: 12px solid var(--slate); border-top: 7px solid transparent; border-bottom: 7px solid transparent; margin-left: 3px; }
+  .top-spend .body { padding: 30px 32px; display: flex; flex-direction: column; }
+  .top-spend h3 { font-size: 16px; font-weight: 600; margin: 0 0 8px; }
+  .top-spend .lead { font-size: 12px; color: var(--faded); margin: 0 0 24px; line-height: 1.55; max-width: 420px; }
+  .top-spend .starters-label { font-size: 13px; color: var(--slate); margin-bottom: 12px; font-weight: 500; }
+  .starters { display: flex; flex-direction: column; gap: 2px; }
+  .starter-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 13px; color: var(--slate); cursor: pointer; }
+  .starter-row:hover { color: var(--soil); }
+  .starter-row .ico { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; color: var(--faded); font-size: 13px; }
+  .starter-row .ico.search::before { content: '◌'; }
+  .starter-row .ico.hook::before { content: '⌒'; }
+  .starter-row .ico.sim::before { content: '⊡'; }
+  .starter-row .ico.spark::before { content: '✦'; color: var(--soil); }
+  .starter-row .ico.ask::before { content: '◦'; }
+
+  /* ─── Section heads ──────────────────────────────────────────────── */
+  .section { margin-top: 36px; }
+  .section .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .section .head h2 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .section .head .right { display: flex; align-items: center; gap: 10px; }
+  .tab-row { display: inline-flex; padding: 3px; background: var(--card); border: 1px solid var(--line); border-radius: 999px; }
+  .tab-row .tab { padding: 4px 14px; font-size: 12px; color: var(--faded); border-radius: 999px; cursor: pointer; }
+  .tab-row .tab.active { background: rgba(58,58,58,0.06); color: var(--slate); }
+  .range-note { font-size: 11px; color: var(--quiet); }
+
+  /* ─── Theme / cluster cards (4-image collage) ────────────────────── */
+  .theme-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; position: relative; }
+  .theme-row .nav-arrow { position: absolute; top: 130px; width: 32px; height: 32px; border-radius: 50%; background: var(--card); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; color: var(--quiet); cursor: pointer; z-index: 5; }
+  .theme-row .nav-arrow:hover { color: var(--slate); border-color: var(--slate); }
+  .theme-row .nav-arrow.left  { left: -16px; }
+  .theme-row .nav-arrow.right { right: -16px; }
+
+  .cluster { padding: 14px; cursor: pointer; }
+  .cluster:hover { border-color: var(--quiet); }
+  .cluster .quad { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; border-radius: 8px; overflow: hidden; aspect-ratio: 1.45; margin-bottom: 12px; }
+  .cluster .quad .q { background: var(--slate); }
+  .cluster .quad .q.a { background: linear-gradient(160deg, #6F6862 0%, #4A4540 100%); }
+  .cluster .quad .q.b { background: linear-gradient(160deg, #8B7E70 0%, #4D4337 100%); }
+  .cluster .quad .q.c { background: linear-gradient(160deg, #595049 0%, #2E2924 100%); }
+  .cluster .quad .q.d { background: linear-gradient(160deg, #7E756B 0%, #423B33 100%); }
+  .cluster .quad .q.e { background: linear-gradient(160deg, #98897A 0%, #56493C 100%); }
+  .cluster .quad .q.f { background: linear-gradient(160deg, #B5A693 0%, #6E6052 100%); }
+  .cluster .name { font-size: 13px; font-weight: 500; color: var(--slate); line-height: 1.35; margin: 0 0 4px; }
+  .cluster .desc { font-size: 11px; color: var(--faded); line-height: 1.5; margin: 0 0 12px; min-height: 32px; }
+  .cluster .foot { font-size: 11px; color: var(--quiet); display: flex; gap: 12px; align-items: center; }
+  .cluster .foot .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--quiet); }
+  .cluster .foot .roas { color: var(--slate); margin-left: auto; font-weight: 500; }
+
+  /* ─── Filter row ─────────────────────────────────────────────────── */
+  .filter-row { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .filter-row .f-pill { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 999px; font-size: 12px; cursor: pointer; }
+  .filter-row .f-pill:hover { border-color: var(--quiet); }
+  .filter-row .f-pill .ico { width: 12px; height: 12px; display: inline-flex; align-items: center; justify-content: center; color: var(--quiet); font-size: 12px; }
+  .filter-row .f-pill .k { color: var(--faded); }
+  .filter-row .f-pill .v { color: var(--slate); }
+  .filter-row .f-pill .x { color: var(--quiet); }
+  .filter-row .add { color: var(--faded); }
+  .filter-row .right { margin-left: auto; }
+
+  .chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+
+  /* ─── Metric strip (ranked metrics shown on cards) ───────────────── */
+  .metric-strip { display: flex; align-items: center; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .metric-strip .label { font-size: 11px; color: var(--faded); margin-right: 6px; }
+  .metric-strip .ai { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px 4px 9px; font-size: 11px; color: var(--slate); display: inline-flex; align-items: center; gap: 5px; }
+  .metric-strip .ai::before { content: '✦'; color: var(--soil); font-size: 11px; }
+  .metric-strip .add { background: var(--card); border: 1px dashed var(--line); border-radius: 999px; padding: 4px 11px; font-size: 11px; color: var(--faded); cursor: pointer; }
+  .metric-strip .m { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; background: var(--card); border: 1px solid var(--line); border-radius: 999px; font-size: 11px; }
+  .metric-strip .m .rank { width: 16px; height: 16px; border-radius: 50%; background: var(--slate); color: var(--salt); display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; }
+  .metric-strip .m.r1 .rank { background: var(--good); }
+  .metric-strip .m.r2 .rank { background: var(--warn); }
+  .metric-strip .m.r3 .rank { background: var(--soil); }
+  .metric-strip .m.r4 .rank { background: var(--slate); }
+  .metric-strip .toggle { margin-left: auto; display: flex; gap: 2px; padding: 2px; background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
+  .metric-strip .toggle a { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; color: var(--quiet); }
+  .metric-strip .toggle a.active { background: rgba(58,58,58,0.06); color: var(--slate); }
+
+  /* ─── Ad grid (Top Creatives / Pattern reports) ──────────────────── */
+  .ad-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .ad-card { padding: 0; overflow: hidden; cursor: pointer; }
+  .ad-card:hover { border-color: var(--quiet); }
+  .ad-card .media { aspect-ratio: 9/16; position: relative; background: var(--slate); }
+  .ad-card .media.image { background: linear-gradient(160deg, #8E8579 0%, #534B40 100%); }
+  .ad-card .media.v1 { background: linear-gradient(160deg, #7A7268 0%, #3F3933 100%); }
+  .ad-card .media.v2 { background: linear-gradient(160deg, #8C7E6E 0%, #4A4034 100%); }
+  .ad-card .media.v3 { background: linear-gradient(160deg, #5C544B 0%, #2D2823 100%); }
+  .ad-card .media.v4 { background: linear-gradient(160deg, #98897A 0%, #56493C 100%); }
+  .ad-card .media.v5 { background: linear-gradient(160deg, #6A6258 0%, #38322C 100%); }
+  .ad-card .media.v6 { background: linear-gradient(160deg, #B5A693 0%, #6E6052 100%); }
+  .ad-card .media.v7 { background: linear-gradient(160deg, #82786C 0%, #423B33 100%); }
+  .ad-card .media .flag { position: absolute; bottom: 10px; left: 10px; padding: 3px 9px; background: rgba(255,255,255,0.92); font-size: 10px; color: var(--slate); border-radius: 4px; font-weight: 500; }
+  .ad-card .body { padding: 12px 14px 14px; }
+  .ad-card .code { font-size: 12px; font-weight: 500; color: var(--slate); margin-bottom: 10px; }
+  .ad-card .stats { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+  .ad-card .stats .row { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; padding: 2px 0; }
+  .ad-card .stats .row .k { color: var(--faded); }
+  .ad-card .stats .row .v { color: var(--slate); font-variant-numeric: tabular-nums; }
+  .ad-card .stats .row .v.good { color: var(--good); background: rgba(59,109,17,0.10); padding: 1px 6px; border-radius: 4px; }
+  .ad-card .stats .row .v.bad  { color: var(--bad); background: rgba(163,45,45,0.10); padding: 1px 6px; border-radius: 4px; }
+  .ad-card .tags { display: flex; gap: 4px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--line); }
+  .ad-card .tags .pill { font-size: 10px; padding: 2px 8px; }
+
+  /* ─── Right-panel ad detail ──────────────────────────────────────── */
+  .detail-pane { display: grid; grid-template-columns: 1fr 380px; gap: 0; min-height: 720px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .detail-left { padding: 36px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; background: var(--card); }
+  .detail-left .meta-top { width: 100%; display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .detail-left .meta-top .id { font-size: 12px; color: var(--slate); }
+  .detail-left .meta-top .id .code { font-weight: 600; }
+  .detail-left .meta-top .id .hash { font-family: var(--mono); font-size: 10px; color: var(--quiet); margin-left: 8px; }
+  .detail-left .meta-top .actions { display: flex; gap: 8px; align-items: center; }
+  .player { width: 320px; aspect-ratio: 9/16; background: linear-gradient(160deg, #7A7268 0%, #3F3933 100%); border-radius: 8px; position: relative; overflow: hidden; }
+  .player .ig-head { position: absolute; top: 12px; left: 12px; right: 12px; background: rgba(255,255,255,0.94); border-radius: 6px; padding: 7px 10px; display: flex; align-items: center; gap: 8px; }
+  .player .ig-head .av { width: 22px; height: 22px; border-radius: 50%; background: var(--slate); flex-shrink: 0; }
+  .player .ig-head .nm { font-size: 11px; font-weight: 600; color: var(--slate); }
+  .player .ig-head .sub { font-size: 9px; color: var(--faded); margin-top: 1px; }
+  .player .cta-row { position: absolute; bottom: 12px; left: 12px; right: 12px; background: rgba(255,255,255,0.94); border-radius: 6px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; }
+  .player .cta-row .l { font-size: 10px; font-weight: 600; color: var(--slate); }
+  .player .cta-row .s { font-size: 9px; color: var(--faded); margin-top: 1px; }
+  .player .cta-row .btn-sm { font-size: 9px; padding: 5px 10px; background: var(--slate); color: var(--salt); border-radius: 4px; font-weight: 500; }
+  .player .controls { position: absolute; bottom: 56px; left: 12px; right: 12px; height: 3px; background: rgba(255,255,255,0.30); border-radius: 2px; }
+  .player .controls .pos { width: 22%; height: 100%; background: rgba(255,255,255,0.92); border-radius: 2px; }
+  .player .timestamp { position: absolute; bottom: 60px; left: 12px; font-size: 10px; color: rgba(255,255,255,0.92); padding: 1px 4px; background: rgba(0,0,0,0.30); border-radius: 3px; }
+
+  .detail-right { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-width: 0; }
+  .detail-tabs { display: flex; padding: 0 20px; border-bottom: 1px solid var(--line); }
+  .detail-tabs .tab { padding: 14px 12px 14px 0; margin-right: 18px; font-size: 12px; color: var(--faded); border-bottom: 2px solid transparent; cursor: pointer; margin-bottom: -1px; }
+  .detail-tabs .tab.active { color: var(--slate); border-bottom-color: var(--slate); }
+  .detail-tabs .tab:hover:not(.active) { color: var(--slate); }
+  .detail-scroll { padding: 22px 22px 28px; overflow-y: auto; }
+
+  .detail-section { margin-bottom: 24px; }
+  .detail-section h3 { font-size: 14px; font-weight: 600; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  .detail-section h3 .info { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--quiet); color: var(--quiet); display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-style: italic; font-family: Georgia, serif; }
+  .detail-section h3 .ai-flag { padding: 1px 7px; background: var(--tag-format); color: var(--soil); font-size: 10px; border-radius: 999px; letter-spacing: 0.02em; font-weight: 500; }
+  .detail-section .row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; font-size: 12px; }
+  .detail-section .row:not(:last-child) { border-bottom: 1px solid var(--line-soft); }
+  .detail-section .row .k { color: var(--faded); display: inline-flex; align-items: center; gap: 6px; }
+  .detail-section .row .k .gico { color: var(--quiet); font-size: 11px; }
+  .detail-section .row .v { display: inline-flex; gap: 4px; align-items: center; color: var(--slate); }
+
+  .spend-block { background: var(--bg); padding: 14px 16px; border-radius: 8px; margin-bottom: 16px; }
+  .spend-block .row { display: flex; align-items: center; justify-content: space-between; }
+  .spend-block .l .k { font-size: 11px; color: var(--faded); display: flex; align-items: center; gap: 5px; }
+  .spend-block .l .v { font-size: 22px; font-weight: 600; margin-top: 2px; letter-spacing: -0.01em; }
+  .spend-block .r { text-align: right; font-size: 11px; color: var(--quiet); display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .spend-block .r .tag { background: rgba(133,79,11,0.10); color: var(--warn); padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 500; }
+
+  .triplet { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; margin-bottom: 22px; padding: 4px 0; }
+  .triplet .cell { padding: 4px 16px 4px 0; border-right: 1px solid var(--line-soft); }
+  .triplet .cell:last-child { border-right: 0; }
+  .triplet .cell .lbl { font-size: 11px; color: var(--faded); margin-bottom: 4px; }
+  .triplet .cell .vv { font-size: 14px; color: var(--slate); font-weight: 500; display: inline-flex; align-items: center; gap: 5px; }
+  .triplet .cell .vv .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--good); }
+
+  .starters-pane { margin-bottom: 24px; }
+  .starters-pane .head { font-size: 13px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .starters-pane .head .ai-flag { padding: 1px 7px; background: var(--tag-format); color: var(--soil); font-size: 10px; border-radius: 999px; font-weight: 500; }
+  .starters-pane .row { display: flex; align-items: center; gap: 10px; padding: 9px 0; font-size: 12px; cursor: pointer; }
+  .starters-pane .row:not(:last-child) { border-bottom: 1px solid var(--line-soft); }
+  .starters-pane .row:hover { color: var(--soil); }
+  .starters-pane .row .ico { width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; color: var(--faded); font-size: 12px; }
+
+  .activity { margin-top: 24px; }
+  .activity .lbl { font-size: 11px; color: var(--faded); margin-bottom: 6px; letter-spacing: 0.04em; }
+  .activity .input { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: flex; align-items: center; gap: 8px; }
+  .activity .input input { border: 0; background: transparent; outline: none; font-family: var(--sans); font-size: 12px; flex: 1; color: var(--slate); }
+  .activity .input input::placeholder { color: var(--quiet); }
+  .activity .input .send { width: 22px; height: 22px; border-radius: 50%; background: var(--slate); color: var(--salt); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; }
+
+  .custom-tags { margin-top: 8px; padding: 14px 0; border-top: 1px solid var(--line-soft); display: flex; justify-content: space-between; align-items: center; }
+  .custom-tags .k { font-size: 12px; color: var(--faded); }
+  .custom-tags .add { width: 22px; height: 22px; border-radius: 6px; background: var(--bg); display: inline-flex; align-items: center; justify-content: center; color: var(--quiet); cursor: pointer; }
+  .custom-tags .add:hover { color: var(--slate); background: var(--hover); }
+
+  /* ─── Performance breakdown (Ad detail · Performance tab) ────────── */
+  .perf-block { padding: 22px 24px; margin-bottom: 16px; }
+  .perf-block h4 { font-size: 13px; font-weight: 600; margin: 0 0 4px; }
+  .perf-block .sub { font-size: 11px; color: var(--quiet); margin-bottom: 14px; }
+  .perf-legend { display: flex; gap: 14px; margin-bottom: 14px; font-size: 11px; color: var(--faded); align-items: center; flex-wrap: wrap; }
+  .perf-legend .item { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; }
+  .perf-legend .item .dot { width: 8px; height: 8px; border-radius: 2px; }
+  .perf-legend .item .dot.impr { background: var(--good); }
+  .perf-legend .item .dot.spnd { background: var(--soil); }
+  .perf-legend .caret { color: var(--quiet); font-size: 9px; }
+
+  .grouped-bars { display: flex; align-items: flex-end; gap: 22px; padding-top: 24px; height: 220px; position: relative; border-bottom: 1px solid var(--line-soft); padding-bottom: 8px; }
+  .grouped-bars .col { flex: 1; display: flex; flex-direction: column; align-items: center; }
+  .grouped-bars .pair { display: flex; align-items: flex-end; gap: 6px; flex: 1; min-height: 180px; }
+  .grouped-bars .b { width: 26px; border-radius: 4px 4px 0 0; position: relative; }
+  .grouped-bars .b .lbl { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 10px; color: var(--slate); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .grouped-bars .b.impr { background: var(--good); opacity: 0.85; }
+  .grouped-bars .b.spnd { background: var(--soil); opacity: 0.85; }
+  .grouped-bars .col .lbl-x { font-size: 11px; color: var(--faded); margin-top: 8px; display: flex; align-items: center; gap: 5px; }
+  .grouped-bars .col .lbl-x .platico { color: var(--quiet); }
+
+  .axis-y { position: absolute; left: 0; top: 0; bottom: 24px; width: 50px; display: flex; flex-direction: column; justify-content: space-between; font-size: 10px; color: var(--quiet); font-variant-numeric: tabular-nums; pointer-events: none; }
+  .axis-y-r { position: absolute; right: 0; top: 0; bottom: 24px; width: 50px; display: flex; flex-direction: column; justify-content: space-between; font-size: 10px; color: var(--quiet); font-variant-numeric: tabular-nums; text-align: right; pointer-events: none; }
+
+  /* ─── Comments tab ───────────────────────────────────────────────── */
+  .comments-empty { padding: 80px 30px; text-align: center; color: var(--faded); }
+  .comments-empty .ico { width: 40px; height: 40px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+  .comments-empty h4 { font-size: 14px; font-weight: 600; color: var(--slate); margin: 0 0 4px; }
+  .comments-empty p { font-size: 12px; margin: 0; }
+
+  .comment { padding: 14px 0; border-bottom: 1px solid var(--line-soft); }
+  .comment .h { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .comment .av { width: 18px; height: 18px; border-radius: 50%; background: var(--sand); }
+  .comment .nm { font-size: 11px; font-weight: 500; }
+  .comment .when { font-size: 10px; color: var(--quiet); margin-left: auto; }
+  .comment .sent { font-size: 9px; padding: 1px 6px; border-radius: 4px; font-weight: 500; }
+  .comment .sent.pos { background: rgba(59,109,17,0.10); color: var(--good); }
+  .comment .sent.neg { background: rgba(163,45,45,0.10); color: var(--bad); }
+  .comment .sent.neu { background: rgba(58,58,58,0.06); color: var(--faded); }
+  .comment .body { font-size: 12px; color: var(--slate); line-height: 1.55; }
+
+  /* ─── Inspo sub-nav (Discover / Trending / Organic / Following) ─── */
+  .inspo-shell { display: grid; grid-template-columns: 220px 1fr; gap: 0; min-height: 720px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .inspo-side { padding: 18px 14px; border-right: 1px solid var(--line); background: var(--bg); }
+  .inspo-side .header { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; margin-bottom: 8px; }
+  .inspo-side .header h3 { margin: 0; font-size: 13px; font-weight: 600; }
+  .inspo-side .header .pan { color: var(--quiet); }
+  .inspo-side .nav-item { padding: 7px 10px; font-size: 13px; border-radius: 6px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .inspo-side .nav-item:hover { background: var(--hover); }
+  .inspo-side .nav-item.active { background: var(--card); border: 1px solid var(--line); }
+  .inspo-side .nav-item .glyph { width: 14px; height: 14px; color: var(--faded); }
+  .inspo-side .empty-card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px; text-align: center; margin: 12px 4px 16px; }
+  .inspo-side .empty-card .ttl { font-size: 12px; font-weight: 600; margin: 0 0 4px; }
+  .inspo-side .empty-card .blurb { font-size: 11px; color: var(--faded); margin: 0 0 10px; line-height: 1.45; }
+  .inspo-side .empty-card .btn-sm { font-size: 11px; padding: 5px 11px; background: var(--slate); color: var(--salt); border-radius: 6px; }
+  .inspo-side .section-title { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--quiet); padding: 12px 8px 4px; }
+  .inspo-side .brand-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; font-size: 12px; border-radius: 6px; cursor: pointer; }
+  .inspo-side .brand-row:hover { background: var(--hover); }
+  .inspo-side .brand-row .ico { width: 18px; height: 18px; border-radius: 5px; background: var(--sand); display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; color: var(--slate); }
+
+  .inspo-main { padding: 0; }
+  .inspo-topbar { display: flex; align-items: center; gap: 12px; padding: 14px 22px; border-bottom: 1px solid var(--line); }
+  .inspo-topbar .where { font-size: 13px; color: var(--slate); }
+  .inspo-search { flex: 1; max-width: 460px; margin: 0 auto; display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; }
+  .inspo-search input { border: 0; background: transparent; outline: none; font-family: var(--sans); font-size: 12px; flex: 1; color: var(--slate); }
+  .inspo-search input::placeholder { color: var(--quiet); }
+  .inspo-topbar .right { margin-left: auto; }
+  .inspo-content { padding: 26px 28px 36px; }
+  .inspo-content h2 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+  .inspo-content .blurb { font-size: 12px; color: var(--faded); margin: 0 0 28px; }
+
+  .creators-row { display: flex; gap: 14px; margin-bottom: 36px; overflow-x: auto; padding-bottom: 8px; }
+  .creator-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; min-width: 200px; flex-shrink: 0; text-align: center; }
+  .creator-card .av { width: 64px; height: 64px; border-radius: 50%; background: var(--slate); margin: 0 auto 10px; background: linear-gradient(160deg, #98897A 0%, #56493C 100%); }
+  .creator-card .nm { font-size: 13px; font-weight: 500; margin-bottom: 8px; }
+  .creator-card .stats { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 11px; color: var(--faded); }
+  .creator-card .stats .platico { color: var(--quiet); }
+
+  .masonry { columns: 4 240px; column-gap: 14px; }
+  .masonry .item { break-inside: avoid; margin-bottom: 14px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
+  .masonry .item:hover { border-color: var(--quiet); }
+  .masonry .item .img { width: 100%; position: relative; }
+  .masonry .item .img.h1 { aspect-ratio: 9/16; }
+  .masonry .item .img.h2 { aspect-ratio: 4/5; }
+  .masonry .item .img.h3 { aspect-ratio: 1; }
+  .masonry .item .img.h4 { aspect-ratio: 3/4; }
+  .masonry .item .img.t1 { background: linear-gradient(160deg, #7A7268 0%, #3F3933 100%); }
+  .masonry .item .img.t2 { background: linear-gradient(160deg, #8C7E6E 0%, #4A4034 100%); }
+  .masonry .item .img.t3 { background: linear-gradient(160deg, #95897A 0%, #4F4538 100%); }
+  .masonry .item .img.t4 { background: linear-gradient(160deg, #5C544B 0%, #2D2823 100%); }
+  .masonry .item .img.t5 { background: linear-gradient(160deg, #B5A693 0%, #6E6052 100%); }
+  .masonry .item .img.t6 { background: linear-gradient(160deg, #82786C 0%, #423B33 100%); }
+  .masonry .item .img.t7 { background: linear-gradient(160deg, #6A6258 0%, #38322C 100%); }
+  .masonry .item .img .play { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 32px; height: 32px; border-radius: 50%; background: rgba(0,0,0,0.50); display: flex; align-items: center; justify-content: center; }
+  .masonry .item .img .play::after { content: ''; border-left: 9px solid #fff; border-top: 5px solid transparent; border-bottom: 5px solid transparent; margin-left: 2px; }
+  .masonry .item .img .caption { position: absolute; bottom: 10px; left: 10px; right: 10px; background: rgba(255,255,255,0.92); border-radius: 4px; padding: 4px 8px; font-size: 9px; color: var(--slate); font-weight: 500; }
+  .masonry .item .meta { padding: 8px 12px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
+  .masonry .item .meta .av { width: 16px; height: 16px; border-radius: 50%; background: var(--sand); }
+  .masonry .item .meta .nm { color: var(--slate); }
+  .masonry .item .meta .bm { margin-left: auto; color: var(--quiet); width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; }
+
+  /* ─── Pattern view dim switcher ──────────────────────────────────── */
+  .dim-bar { display: flex; gap: 4px; padding: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 22px; overflow-x: auto; }
+  .dim-bar a { padding: 6px 12px; font-size: 12px; color: var(--faded); border-radius: 6px; white-space: nowrap; }
+  .dim-bar a.active { background: rgba(58,58,58,0.06); color: var(--slate); }
+  .dim-bar a:hover:not(.active) { color: var(--slate); }
+
+  /* ─── Chat ───────────────────────────────────────────────────────── */
+  .chat-shell { display: grid; grid-template-columns: 240px 1fr; gap: 0; min-height: 640px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .chat-side { padding: 18px 14px; border-right: 1px solid var(--line); background: var(--bg); }
+  .chat-side .lbl { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--quiet); padding: 4px 8px 8px; }
+  .chat-side .conv { padding: 10px 12px; font-size: 12px; border-radius: 6px; cursor: pointer; line-height: 1.4; margin-bottom: 2px; }
+  .chat-side .conv:hover { background: var(--hover); }
+  .chat-side .conv.active { background: var(--card); border: 1px solid var(--line); }
+  .chat-side .conv .when { font-size: 10px; color: var(--quiet); margin-top: 4px; }
+  .chat-main { display: flex; flex-direction: column; }
+  .chat-msgs { padding: 28px 32px; flex: 1; }
+  .chat-input { border-top: 1px solid var(--line); padding: 14px 22px; display: flex; align-items: center; gap: 12px; }
+  .chat-input input { border: 0; background: transparent; outline: none; font-family: var(--sans); font-size: 13px; flex: 1; color: var(--slate); }
+  .chat-input .send { width: 28px; height: 28px; border-radius: 50%; background: var(--slate); color: var(--salt); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; }
+  .msg { margin-bottom: 22px; max-width: 720px; }
+  .msg .role { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--quiet); margin-bottom: 6px; }
+  .msg.user .role { color: var(--soil); }
+  .msg .body { font-size: 13px; color: var(--slate); line-height: 1.7; }
+  .msg .body p { margin: 0 0 10px; }
+  .msg .body p:last-child { margin: 0; }
+  .msg .body .inline-ad { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; background: var(--tag-format); border-radius: 4px; font-family: var(--mono); font-size: 11px; cursor: pointer; }
+  .msg .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 14px; }
+
+  /* ─── Footer ─────────────────────────────────────────────────────── */
+  .footnote { padding: 18px 36px 40px; font-size: 10px; color: var(--quiet); letter-spacing: 0.04em; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ═════════════════ SIDEBAR ═════════════════ -->
+  <aside class="sidebar">
+    <div class="ws">
+      <div class="ico">F</div>
+      <div class="nm">Foreign Resource</div>
+      <span class="caret">▾</span>
+      <span class="panel">⬚</span>
+    </div>
+
+    <a class="nav-item active" href="#home"><span class="glyph">⌂</span><span>Home</span></a>
+    <a class="nav-item" href="#leaderboard"><span class="glyph">⌘</span><span>Leaderboard</span></a>
+    <a class="nav-item" href="#themes"><span class="glyph">◖</span><span>Messaging themes</span></a>
+    <a class="nav-item" href="#new-report"><span class="glyph">+</span><span>Create report</span></a>
+
+    <div class="nav-section">
+      <span>Folders</span>
+      <span class="actions"><a>⌕</a><a>+</a></span>
+    </div>
+
+    <div class="nav-tree">
+      <div class="group open">
+        <div class="header"><span class="caret">▾</span><span class="glyph">▸</span><span>Reports</span></div>
+        <div class="children">
+          <a class="nav-item child" href="#top-creatives"><span class="glyph gr">▣</span>Top creatives</a>
+          <a class="nav-item child"><span class="glyph gr">▣</span>All active ads</a>
+          <a class="nav-item child"><span class="glyph gr">▣</span>New launches</a>
+          <a class="nav-item child"><span class="glyph am">▣</span>Top hooks</a>
+          <a class="nav-item child"><span class="glyph am">▣</span>Top clicks</a>
+          <a class="nav-item child"><span class="glyph am">▣</span>Top copy</a>
+          <a class="nav-item child"><span class="glyph so">▣</span>Ad type comparison</a>
+          <a class="nav-item child"><span class="glyph so">▣</span>Landing page analysis</a>
+          <a class="nav-item child"><span class="glyph so">▣</span>Video analysis</a>
+          <a class="nav-item child"><span class="glyph bd">▣</span>Static analysis</a>
+          <a class="nav-item child"><span class="glyph bd">▣</span>Ad length comparison</a>
+          <a class="nav-item child"><span class="glyph bd">▣</span>Week over week trends</a>
+        </div>
+      </div>
+
+      <div class="group open" style="margin-top: 4px;">
+        <div class="header"><span class="caret">▾</span><span class="glyph">▸</span><span>Creative Patterns</span></div>
+        <div class="children">
+          <a class="nav-item child" href="#patterns/asset-type"><span class="glyph">▣</span>Asset Type</a>
+          <a class="nav-item child" href="#patterns/visual-format"><span class="glyph">▣</span>Visual Format</a>
+          <a class="nav-item child" href="#patterns/messaging-angle"><span class="glyph">▣</span>Messaging Angle</a>
+          <a class="nav-item child" href="#patterns/hook-tactic"><span class="glyph">▣</span>Hook Tactic</a>
+          <a class="nav-item child" href="#patterns/headline-tactic"><span class="glyph">▣</span>Headline Tactic</a>
+          <a class="nav-item child" href="#patterns/intended-audience"><span class="glyph">▣</span>Intended Audience</a>
+          <a class="nav-item child" href="#patterns/seasonality"><span class="glyph">▣</span>Seasonality</a>
+          <a class="nav-item child" href="#patterns/offer-type"><span class="glyph">▣</span>Offer Type</a>
+        </div>
+      </div>
+
+      <div class="group" style="margin-top: 4px;">
+        <div class="header"><span class="caret">▸</span><span class="glyph">▸</span><span>From Templates</span></div>
+        <div class="children">
+          <a class="nav-item child"><span class="glyph">▣</span>Hook analysis</a>
+          <a class="nav-item child"><span class="glyph">▣</span>Top hook</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-foot">
+      <div class="av">M</div>
+      <div class="nm">Matias</div>
+      <div class="dot"></div>
+    </div>
+  </aside>
+
+  <!-- ═════════════════ CONTENT ═════════════════ -->
+  <div class="content">
+
+    <!-- Top crumb / action bar -->
+    <header class="topbar">
+      <span class="crumb" id="crumb">Home</span>
+      <div class="right">
+        <span class="updated" id="updated">Synced 14m ago</span>
+        <a class="icon-btn">⟳</a>
+        <a class="save">Save</a>
+        <a class="share">Share report</a>
+        <a class="icon-btn brand">∞</a>
+      </div>
+    </header>
+
+    <main>
+
+      <!-- ═════════════════ HOME ═════════════════ -->
+      <section class="view active" data-view="home">
+        <div class="home-head">
+          <h2>This week at a glance</h2>
+          <div class="right">
+            <span class="pill range"><span class="cal">▦</span>Last 7 days</span>
+          </div>
+        </div>
+
+        <div class="kpi-strip">
+          <div class="kpi-cell">
+            <div class="lbl">Total spend</div>
+            <div class="row">
+              <div class="val num">$419.47</div>
+              <div class="delta flat num">0.01%</div>
+            </div>
+          </div>
+          <div class="kpi-cell">
+            <div class="lbl">ROAS</div>
+            <div class="row">
+              <div class="val num">2.05</div>
+              <div class="delta bad num">-2.38%</div>
+            </div>
+          </div>
+          <div class="kpi-cell">
+            <div class="lbl">Creatives launched</div>
+            <div class="row">
+              <div class="dash">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top spending creative -->
+        <div class="card top-spend">
+          <div class="inner">
+            <a class="thumb" href="#ad/A-C-S2-C1"><span class="play"></span></a>
+            <div class="body">
+              <h3>This week's top spending creative</h3>
+              <p class="lead">This ad drove $169.85 in spend with a ROAS of 2.94.</p>
+              <div class="starters-label">Thought starters</div>
+              <div class="starters">
+                <a class="starter-row"><span class="ico search"></span>Analyze this ad</a>
+                <a class="starter-row"><span class="ico hook"></span>Give me new hook ideas based on this ad</a>
+                <a class="starter-row"><span class="ico sim"></span>Similar ads like this from other brands</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Messaging themes -->
+        <div class="section">
+          <div class="head">
+            <h2>Messaging themes you're testing right now</h2>
+            <div class="right">
+              <div class="tab-row">
+                <span class="tab active">Top</span>
+                <span class="tab">Just launched</span>
+              </div>
+              <span class="range-note">Last 14d</span>
+            </div>
+          </div>
+          <div class="theme-row">
+            <span class="nav-arrow left">‹</span>
+            <div class="card cluster">
+              <div class="quad"><div class="q a"></div><div class="q b"></div><div class="q c"></div><div class="q d"></div></div>
+              <h4 class="name">Distressed &amp; deconstructed aesthetic</h4>
+              <p class="desc">Focus on the unique visual style of the clothing,&hellip;</p>
+              <div class="foot"><span>18 ads</span><span class="dot"></span><span>2% hit rate</span></div>
+            </div>
+            <div class="card cluster">
+              <div class="quad"><div class="q b"></div><div class="q c"></div><div class="q d"></div><div class="q e"></div></div>
+              <h4 class="name">Versatility &amp; modular design</h4>
+              <p class="desc">Garments transform for multiple looks, including&hellip;</p>
+              <div class="foot"><span>15 ads</span><span class="dot"></span><span>8% hit rate</span></div>
+            </div>
+            <div class="card cluster">
+              <div class="quad"><div class="q c"></div><div class="q d"></div><div class="q e"></div><div class="q f"></div></div>
+              <h4 class="name">Design as identity &amp; self-expression</h4>
+              <p class="desc">Expressing self through unique design, showcasing unique&hellip;</p>
+              <div class="foot"><span>11 ads</span><span class="dot"></span><span>4% hit rate</span></div>
+            </div>
+            <div class="card cluster">
+              <div class="quad"><div class="q d"></div><div class="q e"></div><div class="q f"></div><div class="q a"></div></div>
+              <h4 class="name">Urban exploration aesthetic</h4>
+              <p class="desc">Adventurous, exploration-themed visual, depicting an&hellip;</p>
+              <div class="foot"><span>2 ads</span><span class="dot"></span><span>0% hit rate</span></div>
+            </div>
+            <span class="nav-arrow right">›</span>
+          </div>
+        </div>
+
+        <!-- Trending across the tool -->
+        <div class="section">
+          <div class="head">
+            <h2>Trending ads across your inspo</h2>
+            <a class="btn-cta"><span class="icoplus">⊙</span>Explore inspo</a>
+          </div>
+          <div class="ad-grid">
+            <a class="card ad-card" href="#ad/A-BB-S6-C1"><div class="media v1"><span class="flag">Reel</span></div><div class="body"><div class="code">essentials_co</div><div class="stats"><div class="row"><span class="k">Format</span><span class="v">Reel</span></div><div class="row"><span class="k">Active</span><span class="v">4d</span></div></div></div></a>
+            <a class="card ad-card" href="#ad/A-BB-S6-C1"><div class="media v3"><span class="flag">Story</span></div><div class="body"><div class="code">fearofgod</div><div class="stats"><div class="row"><span class="k">Format</span><span class="v">Story</span></div><div class="row"><span class="k">Active</span><span class="v">1w</span></div></div></div></a>
+            <a class="card ad-card" href="#ad/A-BB-S6-C1"><div class="media v5"><span class="flag">Reel</span></div><div class="body"><div class="code">stussy</div><div class="stats"><div class="row"><span class="k">Format</span><span class="v">Reel</span></div><div class="row"><span class="k">Active</span><span class="v">2d</span></div></div></div></a>
+            <a class="card ad-card" href="#ad/A-BB-S6-C1"><div class="media v7"><span class="flag">Feed</span></div><div class="body"><div class="code">aimeleondore</div><div class="stats"><div class="row"><span class="k">Format</span><span class="v">Feed</span></div><div class="row"><span class="k">Active</span><span class="v">6d</span></div></div></div></a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═════════════════ TOP CREATIVES ═════════════════ -->
+      <section class="view" data-view="top-creatives">
+        <h1 class="page-title"><span style="margin-right: 6px;">⌘</span>Top creatives</h1>
+        <p class="page-blurb">This report highlights your top-performing creatives, making it easy to spot what's working.</p>
+
+        <div class="filter-row">
+          <div class="f-pill"><span class="ico">▦</span><span class="v">Last 14 days</span></div>
+          <div class="f-pill"><span class="k">Group by</span><span class="v">Creative</span></div>
+          <div class="f-pill"><span class="v">Ad type is not Feed</span><span class="x">×</span></div>
+          <a class="f-pill add"><span>+ Add filter</span></a>
+        </div>
+
+        <div class="chip-row">
+          <a class="chip"><span class="ico">i</span>Ask me anything</a>
+          <a class="chip"><span class="ico">⌘</span>Give me a testing plan</a>
+          <a class="chip"><span class="ico">◆</span>Spot patterns in winners</a>
+          <a class="chip"><span class="ico">✦</span>What should I create next?</a>
+          <a class="chip"><span class="ico">⊕</span>Analyze this report</a>
+        </div>
+
+        <div class="metric-strip">
+          <span class="ai">AI tags</span>
+          <span class="add">+ Add metric</span>
+          <span class="m r1"><span class="rank">1</span>ROAS</span>
+          <span class="m r2"><span class="rank">2</span>Spend</span>
+          <span class="m r3"><span class="rank">3</span>CPA</span>
+          <span class="m r4"><span class="rank">4</span>CTR (link click)</span>
+          <span class="m"><span class="rank">+</span>Visual Format</span>
+          <span class="m"><span class="rank">+</span>Messaging Angle</span>
+          <span class="m"><span class="rank">+</span>Intended Audience</span>
+          <span class="toggle"><a class="active">▦</a><a>▤</a><a>▥</a></span>
+        </div>
+
+        <div class="ad-grid">
+          <a class="card ad-card" href="#ad/A-BB-S6-C1">
+            <div class="media v1"><span class="flag">Flexible Ad</span></div>
+            <div class="body">
+              <div class="code">A-BB-S6-C1</div>
+              <div class="stats">
+                <div class="row"><span class="k">ROAS</span><span class="v">2.11</span></div>
+                <div class="row"><span class="k">Spend</span><span class="v">$313.95</span></div>
+                <div class="row"><span class="k">CPA</span><span class="v">$62.79</span></div>
+                <div class="row"><span class="k">CTR (link click)</span><span class="v">1.46%</span></div>
+              </div>
+              <div class="tags">
+                <span class="pill tag-fmt">Try-On</span>
+                <span class="pill tag-msg">Distressed Aesthetic</span>
+              </div>
+            </div>
+          </a>
+          <a class="card ad-card" href="#ad/A-C-APR">
+            <div class="media v2"><span class="flag">Flexible Ad</span></div>
+            <div class="body">
+              <div class="code">A-C-APR.13.25.V.C5</div>
+              <div class="stats">
+                <div class="row"><span class="k">ROAS</span><span class="v">1.3</span></div>
+                <div class="row"><span class="k">Spend</span><span class="v">$119.42</span></div>
+                <div class="row"><span class="k">CPA</span><span class="v">$119.42</span></div>
+                <div class="row"><span class="k">CTR (link click)</span><span class="v">1.17%</span></div>
+              </div>
+              <div class="tags">
+                <span class="pill tag-fmt">Static To Video Hybrid</span>
+                <span class="pill tag-msg">Design As Identity &amp; Self-Expression</span>
+              </div>
+            </div>
+          </a>
+          <a class="card ad-card" href="#ad/A-C-DCT10">
+            <div class="media image"><span class="flag">Image</span></div>
+            <div class="body">
+              <div class="code">A-C-DCT10</div>
+              <div class="stats">
+                <div class="row"><span class="k">ROAS</span><span class="v good">2.74</span></div>
+                <div class="row"><span class="k">Spend</span><span class="v">$78.10</span></div>
+                <div class="row"><span class="k">CPA</span><span class="v">$39.05</span></div>
+                <div class="row"><span class="k">CTR (link click)</span><span class="v">1.9%</span></div>
+              </div>
+              <div class="tags">
+                <span class="pill tag-fmt">Split Screen</span>
+                <span class="pill tag-msg">Versatility &amp; Modular Design</span>
+              </div>
+            </div>
+          </a>
+          <a class="card ad-card" href="#ad/A-C-S2-C5V2">
+            <div class="media v3"><span class="flag">Flexible Ad</span></div>
+            <div class="body">
+              <div class="code">A-C-S2-C5V2</div>
+              <div class="stats">
+                <div class="row"><span class="k">ROAS</span><span class="v good">4.58</span></div>
+                <div class="row"><span class="k">Spend</span><span class="v">$70.92</span></div>
+                <div class="row"><span class="k">CPA</span><span class="v">$35.46</span></div>
+                <div class="row"><span class="k">CTR (link click)</span><span class="v">1.11%</span></div>
+              </div>
+              <div class="tags">
+                <span class="pill tag-fmt">Try-On</span>
+                <span class="pill tag-msg">Design As Identity &amp; Self-Expression</span>
+              </div>
+            </div>
+          </a>
+          <a class="card ad-card" href="#ad/A-C-S2-C1">
+            <div class="media v4"><span class="flag">Flexible Ad</span></div>
+            <div class="body">
+              <div class="code">A-C-S2-C1</div>
+              <div class="stats">
+                <div class="row"><span class="k">ROAS</span><span class="v">—</span></div>
+                <div class="row"><span class="k">Spend</span><span class="v">$42.48</span></div>
+                <div class="row"><span class="k">CPA</span><span class="v">—</span></div>
+                <div class="row"><span class="k">CTR (link click)</span><span class="v">1.37%</span></div>
+              </div>
+              <div class="tags">
+                <span class="pill tag-fmt">Demo</span>
+                <span class="pill tag-msg">Versatility &amp; Modular Design</span>
+              </div>
+            </div>
+          </a>
+          <a class="card ad-card" href="#ad/A-C-Dec6">
+            <div class="media v5"><span class="flag">Flexible Ad</span></div>
+            <div class="body">
+              <div class="code">A-C-Dec6</div>
+              <div class="stats">
+                <div class="row"><span class="k">ROAS</span><span class="v good">3.83</span></div>
+                <div class="row"><span class="k">Spend</span><span class="v">$40.45</span></div>
+                <div class="row"><span class="k">CPA</span><span class="v">$40.45</span></div>
+                <div class="row"><span class="k">CTR (link click)</span><span class="v">1.53%</span></div>
+              </div>
+              <div class="tags">
+                <span class="pill tag-fmt">Montage</span>
+                <span class="pill tag-msg">Versatility &amp; Modular Design</span>
+              </div>
+            </div>
+          </a>
+          <a class="card ad-card" href="#ad/A-BB-S6-C4">
+            <div class="media v6"><span class="flag">Flexible Ad</span></div>
+            <div class="body">
+              <div class="code">A-BB-S6-C4</div>
+              <div class="stats">
+                <div class="row"><span class="k">ROAS</span><span class="v">—</span></div>
+                <div class="row"><span class="k">Spend</span><span class="v">$17.66</span></div>
+                <div class="row"><span class="k">CPA</span><span class="v">—</span></div>
+                <div class="row"><span class="k">CTR (link click)</span><span class="v bad">0.14%</span></div>
+              </div>
+              <div class="tags">
+                <span class="pill tag-fmt">Try-On</span>
+                <span class="pill tag-msg">Distressed Aesthetic</span>
+              </div>
+            </div>
+          </a>
+          <a class="card ad-card" href="#ad/A-BB-S5-C2">
+            <div class="media v7"><span class="flag">Image</span></div>
+            <div class="body">
+              <div class="code">A-BB-S5-C2</div>
+              <div class="stats">
+                <div class="row"><span class="k">ROAS</span><span class="v">1.92</span></div>
+                <div class="row"><span class="k">Spend</span><span class="v">$38.20</span></div>
+                <div class="row"><span class="k">CPA</span><span class="v">$48.10</span></div>
+                <div class="row"><span class="k">CTR (link click)</span><span class="v">0.94%</span></div>
+              </div>
+              <div class="tags">
+                <span class="pill tag-fmt">Flat Lay</span>
+                <span class="pill tag-msg">Quality / Craft</span>
+              </div>
+            </div>
+          </a>
+        </div>
+      </section>
+
+      <!-- ═════════════════ PATTERN VIEW ═════════════════ -->
+      <section class="view" data-view="patterns">
+        <h1 class="page-title"><span data-dim-title>Hook tactic</span></h1>
+        <p class="page-blurb" data-dim-blurb>How each ad opens. Clusters rolled up by spend and ROAS so you can see which tactics are pulling weight.</p>
+
+        <div class="dim-bar">
+          <a href="#patterns/asset-type">Asset Type</a>
+          <a href="#patterns/visual-format">Visual Format</a>
+          <a href="#patterns/messaging-angle">Messaging Angle</a>
+          <a href="#patterns/hook-tactic" class="active">Hook Tactic</a>
+          <a href="#patterns/headline-tactic">Headline Tactic</a>
+          <a href="#patterns/intended-audience">Intended Audience</a>
+          <a href="#patterns/seasonality">Seasonality</a>
+          <a href="#patterns/offer-type">Offer Type</a>
+        </div>
+
+        <div class="filter-row">
+          <div class="f-pill"><span class="ico">▦</span><span class="v">Last 14 days</span></div>
+          <div class="f-pill"><span class="k">Sort by</span><span class="v">Spend</span></div>
+          <a class="f-pill add"><span>+ Add filter</span></a>
+        </div>
+
+        <div class="theme-row" style="grid-template-columns: repeat(4, 1fr);">
+          <div class="card cluster">
+            <div class="quad"><div class="q a"></div><div class="q b"></div><div class="q c"></div><div class="q d"></div></div>
+            <h4 class="name">Product Showcase</h4>
+            <p class="desc">Lead with the garment in motion or detail; no narration.</p>
+            <div class="foot"><span>12 ads</span><span class="dot"></span><span>$687</span><span class="roas">2.74</span></div>
+          </div>
+          <div class="card cluster">
+            <div class="quad"><div class="q c"></div><div class="q d"></div><div class="q e"></div><div class="q f"></div></div>
+            <h4 class="name">Aspirational</h4>
+            <p class="desc">Lifestyle moment first — the wearer's world, not the garment.</p>
+            <div class="foot"><span>8 ads</span><span class="dot"></span><span>$412</span><span class="roas">2.11</span></div>
+          </div>
+          <div class="card cluster">
+            <div class="quad"><div class="q b"></div><div class="q c"></div><div class="q d"></div><div class="q a"></div></div>
+            <h4 class="name">Curiosity</h4>
+            <p class="desc">Question hook, partial reveal, "wait til you see this."</p>
+            <div class="foot"><span>5 ads</span><span class="dot"></span><span>$184</span><span class="roas">1.42</span></div>
+          </div>
+          <div class="card cluster">
+            <div class="quad"><div class="q d"></div><div class="q a"></div><div class="q b"></div><div class="q c"></div></div>
+            <h4 class="name">None</h4>
+            <p class="desc">Ads that don't deploy a strong hook tactic. Default classification.</p>
+            <div class="foot"><span>19 ads</span><span class="dot"></span><span>$612</span><span class="roas">1.88</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═════════════════ THEMES ═════════════════ -->
+      <section class="view" data-view="themes">
+        <h1 class="page-title">Messaging themes</h1>
+        <p class="page-blurb">Emergent clusters of what your active ads are saying. Derived nightly from creative embeddings. Hit rate is the share of ads in the cluster beating account median ROAS.</p>
+
+        <div class="filter-row">
+          <div class="f-pill"><span class="ico">▦</span><span class="v">Last 14 days</span></div>
+          <div class="f-pill"><span class="k">Sort by</span><span class="v">Hit rate</span></div>
+          <div class="f-pill"><span class="k">Min ads</span><span class="v">5</span></div>
+          <a class="f-pill add"><span>+ Add filter</span></a>
+          <div class="right"><a class="btn">Recompute</a></div>
+        </div>
+
+        <div class="theme-row" style="grid-template-columns: repeat(3, 1fr);">
+          <div class="card cluster"><div class="quad"><div class="q a"></div><div class="q b"></div><div class="q c"></div><div class="q d"></div></div><h4 class="name">Distressed &amp; deconstructed aesthetic</h4><p class="desc">Frayed hems, raw seams, intentionally undone silhouettes.</p><div class="foot"><span>18 ads</span><span class="dot"></span><span>2% hit rate</span><span class="roas">2.41</span></div></div>
+          <div class="card cluster"><div class="quad"><div class="q b"></div><div class="q c"></div><div class="q d"></div><div class="q a"></div></div><h4 class="name">Versatility &amp; modular design</h4><p class="desc">Garments transform across multiple looks; layering and swap-outs.</p><div class="foot"><span>15 ads</span><span class="dot"></span><span>8% hit rate</span><span class="roas">2.88</span></div></div>
+          <div class="card cluster"><div class="quad"><div class="q c"></div><div class="q d"></div><div class="q a"></div><div class="q b"></div></div><h4 class="name">Design as identity &amp; self-expression</h4><p class="desc">Pieces that signal who you are; the wearer as protagonist.</p><div class="foot"><span>11 ads</span><span class="dot"></span><span>4% hit rate</span><span class="roas">2.12</span></div></div>
+          <div class="card cluster"><div class="quad"><div class="q d"></div><div class="q a"></div><div class="q b"></div><div class="q c"></div></div><h4 class="name">Urban exploration aesthetic</h4><p class="desc">City as backdrop; movement, transit, the wearer in motion.</p><div class="foot"><span>9 ads</span><span class="dot"></span><span>0% hit rate</span><span class="roas">1.34</span></div></div>
+          <div class="card cluster"><div class="quad"><div class="q e"></div><div class="q f"></div><div class="q a"></div><div class="q b"></div></div><h4 class="name">Quiet luxury cues</h4><p class="desc">Restrained palette, no logo, fit-first framing.</p><div class="foot"><span>7 ads</span><span class="dot"></span><span>14% hit rate</span><span class="roas">3.06</span></div></div>
+          <div class="card cluster"><div class="quad"><div class="q f"></div><div class="q a"></div><div class="q d"></div><div class="q c"></div></div><h4 class="name">Travel as freedom</h4><p class="desc">Brand mission rendered direct: airports, train stations.</p><div class="foot"><span>6 ads</span><span class="dot"></span><span>17% hit rate</span><span class="roas">3.41</span></div></div>
+        </div>
+      </section>
+
+      <!-- ═════════════════ AD DETAIL (right-panel layout) ═════════════════ -->
+      <section class="view" data-view="ad">
+        <div class="detail-pane">
+          <div class="detail-left">
+            <div class="meta-top">
+              <div class="id"><span class="code">A-BB-S6-C1</span><span class="hash">69b824c1c32a3e375603c8e4</span></div>
+              <div class="actions">
+                <span class="pill range"><span class="cal">▦</span>Last 14 days</span>
+                <a class="share">⌘ Copy link</a>
+                <a class="icon-btn">×</a>
+              </div>
+            </div>
+            <div class="player">
+              <div class="ig-head">
+                <div class="av"></div>
+                <div>
+                  <div class="nm">Foreign Resource</div>
+                  <div class="sub">Sponsored</div>
+                </div>
+              </div>
+              <div class="timestamp">0:00 / 0:11</div>
+              <div class="controls"><div class="pos"></div></div>
+              <div class="cta-row">
+                <div>
+                  <div class="l">BORDERLESS BASICS</div>
+                  <div class="s">5 Day Shipping.</div>
+                </div>
+                <a class="btn-sm">Shop now</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-right">
+            <div class="detail-tabs">
+              <span class="tab active">Overview</span>
+              <span class="tab">Performance</span>
+              <span class="tab">Ad comments</span>
+              <span class="tab">Transcript</span>
+              <span class="tab">Notes</span>
+            </div>
+
+            <div class="detail-scroll">
+              <div class="spend-block">
+                <div class="row">
+                  <div class="l">
+                    <div class="k">Spend <span class="info" style="margin-left:4px; width:11px; height:11px; border:1px solid var(--quiet); border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:8px; font-style:italic;">i</span></div>
+                    <div class="v num">$313.95</div>
+                  </div>
+                  <div class="r">
+                    <span>Creative is below the spend threshold</span>
+                    <span class="tag">Testing</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="triplet">
+                <div class="cell">
+                  <div class="lbl">ROAS</div>
+                  <div class="vv num">2.11</div>
+                </div>
+                <div class="cell">
+                  <div class="lbl">Launch date</div>
+                  <div class="vv">10 weeks ago</div>
+                </div>
+                <div class="cell">
+                  <div class="lbl">Status</div>
+                  <div class="vv"><span class="dot"></span>Active</div>
+                </div>
+              </div>
+
+              <div class="starters-pane">
+                <div class="head">Thought starters <span class="ai-flag">AI</span></div>
+                <a class="row"><span class="ico">⌕</span>Analyze this ad</a>
+                <a class="row"><span class="ico">⌘</span>Analyze comments on this ad</a>
+                <a class="row"><span class="ico">⌒</span>Give me new hook ideas based on this ad</a>
+                <a class="row"><span class="ico">✦</span>Spark wild ideas based on this ad</a>
+                <a class="row"><span class="ico">◦</span>Ask me anything</a>
+              </div>
+
+              <div class="detail-section">
+                <h3>Visual</h3>
+                <div class="row"><div class="k"><span class="gico">▤</span>Asset Type</div><div class="v"><span class="pill tag-fmt">High Production</span></div></div>
+                <div class="row"><div class="k"><span class="gico">▦</span>Visual Format</div><div class="v"><span class="pill tag-fmt">Try-On</span></div></div>
+              </div>
+
+              <div class="detail-section">
+                <h3>Persona</h3>
+                <div class="row"><div class="k"><span class="gico">⊙</span>Intended Audience</div><div class="v"><span class="pill tag-pers">Fashion Forward Individuals</span></div></div>
+              </div>
+
+              <div class="detail-section">
+                <h3>Messaging</h3>
+                <div class="row"><div class="k"><span class="gico">◖</span>Messaging theme</div><div class="v"><span class="pill tag-msg">Distressed &amp; Deconstructed Aesthetic</span></div></div>
+                <div class="row"><div class="k"><span class="gico">⌒</span>Hook tactic</div><div class="v"><span class="pill tag-msg">Product Showcase</span></div></div>
+                <div class="row"><div class="k"><span class="gico">⊞</span>Headline tactic</div><div class="v"><span class="pill tag-msg">Statement</span></div></div>
+                <a style="font-size: 11px; color: var(--faded); padding: 6px 0; display: inline-block;">Show more ▾</a>
+              </div>
+
+              <div class="custom-tags">
+                <span class="k">Custom tags</span>
+                <a class="add">+</a>
+              </div>
+
+              <div class="activity">
+                <div class="lbl">Activity</div>
+                <div class="input">
+                  <input placeholder="Share your thoughts...">
+                  <span class="send">↑</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Below the fold: Performance breakdown previews -->
+        <div style="display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 20px;">
+          <div class="card perf-block">
+            <h4>Placement breakdown</h4>
+            <div class="sub">Impressions × Spend</div>
+            <div class="perf-legend">
+              <span class="item"><span class="dot impr"></span>Impressions <span class="caret">▾</span></span>
+              <span class="item"><span class="dot spnd"></span>Spend <span class="caret">▾</span></span>
+            </div>
+            <div style="position: relative; padding: 0 56px;">
+              <div class="axis-y"><span>14.51K</span><span>8.15K</span><span>4.15K</span><span>152</span></div>
+              <div class="axis-y-r"><span>$162.45</span><span>$91.94</span><span>$46.94</span><span>$1.94</span></div>
+              <div class="grouped-bars">
+                <div class="col"><div class="pair"><div class="b impr" style="height: 100%;"><div class="lbl">14.51K</div></div><div class="b spnd" style="height: 100%;"><div class="lbl">$162.45</div></div></div><div class="lbl-x"><span class="platico">▣</span>Reels</div></div>
+                <div class="col"><div class="pair"><div class="b impr" style="height: 56%;"><div class="lbl">8.15K</div></div><div class="b spnd" style="height: 43%;"><div class="lbl">$70.05</div></div></div><div class="lbl-x"><span class="platico">▢</span>Stories</div></div>
+                <div class="col"><div class="pair"><div class="b impr" style="height: 31%;"><div class="lbl">4.53K</div></div><div class="b spnd" style="height: 45%;"><div class="lbl">$72.52</div></div></div><div class="lbl-x"><span class="platico">▣</span>Feed</div></div>
+                <div class="col"><div class="pair"><div class="b impr" style="height: 27%;"><div class="lbl">3.86K</div></div><div class="b spnd" style="height: 12%;"><div class="lbl">$5.18</div></div></div><div class="lbl-x"><span class="platico">f</span>Feed</div></div>
+                <div class="col"><div class="pair"><div class="b impr" style="height: 5%;"><div class="lbl">367</div></div><div class="b spnd" style="height: 4%;"><div class="lbl">$1.94</div></div></div><div class="lbl-x"><span class="platico">f</span>Reels</div></div>
+                <div class="col"><div class="pair"><div class="b impr" style="height: 2%;"><div class="lbl">152</div></div><div class="b spnd" style="height: 4%;"><div class="lbl">$1.94</div></div></div><div class="lbl-x"><span class="platico">f</span>Stories</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card perf-block">
+            <h4>Gender &amp; age breakdown</h4>
+            <div class="sub">Impressions</div>
+            <div class="perf-legend">
+              <span class="item"><span class="dot impr"></span>Male</span>
+              <span class="item"><span class="dot spnd"></span>Female</span>
+            </div>
+            <div style="position: relative; padding: 0 56px;">
+              <div class="axis-y"><span>9.72K</span><span>5.03K</span><span>2.53K</span><span>26</span></div>
+              <div class="grouped-bars">
+                <div class="col"><div class="pair"><div class="b impr" style="height: 100%;"><div class="lbl">9.72K</div></div><div class="b spnd" style="height: 9%;"><div class="lbl">898</div></div></div><div class="lbl-x">18–24</div></div>
+                <div class="col"><div class="pair"><div class="b impr" style="height: 95%;"><div class="lbl">9.26K</div></div><div class="b spnd" style="height: 10%;"><div class="lbl">985</div></div></div><div class="lbl-x">25–34</div></div>
+                <div class="col"><div class="pair"><div class="b impr" style="height: 14%;"><div class="lbl">1.35K</div></div><div class="b spnd" style="height: 2%;"><div class="lbl">157</div></div></div><div class="lbl-x">35–44</div></div>
+                <div class="col"><div class="pair"><div class="b impr" style="height: 4%;"><div class="lbl">426</div></div><div class="b spnd" style="height: 1%;"><div class="lbl">65</div></div></div><div class="lbl-x">45–54</div></div>
+                <div class="col"><div class="pair"><div class="b impr" style="height: 1%;"><div class="lbl">141</div></div><div class="b spnd" style="height: 1%;"><div class="lbl">38</div></div></div><div class="lbl-x">55–64</div></div>
+                <div class="col"><div class="pair"><div class="b impr" style="height: 2%;"><div class="lbl">176</div></div><div class="b spnd" style="height: 1%;"><div class="lbl">26</div></div></div><div class="lbl-x">65+</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═════════════════ INSPO (Organic sub-route shown by default) ═════════════════ -->
+      <section class="view" data-view="inspo">
+        <div class="inspo-shell">
+          <aside class="inspo-side">
+            <div class="header">
+              <h3>Inspo</h3>
+              <span class="pan">⬚</span>
+            </div>
+            <a class="nav-item"><span class="glyph">⌘</span>Discover</a>
+            <a class="nav-item"><span class="glyph">↗</span>Trending</a>
+            <a class="nav-item active"><span class="glyph">◆</span>Organic</a>
+
+            <div class="empty-card">
+              <div class="ttl">No boards yet</div>
+              <div class="blurb">Create boards to keep your saved ads organized</div>
+              <a class="btn-sm">Create board</a>
+            </div>
+
+            <div class="section-title">Following</div>
+            <a class="brand-row"><span class="ico">e</span>Essentials</a>
+            <a class="brand-row"><span class="ico">a</span>Aimé Leon Dore</a>
+            <a class="brand-row"><span class="ico">d</span>Drôle de Monsieur</a>
+            <a class="brand-row"><span class="ico">s</span>Stüssy</a>
+            <a class="brand-row"><span class="ico">▦</span>All brands</a>
+            <a class="brand-row"><span class="ico">⋯</span>More</a>
+          </aside>
+
+          <div class="inspo-main">
+            <div class="inspo-topbar">
+              <span class="where">Organic</span>
+              <div class="inspo-search">
+                <span style="color: var(--quiet);">⌕</span>
+                <input placeholder="Search brands, creators, and boards">
+              </div>
+              <div class="right"><a class="btn-cta"><span class="icoplus">⊕</span>Set up alerts</a></div>
+            </div>
+
+            <div class="inspo-content">
+              <h2>Organic</h2>
+              <p class="blurb">Discover creators and see what's resonating on your audience's organic feeds</p>
+
+              <h3 style="font-size: 13px; font-weight: 600; margin: 0 0 12px;">Top creators</h3>
+              <div class="creators-row">
+                <div class="creator-card">
+                  <div class="av"></div>
+                  <div class="nm">Nena Barcelona</div>
+                  <div class="stats"><span class="platico">▤</span>35.2K · <span class="platico">▢</span>—</div>
+                </div>
+                <div class="creator-card">
+                  <div class="av" style="background: linear-gradient(160deg, #7A7268 0%, #3F3933 100%);"></div>
+                  <div class="nm">samuel.ross</div>
+                  <div class="stats"><span class="platico">▤</span>112K · <span class="platico">▢</span>89K</div>
+                </div>
+                <div class="creator-card">
+                  <div class="av" style="background: linear-gradient(160deg, #B5A693 0%, #6E6052 100%);"></div>
+                  <div class="nm">bryan.boy</div>
+                  <div class="stats"><span class="platico">▤</span>48K · <span class="platico">▢</span>—</div>
+                </div>
+                <div class="creator-card">
+                  <div class="av" style="background: linear-gradient(160deg, #6A6258 0%, #38322C 100%);"></div>
+                  <div class="nm">kazna</div>
+                  <div class="stats"><span class="platico">▤</span>28K · <span class="platico">▢</span>11K</div>
+                </div>
+              </div>
+
+              <h3 style="font-size: 13px; font-weight: 600; margin: 0 0 12px;">This week</h3>
+              <div class="masonry">
+                <div class="item"><div class="img h1 t1"><span class="play"></span></div><div class="meta"><div class="av"></div><span class="nm">personsoul.life</span><span class="bm">▢</span></div></div>
+                <div class="item"><div class="img h2 t5"><span class="play"></span></div><div class="meta"><div class="av"></div><span class="nm">gnomowear</span><span class="bm">▢</span></div></div>
+                <div class="item"><div class="img h1 t3"><span class="play"></span><div class="caption">Recreating this mirror palais dress from scratch</div></div><div class="meta"><div class="av"></div><span class="nm">nhpatterns</span><span class="bm">▢</span></div></div>
+                <div class="item"><div class="img h1 t6"><span class="play"></span><div class="caption">FROM SWE</div></div><div class="meta"><div class="av"></div><span class="nm">lucasferryfits</span><span class="bm">▢</span></div></div>
+                <div class="item"><div class="img h1 t4"><span class="play"></span><div class="caption">Flashbacks when I ended up...</div></div><div class="meta"><div class="av"></div><span class="nm">mango._martini</span><span class="bm">▢</span></div></div>
+                <div class="item"><div class="img h2 t7"><span class="play"></span><div class="caption">ALT/Gothic MENSWEAR</div></div><div class="meta"><div class="av"></div><span class="nm">thewolfinlace</span><span class="bm">▢</span></div></div>
+                <div class="item"><div class="img h3 t2"><span class="play"></span><div class="caption">Turning sweats into sweat shorts</div></div><div class="meta"><div class="av"></div><span class="nm">@unknownuser</span><span class="bm">▢</span></div></div>
+                <div class="item"><div class="img h1 t5"><span class="play"></span><div class="caption">Zip it. Switch it. The North Face Convertible Pant.</div></div><div class="meta"><div class="av"></div><span class="nm">lakefewatrekkingshop</span><span class="bm">▢</span></div></div>
+                <div class="item"><div class="img h4 t1"><span class="play"></span></div><div class="meta"><div class="av"></div><span class="nm">#streetwearfit</span><span class="bm">▢</span></div></div>
+                <div class="item"><div class="img h2 t3"><span class="play"></span></div><div class="meta"><div class="av"></div><span class="nm">@samuel.ross</span><span class="bm">▢</span></div></div>
+                <div class="item"><div class="img h1 t6"><span class="play"></span></div><div class="meta"><div class="av"></div><span class="nm">#airportootd</span><span class="bm">▢</span></div></div>
+                <div class="item"><div class="img h3 t4"><span class="play"></span></div><div class="meta"><div class="av"></div><span class="nm">#travelcore</span><span class="bm">▢</span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═════════════════ CHAT ═════════════════ -->
+      <section class="view" data-view="chat">
+        <h1 class="page-title">What do you want to work on?</h1>
+        <p class="page-blurb">Operator-to-operator. Grounded in your real ads, comments, themes, and inspo. Never proposes markdowns.</p>
+
+        <div class="chat-shell">
+          <aside class="chat-side">
+            <div class="lbl">Recent</div>
+            <a class="conv active">Spot patterns in winners<div class="when">14m ago · 6 ads cited</div></a>
+            <a class="conv">Hook ideas for distressed pants<div class="when">1h · 3 ideas</div></a>
+            <a class="conv">Why did A-BB-S6-C4 underperform<div class="when">Yesterday</div></a>
+            <a class="conv">Prep for Friday team review<div class="when">3d ago</div></a>
+          </aside>
+          <div class="chat-main">
+            <div class="chat-msgs">
+              <div class="msg user">
+                <div class="role">You</div>
+                <div class="body"><p>Spot patterns in winners — last 14 days.</p></div>
+              </div>
+              <div class="msg">
+                <div class="role">Assistant</div>
+                <div class="body">
+                  <p>Three patterns the data is consistent on:</p>
+                  <p><b>Try-On beats lifestyle.</b> Try-On format ads (<a class="inline-ad">A-C-S2-C5V2</a>, <a class="inline-ad">A-BB-S6-C1</a>, <a class="inline-ad">A-C-Dec6</a>) sit at 2.94 ROAS average versus 1.62 for lifestyle. Spend has been concentrated on the right format.</p>
+                  <p><b>Distressed Aesthetic stalls at the top of funnel.</b> CTR is healthy (1.46% on <a class="inline-ad">A-BB-S6-C1</a>) but ROAS is median. Aesthetic gets the click; nothing on the landing page reinforces the silhouette story.</p>
+                  <p><b>Versatility &amp; Modular Design is your underused angle.</b> 8% hit rate at 2.88 ROAS, only 15 ads behind it. The cluster is small relative to spend impact — worth tripling output here.</p>
+                </div>
+                <div class="chips">
+                  <a class="chip"><span class="ico">⌘</span>Scope a testing plan</a>
+                  <a class="chip"><span class="ico">⊕</span>Find similar ads from inspo</a>
+                  <a class="chip"><span class="ico">◆</span>Prep me for team review</a>
+                </div>
+              </div>
+            </div>
+            <div class="chat-input">
+              <input placeholder="Ask anything about your ads, themes, or inspo">
+              <span class="send">↑</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <div class="footnote">
+      Mockup v1 · Motion-layout variant · Soil hex placeholder #9A816B — replace with FR Brand Guidelines V3 PDF value before first JSX commit. Layout structure cloned from motionapp.com; color, type, and identity are FR.
+    </div>
+  </div>
+</div>
+
+<script>
+  const DIM = {
+    'asset-type':        ['Asset type',        'How the ad was produced. High Production, UGC, Studio, Lifestyle, Flat Lay, Talking Head, Animation, Mixed.'],
+    'visual-format':     ['Visual format',     'The container. Vertical Video, Square Video, Horizontal Video, Single Image, Carousel, GIF.'],
+    'messaging-angle':   ['Messaging angle',   'What the ad is about. Identity, Versatility, Aesthetic, Mission, Quality, Travel, Community, Product Detail.'],
+    'hook-tactic':       ['Hook tactic',       'How each ad opens. Aspirational, Curiosity, Product Showcase, Social Proof. Default classification is None.'],
+    'headline-tactic':   ['Headline tactic',   'The copy lever. Question, Statement, Stat, Command, Provocation, Brand Name Only.'],
+    'intended-audience': ['Intended audience', 'Who the creative is built for. Streetwear, Travel, Gen Z Urban, Festival, Creative Class, Fashion-Forward, Broad.'],
+    'seasonality':       ['Seasonality',       'Temporal frame. Spring, Summer, Fall, Winter, Evergreen, Holiday, Back to School, Travel Season.'],
+    'offer-type':        ['Offer type',        'What is on the table. Never-discount brand: % off, Sale, BOGO are removed from vocabulary. Only New Drop, Restock, Pre-order, Early Access, Free Shipping, Bundle, None.']
+  };
+  const CRUMB = {
+    'home': 'Home',
+    'top-creatives': 'Reports / Top creatives',
+    'patterns': 'Creative Patterns',
+    'themes': 'Messaging themes',
+    'ad': 'Ad details',
+    'inspo': 'Inspo / Organic',
+    'chat': 'Chat'
+  };
+
+  function applyRoute() {
+    const raw = location.hash.replace(/^#/, '') || 'home';
+    const [head, ...rest] = raw.split('/');
+
+    let viewKey = head;
+    if (head === 'patterns') viewKey = 'patterns';
+    else if (head === 'ad') viewKey = 'ad';
+    else if (head === 'inspo') viewKey = 'inspo';
+
+    document.querySelectorAll('[data-view]').forEach(el => {
+      el.classList.toggle('active', el.dataset.view === viewKey);
+    });
+
+    // Sidebar active state
+    document.querySelectorAll('.sidebar .nav-item').forEach(a => a.classList.remove('active'));
+    const sidebarTargets = document.querySelectorAll('.sidebar a[href]');
+    sidebarTargets.forEach(a => {
+      const href = a.getAttribute('href').replace('#','');
+      if (href === raw || href === viewKey || (href === 'patterns/' + (rest[0]||''))) {
+        a.classList.add('active');
+      }
+    });
+    if (viewKey === 'home') {
+      document.querySelector('.sidebar .nav-item[href="#home"]')?.classList.add('active');
+    }
+
+    // Crumb
+    let label = CRUMB[viewKey] || 'Home';
+    if (head === 'patterns' && rest[0]) {
+      label = 'Creative Patterns / ' + (DIM[rest[0]]?.[0] || rest[0]);
+    } else if (head === 'ad' && rest[0]) {
+      label = 'Ad details / ' + rest[0];
+    }
+    document.getElementById('crumb').textContent = label;
+
+    // Pattern dim switching
+    if (head === 'patterns' && rest[0]) {
+      const [name, blurb] = DIM[rest[0]] || DIM['hook-tactic'];
+      document.querySelectorAll('[data-dim-title]').forEach(el => el.textContent = name);
+      document.querySelectorAll('[data-dim-blurb]').forEach(el => el.textContent = blurb);
+      document.querySelectorAll('.dim-bar a').forEach(a => {
+        a.classList.toggle('active', a.getAttribute('href') === '#patterns/' + rest[0]);
+      });
+    }
+
+    window.scrollTo({ top: 0 });
+  }
+
+  window.addEventListener('hashchange', applyRoute);
+  applyRoute();
+</script>
+
+</body>
+</html>
