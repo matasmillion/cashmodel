@@ -7,7 +7,7 @@
 // a rich record in the library are stitched in as empty cards with a
 // muted "No details yet" badge so users can find and enrich them.
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Upload, Plus, Trash2, MapPin, Globe, Archive, RotateCcw } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { Input, labelStyle } from './TechPackPrimitives';
@@ -244,6 +244,13 @@ function VendorEditor({ name, onClose, onDeleted, onRenamed }) {
   const [entry, setEntry] = useState(() => getVendor(name) || { name });
   const fileRef = useRef(null);
   const hasRecord = !!entry._hasRecord;
+  const [saveState, setSaveState] = useState('idle'); // 'idle' | 'saved'
+  const saveTimerRef = useRef(null);
+  const flashSaved = useCallback(() => {
+    setSaveState('saved');
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => setSaveState('idle'), 1800);
+  }, []);
 
   // Lazy migration: if this vendor's logoImage is still a base64 data URL
   // from before Phase 3, upload it to Storage in the background and save
@@ -284,6 +291,7 @@ function VendorEditor({ name, onClose, onDeleted, onRenamed }) {
     if (v) {
       updateVendor(name, { [k]: v });
       setEntry({ ...getVendor(name), _hasRecord: true });
+      flashSaved();
     }
   };
 
@@ -410,10 +418,20 @@ function VendorEditor({ name, onClose, onDeleted, onRenamed }) {
               }}
             />
           </div>
-          <button onClick={onClose} aria-label="Close"
-            style={{ padding: 6, background: 'rgba(255,255,255,0.12)', color: FR.salt, border: 'none', borderRadius: 3, cursor: 'pointer', marginLeft: 12 }}>
-            <X size={14} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 12, flexShrink: 0 }}>
+            <span style={{
+              fontSize: 10, color: '#a8d5a2', fontWeight: 600, letterSpacing: 0.3,
+              opacity: saveState === 'saved' ? 1 : 0,
+              transition: 'opacity 0.4s ease',
+              whiteSpace: 'nowrap',
+            }}>
+              ✓ Saved
+            </span>
+            <button onClick={onClose} aria-label="Close"
+              style={{ padding: 6, background: 'rgba(255,255,255,0.12)', color: FR.salt, border: 'none', borderRadius: 3, cursor: 'pointer' }}>
+              <X size={14} />
+            </button>
+          </div>
         </div>
 
         <div style={{ padding: '18px 22px' }}>

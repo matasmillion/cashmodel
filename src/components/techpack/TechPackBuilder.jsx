@@ -330,6 +330,8 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   }, [fabricIdKey, refreshTick]);
 
   const [saving, setSaving] = useState(false);
+  const [savedRecently, setSavedRecently] = useState(false);
+  const savedTimerRef = useRef(null);
   const [saveError, setSaveError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState(null);
@@ -610,6 +612,9 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
             replacePLMHash({ section: 'styles', packId: packIdRef.current, step });
           }
           setSaveError(null);
+          setSavedRecently(true);
+          if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+          savedTimerRef.current = setTimeout(() => setSavedRecently(false), 2000);
         }
       } catch (err) {
         console.error('Auto-save failed:', err);
@@ -917,8 +922,12 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           {pendingUploads > 0
             ? <span style={{ fontSize: 10, color: FR.soil }}>Uploading {pendingUploads} image{pendingUploads === 1 ? '' : 's'}…</span>
             : saving
-              ? <span style={{ fontSize: 10, color: FR.sage }}>Saving…</span>
-              : saveError && <span title={saveError} style={{ fontSize: 10, color: '#A32D2D', maxWidth: 460, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>⚠︎ Save failed (kept locally): {saveError}</span>}
+              ? <span style={{ fontSize: 10, color: FR.stone, fontStyle: 'italic' }}>Saving…</span>
+              : saveError
+                ? <span title={saveError} style={{ fontSize: 10, color: '#A32D2D', maxWidth: 460, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>⚠︎ Save failed (kept locally): {saveError}</span>
+                : savedRecently
+                  ? <span style={{ fontSize: 10, color: '#a8d5a2', fontWeight: 600 }}>✓ Saved</span>
+                  : <span style={{ fontSize: 10, color: FR.stone, opacity: 0.5 }}>Auto-saving…</span>}
           {/* Cost roll-up — BOM + colorway (wash/dye) + vendor markup. */}
           <div style={{ textAlign: 'right' }} title={`BOM ${formatCost(bomCost)}  ·  Colorways ${formatCost(colorwayCost)}${vendorMarkupPct > 0 ? `  ·  Vendor +${vendorMarkupPct}% ${formatCost(vendorMarkupCost)}` : ''}${maxFOB > 0 ? `  ·  Max FOB ${formatCost(maxFOB)}` : ''}`}>
             <div style={{ fontSize: 9, color: FR.stone }}>Total Unit Cost</div>
