@@ -19,6 +19,7 @@ import { useApp } from '../../context/AppContext';
 import { analyzeGarmentImage, generateGarmentView, imageEntryToDataUrl } from '../../utils/techPackViews';
 import { StepFabrics, StepTrims, StepPackaging } from './TechPackBOMSteps';
 import { estimateLaborCost } from '../../utils/aiLaborCost';
+import CutSewCostChat from './CutSewCostChat';
 import { getVendor } from '../../utils/vendorLibrary';
 
 const COST_TIER_CAP = 5;
@@ -1770,6 +1771,7 @@ export function StepConstruction({ data, set, images, onUpload, onRemove }) {
       </div>
 
       <CutSewLaborCostBlock data={data} set={set} sectionLabel={sectionLabel} />
+      <CutSewCostChat data={data} set={set} sectionLabel={sectionLabel} />
     </div>
   );
 }
