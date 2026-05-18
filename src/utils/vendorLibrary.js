@@ -110,11 +110,22 @@ async function hydrateVendorsFromCloud() {
       const camel = fromSupabaseRow(row);
       if (camel?.name) cloudByName[camel.name] = camel;
     });
-    // Cloud-wins merge into local store.
+    // Cloud-wins merge into local store — but only for fields the cloud
+    // actually has a value for. fromSupabaseRow returns '' for missing
+    // columns (e.g. markup_pct before that column is added to the
+    // Supabase schema), and without this guard those empty defaults
+    // would clobber any locally-saved value on the very next refresh.
+    // Result: edits made offline / before the cloud migration is run
+    // silently disappear when the editor modal closes.
+    const isEmpty = (v) => v === '' || v == null || (Array.isArray(v) && v.length === 0);
     const local = readStore();
     const merged = { ...local };
     Object.entries(cloudByName).forEach(([name, entry]) => {
-      merged[name] = { ...(local[name] || {}), ...entry };
+      const cloudNonEmpty = {};
+      Object.entries(entry).forEach(([k, v]) => {
+        if (!isEmpty(v)) cloudNonEmpty[k] = v;
+      });
+      merged[name] = { ...(local[name] || {}), ...cloudNonEmpty };
     });
     writeStore(merged);
     return merged;
@@ -165,7 +176,22 @@ function syncVendorToCloud(name, entry) {
       markup_pct: Number(entry.markupPct) || 0,
       archived_at: entry.archivedAt || null,
     }, { onConflict: 'organization_id,name' })
-    .then(({ error }) => { if (error) console.error('vendorLibrary sync:', error); });
+    .then(({ error }) => {
+      if (!error) return;
+      // Most common cause: a column added in the local app (e.g. markup_pct,
+      // sam_rate_usd_per_min) hasn't been migrated to the Supabase schema.
+      // Surface a one-line hint with the SQL needed so the operator can run
+      // it in the dashboard. The local write already succeeded, so the
+      // value persists; only cross-device sync is blocked.
+      const msg = error.message || '';
+      const missing = msg.match(/column ['"]?(\w+)['"]? of ['"]?vendors['"]?/i)?.[1]
+                   || msg.match(/Could not find the ['"]?(\w+)['"]? column/i)?.[1];
+      if (missing) {
+        console.error(`vendorLibrary sync: missing column "${missing}" on Supabase \`vendors\` table. Local write succeeded; cross-device sync blocked until you run:  ALTER TABLE vendors ADD COLUMN ${missing} numeric DEFAULT 0;`);
+      } else {
+        console.error('vendorLibrary sync:', error);
+      }
+    });
   });
 }
 
