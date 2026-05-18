@@ -565,6 +565,18 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       setData(p => ({ ...p, maxFOB: next }));
     }
   }, [maxFOB, data.maxFOB]);
+
+  // Mirror the fully-computed totalUnitCost back into data so that
+  // techPackStore.computeTotalUnitCost (called at save time) can read
+  // the accurate figure — it lacks access to async fabric library specs,
+  // so the list view / grid cards would otherwise always show $0.00.
+  useEffect(() => {
+    const persisted = parseFloat(data.totalUnitCost);
+    const next = totalUnitCost > 0 ? Number(totalUnitCost.toFixed(2)) : 0;
+    if (next !== persisted && !(next === 0 && isNaN(persisted))) {
+      setData(p => ({ ...p, totalUnitCost: next }));
+    }
+  }, [totalUnitCost, data.totalUnitCost]);
   const fobDeltaColor = fobDelta === null ? FR.stone
     : fobDelta <= 0 ? '#3B6D11'
     : fobDelta / maxFOB <= 0.10 ? '#854F0B'

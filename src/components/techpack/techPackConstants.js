@@ -368,13 +368,18 @@ export function computeColorwayCost(data, getColorCostFn) {
   return total;
 }
 
-// Full unit-cost roll-up: BOM + colorway library.
-// Vendors aren't a cash line on the garment — they're the maker — so no
-// CMT in this total. If we ever want to track CMT, it lives on the tech
-// pack itself, not on the vendor directory entry.
+// Full unit-cost roll-up.
+// TechPackBuilder computes the accurate total (fabrics + trims +
+// treatments + embellishments + cut & sew + vendor markup) and mirrors
+// it to data.totalUnitCost via useEffect — same pattern as maxFOB.
+// When that field is present (i.e. the pack has been opened at least
+// once since the field was introduced), return it directly. Otherwise
+// fall back to the legacy free-text BOM + colorway sum so old packs
+// still show something rather than $0.
 export function computeTotalUnitCost(data, { getColorCost } = {}) {
-  return computeBOMCost(data)
-       + computeColorwayCost(data, getColorCost);
+  const cached = parseFloat(data?.totalUnitCost);
+  if (Number.isFinite(cached) && cached > 0) return cached;
+  return computeBOMCost(data) + computeColorwayCost(data, getColorCost);
 }
 
 export function computeCompletion(data) {
