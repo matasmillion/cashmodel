@@ -240,12 +240,54 @@ function AddVendorForm({ onCancel, onSubmit }) {
   );
 }
 
+// Visual indicator for the four save states the editor can be in. Sits
+// in the modal header next to the Save & Close button so the operator
+// can tell at a glance whether their last keystroke is persisted.
+function SaveStateChip({ state, pending }) {
+  if (state === 'saving' || pending > 0) {
+    return (
+      <span style={{ fontSize: 10, color: FR.sand, fontStyle: 'italic', whiteSpace: 'nowrap' }}>
+        Saving{pending > 1 ? ` (${pending})` : ''}…
+      </span>
+    );
+  }
+  if (state === 'error') {
+    return (
+      <span title="Last cloud sync failed — local copy is still saved" style={{ fontSize: 10, color: '#e7a8a8', fontWeight: 600, whiteSpace: 'nowrap' }}>
+        ⚠︎ Cloud sync failed
+      </span>
+    );
+  }
+  if (state === 'saved') {
+    return (
+      <span style={{ fontSize: 10, color: '#a8d5a2', fontWeight: 600, letterSpacing: 0.3, whiteSpace: 'nowrap' }}>
+        ✓ Saved
+      </span>
+    );
+  }
+  return (
+    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', whiteSpace: 'nowrap' }}>
+      Auto-saves on edit
+    </span>
+  );
+}
+
 function VendorEditor({ name, onClose, onDeleted, onRenamed }) {
   const [entry, setEntry] = useState(() => getVendor(name) || { name });
   const fileRef = useRef(null);
   const hasRecord = !!entry._hasRecord;
-  const [saveState, setSaveState] = useState('idle'); // 'idle' | 'saved'
+  // saveState transitions: idle → saving → saved → idle (after 1.8s)
+  //                        idle → error (if cloud sync threw)
+  const [saveState, setSaveState] = useState('idle');
   const saveTimerRef = useRef(null);
+  // Counts in-flight cloud syncs. Local writes are synchronous so this
+  // only tracks the async tail. >0 = something still propagating.
+  const pendingSavesRef = useRef(0);
+  const [pendingSaves, setPendingSaves] = useState(0);
+  const bumpPending = useCallback((delta) => {
+    pendingSavesRef.current = Math.max(0, pendingSavesRef.current + delta);
+    setPendingSaves(pendingSavesRef.current);
+  }, []);
   const flashSaved = useCallback(() => {
     setSaveState('saved');
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -283,16 +325,75 @@ function VendorEditor({ name, onClose, onDeleted, onRenamed }) {
     return () => { cancelled = true; };
   }, [name, entry.logoImage]);
 
+  // Patch a single field. Always persists — empty values route through
+  // clearVendorField so a deliberate clear actually clears (rather than
+  // silently snapping back to the previous value on the next hydrate).
+  // Returns a promise so explicit "Save & Close" can await all in-flight
+  // syncs before letting the modal close.
   const patch = (k, v) => {
-    const next = { ...entry, [k]: v };
-    setEntry(next);
-    // updateVendor ignores empty strings, so a clear has to go through
-    // clearVendorField. For typical edits just write.
-    if (v) {
-      updateVendor(name, { [k]: v });
-      setEntry({ ...getVendor(name), _hasRecord: true });
-      flashSaved();
+    setEntry(prev => ({ ...prev, [k]: v }));
+    setSaveState('saving');
+    bumpPending(1);
+    const op = (v === '' || v == null)
+      ? clearVendorField(name, k)
+      : updateVendor(name, { [k]: v });
+    return op
+      .then(() => {
+        setEntry({ ...getVendor(name), _hasRecord: true });
+        flashSaved();
+      })
+      .catch(err => {
+        console.error('vendor save:', err);
+        setSaveState('error');
+      })
+      .finally(() => {
+        bumpPending(-1);
+      });
+  };
+
+  // Block exiting while async cloud syncs are still in flight (the local
+  // store is already correct, but a close right now could miss the cloud
+  // mirror). Confirm before exit if the user really wants to leave with
+  // pending sync.
+  const attemptClose = () => {
+    if (pendingSavesRef.current > 0) {
+      const proceed = window.confirm(
+        'A cloud sync is still in flight. The vendor is saved on this device, but the cross-device copy may be a moment behind. Close anyway?'
+      );
+      if (!proceed) return;
     }
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    onClose();
+  };
+
+  // Explicit Save & Close: forces a fresh upsert of the whole entry
+  // (closes any cross-field gaps from earlier partial syncs), then
+  // waits for it to settle before closing the modal.
+  const saveAndClose = async () => {
+    setSaveState('saving');
+    bumpPending(1);
+    try {
+      const fresh = { ...getVendor(name), _hasRecord: true };
+      // Re-upsert everything so the cloud row matches local exactly —
+      // catches the case where an earlier field's sync silently failed.
+      await updateVendor(name, fresh);
+      setEntry(fresh);
+      flashSaved();
+    } catch (err) {
+      console.error('vendor saveAndClose:', err);
+      setSaveState('error');
+      const proceed = window.confirm(
+        `Save to cloud failed: ${err?.message || err}\n\nLocal copy is already persisted. Close anyway?`
+      );
+      bumpPending(-1);
+      if (!proceed) return;
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      onClose();
+      return;
+    }
+    bumpPending(-1);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    onClose();
   };
 
   const uploadLogo = async (file) => {
@@ -419,15 +520,26 @@ function VendorEditor({ name, onClose, onDeleted, onRenamed }) {
             />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 12, flexShrink: 0 }}>
-            <span style={{
-              fontSize: 10, color: '#a8d5a2', fontWeight: 600, letterSpacing: 0.3,
-              opacity: saveState === 'saved' ? 1 : 0,
-              transition: 'opacity 0.4s ease',
-              whiteSpace: 'nowrap',
-            }}>
-              ✓ Saved
-            </span>
-            <button onClick={onClose} aria-label="Close"
+            {/* Save state indicator — single source of truth for "did my edit stick?" */}
+            <SaveStateChip state={saveState} pending={pendingSaves} />
+            {/* Manual Save & Close — re-upserts the whole entry, waits for
+                cloud round-trip, then closes. Useful as an explicit
+                confirmation that everything got through. */}
+            <button onClick={saveAndClose}
+              disabled={saveState === 'saving' || pendingSaves > 0}
+              title="Force a fresh save then close the editor"
+              style={{
+                padding: '6px 12px',
+                background: FR.salt, color: FR.slate,
+                border: 'none', borderRadius: 3,
+                fontSize: 11, fontWeight: 600,
+                cursor: (saveState === 'saving' || pendingSaves > 0) ? 'wait' : 'pointer',
+                whiteSpace: 'nowrap',
+                opacity: (saveState === 'saving' || pendingSaves > 0) ? 0.6 : 1,
+              }}>
+              Save &amp; Close
+            </button>
+            <button onClick={attemptClose} aria-label="Close"
               style={{ padding: 6, background: 'rgba(255,255,255,0.12)', color: FR.salt, border: 'none', borderRadius: 3, cursor: 'pointer' }}>
               <X size={14} />
             </button>

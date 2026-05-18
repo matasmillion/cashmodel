@@ -150,48 +150,68 @@ function writeStore(store) {
   catch (err) { console.error('vendorLibrary write:', err); }
 }
 
+// Build the snake_case Supabase row from the camelCase entry. Numerics
+// that are empty strings are sent as `null` rather than coerced to 0 —
+// otherwise the next hydrate would round-trip a real "0" string into the
+// editor and clobber whatever the user just typed.
+function entryToCloudRow(name, entry, orgId) {
+  const num = (v) => {
+    if (v === '' || v == null) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  return {
+    organization_id: orgId,
+    name,
+    country: entry.country || '',
+    city: entry.city || '',
+    primary_contact: entry.primaryContact || '',
+    email: entry.email || '',
+    phone: entry.phone || '',
+    website: entry.website || '',
+    moq: entry.moq || '',
+    // BUG-2026-05-18: previously read entry.lead_time_days (snake) which
+    // the form never writes, so the cloud always got 0. On the next
+    // hydrate "0" got round-tripped over the user's real value (e.g. 45).
+    // Read entry.leadTimeDays (what the form actually patches), and emit
+    // null when empty so the field stays clearable.
+    lead_time_days: num(entry.leadTimeDays),
+    specialties: entry.specialties || '',
+    notes: entry.notes || '',
+    logo_image: entry.logoImage || null,
+    capabilities: entry.capabilities || [],
+    payment_terms: entry.payment_terms || '',
+    rating: num(entry.rating),
+    sam_rate_usd_per_min: num(entry.samRateUsdPerMin),
+    markup_pct: num(entry.markupPct),
+    archived_at: entry.archivedAt || null,
+  };
+}
+
+// Push the entry to Supabase. Returns a promise that resolves whether the
+// network call succeeded or failed — callers track in-flight syncs for
+// the "Save & Close" UX but never block on a cloud failure (local write
+// already persisted).
 function syncVendorToCloud(name, entry) {
   const orgId = getCurrentOrgIdSync();
-  if (!IS_SUPABASE_ENABLED || !orgId) return;
-  getAuthedSupabase().then(db => {
+  if (!IS_SUPABASE_ENABLED || !orgId) return Promise.resolve();
+  return getAuthedSupabase().then(db => {
     if (!db) return;
-    db.from('vendors').upsert({
-      organization_id: orgId,
-      name,
-      country: entry.country || '',
-      city: entry.city || '',
-      primary_contact: entry.primaryContact || '',
-      email: entry.email || '',
-      phone: entry.phone || '',
-      website: entry.website || '',
-      moq: entry.moq || '',
-      lead_time_days: Number(entry.lead_time_days) || 0,
-      specialties: entry.specialties || '',
-      notes: entry.notes || '',
-      logo_image: entry.logoImage || null,
-      capabilities: entry.capabilities || [],
-      payment_terms: entry.payment_terms || '',
-      rating: Number(entry.rating) || 0,
-      sam_rate_usd_per_min: Number(entry.samRateUsdPerMin) || 0,
-      markup_pct: Number(entry.markupPct) || 0,
-      archived_at: entry.archivedAt || null,
-    }, { onConflict: 'organization_id,name' })
-    .then(({ error }) => {
-      if (!error) return;
-      // Most common cause: a column added in the local app (e.g. markup_pct,
-      // sam_rate_usd_per_min) hasn't been migrated to the Supabase schema.
-      // Surface a one-line hint with the SQL needed so the operator can run
-      // it in the dashboard. The local write already succeeded, so the
-      // value persists; only cross-device sync is blocked.
-      const msg = error.message || '';
-      const missing = msg.match(/column ['"]?(\w+)['"]? of ['"]?vendors['"]?/i)?.[1]
-                   || msg.match(/Could not find the ['"]?(\w+)['"]? column/i)?.[1];
-      if (missing) {
-        console.error(`vendorLibrary sync: missing column "${missing}" on Supabase \`vendors\` table. Local write succeeded; cross-device sync blocked until you run:  ALTER TABLE vendors ADD COLUMN ${missing} numeric DEFAULT 0;`);
-      } else {
-        console.error('vendorLibrary sync:', error);
-      }
-    });
+    return db.from('vendors').upsert(entryToCloudRow(name, entry, orgId), { onConflict: 'organization_id,name' })
+      .then(({ error }) => {
+        if (!error) return;
+        // Most common cause: a column added in the local app (e.g.
+        // markup_pct) hasn't been migrated to the Supabase schema. Log
+        // the exact ALTER TABLE statement the operator needs to run.
+        const msg = error.message || '';
+        const missing = msg.match(/column ['"]?(\w+)['"]? of ['"]?vendors['"]?/i)?.[1]
+                     || msg.match(/Could not find the ['"]?(\w+)['"]? column/i)?.[1];
+        if (missing) {
+          console.error(`vendorLibrary sync: missing column "${missing}" on Supabase \`vendors\` table. Local write succeeded; cross-device sync blocked until you run:  ALTER TABLE vendors ADD COLUMN ${missing} numeric DEFAULT 0;`);
+        } else {
+          console.error('vendorLibrary sync:', error);
+        }
+      });
   });
 }
 
@@ -324,11 +344,14 @@ export function resolveVendor(nameOrId) {
 }
 
 // Merge a partial update into the vendor's record. Any empty-string field
-// is ignored so a blank edit doesn't wipe a previously-saved value. Writing
-// any field also establishes the record in the library store, so names
-// that only lived in plmDirectory get promoted on first edit.
+// is ignored so a blank edit doesn't wipe a previously-saved value (the
+// VendorEditor calls clearVendorField for explicit clears). Writing any
+// field also establishes the record in the library store, so names that
+// only lived in plmDirectory get promoted on first edit. Returns a
+// promise that resolves once the cloud sync settles (success or fail) —
+// VendorEditor tracks these to gate the close button.
 export function updateVendor(name, patch) {
-  if (!name || !patch) return;
+  if (!name || !patch) return Promise.resolve();
   const store = readStore();
   const current = store[name] || {};
   const next = { ...current };
@@ -338,18 +361,20 @@ export function updateVendor(name, patch) {
   });
   store[name] = next;
   writeStore(store);
-  syncVendorToCloud(name, next);
+  return syncVendorToCloud(name, next) || Promise.resolve();
 }
 
-// Clear a specific field (used when removing the logo image).
+// Clear a specific field (e.g. when the user wipes Lead Time back to
+// empty). Mirrors the clear to the cloud — otherwise the field would
+// re-appear on the next hydrate.
 export function clearVendorField(name, field) {
-  if (!name || !field) return;
+  if (!name || !field) return Promise.resolve();
   const store = readStore();
-  if (!store[name]) return;
+  if (!store[name]) return Promise.resolve();
   const { [field]: _, ...rest } = store[name];
   store[name] = rest;
   writeStore(store);
-  syncVendorToCloud(name, rest);
+  return syncVendorToCloud(name, rest) || Promise.resolve();
 }
 
 // Create a new vendor. Returns { ok: true } on success or
