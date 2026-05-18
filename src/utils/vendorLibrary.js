@@ -80,6 +80,9 @@ function fromSupabaseRow(row) {
     samRateUsdPerMin: row.sam_rate_usd_per_min != null && row.sam_rate_usd_per_min !== 0
       ? String(row.sam_rate_usd_per_min)
       : '',
+    markupPct: row.markup_pct != null && row.markup_pct !== 0
+      ? String(row.markup_pct)
+      : '',
     archivedAt: row.archived_at || null,
   };
 }
@@ -159,6 +162,7 @@ function syncVendorToCloud(name, entry) {
       payment_terms: entry.payment_terms || '',
       rating: Number(entry.rating) || 0,
       sam_rate_usd_per_min: Number(entry.samRateUsdPerMin) || 0,
+      markup_pct: Number(entry.markupPct) || 0,
       archived_at: entry.archivedAt || null,
     }, { onConflict: 'organization_id,name' })
     .then(({ error }) => { if (error) console.error('vendorLibrary sync:', error); });
@@ -200,6 +204,12 @@ const emptyEntry = (name) => ({
   // estimator uses this rate × estimated SAM minutes when present, and
   // falls back to regional CMT benchmarks when blank.
   samRateUsdPerMin: '',
+  // Flat factory profit markup, expressed as a percentage on top of the
+  // landed unit cost (fabrics + trims + treatments + cut & sew). Sticks
+  // with the vendor so every tech pack that names them inherits the
+  // same %. Stored as a string so blank stays blank in the UI; coerced
+  // to Number at cost-rollup time.
+  markupPct: '',
   // Soft-archive timestamp. NULL/empty = active and shown in the
   // Vendors directory. Non-null = archived; hidden by default but
   // visible behind the "Show archived" toggle. Restore by clearing.

@@ -443,6 +443,17 @@ function VendorEditor({ name, onClose, onDeleted, onRenamed }) {
                   Cut &amp; sew manufacturers only. Fully-loaded billing rate per Standard Allowed Minute (includes labor + overhead + factory margin) — typical coastal China $0.30–0.45, Vietnam $0.25–0.40, Bangladesh $0.12–0.20. Leave blank for mills, trim suppliers, etc. The AI Cut &amp; Sew estimator uses this rate × estimated SAM minutes when set; otherwise it falls back to regional CMT benchmarks.
                 </p>
               </div>
+              <div style={{ marginBottom: 12 }}>
+                <Input
+                  label="Factory Markup (%)"
+                  value={entry.markupPct || ''}
+                  onChange={v => patch('markupPct', v)}
+                  placeholder="e.g. 12"
+                />
+                <p style={{ fontSize: 10, color: FR.stone, marginTop: -4, lineHeight: 1.4, fontStyle: 'italic' }}>
+                  Flat profit margin this vendor charges on top of unit cost (fabrics + trims + treatments + cut &amp; sew). Sticks with the vendor — every tech pack that names them adds this % automatically. Typical 8–15% for full-package, 0 for CMT-only.
+                </p>
+              </div>
               <Input label="Notes" value={entry.notes || ''} onChange={v => patch('notes', v)} placeholder="Anything worth remembering" multiline />
             </div>
 

@@ -16,6 +16,8 @@ import { formatCost } from './TechPackPrimitives';
 import { uploadAsset, dataUrlToBlob, isLegacyDataUrl, useResolvedImageEntries, isGhostImage } from '../../utils/plmAssets';
 import { computePackDiff } from '../../utils/techPackDiff';
 import { listTreatments } from '../../utils/treatmentStore';
+import { listEmbellishments } from '../../utils/embellishmentStore';
+import { getVendor } from '../../utils/vendorLibrary';
 
 function sanitizeFilename(s) {
   return (s || 'techpack').replace(/[^\w\-]+/g, '_').slice(0, 60);
@@ -189,6 +191,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // selections into name/code/process on the live preview without forcing
   // PageTreatments to do async work mid-render.
   const [treatmentsById, setTreatmentsById] = useState({});
+  const [embellishmentsById, setEmbellishmentsById] = useState({});
   useEffect(() => {
     let cancelled = false;
     listTreatments({ includeArchived: true }).then(rows => {
@@ -196,6 +199,12 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       const map = {};
       (rows || []).forEach(t => { if (t.id) map[t.id] = t; });
       setTreatmentsById(map);
+    });
+    listEmbellishments({ includeArchived: true }).then(rows => {
+      if (cancelled) return;
+      const map = {};
+      (rows || []).forEach(e => { if (e.id) map[e.id] = e; });
+      setEmbellishmentsById(map);
     });
     return () => { cancelled = true; };
   }, []);
@@ -450,28 +459,70 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     return sum + componentUnitCost(full) * parseQty(p?.quantity);
   }, 0);
 
+  // Treatments cost: legacy BOM-fabric-linked treatments (data.fabrics[].treatment_id)
+  // plus the per-row costs designers now enter on the Treatments tab — Wash
+  // Types, Wash & Dye, Distressing & Finishes. When a row is linked to a
+  // library atom (treatment_id set), the library's cost wins; otherwise the
+  // row's free-typed cost_per_unit_usd wins. Same precedence we apply to
+  // fabric finishes so a library edit propagates everywhere instantly.
+  const rowTreatmentCost = (r) => {
+    if (r?.treatment_id && treatmentsById[r.treatment_id]) {
+      const t = treatmentsById[r.treatment_id];
+      return parseFloat(t?.cost_per_unit_usd) || parseFloat(t?.target_cost) || parseFloat(t?.cost_per_unit) || 0;
+    }
+    return parseFloat(r?.cost_per_unit_usd) || 0;
+  };
   const treatmentsCost = (() => {
     let sum = 0;
     (data.fabrics || []).forEach(f => {
       if (!f?.treatment_id) return;
       const t = treatmentsById[f.treatment_id];
-      sum += parseFloat(t?.target_cost) || parseFloat(t?.cost_per_unit) || 0;
+      sum += parseFloat(t?.cost_per_unit_usd) || parseFloat(t?.target_cost) || parseFloat(t?.cost_per_unit) || 0;
     });
+    (data.treatmentWashTypes || []).forEach(r => { sum += rowTreatmentCost(r); });
+    (data.treatments || []).forEach(r => { sum += rowTreatmentCost(r); });
+    (data.distressing || []).forEach(r => { sum += rowTreatmentCost(r); });
     return sum;
   })();
+
+  // Embellishments cost: colorways (library-resolved) plus the per-row
+  // artwork placement costs the designer enters on the Embellishments tab.
+  // Linked rows pull from the embellishment library, free rows use their
+  // own cost_per_unit_usd.
+  const artworkRowCost = (r) => {
+    if (r?.embellishment_id && embellishmentsById[r.embellishment_id]) {
+      const e = embellishmentsById[r.embellishment_id];
+      return parseFloat(e?.cost_per_unit_usd) || 0;
+    }
+    return parseFloat(r?.cost_per_unit_usd) || 0;
+  };
+  const artworkRowsCost = (data.artworkPlacements || []).reduce((s, r) => s + artworkRowCost(r), 0);
 
   const cutSewCost = parseFloat(data.cutSewLaborCost) || 0;
 
   const bomCost = computeBOMCost(data);  // legacy free-text BOM, kept for old packs
   const colorwayCost = computeColorwayCost(data, getFRColorCost);
+  const embellishmentsCost = colorwayCost + artworkRowsCost;
   const billOfMaterialsCost = fabricsCost + trimsCost + packagingCost + bomCost;
-  const totalUnitCost = billOfMaterialsCost + colorwayCost + treatmentsCost + cutSewCost;
+  const preMarkupCost = billOfMaterialsCost + embellishmentsCost + treatmentsCost + cutSewCost;
+
+  // Vendor markup: a flat % the named factory tacks on top of landed unit
+  // cost. Lives on the vendor entry so every pack that names this vendor
+  // inherits the same rate. Surfaces as its own line item in the header
+  // so the operator sees where the bump comes from.
+  const vendorMarkupPct = (() => {
+    const v = data.vendor ? getVendor(data.vendor) : null;
+    const n = parseFloat(v?.markupPct);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  })();
+  const vendorMarkupCost = preMarkupCost * (vendorMarkupPct / 100);
+  const totalUnitCost = preMarkupCost + vendorMarkupCost;
 
   // Per-phase cost subtotals shown as pills in the sidebar phase headers.
   const phaseCosts = {
     'Bill of Materials': billOfMaterialsCost,
     'Cut & Sew': cutSewCost,
-    'Embellishments': colorwayCost,
+    'Embellishments': embellishmentsCost,
     'Treatments': treatmentsCost,
   };
   const targetFOB = parseFloat(data.targetFOB) || 0;
@@ -854,12 +905,17 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
             : saving
               ? <span style={{ fontSize: 10, color: FR.sage }}>Saving…</span>
               : saveError && <span title={saveError} style={{ fontSize: 10, color: '#A32D2D', maxWidth: 460, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>⚠︎ Save failed (kept locally): {saveError}</span>}
-          {/* Cost roll-up — BOM + colorway (wash/dye). */}
-          <div style={{ textAlign: 'right' }} title={`BOM ${formatCost(bomCost)}  ·  Colorways ${formatCost(colorwayCost)}${maxFOB > 0 ? `  ·  Max FOB ${formatCost(maxFOB)}` : ''}`}>
+          {/* Cost roll-up — BOM + colorway (wash/dye) + vendor markup. */}
+          <div style={{ textAlign: 'right' }} title={`BOM ${formatCost(bomCost)}  ·  Colorways ${formatCost(colorwayCost)}${vendorMarkupPct > 0 ? `  ·  Vendor +${vendorMarkupPct}% ${formatCost(vendorMarkupCost)}` : ''}${maxFOB > 0 ? `  ·  Max FOB ${formatCost(maxFOB)}` : ''}`}>
             <div style={{ fontSize: 9, color: FR.stone }}>Total Unit Cost</div>
             <div style={{ fontSize: 13, color: totalUnitCost > 0 ? FR.salt : FR.stone, fontWeight: 600 }}>
               {formatCost(totalUnitCost)}
             </div>
+            {vendorMarkupPct > 0 && (
+              <div style={{ fontSize: 9, color: FR.sand, marginTop: 1, fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace" }}>
+                incl. vendor +{vendorMarkupPct}% · {formatCost(vendorMarkupCost)}
+              </div>
+            )}
             {fobDelta !== null && (
               <div style={{ fontSize: 9, color: fobDeltaColor, fontWeight: 600, marginTop: 1 }}>
                 {fobDelta > 0 ? '+' : ''}{fobDelta.toFixed(2)} vs max FOB
