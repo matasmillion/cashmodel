@@ -546,6 +546,8 @@ function PageFabrics({ d, fabricsById = {}, fabricPageIdx = 0 }) {
       chosenPlacementImage={entry.chosenPlacementImage != null ? entry.chosenPlacementImage : null}
       chosenPlacementNotes={entry.chosenPlacementNotes != null ? entry.chosenPlacementNotes : null}
       yieldM={entry.metersPerUnit || null}
+      chosenPricePerMeterUsd={entry.chosenPricePerMeterUsd ?? null}
+      chosenPricePerKgUsd={entry.chosenPricePerKgUsd ?? null}
     />
   );
 }

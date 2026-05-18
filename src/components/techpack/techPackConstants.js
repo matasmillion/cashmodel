@@ -337,6 +337,16 @@ export const GARMENT_YIELDS = [
   { label: 'Trench Coat',             metersPerUnit: 3.5 },
   { label: 'Sling Bag',               metersPerUnit: 0.5 },
 ];
+// Look up the standard fabric yield (m/unit) for a given PRODUCT_TYPES label.
+// Tries exact match first, then startsWith to handle "Hoodie" → "Hoodie (pullover)".
+export function yieldForProductType(productType) {
+  if (!productType) return null;
+  const lc = productType.toLowerCase();
+  const hit = GARMENT_YIELDS.find(g => g.label.toLowerCase() === lc) ||
+    GARMENT_YIELDS.find(g => g.label.toLowerCase().startsWith(lc));
+  return hit?.metersPerUnit ?? null;
+}
+
 export const SAMPLE_VERDICTS = ['Pending', 'Approved', 'Rejected', 'Revise'];
 export const APPROVAL_STATUSES = ['Pending', 'Approved', 'Rejected', 'Revise'];
 export const PASS_FAIL = ['Pass', 'Fail', 'Pending'];

@@ -237,6 +237,59 @@ function repairTruncatedJson(src) {
   return head + tail;
 }
 
+const SWATCH_SYSTEM = `You are analyzing a fabric swatch color card image. Your job is to identify every individual color swatch region in the image.
+
+Return ONLY a JSON array. Each element represents one distinct color swatch:
+[
+  {
+    "label": "color name or number exactly as printed near the swatch (e.g. '01 Ivory', 'Stone', '#4 Navy')",
+    "x": 0.05,
+    "y": 0.10,
+    "w": 0.20,
+    "h": 0.15
+  }
+]
+
+Rules:
+- x, y = top-left corner as a fraction of the full image dimensions (0.0–1.0)
+- w, h = width/height of the swatch region as fractions (0.0–1.0)
+- x + w must be ≤ 1.0, y + h must be ≤ 1.0
+- Include only the actual textile swatch area — not the text label below/beside it
+- If the label text is below the swatch, exclude it from the bounding box
+- Exclude headers, logos, spec tables, white margins, borders
+- If no label is visible for a swatch, use "Color NN" (sequential number)
+- Output ONLY the JSON array, nothing else`;
+
+/**
+ * Run Claude Vision against a single swatch-card image and return detected
+ * swatch regions as [{ label, x, y, w, h }] with coordinates as 0-1 fractions.
+ * @param {{ mediaType: string, base64: string }} media
+ */
+export async function extractSwatchesFromImage({ media }) {
+  if (!media) throw new Error('No image provided.');
+  const json = await callAnthropicProxy({
+    model: MODEL,
+    max_tokens: 4096,
+    system: SWATCH_SYSTEM,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: media.mediaType, data: media.base64 } },
+        { type: 'text', text: 'Identify all individual color swatches in this fabric color card. Return the JSON array of swatch regions.' },
+      ],
+    }],
+  });
+
+  const text = (Array.isArray(json?.content) ? json.content : []).find(b => b?.type === 'text')?.text || '';
+  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+  try {
+    const parsed = JSON.parse(cleaned);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Read a File into { mediaType, base64 } suitable for extractFabricFromMedia.
  */
