@@ -410,9 +410,36 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
 
   const fabricsCost = (data.pickedFabrics || []).reduce((sum, p) => {
     const row = fabricsById[p?.fabricId];
-    const costPerMeter = fabricUnitCost(row);
+    const d = row?.data || row;
+    const gsm = parseFloat(row?.weight_gsm ?? d?.weight_gsm) || 0;
+    const widthCm = parseFloat(row?.width_cm ?? d?.width_cm) || 0;
+    const kpm = (gsm && widthCm) ? gsm * widthCm / 100000 : 0;
+
+    // Per-style overrides take precedence over library cost
+    const mOverride = parseFloat(p?.chosenPricePerMeterUsd);
+    const kOverride = parseFloat(p?.chosenPricePerKgUsd);
+    let baseCostPerMeter;
+    if (Number.isFinite(mOverride) && p?.chosenPricePerMeterUsd != null) {
+      baseCostPerMeter = mOverride;
+    } else if (Number.isFinite(kOverride) && p?.chosenPricePerKgUsd != null && kpm) {
+      baseCostPerMeter = kOverride * kpm;
+    } else {
+      baseCostPerMeter = fabricUnitCost(row);
+    }
+
+    // Finish costs: per-meter delta first, per-kg converted as fallback
+    const finishes = p?.chosenFinishes ?? (d?.finishes || []);
+    const finishCostPerMeter = (finishes || []).reduce((s, f) => {
+      const fm = parseFloat(f?.delta_per_meter_usd);
+      if (Number.isFinite(fm) && fm > 0) return s + fm;
+      const fk = parseFloat(f?.delta_per_kg_usd);
+      if (Number.isFinite(fk) && fk > 0 && kpm) return s + fk * kpm;
+      return s;
+    }, 0);
+
     const mpu = p?.metersPerUnit;
-    return sum + (mpu ? costPerMeter * mpu : costPerMeter);
+    const totalPerMeter = baseCostPerMeter + finishCostPerMeter;
+    return sum + (mpu ? totalPerMeter * mpu : totalPerMeter);
   }, 0);
   const trimsCost = (data.pickedTrims || []).reduce((sum, p) => {
     const full = componentsById[p?.componentId || p?.id];
