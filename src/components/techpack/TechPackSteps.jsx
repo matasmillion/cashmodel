@@ -1665,7 +1665,7 @@ function CutSewLaborCostBlock({ data, set, sectionLabel }) {
         </div>
       )}
       <div style={{ fontSize: 11, color: FR.stone, lineHeight: 1.4 }}>
-        Total stitching labor charged by the factory per garment. Click Estimate with AI to anchor the value against the vendor's region and the garment's complexity, then override manually if you have a real quote. Rolls into the Cut &amp; Sew phase pill in the sidebar and the unit-cost total in the header.
+        <strong style={{ color: FR.slate, fontWeight: 600 }}>CMT-only — conversion labor.</strong> Cutting, sewing, finishing, packing, factory overhead. <strong>Excludes</strong> fabric, trims, packaging, treatments, embellishments, and vendor markup % — those live on their own tech-pack steps and roll up separately, so adding them here would double-count. Click Estimate with AI to anchor against the vendor's region or SAM rate, then override manually if you have a real quote.
       </div>
     </div>
   );
