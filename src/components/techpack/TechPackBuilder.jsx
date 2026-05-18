@@ -509,10 +509,12 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // Vendor markup: a flat % the named factory tacks on top of landed unit
   // cost. Lives on the vendor entry so every pack that names this vendor
   // inherits the same rate. Surfaces as its own line item in the header
-  // so the operator sees where the bump comes from.
+  // so the operator sees where the bump comes from. We track whether
+  // the named vendor has a library record so the UI can hint "set markup
+  // on vendor record" when the lookup falls through to directory-only.
+  const vendorRecord = data.vendor ? getVendor(data.vendor) : null;
   const vendorMarkupPct = (() => {
-    const v = data.vendor ? getVendor(data.vendor) : null;
-    const n = parseFloat(v?.markupPct);
+    const n = parseFloat(vendorRecord?.markupPct);
     return Number.isFinite(n) && n > 0 ? n : 0;
   })();
   const vendorMarkupCost = preMarkupCost * (vendorMarkupPct / 100);
@@ -911,10 +913,18 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
             <div style={{ fontSize: 13, color: totalUnitCost > 0 ? FR.salt : FR.stone, fontWeight: 600 }}>
               {formatCost(totalUnitCost)}
             </div>
-            {vendorMarkupPct > 0 && (
-              <div style={{ fontSize: 9, color: FR.sand, marginTop: 1, fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace" }}>
-                incl. vendor +{vendorMarkupPct}% · {formatCost(vendorMarkupCost)}
-              </div>
+            {data.vendor && (
+              vendorMarkupPct > 0 ? (
+                <div style={{ fontSize: 9, color: FR.sand, marginTop: 1, fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace" }}
+                  title={`Markup on ${data.vendor} (${vendorRecord?._hasRecord ? 'library record' : 'directory-only'})`}>
+                  incl. {data.vendor} +{vendorMarkupPct}% · {formatCost(vendorMarkupCost)}
+                </div>
+              ) : (
+                <div style={{ fontSize: 9, color: FR.stone, marginTop: 1, fontStyle: 'italic' }}
+                  title={`No markup % set on ${data.vendor}. Open PLM → Library → Vendors → ${data.vendor} and fill in "Factory Markup (%)".`}>
+                  {data.vendor} markup not set
+                </div>
+              )
             )}
             {fobDelta !== null && (
               <div style={{ fontSize: 9, color: fobDeltaColor, fontWeight: 600, marginTop: 1 }}>
