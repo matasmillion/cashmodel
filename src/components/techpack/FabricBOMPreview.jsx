@@ -108,7 +108,7 @@ function Photo({ x, y, w, h, src, label }) {
 }
 
 function Swatch({ x, y, w, h, entry, picked }) {
-  const resolved = useResolved(entry.url);
+  const resolved = useResolved(entry.url || entry.path);
   return (
     <g>
       <rect x={x} y={y} width={w} height={h} fill={entry.hex || FR.salt}
@@ -132,7 +132,7 @@ function PageBody(props) { return <FabricBOMPreviewBody {...props} />; }
 // TechPackPagePreview's PageFabrics so the tech pack live preview and the
 // library card render through one component. The wrapper above adds the
 // salt background + slate header + soil divider for the standalone view.
-export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFinishes, chosenNotes, chosenPlacementImage, chosenPlacementNotes, yieldM, chosenPricePerMeterUsd = null }) {
+export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFinishes, chosenNotes, chosenPlacementImage, chosenPlacementNotes, yieldM, chosenPricePerMeterUsd = null, chosenPricePerKgUsd = null }) {
   const allColors = fabric.color_card_images || [];
   const finishes = chosenFinishes != null ? chosenFinishes : (fabric.mill_finishes || []);
   const notes = chosenNotes != null ? chosenNotes : (fabric.notes || '');
@@ -149,11 +149,21 @@ export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFi
   const _d = fabric.data || fabric;
   const _gsm = parseFloat(fabric.weight_gsm ?? _d?.weight_gsm) || 0;
   const _widthCm = parseFloat(fabric.width_cm ?? _d?.width_cm) || 0;
+  const _kpm = (_gsm && _widthCm) ? (_gsm * _widthCm / 100000) : 0;
   const _kgUsd = parseFloat(fabric.price_per_kg_usd ?? _d?.price_per_kg_usd) || 0;
-  const _fromKg = (_kgUsd && _gsm && _widthCm) ? _kgUsd * (_gsm * _widthCm / 100000) : 0;
+  const _fromKg = (_kgUsd && _kpm) ? _kgUsd * _kpm : 0;
   const _libraryBaseUsd = parseFloat(fabric.price_per_meter_usd) || parseFloat(_d?.price_per_meter_usd) || _fromKg || 0;
-  const baseUsd = chosenPricePerMeterUsd != null ? (parseFloat(chosenPricePerMeterUsd) || 0) : _libraryBaseUsd;
-  const finishesUsd = finishes.reduce((s, f) => s + (parseFloat(f.delta_per_meter_usd) || 0), 0);
+  const _overrideFromKg = (chosenPricePerKgUsd != null && _kpm) ? (parseFloat(chosenPricePerKgUsd) || 0) * _kpm : null;
+  const baseUsd = chosenPricePerMeterUsd != null
+    ? (parseFloat(chosenPricePerMeterUsd) || 0)
+    : (_overrideFromKg != null ? _overrideFromKg : _libraryBaseUsd);
+  const finishesUsd = finishes.reduce((s, f) => {
+    const m = parseFloat(f?.delta_per_meter_usd);
+    if (Number.isFinite(m) && m > 0) return s + m;
+    const k = parseFloat(f?.delta_per_kg_usd);
+    if (Number.isFinite(k) && k > 0 && _kpm) return s + k * _kpm;
+    return s;
+  }, 0);
   const allInUsd = baseUsd + finishesUsd;
   const m = parseFloat(yieldM || 0) || 0;
   const costPerUnit = m > 0 ? allInUsd * m : allInUsd;
@@ -364,6 +374,7 @@ export default function FabricBOMPreview({
   chosenPlacementNotes = null,
   yieldM = null,
   chosenPricePerMeterUsd = null,
+  chosenPricePerKgUsd = null,
   styleNumber = null,
   pageLabel = null,
 }) {
@@ -385,7 +396,7 @@ export default function FabricBOMPreview({
       )}
       <text x={PAGE_W - 40} y="50" textAnchor="end" fontSize="8" fill={FR.sand} letterSpacing="2">PAGE {pageTag}</text>
       <rect x="0" y="70" width={PAGE_W} height="2" fill={FR.soil} />
-      <PageBody fabric={fabric} chosenColor={chosenColor} chosenArea={chosenArea} chosenFinishes={chosenFinishes} chosenNotes={chosenNotes} chosenPlacementImage={chosenPlacementImage} chosenPlacementNotes={chosenPlacementNotes} yieldM={yieldM} chosenPricePerMeterUsd={chosenPricePerMeterUsd} />
+      <PageBody fabric={fabric} chosenColor={chosenColor} chosenArea={chosenArea} chosenFinishes={chosenFinishes} chosenNotes={chosenNotes} chosenPlacementImage={chosenPlacementImage} chosenPlacementNotes={chosenPlacementNotes} yieldM={yieldM} chosenPricePerMeterUsd={chosenPricePerMeterUsd} chosenPricePerKgUsd={chosenPricePerKgUsd} />
       <text x="40" y="775" fontSize="9" fill={FR.stone}>{styleInfo}</text>
       <text x={PAGE_W - 40} y="775" textAnchor="end" fontSize="9" fill={FR.stone}>PAGE {pageTag}</text>
     </svg>

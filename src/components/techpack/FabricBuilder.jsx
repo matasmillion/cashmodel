@@ -501,7 +501,7 @@ export default function FabricBuilder({ fabric, onBack }) {
           blob: s.blob,
           skipCompress: false,
         });
-        return { path: ref.path, url: '', label: s.label || `Color ${String(i + 1).padStart(2, '0')}`, hex: '' };
+        return { url: ref.path, label: s.label || `Color ${String(i + 1).padStart(2, '0')}`, hex: '' };
       } catch (err) { console.error('SwatchScan upload:', err); return null; }
     }));
     const valid = uploaded.filter(Boolean);
