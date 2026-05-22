@@ -288,9 +288,11 @@ export async function extractSwatchesFromImage({ media }) {
 
   const text = (Array.isArray(json?.content) ? json.content : []).find(b => b?.type === 'text')?.text || '';
   const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+
+  let regions = [];
   try {
     const parsed = JSON.parse(cleaned);
-    return Array.isArray(parsed) ? parsed : [];
+    regions = Array.isArray(parsed) ? parsed : [];
   } catch {
     // A large color card (20-30+ swatches) can blow past max_tokens and cut
     // the array off mid-element. Salvage the regions that did come through.
@@ -298,11 +300,16 @@ export async function extractSwatchesFromImage({ media }) {
     if (repaired !== null) {
       try {
         const parsed = JSON.parse(repaired);
-        return Array.isArray(parsed) ? parsed : [];
+        regions = Array.isArray(parsed) ? parsed : [];
       } catch { /* fall through */ }
     }
-    return [];
   }
+
+  // Despite prompt instructions the model consistently returns bounding boxes
+  // that cover the full cell (fabric swatch + label text below it). On standard
+  // Asian color cards the label occupies roughly the bottom 28% of each cell,
+  // so trimming that fraction gives a clean fabric-only crop.
+  return regions.map(r => ({ ...r, h: r.h * 0.72 }));
 }
 
 /**
