@@ -349,18 +349,57 @@ export async function detectAndCropSwatches(file) {
 }
 
 /**
- * Read a File into { mediaType, base64 } suitable for extractFabricFromMedia.
+ * Read a File into { mediaType, base64 } suitable for Claude Vision.
+ * Images are downscaled on a canvas to fit within maxPx on the longest side
+ * (default 2048) so the base64 payload stays well under the 5 MB API limit.
+ * PDFs are passed through unchanged.
+ * @param {File|Blob} file
+ * @param {{ maxPx?: number }} [opts]
  */
-export function fileToMedia(file) {
+export function fileToMedia(file, { maxPx = 2048 } = {}) {
+  if (file.type === 'application/pdf') {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = String(reader.result || '');
+        const m = /^data:([^;]+);base64,(.*)$/.exec(result);
+        if (!m) { reject(new Error('Unsupported file encoding')); return; }
+        resolve({ mediaType: m[1], base64: m[2] });
+      };
+      reader.onerror = () => reject(new Error('Could not read file'));
+      reader.readAsDataURL(file);
+    });
+  }
+
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result || '');
-      const m = /^data:([^;]+);base64,(.*)$/.exec(result);
-      if (!m) { reject(new Error('Unsupported file encoding')); return; }
-      resolve({ mediaType: m[1], base64: m[2] });
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const { naturalWidth: w, naturalHeight: h } = img;
+      const scale = Math.min(1, maxPx / Math.max(w, h));
+      const dw = Math.round(w * scale);
+      const dh = Math.round(h * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = dw;
+      canvas.height = dh;
+      canvas.getContext('2d').drawImage(img, 0, 0, dw, dh);
+      // JPEG at 0.88 keeps color cards sharp enough for swatch detection while
+      // staying comfortably under the 5 MB Claude Vision base64 limit.
+      canvas.toBlob(blob => {
+        if (!blob) { reject(new Error('Canvas toBlob failed')); return; }
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = String(reader.result || '');
+          const m = /^data:([^;]+);base64,(.*)$/.exec(result);
+          if (!m) { reject(new Error('Unsupported encoding after resize')); return; }
+          resolve({ mediaType: m[1], base64: m[2] });
+        };
+        reader.onerror = () => reject(new Error('Could not read resized blob'));
+        reader.readAsDataURL(blob);
+      }, 'image/jpeg', 0.88);
     };
-    reader.onerror = () => reject(new Error('Could not read file'));
-    reader.readAsDataURL(file);
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Image load failed')); };
+    img.src = objectUrl;
   });
 }
