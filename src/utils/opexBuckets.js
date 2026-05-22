@@ -28,6 +28,8 @@ export function buildOpexBuckets(subscriptions) {
 
 /** Returns this week's G&A bucket value given a Monday date and the buckets array. */
 export function gaForWeek(mondayDate, buckets) {
-  const day = new Date(mondayDate + 'T00:00:00').getDate();
+  // Parse as local midnight (avoids UTC-shift on negative-offset timezones).
+  const [y, m, d] = mondayDate.split('-').map(Number);
+  const day = new Date(y, m - 1, d).getDate();
   return buckets[getWeeklyBucket(day)];
 }

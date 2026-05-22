@@ -9,14 +9,51 @@
 // Classification is name-based — Mercury account names are user-controlled, so
 // we look for keywords. Order matters: more specific keywords first.
 
+// Order matters — the most specific patterns must come first so a name
+// like "Sales Tax Reserve" routes to salesTax (not workingCapital).
 const PATTERNS = [
-  { role: 'salesTax',       test: /\b(sales\s*tax)\b/i },
-  { role: 'corporateTax',   test: /\b(corp(orate)?\s*tax|federal\s*tax|fed\s*tax|income\s*tax)\b/i },
-  { role: 'workingCapital', test: /\b(working\s*capital|wc|po\s*(reserve|fund)|inventory)\b/i },
-  { role: 'operating',      test: /\b(operating|main|primary|checking|ops)\b/i },
+  { role: 'salesTax',       test: /\b(sales\s*tax|state\s*tax|nexus)\b/i },
+  { role: 'corporateTax',   test: /\b(corp(orate)?\s*tax|federal\s*tax|fed\s*tax|income\s*tax|irs)\b/i },
+  { role: 'workingCapital', test: /\b(working\s*capital|wc|po\s*(reserve|fund)|inventory|vendor|supplier|inventory\s*float)\b/i },
+  { role: 'fulfillment',    test: /\b(fulfillment|fulfilment|shipping|3pl|warehouse)\b/i },
+  // Mercury default sub-account names ("Treasury", "Vault", "Reserve",
+  // "Savings", "High Yield") all act as the user's main store of cash
+  // unless the name explicitly says otherwise — bucket them as operating
+  // so the SB Main row reflects total available cash.
+  { role: 'operating',      test: /\b(operating|main|primary|checking|ops|treasury|vault|reserve|holding|savings|high\s*yield|hy)\b/i },
 ];
 
-export function classifyAccount(name = '') {
+// Mask → role overrides. Wins over name-based PATTERNS so a renamed
+// Mercury sub-account can't accidentally re-bucket itself.
+const DEPOSITORY_MASK_MAP = {
+  // Mercury checking (Foreign Resource) — the sole "operating cash"
+  // account. sbMain pins to this mask specifically so renamed Treasury /
+  // Vault / Savings sub-accounts don't silently sum into it.
+  '6848': 'operating',
+  // Mercury sub-account that funds 3PL / shipping invoices. Surfaced
+  // as a gray italic sub-row UNDER Fulfillment Payable in the cashflow
+  // — it's not its own line item; it's the cash side of that liability.
+  '7301': 'fulfillment',
+  // Mercury sub-account that funds Meta / Chase 7248 ad payments.
+  // Surfaced the same way under Ads Payable.
+  '3135': 'marketing',
+};
+
+// The single Mercury account that backs the "Operating Cash" cashflow row.
+// sbMain = balance of this exact account, not a sum of operating-classified
+// sub-accounts.
+export const OPERATING_MASK = '6848';
+
+export function classifyAccount(nameOrAcc = '') {
+  // Accept either a string (legacy) or the account object so mask
+  // overrides can win over name-based pattern matching.
+  if (typeof nameOrAcc === 'object' && nameOrAcc !== null) {
+    if (nameOrAcc.mask && DEPOSITORY_MASK_MAP[nameOrAcc.mask]) {
+      return DEPOSITORY_MASK_MAP[nameOrAcc.mask];
+    }
+    return classifyAccount(nameOrAcc.name || '');
+  }
+  const name = nameOrAcc;
   for (const p of PATTERNS) {
     if (p.test.test(name)) return p.role;
   }
@@ -31,14 +68,16 @@ export function classifyAccount(name = '') {
  *   salesTax: number,
  *   corporateTax: number,
  *   workingCapital: number,
+ *   fulfillment: number,
+ *   marketing: number,
  *   total: number,
  *   accounts: Array<{role, name, mask, balance, institution}>,
  * }}
  */
 export function bucketDepositoryAccounts(accounts = []) {
-  const buckets = { operating: 0, salesTax: 0, corporateTax: 0, workingCapital: 0, total: 0 };
+  const buckets = { operating: 0, salesTax: 0, corporateTax: 0, workingCapital: 0, fulfillment: 0, marketing: 0, total: 0 };
   const tagged = accounts.map(a => {
-    const role = classifyAccount(a.name);
+    const role = classifyAccount(a);
     buckets.total += a.balance || 0;
     // Anything we can't classify rolls into operating so cash-on-hand stays correct.
     const target = role === 'other' ? 'operating' : role;
@@ -54,6 +93,9 @@ export function bucketDepositoryAccounts(accounts = []) {
 const CARD_MASK_MAP = {
   '5718': 'chase-5718',
   '1005': 'amex-blue',
+  // Chase 7248 is the active ads card — its balance + pending charges
+  // drive the Ads Payable cashflow row alongside Meta's amount-owed.
+  '7248': 'chase-7248',
 };
 export function cardIdFromMask(mask) {
   if (!mask) return null;
@@ -61,16 +103,20 @@ export function cardIdFromMask(mask) {
 }
 
 // Classify Plaid credit-card account → key used by the cashflow engine.
-// (chase5718 / amexBlue / amexPlum). Falls back to a name-based match if mask
-// isn't recognised — handy for the AMEX Plum which has no last-4 from Plaid.
+// (chase5718 / chase7248 / amexBlue / amexPlum). Falls back to a name-based
+// match if mask isn't recognised — handy for AMEX Plum which has no last-4.
 export function classifyCreditAccount({ mask, name = '', subtype = '' }) {
   if (mask && CARD_MASK_MAP[mask]) {
     const id = CARD_MASK_MAP[mask];
-    return id === 'chase-5718' ? 'chase5718' : id === 'amex-blue' ? 'amexBlue' : null;
+    if (id === 'chase-5718') return 'chase5718';
+    if (id === 'chase-7248') return 'chase7248';
+    if (id === 'amex-blue') return 'amexBlue';
+    return null;
   }
   const lc = name.toLowerCase();
   if (lc.includes('plum')) return 'amexPlum';
   if (lc.includes('blue')) return 'amexBlue';
+  if (lc.includes('7248')) return 'chase7248';
   if (lc.includes('chase')) return 'chase5718';
   return null;
 }

@@ -500,7 +500,7 @@ function GridTable({ x, y, cols, rows, bodyRows = 4, rowH = 22, headerH = 22, re
 // fabrics, but the live preview shows the first picked fabric on its
 // dedicated page. Multi-fabric pagination (one A4 per fabric, dropdown
 // nav) is the follow-up.
-function PageFabrics({ d, fabricsById = {} }) {
+function PageFabrics({ d, fabricsById = {}, fabricPageIdx = 0 }) {
   const picked = (d?.pickedFabrics || []).filter(p => p?.fabricId);
   if (picked.length === 0) {
     return (
@@ -516,7 +516,7 @@ function PageFabrics({ d, fabricsById = {} }) {
       </g>
     );
   }
-  const entry = picked[0];
+  const entry = picked[Math.min(fabricPageIdx, picked.length - 1)];
   const fabric = fabricsById[entry.fabricId];
   // Show a spinner card while the fabric library row is still being fetched
   // (signed cover URL, vendor lookup, color cards). Without it the page
@@ -542,7 +542,12 @@ function PageFabrics({ d, fabricsById = {} }) {
       chosenColor={chosenColor}
       chosenArea={entry.role || null}
       chosenFinishes={entry.chosenFinishes || null}
+      chosenNotes={entry.chosenNotes != null ? entry.chosenNotes : null}
+      chosenPlacementImage={entry.chosenPlacementImage != null ? entry.chosenPlacementImage : null}
+      chosenPlacementNotes={entry.chosenPlacementNotes != null ? entry.chosenPlacementNotes : null}
       yieldM={entry.metersPerUnit || null}
+      chosenPricePerMeterUsd={entry.chosenPricePerMeterUsd ?? null}
+      chosenPricePerKgUsd={entry.chosenPricePerKgUsd ?? null}
     />
   );
 }
@@ -1577,7 +1582,7 @@ const PAGE_FNS = [
   { title: 'Style Overview',                    phase: 'Design',            body: ({ d, images }) => <PageCover d={d} images={images} /> },
   { title: 'Design Overview',                   phase: 'Design',            body: ({ d, images }) => <PageDesignOverview d={d} images={images} /> },
   // 04, 05, 06 — Bill of Materials
-  { title: 'Fabrics',                           phase: 'Bill of Materials', body: ({ d, fabricsById }) => <PageFabrics d={d} fabricsById={fabricsById} /> },
+  { title: 'Fabrics',                           phase: 'Bill of Materials', body: ({ d, fabricsById, fabricPageIdx }) => <PageFabrics d={d} fabricsById={fabricsById} fabricPageIdx={fabricPageIdx} /> },
   { title: 'Trims',                             phase: 'Bill of Materials', body: ({ d, componentsById }) => <PageTrims d={d} componentsById={componentsById} /> },
   { title: 'Packaging',                         phase: 'Bill of Materials', body: ({ d, componentsById }) => <PagePackaging d={d} componentsById={componentsById} /> },
   // 07–13 — Cut & Sew
@@ -1619,12 +1624,17 @@ function SkipOverlay() {
   );
 }
 
-export default function TechPackPagePreview({ data, images, step, skippedSteps, treatmentsById, componentsById = {}, fabricsById = {} }) {
+export default function TechPackPagePreview({ data, images, step, skippedSteps, treatmentsById, componentsById = {}, fabricsById = {}, fabricPageIdx = 0 }) {
   const d = data || {};
   const styleInfo = `© 2026 Foreign Resource Co. — Confidential Tech Pack`;
   // Page number uses STEPS[step].icon — '000', '00', '01' … '19'.
+  // Fabrics step gets a "03.N" suffix when the operator picks multiple fabrics
+  // and is paginating through them via the sidebar sub-entries.
   const stepEntry = STEPS[step] || STEPS[0];
-  const pageNum = stepEntry.icon || String((step ?? 0) + 1);
+  let pageNum = stepEntry.icon || String((step ?? 0) + 1);
+  if (stepEntry.id === 'fabrics' && fabricPageIdx > 0) {
+    pageNum = `${pageNum}.${fabricPageIdx}`;
+  }
   const current = PAGE_FNS[step] || PAGE_FNS[0];
   const Body = current.body;
   const isSkipped = Array.isArray(skippedSteps) && skippedSteps.includes(step);
@@ -1635,7 +1645,7 @@ export default function TechPackPagePreview({ data, images, step, skippedSteps, 
       preserveAspectRatio="xMidYMin meet"
       style={{ width: '100%', height: 'auto', background: FR.white, boxShadow: '0 2px 14px rgba(0,0,0,0.12)', borderRadius: 6, fontFamily: 'Helvetica, Arial, sans-serif' }}>
       <PageFrame title={current.title} phase={current.phase} pageNum={pageNum} styleInfo={styleInfo} styleNumber={d.styleNumber}>
-        <Body d={d} images={images} treatmentsById={treatmentsById} componentsById={componentsById} fabricsById={fabricsById} />
+        <Body d={d} images={images} treatmentsById={treatmentsById} componentsById={componentsById} fabricsById={fabricsById} fabricPageIdx={fabricPageIdx} />
       </PageFrame>
       {isSkipped && <SkipOverlay />}
     </svg>

@@ -5,12 +5,14 @@
 // holds thin references and renders the picker UI.
 
 import React, { useEffect, useState } from 'react';
-import { FR, GARMENT_YIELDS } from './techPackConstants';
+import { FR, GARMENT_YIELDS, yieldForProductType } from './techPackConstants';
 import { SectionTitle, AssetImage } from './TechPackPrimitives';
 import { listFabrics } from '../../utils/fabricStore';
 import { listComponentPacks, getComponentPack } from '../../utils/componentPackStore';
 import { getAssetUrl } from '../../utils/plmAssets';
 import { FABRIC_GARMENT_AREAS, MILL_FINISH_CATALOG, FINISH_EXECUTED_AT } from '../../utils/fabricLibrary';
+import VendorPicker from './VendorPicker';
+import SimpleImageSlot from './SimpleImageSlot';
 
 // Cover images in fabric / component pack rows are stored as Supabase
 // Storage paths, not URLs. The browser can't render them directly — we
@@ -57,7 +59,23 @@ async function resolveCoverPath(value, version) {
 
 const labelStyle = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' };
 
-// ─── Reusable picker modal ──────────────────────────────────────────────────
+// Resolves a swatch ref (storage path OR inline http/data/blob URL) into
+// a usable <img src> and renders it. Used wherever a color_card_images
+// entry needs to display — picker modal, picked-fabric badge, etc.
+function SwatchThumb({ refPath, alt = '', style = {} }) {
+  const [resolved, setResolved] = useState('');
+  useEffect(() => {
+    if (!refPath) { setResolved(''); return undefined; }
+    if (/^(https?:|data:|blob:)/.test(refPath)) { setResolved(refPath); return undefined; }
+    let cancelled = false;
+    getAssetUrl(refPath).then(u => { if (!cancelled && u) setResolved(u); });
+    return () => { cancelled = true; };
+  }, [refPath]);
+  if (!resolved) return null;
+  return <img src={resolved} alt={alt} style={{ width: '100%', height: '100%', objectFit: 'cover', ...style }} />;
+}
+
+// ─── Reusable picker modal ──────────────────────────────────────────────────────
 // Generic picker that lists items from the library. The caller supplies
 // `fetchItems` (async fn returning rows), `renderItem` (per-row tile), and
 // `getId` (key extractor). Modal closes on select.
@@ -140,8 +158,21 @@ function LibraryPickerModal({ title, subtitle, fetchItems, renderItem, getId, on
 // Picking an area moves the flow on to the color picker (or commits if
 // the fabric has no color cards).
 function FabricAreaPickerModal({ fabric, defaultArea, onSelect, onClose }) {
-  const [area, setArea] = useState(defaultArea || fabric?.default_garment_area || 'Body');
+  // Areas can be multi-select. Seed from defaultArea (string or comma-joined),
+  // and fall back to the fabric's library default. Always at least one area.
+  const seedAreas = (() => {
+    if (Array.isArray(defaultArea) && defaultArea.length) return defaultArea;
+    if (typeof defaultArea === 'string' && defaultArea.trim()) {
+      return defaultArea.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    return [fabric?.default_garment_area || 'Body'];
+  })();
+  const [selected, setSelected] = useState(seedAreas);
   const areas = FABRIC_GARMENT_AREAS;
+  const toggle = (a) => {
+    setSelected(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]);
+  };
+  const canContinue = selected.length > 0;
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(58,58,58,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
       <div style={{ background: FR.salt, borderRadius: 8, padding: 22, width: 560, maxWidth: '94vw', border: `0.5px solid rgba(58,58,58,0.15)` }}>
@@ -149,31 +180,35 @@ function FabricAreaPickerModal({ fabric, defaultArea, onSelect, onClose }) {
           <div>
             <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 22, color: FR.slate }}>Where on the garment?</div>
             <div style={{ fontSize: 11, color: FR.stone, marginTop: 4 }}>
-              {fabric?.name || fabric?.mill_fabric_no || 'Selected fabric'} — pick the area this fabric is cut for.
+              {fabric?.name || fabric?.mill_fabric_no || 'Selected fabric'} — pick every area this fabric is cut for (multi-select).
             </div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: FR.stone, lineHeight: 1 }}>×</button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 18 }}>
-          {areas.map(a => (
-            <button key={a} onClick={() => setArea(a)}
-              style={{
-                padding: '10px 8px',
-                background: area === a ? FR.slate : FR.white,
-                color: area === a ? FR.salt : FR.slate,
-                border: `1px solid ${area === a ? FR.slate : FR.sand}`,
-                borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              }}>
-              {a}
-            </button>
-          ))}
+          {areas.map(a => {
+            const active = selected.includes(a);
+            return (
+              <button key={a} onClick={() => toggle(a)}
+                style={{
+                  padding: '10px 8px',
+                  background: active ? FR.slate : FR.white,
+                  color: active ? FR.salt : FR.slate,
+                  border: `1px solid ${active ? FR.slate : FR.sand}`,
+                  borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}>
+                {a}
+              </button>
+            );
+          })}
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button onClick={onClose} style={{ padding: '7px 14px', background: 'none', border: `0.5px solid ${FR.sand}`, borderRadius: 6, cursor: 'pointer', fontSize: 11, color: FR.stone }}>
             Cancel
           </button>
-          <button onClick={() => onSelect(area)}
-            style={{ padding: '7px 18px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+          <button onClick={() => canContinue && onSelect(selected.join(', '))}
+            disabled={!canContinue}
+            style={{ padding: '7px 18px', background: canContinue ? FR.slate : FR.sand, color: FR.salt, border: 'none', borderRadius: 6, cursor: canContinue ? 'pointer' : 'default', fontSize: 11, fontWeight: 600, opacity: canContinue ? 1 : 0.6 }}>
             Continue → {fabric?.color_card_images?.length ? 'pick color' : 'commit'}
           </button>
         </div>
@@ -207,7 +242,7 @@ function FabricColorPickerModal({ fabric, onSelect, onSkip, onClose }) {
               onMouseOut={e => { e.currentTarget.style.borderColor = FR.sand; }}
             >
               <div style={{ aspectRatio: '1 / 1', background: c.hex || FR.salt, overflow: 'hidden' }}>
-                {c.url && <img src={c.url} alt={c.label || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                <SwatchThumb refPath={c.url || c.path} alt={c.label || ''} />
               </div>
               <div style={{ padding: '6px 8px' }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: FR.slate }}>{c.label || `Color ${i + 1}`}</div>
@@ -226,7 +261,7 @@ function FabricColorPickerModal({ fabric, onSelect, onSkip, onClose }) {
   );
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function specOf(componentRow) {
   // listComponentPacks returns thin projection rows (cover_image, supplier).
@@ -266,16 +301,134 @@ function fabricSpec(row) {
     cover:       row?.front_image_url || row?.cover_image || d?.front_image_url || d?.cover_image || null,
     colors:      row?.color_card_images || d?.color_card_images || [],
     finishes:    row?.mill_finishes || d?.mill_finishes || [],
+    notes:       row?.notes || d?.notes || '',
+    placementImage: row?.garment_placement_image_url || d?.garment_placement_image_url || '',
+    placementNotes: row?.garment_placement_notes || d?.garment_placement_notes || '',
     unitCost,
+    unitCostPerKg: kgUsd,
+    gsm,
+    widthCm,
     currency:    d.currency || tier?.currency || 'USD',
   };
 }
 
-// ─── Mill Finishes inline editor (per fabric slot in StepFabrics) ────────────
+// One meter of this fabric weighs `gsm × widthCm / 100000` kg (gsm = g/m²,
+// width in cm → m². ÷ 1000 to go g → kg). Returns 0 when gsm or width are
+// missing, so callers can fall back to the per-meter price directly.
+function kgPerMeter(gsm, widthCm) {
+  const g = parseFloat(gsm) || 0;
+  const w = parseFloat(widthCm) || 0;
+  return (g && w) ? (g * w / 100000) : 0;
+}
+
+// Resolves the effective price-per-meter for a picked fabric, honoring
+// per-style overrides first (meter, then kg×kgPerMeter), then falling back
+// to the library's spec.unitCost.
+function effectivePerMeter(entry, spec) {
+  const m = parseFloat(entry?.chosenPricePerMeterUsd);
+  if (Number.isFinite(m) && entry?.chosenPricePerMeterUsd != null) return m;
+  const k = parseFloat(entry?.chosenPricePerKgUsd);
+  if (Number.isFinite(k) && entry?.chosenPricePerKgUsd != null) {
+    const kpm = kgPerMeter(spec?.gsm, spec?.widthCm);
+    if (kpm) return k * kpm;
+  }
+  return spec?.unitCost || 0;
+}
+
+// Resolves a finish's per-meter delta, honoring delta_per_meter_usd first,
+// then delta_per_kg_usd × kgPerMeter when /m wasn't entered.
+function finishPerMeter(f, gsm, widthCm) {
+  const m = parseFloat(f?.delta_per_meter_usd);
+  if (Number.isFinite(m) && m > 0) return m;
+  const k = parseFloat(f?.delta_per_kg_usd);
+  if (Number.isFinite(k) && k > 0) {
+    const kpm = kgPerMeter(gsm, widthCm);
+    if (kpm) return k * kpm;
+  }
+  return 0;
+}
+
+// ─── Per-style fabric price override (per fabric slot in StepFabrics) ──────
+// The mill quote sometimes comes in $/meter, sometimes in $/kg. The library
+// stores both; the per-style override mirrors that. Operator picks the unit,
+// types the price they were quoted, and the cost rollup rolls it up to /m
+// using GSM + width when /kg is the source of truth.
+function FabricPriceOverride({ entry, spec, onChange }) {
+  const unit = entry.chosenPriceUnit === 'kg' ? 'kg' : 'm';
+  const libraryPerM = spec?.unitCost || 0;
+  const libraryPerKg = spec?.unitCostPerKg || 0;
+  const kpm = kgPerMeter(spec?.gsm, spec?.widthCm);
+
+  const fieldValue = unit === 'kg' ? entry.chosenPricePerKgUsd : entry.chosenPricePerMeterUsd;
+  const libraryFallback = unit === 'kg' ? libraryPerKg : libraryPerM;
+  const isOverridden = fieldValue != null;
+
+  const setUnit = (u) => onChange({ chosenPriceUnit: u });
+  const setValue = (raw) => {
+    const v = raw !== '' ? parseFloat(raw) : null;
+    if (unit === 'kg') {
+      onChange({ chosenPricePerKgUsd: v, chosenPricePerMeterUsd: null });
+    } else {
+      onChange({ chosenPricePerMeterUsd: v, chosenPricePerKgUsd: null });
+    }
+  };
+  const reset = () => onChange({ chosenPricePerMeterUsd: null, chosenPricePerKgUsd: null });
+
+  const effPerM = effectivePerMeter(entry, spec);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <span style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Price</span>
+        <select
+          value={unit}
+          onChange={e => setUnit(e.target.value)}
+          style={{ fontSize: 9, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '2px 3px', color: FR.slate, background: FR.white, outline: 'none' }}
+        >
+          <option value="m">per meter</option>
+          <option value="kg">per kg</option>
+        </select>
+        <span style={{ fontSize: 9, color: FR.stone }}>$</span>
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={fieldValue != null ? fieldValue : (libraryFallback || '')}
+          onChange={e => setValue(e.target.value)}
+          placeholder={libraryFallback ? String(libraryFallback) : '0.00'}
+          style={{ flex: 1, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '3px 5px', fontSize: 10, color: FR.slate, background: FR.white, outline: 'none' }}
+        />
+        {isOverridden && (
+          <button
+            onClick={reset}
+            style={{ fontSize: 9, color: FR.stone, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', flexShrink: 0 }}
+          >Reset</button>
+        )}
+      </div>
+      {unit === 'kg' && !kpm && (
+        <div style={{ marginTop: 2, fontSize: 8, color: '#854F0B' }}>
+          Set GSM + width on the fabric in the library so /kg can roll into the unit cost.
+        </div>
+      )}
+      {unit === 'kg' && kpm > 0 && fieldValue != null && (
+        <div style={{ marginTop: 2, fontSize: 8, color: FR.stone, fontFamily: 'ui-monospace, Menlo, monospace' }}>
+          ≈ ${effPerM.toFixed(3)} /m  ·  using {spec?.gsm} GSM × {spec?.widthCm} cm
+        </div>
+      )}
+      {isOverridden && libraryFallback > 0 && (
+        <div style={{ marginTop: 2, fontSize: 8, color: FR.stone, fontFamily: 'ui-monospace, Menlo, monospace' }}>
+          library: ${libraryFallback.toFixed ? libraryFallback.toFixed(2) : libraryFallback} /{unit}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Fabric Finishes inline editor (per fabric slot in StepFabrics) ─────────
 
 const EXEC_LABEL = { mill: 'At mill', secondary: 'Secondary', at_treatment: 'Wash house' };
 
-function MillFinishesPanel({ entry, libraryFinishes, onChange }) {
+function MillFinishesPanel({ entry, libraryFinishes, onChange, gsm, widthCm }) {
   const finishes = entry.chosenFinishes ?? libraryFinishes;
   const isOverridden = entry.chosenFinishes != null;
 
@@ -293,13 +446,15 @@ function MillFinishesPanel({ entry, libraryFinishes, onChange }) {
 
   function addFinish(name) {
     if (!name) return;
-    onChange([...finishes, { name, executed_at: 'mill', delta_per_meter_usd: 0, delta_per_meter_cny: 0 }]);
+    onChange([...finishes, { name, executed_at: 'mill', delta_per_meter_usd: 0, delta_per_meter_cny: 0, delta_per_kg_usd: 0, delta_per_kg_cny: 0 }]);
   }
+
+  const kpm = kgPerMeter(gsm, widthCm);
 
   return (
     <div style={{ paddingTop: 6, paddingBottom: 6, borderTop: `0.5px solid ${FR.sand}` }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>Mill Finishes</span>
+        <span style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>Fabric Finishes</span>
         {isOverridden && finishes.length === 0 && libraryFinishes.length > 0 && (
           <button
             onClick={() => onChange(null)}
@@ -307,22 +462,67 @@ function MillFinishesPanel({ entry, libraryFinishes, onChange }) {
           >Reset to library</button>
         )}
       </div>
-      {finishes.map((f, fi) => (
-        <div key={fi} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-          <div style={{ flex: 1, fontSize: 10, color: FR.slate, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
-          <select
-            value={f.executed_at || 'mill'}
-            onChange={e => updateFinish(fi, { executed_at: e.target.value })}
-            style={{ fontSize: 9, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '2px 3px', color: FR.stone, background: FR.white, outline: 'none', maxWidth: 90 }}
-          >
-            {FINISH_EXECUTED_AT.map(opt => <option key={opt.id} value={opt.id}>{EXEC_LABEL[opt.id]}</option>)}
-          </select>
-          <button
-            onClick={() => removeFinish(fi)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: FR.stone, fontSize: 14, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
-          >×</button>
+      {finishes.map((f, fi) => {
+        const unit = f._editUnit === 'kg' ? 'kg' : 'm';
+        const usdKey = unit === 'kg' ? 'delta_per_kg_usd' : 'delta_per_meter_usd';
+        const effPerM = finishPerMeter(f, gsm, widthCm);
+        return (
+        <div key={fi} style={{ marginBottom: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div style={{ flex: 1, fontSize: 10, color: FR.slate, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
+            <span style={{ fontSize: 9, color: FR.stone, flexShrink: 0 }}>$</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={f[usdKey] || ''}
+              onChange={e => updateFinish(fi, { [usdKey]: e.target.value !== '' ? parseFloat(e.target.value) : 0 })}
+              placeholder="0.00"
+              style={{ width: 52, fontSize: 9, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '2px 4px', textAlign: 'right', color: FR.slate, background: FR.white, outline: 'none' }}
+            />
+            <select
+              value={unit}
+              onChange={e => updateFinish(fi, { _editUnit: e.target.value })}
+              title={unit === 'kg' && !kpm ? 'Need fabric GSM + width to convert /kg → /m for cost rollup' : ''}
+              style={{ fontSize: 8, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '2px 1px', color: FR.stone, background: FR.white, outline: 'none' }}
+            >
+              <option value="m">/m</option>
+              <option value="kg">/kg</option>
+            </select>
+            <select
+              value={f.executed_at || 'mill'}
+              onChange={e => updateFinish(fi, { executed_at: e.target.value })}
+              style={{ fontSize: 9, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '2px 3px', color: FR.stone, background: FR.white, outline: 'none', maxWidth: 90 }}
+            >
+              {FINISH_EXECUTED_AT.map(opt => <option key={opt.id} value={opt.id}>{EXEC_LABEL[opt.id]}</option>)}
+            </select>
+            <button
+              onClick={() => removeFinish(fi)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: FR.stone, fontSize: 14, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}
+            >×</button>
+          </div>
+          {unit === 'kg' && !kpm && (f.delta_per_kg_usd > 0) && (
+            <div style={{ marginTop: 2, fontSize: 8, color: '#854F0B' }}>
+              Set fabric GSM + width in the library to roll this /kg cost into the unit cost.
+            </div>
+          )}
+          {unit === 'kg' && kpm > 0 && (f.delta_per_kg_usd > 0) && (
+            <div style={{ marginTop: 2, fontSize: 8, color: FR.stone, fontFamily: 'ui-monospace, Menlo, monospace' }}>
+              ≈ ${effPerM.toFixed(3)} /m
+            </div>
+          )}
+          {f.executed_at === 'secondary' && (
+            <div style={{ marginTop: 4 }}>
+              <VendorPicker
+                value={f.vendor_id}
+                onChange={v => updateFinish(fi, { vendor_id: v })}
+                placeholder="Pick the secondary finishing facility…"
+              />
+            </div>
+          )}
         </div>
-      ))}
+        );
+      })}
       <select
         value=""
         onChange={e => { addFinish(e.target.value); e.target.value = ''; }}
@@ -331,6 +531,115 @@ function MillFinishesPanel({ entry, libraryFinishes, onChange }) {
         <option value="">+ Add finish…</option>
         {allCatalog.map(name => <option key={name} value={name}>{name}</option>)}
       </select>
+    </div>
+  );
+}
+
+// ─── Fabric Notes inline editor (per fabric slot in StepFabrics) ────────────
+//
+// Mirrors MillFinishesPanel: writes to `entry.chosenNotes` as a per-style
+// override, falling back to the library notes when null. Surfaces in the
+// FabricBOMPreview's FABRIC NOTES band so the factory rep sees the tech
+// pack–specific note (not just the library default).
+
+function FabricNotesPanel({ entry, libraryNotes, onChange }) {
+  const value = entry.chosenNotes != null ? entry.chosenNotes : libraryNotes;
+  const isOverridden = entry.chosenNotes != null;
+
+  return (
+    <div style={{ paddingTop: 6, paddingBottom: 6, borderTop: `0.5px solid ${FR.sand}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>Fabric Notes</span>
+        {isOverridden && libraryNotes && (
+          <button
+            onClick={() => onChange(null)}
+            style={{ fontSize: 9, color: FR.stone, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+          >Reset to library</button>
+        )}
+      </div>
+      <textarea
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        rows={2}
+        placeholder={libraryNotes ? '— inheriting library notes; type to override —' : 'Compatibility, care, certifications…'}
+        style={{
+          width: '100%',
+          fontSize: 10,
+          lineHeight: 1.4,
+          border: `0.5px solid ${FR.sand}`,
+          borderRadius: 3,
+          padding: '4px 6px',
+          color: FR.slate,
+          background: '#fff',
+          outline: 'none',
+          resize: 'vertical',
+          fontFamily: "'Inter', sans-serif",
+          boxSizing: 'border-box',
+        }}
+      />
+    </div>
+  );
+}
+
+// ─── Placement override inline editor (per fabric slot in StepFabrics) ─────
+//
+// Mirrors FabricNotesPanel + MillFinishesPanel: writes to
+// `entry.chosenPlacementImage` (Storage path or data URL) and
+// `entry.chosenPlacementNotes` (string) as per-style overrides, falling
+// back to the library fields when null. Surfaces in the FabricBOMPreview
+// PLACEMENT silhouette so each tech pack can show a different placement
+// without mutating the shared library fabric.
+
+function PlacementOverridePanel({ entry, libraryImage, libraryNotes, fabricId, onChangeImage, onChangeNotes }) {
+  const isImageOverridden = entry.chosenPlacementImage != null;
+  const isNotesOverridden = entry.chosenPlacementNotes != null;
+  const imageValue = isImageOverridden ? entry.chosenPlacementImage : libraryImage;
+  const notesValue = isNotesOverridden ? entry.chosenPlacementNotes : libraryNotes;
+  const anyOverride = isImageOverridden || isNotesOverridden;
+
+  return (
+    <div style={{ paddingTop: 6, paddingBottom: 6, borderTop: `0.5px solid ${FR.sand}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>Placement on garment</span>
+        {anyOverride && (libraryImage || libraryNotes) && (
+          <button
+            onClick={() => { onChangeImage(null); onChangeNotes(null); }}
+            style={{ fontSize: 9, color: FR.stone, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+          >Reset to library</button>
+        )}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: 8, alignItems: 'flex-start' }}>
+        <SimpleImageSlot
+          value={imageValue || ''}
+          onChange={v => onChangeImage(v || null)}
+          label=""
+          hint="2:3"
+          height={100}
+          assetScope="fabrics"
+          assetOwnerId={fabricId ? `slot-${fabricId}` : 'slot'}
+          assetSlot="placement-override"
+        />
+        <textarea
+          value={notesValue || ''}
+          onChange={e => onChangeNotes(e.target.value)}
+          rows={4}
+          placeholder={libraryNotes ? '— inheriting library placement notes —' : 'e.g. Main body and hood; not sleeves'}
+          style={{
+            width: '100%',
+            fontSize: 10,
+            lineHeight: 1.4,
+            border: `0.5px solid ${FR.sand}`,
+            borderRadius: 3,
+            padding: '4px 6px',
+            color: FR.slate,
+            background: '#fff',
+            outline: 'none',
+            resize: 'vertical',
+            fontFamily: "'Inter', sans-serif",
+            boxSizing: 'border-box',
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -367,7 +676,7 @@ function EmptyPickerSlot({ onPick, label, hint }) {
   );
 }
 
-// ─── Page 03 — Fabrics ──────────────────────────────────────────────────────
+// ─── Page 03 — Fabrics ───────────────────────────────────────────────────────
 
 export function StepFabrics({ data, set }) {
   const [pickerSlot, setPickerSlot] = useState(null); // 0..2 | null
@@ -452,6 +761,7 @@ export function StepFabrics({ data, set }) {
 
   function commitFabric(slotIdx, item, colorChoice, area) {
     const role = area || picked[slotIdx]?.role || item.default_garment_area || FABRIC_GARMENT_AREAS[0] || '';
+    const autoYield = yieldForProductType(data.productType);
     setSlot(slotIdx, {
       fabricId:   item.id,
       role,
@@ -460,13 +770,17 @@ export function StepFabrics({ data, set }) {
       colorLabel: colorChoice?.label || '',
       colorHex:   colorChoice?.hex || '',
       colorUrl:   colorChoice?.url || '',
+      ...(autoYield != null ? { metersPerUnit: autoYield, yieldIsActual: false } : {}),
     });
   }
 
   const fabricsSubtotal = picked.reduce((sum, p) => {
-    const cost = resolved[p?.fabricId]?.unitCost || 0;
+    const spec = resolved[p?.fabricId];
+    const baseCost = effectivePerMeter(p, spec);
+    const finishes = p?.chosenFinishes ?? (spec?.finishes || []);
+    const finishCost = finishes.reduce((s, f) => s + finishPerMeter(f, spec?.gsm, spec?.widthCm), 0);
     const mpu = p?.metersPerUnit;
-    return sum + (mpu ? cost * mpu : cost);
+    return sum + (mpu ? (baseCost + finishCost) * mpu : (baseCost + finishCost));
   }, 0);
   const fabricsHaveYield = picked.some(p => p?.metersPerUnit);
   const fabricsAllYield  = picked.length > 0 && picked.every(p => p?.metersPerUnit);
@@ -528,11 +842,9 @@ export function StepFabrics({ data, set }) {
                 {/* Selected colorway badge */}
                 {entry.colorLabel && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    {entry.colorUrl ? (
-                      <img src={entry.colorUrl} alt={entry.colorLabel} style={{ width: 28, height: 28, borderRadius: 4, objectFit: 'cover', border: `0.5px solid ${FR.sand}` }} />
-                    ) : (
-                      <span style={{ width: 28, height: 28, borderRadius: 4, background: entry.colorHex || FR.salt, border: `0.5px solid ${FR.sand}`, display: 'inline-block' }} />
-                    )}
+                    <div style={{ width: 28, height: 28, borderRadius: 4, background: entry.colorHex || FR.salt, border: `0.5px solid ${FR.sand}`, overflow: 'hidden', flexShrink: 0 }}>
+                      <SwatchThumb refPath={entry.colorUrl} alt={entry.colorLabel} />
+                    </div>
                     <span style={{ fontSize: 11, color: FR.slate, fontWeight: 500 }}>{entry.colorLabel}</span>
                     <button
                       onClick={() => setColorPickFor({ fabric: { id: entry.fabricId, color_card_images: spec?.colors || [] }, slot: i })}
@@ -556,29 +868,65 @@ export function StepFabrics({ data, set }) {
                     {spec?.vendor?.phone && <div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 10 }}>{spec.vendor.phone}</div>}
                   </div>
                 </div>
-                {/* Mill Finishes — per-style override; falls back to library defaults */}
+                {/* Price override — /m or /kg, hoisted above finishes for visibility */}
+                <div style={{ paddingTop: 6, paddingBottom: 6, borderTop: `0.5px solid ${FR.sand}` }}>
+                  <FabricPriceOverride entry={entry} spec={spec} onChange={patch => setSlot(i, { ...entry, ...patch })} />
+                </div>
+
+                {/* Fabric Finishes — per-style override; falls back to library defaults */}
                 <MillFinishesPanel
                   entry={entry}
                   libraryFinishes={spec?.finishes || []}
+                  gsm={spec?.gsm}
+                  widthCm={spec?.widthCm}
                   onChange={finishes => setSlot(i, { ...entry, chosenFinishes: finishes })}
                 />
 
+                {/* Per-style fabric notes — overrides the library notes on this tech pack only */}
+                <FabricNotesPanel
+                  entry={entry}
+                  libraryNotes={spec?.notes || ''}
+                  onChange={notes => setSlot(i, { ...entry, chosenNotes: notes })}
+                />
+
+                {/* Per-style placement (image + notes) — same override pattern */}
+                <PlacementOverridePanel
+                  entry={entry}
+                  libraryImage={spec?.placementImage || ''}
+                  libraryNotes={spec?.placementNotes || ''}
+                  fabricId={entry.fabricId}
+                  onChangeImage={v => setSlot(i, { ...entry, chosenPlacementImage: v })}
+                  onChangeNotes={v => setSlot(i, { ...entry, chosenPlacementNotes: v })}
+                />
+
                 <div style={{ paddingTop: 6, borderTop: `0.5px solid ${FR.sand}` }}>
-                  {/* Cost value — shows /unit when yield is known, /m otherwise */}
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6, fontFamily: "ui-monospace, Menlo, monospace" }}>
-                    <span style={{ fontSize: 10, color: FR.stone }}>
-                      {entry.metersPerUnit
-                        ? (entry.yieldIsActual ? 'Cost / unit' : 'Cost / unit (est.)')
-                        : 'Cost / m'}
-                    </span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: FR.slate }}>
-                      {entry.metersPerUnit
-                        ? formatMoney((spec?.unitCost || 0) * entry.metersPerUnit, spec?.currency)
-                        : formatMoney(spec?.unitCost || 0, spec?.currency)}
-                    </span>
-                  </div>
+                  {/* Cost rollup — base + finishes, /unit when yield is known */}
+                  {(() => {
+                    const basePriceM = effectivePerMeter(entry, spec);
+                    const finishes = entry.chosenFinishes ?? spec?.finishes ?? [];
+                    const finishCost = finishes.reduce((s, f) => s + finishPerMeter(f, spec?.gsm, spec?.widthCm), 0);
+                    const totalPerM = basePriceM + finishCost;
+                    const costLabel = entry.metersPerUnit
+                      ? (entry.yieldIsActual ? 'Cost / unit' : 'Cost / unit (est.)')
+                      : 'Cost / m';
+                    const costValue = entry.metersPerUnit ? totalPerM * entry.metersPerUnit : totalPerM;
+                    return (
+                      <div style={{ marginBottom: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6, fontFamily: 'ui-monospace, Menlo, monospace' }}>
+                          <span style={{ fontSize: 10, color: FR.stone }}>{costLabel}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: FR.slate }}>{formatMoney(costValue, 'USD')}</span>
+                        </div>
+                        {finishCost > 0 && (
+                          <div style={{ marginTop: 2, fontSize: 8, color: FR.stone, fontFamily: 'ui-monospace, Menlo, monospace', textAlign: 'right' }}>
+                            base ${basePriceM.toFixed(2)} + finishes ${finishCost.toFixed(2)} = ${totalPerM.toFixed(2)} /m
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {/* Yield selector — garment type picks a standard m/unit estimate */}
-                  <div style={{ marginTop: 6 }}>
+                  <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       <span style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Yield</span>
                       <select
@@ -658,7 +1006,7 @@ export function StepFabrics({ data, set }) {
   );
 }
 
-// ─── Page 04 — Trims (image-first, 6-card grid) ─────────────────────────────
+// ─── Page 04 — Trims (image-first, 6-card grid) ───────────────────────────────
 
 const MAX_TRIMS = 6;
 
@@ -798,7 +1146,7 @@ export function StepTrims({ data, set, packId }) {
   );
 }
 
-// ─── Page 05 — Packaging ────────────────────────────────────────────────────
+// ─── Page 05 — Packaging ─────────────────────────────────────────────────────
 
 export function StepPackaging({ data, set, packId }) {
   return (

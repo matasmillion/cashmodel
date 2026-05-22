@@ -28,7 +28,7 @@ const FABRIC_CLOUD_COLUMNS = new Set([
   'moq_meters', 'price_per_meter_usd', 'price_per_meter_cny',
   'price_per_kg_usd', 'price_per_kg_cny', 'currency',
   'front_image_url', 'back_image_url', 'color_card_images', 'cover_image',
-  'zfab_file_url', 'color_id', 'notes',
+  'zfab_file_url', 'color_id', 'notes', 'documents',
   'organization_id', 'user_id',
 ]);
 
@@ -172,14 +172,20 @@ export async function getFabric(id) {
       // have a row to update — without this, a fabric created on another
       // device or by another process saves to cloud only and disappears
       // when listFabrics queries Supabase before the cloud row replicates.
+      //
+      // Return the MERGED local row, not the raw cloud row: local-only fields
+      // (documents, and any column not yet present in the DB schema) survive
+      // the round-trip. Returning raw `data` made dropped files vanish on
+      // reopen because the cloud row never carried them.
+      let result = data;
       try {
         const local = readLocal();
         const idx = local.findIndex(r => r.id === id);
-        if (idx >= 0) local[idx] = { ...local[idx], ...data };
+        if (idx >= 0) { local[idx] = { ...local[idx], ...data }; result = local[idx]; }
         else local.push(data);
         writeLocal(local);
       } catch (err) { console.error('getFabric mirror:', err); }
-      return data;
+      return result;
     }
     if (error) console.error('getFabric:', error);
   }

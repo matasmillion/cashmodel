@@ -17,12 +17,23 @@ const FR = {
 };
 
 // Find a Plaid-classified bank account (or null) given seed.bankAccounts and a role.
-function pickAccountName(bankAccounts, role, fallback) {
+// If preferMask is provided, an account with that exact mask wins over a generic
+// role match — used so the Operating Cash label can pin to mask 6848 even when
+// other Mercury sub-accounts (Treasury, Vault, Savings) are also role=operating.
+function pickAccountName(bankAccounts, role, fallback, preferMask) {
   if (!bankAccounts || !bankAccounts.length) return fallback;
-  const match = bankAccounts.find(a => a.role === role);
+  const match =
+    (preferMask && bankAccounts.find(a => a.mask === preferMask)) ||
+    bankAccounts.find(a => a.role === role);
   if (!match) return fallback;
+  // Strip "Foreign Resource" / "- Foreign Resource" from the Plaid account
+  // name — it's the brand and reading it on every row is noise.
+  const cleanName = (match.name || '')
+    .replace(/[\s-]*foreign\s*resource/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
   const lastFour = match.mask ? `(${match.mask})` : '';
-  return `${match.name} ${lastFour}`.trim();
+  return `${cleanName} ${lastFour}`.trim();
 }
 
 // Section spec — the order is the workbook's row order. Each row carries:
@@ -36,44 +47,82 @@ function pickAccountName(bankAccounts, role, fallback) {
 // as a single row spanning across the table with a date appended.
 function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
   const accs = seed.bankAccounts;
-  const operatingLabel = pickAccountName(accs, 'operating', 'SB - Main (9773)');
-  const salesTaxLabel = pickAccountName(accs, 'salesTax', 'SB - Sales Tax (6735)');
-  const corpTaxLabel = pickAccountName(accs, 'corporateTax', 'SB - Corporate Tax (6735)');
-  const wcLabel = pickAccountName(accs, 'workingCapital', 'Working Capital (2465)');
+  // Operating Cash = total Mercury depository balance (sum of every
+  // Mercury sub-account, available). Renamed to "Cash Balance" per
+  // operator since the row is no longer pinned to a single account.
+  const operatingLabel = 'Cash Balance';
+  const salesTaxLabel = pickAccountName(accs, 'salesTax', 'Sales Tax (6735)');
+  const corpTaxLabel = pickAccountName(accs, 'corporateTax', 'Corporate Tax (8298)');
+  const wcLabel = pickAccountName(accs, 'workingCapital', 'Working Capital (5125)');
+  const fulfillmentLabel = pickAccountName(accs, 'fulfillment', 'Mercury Fulfillment (7301)');
+  const marketingLabel = pickAccountName(accs, 'marketing', 'Mercury Marketing (3135)');
   const pct = v => `${Math.round(v * 100)}%`;
+
+  // Shopify Payouts sub-label: only surface a hint when something
+  // ACTUALLY went wrong (scope error, Mercury reconcile skipped, etc.)
+  // — never when it's just a normal $725-pending kind of day. Keeps the
+  // row clean. Breakdown still lives on seed for the curious.
+  const reconcileSkipped = seed.shopifyPayoutsReconciliationSkipped;
+  const reconcileReason = seed.shopifyPayoutsReconciliationSkipReason;
+  const shopifyErrors = seed.shopifyPayoutsErrors || {};
+  const shopifyErr = shopifyErrors.shopify_scheduled || shopifyErrors.shopify_in_transit || shopifyErrors.shopify_paid;
+  let payoutsSubLabel = null;
+  if (shopifyErr) {
+    payoutsSubLabel = `Shopify API error: ${shopifyErr.slice(0, 160)}`;
+  } else if (reconcileSkipped) {
+    payoutsSubLabel = `Mercury reconcile skipped${reconcileReason ? ': ' + reconcileReason.slice(0, 180) : ''}`;
+  }
 
   return [
     { header: true, label: 'Revenue Run Rate As Of', anchorKey: 'date' },
     { key: 'shopifyRevenue', label: 'Shopify Store',  kind: 'driver',
-      leftLabel: 'H1 Growth', leftValue: pct(C.h1Growth - 1) },
-    { key: 'dailyAdSpend',   label: 'Daily Spend',     kind: 'driver' },
-    { key: 'fbAdSpend',      label: 'FB Ad Spend',     kind: 'driver',
-      leftLabel: 'MER', leftValue: pct(C.mer) },
+      leftLabel: 'Weekly Growth', leftValue: pct(C.weeklyGrowth - 1),
+      leftEditableKey: 'weeklyGrowth', leftEditableType: 'growth' },
+    { key: 'dailyAdSpend',   label: 'Daily Ad Spend',  kind: 'driver' },
+    { key: 'fbAdSpend',      label: 'Weekly Ad Spend', kind: 'driver',
+      leftLabel: 'MER', leftValue: pct(C.mer),
+      leftEditableKey: 'mer', leftEditableType: 'percent' },
     { key: 'cogsRate',       label: 'COGS %',          kind: 'percent' },
 
     { header: true, label: 'Balance Sheet As Of', anchorKey: 'date' },
-    { key: 'shopifyPayouts',     label: 'Shopify Payouts',     kind: 'balance',
-      leftLabel: 'Weekly Growth', leftValue: pct(C.h2Growth - 1) },
+    { key: 'shopifyPayouts',     label: 'Shopify Payouts',     kind: 'balance', subLabel: payoutsSubLabel },
     { key: 'sbMain',             label: operatingLabel,        kind: 'balance',
       leftLabel: 'Profit %', leftValue: pct(C.profitPercentForWC) },
-    { key: 'sbSalesTax',         label: salesTaxLabel,         kind: 'balance' },
-    { key: 'sbCorpTax',          label: corpTaxLabel,          kind: 'balance' },
-    { key: 'shopifyCapRepayment',label: 'Shopify Capital Repayment', kind: 'balance' },
+    // Working Capital lives WITHIN the Mercury cash balance — it's not
+    // separately spendable cash. Operator wants it gray + italic above
+    // Total Cash On Hand so the breakdown is visible without
+    // double-counting.
+    { key: 'workingCapital',     label: wcLabel,               kind: 'balance', subRow: true },
+    { key: 'sbSalesTax',         label: salesTaxLabel,         kind: 'balance', subRow: true },
+    { key: 'sbCorpTax',          label: corpTaxLabel,          kind: 'balance', subRow: true },
+    { key: 'shopifyCapRepayment',label: 'Shopify Capital Repayment', kind: 'balance',
+      subLabel: seed.shopifyCapitalPendingError ? `Shopify API error: ${String(seed.shopifyCapitalPendingError).slice(0, 160)}` : null },
     { key: '_poMilestonesPending', label: 'PO Milestones',     kind: 'pending' },
     { key: 'totalCashOnHand',    label: 'Total Cash On Hand',  kind: 'subtotal' },
     { key: 'inventory',          label: 'Inventory',           kind: 'balance' },
-    { key: 'workingCapital',     label: wcLabel,               kind: 'balance' },
     { key: 'totalAssets',        label: 'Total Assets',        kind: 'subtotal' },
 
     { header: true, label: 'ST Liabilities' },
-    { key: 'adsPayable',         label: 'Ads Payable (01000)',         kind: 'balance' },
-    { key: 'fulfillmentPayable', label: 'Fullfillment Payable (2907)', kind: 'balance' },
+    { key: 'adsPayable',         label: 'Ads Payable',                 kind: 'balance' },
+    // Mercury 3135 — cash earmarked toward Ads Payable. Gray italic so
+    // the operator can see how funded the liability is at a glance.
+    { key: 'mercuryMarketing',   label: marketingLabel,                kind: 'balance', subRow: true },
+    { key: 'fulfillmentPayable', label: 'Fulfillment Payable',         kind: 'balance' },
+    // Mercury 7301 — cash earmarked toward Fulfillment Payable.
+    { key: 'mercuryFulfillment', label: fulfillmentLabel,              kind: 'balance', subRow: true },
 
     { header: true, label: 'LT Liabilities' },
     { key: 'chase5718',     label: 'CHASE 5718',     kind: 'balance', leftLabel: 'OPEX CARDS' },
     { key: 'amexPlum',      label: 'AMEX PLUM 0000', kind: 'balance' },
     { key: 'amexBlue',      label: 'AMEX BLUE 71005', kind: 'balance' },
-    { key: 'shopifyCapital',label: 'Shopify Capital', kind: 'balance' },
+    { key: 'shopifyCapital',label: 'Shopify Capital', kind: 'balance',
+      leftLabel: 'Original loan $',
+      leftEditableKey: 'shopifyCapitalOriginalLoan',
+      leftEditableType: 'dollar',
+      leftEditableTarget: 'seed',
+      subLabel: seed.shopifyCapitalOutstandingError
+        ? `Shopify API error: ${String(seed.shopifyCapitalOutstandingError).slice(0, 160)}`
+        : null },
     { key: 'longTermLoan',  label: 'Long Term Loan',  kind: 'balance' },
     { key: 'totalLiabilities',  label: 'Total Liabilities', kind: 'subtotal' },
     { key: 'totalEquity',       label: 'Total Equity',      kind: 'subtotal' },
@@ -84,7 +133,7 @@ function buildSections(seed = {}, C = CASHFLOW_DEFAULTS) {
       leftLabel: 'PP %', leftValue: pct(C.ppPercent) },
     { key: 'transferToWC',    label: 'Transfer to WC',           kind: 'outflow' },
     { key: 'totalInflows',    label: 'Total Inflows',            kind: 'subtotal' },
-    { key: 'adsPaid',         label: 'Ads Payable (01000)',      kind: 'outflow', leftLabel: 'Variable Overhead' },
+    { key: 'adsPaid',         label: 'Ads Payable',              kind: 'outflow', leftLabel: 'Variable Overhead' },
     { key: 'fulfillmentPaid', label: 'Fullfillment Payable (2907)', kind: 'outflow' },
     { key: 'payChase',        label: 'CHASE 5718',     kind: 'outflow', leftLabel: 'Working Capital' },
     { key: 'payAmexPlum',     label: 'AMEX PLUM 0000', kind: 'outflow' },
@@ -117,8 +166,11 @@ function fmt(v, kind) {
   return formatCurrency(v);
 }
 
-function colorFor(v, kind, isHistorical, isCurrent) {
+function colorFor(v, kind, isHistorical, isCurrent, informational) {
   if (v == null || kind === 'pending' || kind === 'index') return FR.slate;
+  // Informational rows (e.g. Sales Tax reserve) are decoupled from Total
+  // Cash — render in muted stone regardless of sign or week.
+  if (informational) return FR.stone;
   if (isCurrent) return FR.blue;
   if (isHistorical) return FR.slate;
   if (kind === 'subtotal' || kind === 'inflow') return v > 0 ? FR.good : v < 0 ? FR.bad : FR.slate;
@@ -130,9 +182,22 @@ const COL_W_LEFT = 80;   // column A
 const COL_W_LABEL = 220; // column B
 const COL_W_DATA = 88;
 
+function formatSyncAge(iso) {
+  if (!iso) return '';
+  const secs = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (secs < 60) return 'synced just now';
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `synced ${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `synced ${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `synced ${days}d ago`;
+}
+
 export default function Cashflow58WeekTable() {
-  const { state } = useApp();
+  const { state, dispatch, autoSyncState, triggerAutoSync } = useApp();
   const [showHistorical, setShowHistorical] = useState(false);
+  const syncing = autoSyncState?.status === 'syncing';
 
   const weeks = useMemo(() => generateCashflow58({
     assumptions: state.assumptions,
@@ -140,7 +205,9 @@ export default function Cashflow58WeekTable() {
     subscriptions: state.subscriptions,
     creditCards: state.creditCards,
     loans: state.loans,
-  }), [state.assumptions, state.seed, state.subscriptions, state.creditCards, state.loans]);
+    actualsHistory: state.actualsHistory,
+    cardPaymentsActuals: state.cardPaymentsActuals,
+  }), [state.assumptions, state.seed, state.subscriptions, state.creditCards, state.loans, state.actualsHistory, state.cardPaymentsActuals]);
 
   const visibleWeeks = useMemo(
     () => showHistorical ? weeks : weeks.filter(w => !w.isHistorical),
@@ -194,20 +261,45 @@ export default function Cashflow58WeekTable() {
             13 Week Cashflow
           </h3>
           <p className="text-xs mt-1" style={{ color: FR.stone }}>
-            {visibleWeeks.length} weeks · live from Plaid + OPEX · ports the workbook 1:1
+            {visibleWeeks.length} weeks · live from Plaid + Shopify + Meta + OPEX
+            {state.seed?.syncedAt && (
+              <> · <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{formatSyncAge(state.seed.syncedAt)}</span></>
+            )}
           </p>
         </div>
-        <button
-          onClick={() => setShowHistorical(s => !s)}
-          className="text-xs px-3 py-1.5 rounded-lg border"
-          style={{
-            background: showHistorical ? FR.slate : 'transparent',
-            color: showHistorical ? FR.salt : FR.slate,
-            borderColor: FR.sand, fontFamily: "'Inter', sans-serif",
-          }}
-        >
-          {showHistorical ? 'Hide historical' : 'Show 12 weeks of historical'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowHistorical(s => !s)}
+            className="text-xs px-3 py-1.5 rounded-lg border"
+            style={{
+              background: showHistorical ? FR.slate : 'transparent',
+              color: showHistorical ? FR.salt : FR.slate,
+              borderColor: FR.sand, fontFamily: "'Inter', sans-serif",
+            }}
+          >
+            {showHistorical ? 'Hide historical' : 'Show 12 weeks of historical'}
+          </button>
+          <button
+            onClick={() => triggerAutoSync({ realTime: true })}
+            disabled={syncing}
+            title="Force live refresh from Plaid + Shopify + Meta. Hits /accounts/balance/get on every bank (~$0.10/account, 10-30s)."
+            className="text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5"
+            style={{
+              background: syncing ? FR.sand : FR.slate,
+              color: syncing ? FR.stone : FR.salt,
+              border: 'none', fontFamily: "'Inter', sans-serif",
+              cursor: syncing ? 'not-allowed' : 'pointer',
+            }}
+          >
+            <span style={{
+              display: 'inline-block',
+              width: 8, height: 8, borderRadius: '50%',
+              background: syncing ? FR.stone : '#7DBE7D',
+              animation: syncing ? 'pulse 1.4s ease-in-out infinite' : undefined,
+            }} />
+            {syncing ? 'Refreshing…' : 'Force real-time refresh'}
+          </button>
+        </div>
       </div>
 
       <div className="overflow-x-auto scrollbar-thin">
@@ -276,7 +368,7 @@ export default function Cashflow58WeekTable() {
             {sections.map((row, ri) => (
               row.header
                 ? <SectionHeader key={ri} row={row} weeks={visibleWeeks} />
-                : <DataRow key={ri} row={row} weeks={visibleWeeks} prevRow={sections[ri - 1]} currentWeekIndex={currentWeekIndex} />
+                : <DataRow key={ri} row={row} weeks={visibleWeeks} prevRow={sections[ri - 1]} currentWeekIndex={currentWeekIndex} assumptions={state.assumptions} seed={state.seed} dispatch={dispatch} />
             ))}
           </tbody>
         </table>
@@ -305,8 +397,82 @@ function SectionHeader({ row, weeks }) {
   );
 }
 
-function DataRow({ row, weeks, prevRow, currentWeekIndex }) {
+function EditableLeftValue({ rawValue, editableType, onCommit }) {
+  // rawValue display rules by editableType:
+  //   'growth'   → 1.04 → "4%"
+  //   'percent'  → 0.33 → "33%"
+  //   'dollar'   → 16700 → "$16,700" (used for Shopify Capital override)
+  const toDisplay = (v) => {
+    if (v == null || v === '') return editableType === 'dollar' ? '$0' : '0%';
+    if (editableType === 'growth') return `${Math.round((v - 1) * 100)}%`;
+    if (editableType === 'dollar') {
+      const n = Number(v);
+      return Number.isFinite(n) ? `$${Math.round(n).toLocaleString('en-US')}` : '$0';
+    }
+    return `${Math.round(v * 100)}%`;
+  };
+  const fromDisplay = (s) => {
+    const stripped = s.replace(/[$,%\s]/g, '').trim();
+    const n = parseFloat(stripped);
+    if (!Number.isFinite(n)) return null;
+    if (editableType === 'growth') return 1 + n / 100;
+    if (editableType === 'dollar') return n;
+    return n / 100;
+  };
+
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(toDisplay(rawValue));
+
+  const commit = () => {
+    const next = fromDisplay(draft);
+    if (next != null && next !== rawValue) onCommit(next);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') { setDraft(toDisplay(rawValue)); setEditing(false); }
+        }}
+        style={{
+          width: '100%', textAlign: 'right', border: `1px solid ${FR.blue}`, borderRadius: 3,
+          padding: '0 4px', fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          color: FR.slate, background: 'white', outline: 'none',
+        }}
+      />
+    );
+  }
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      title="Click to edit"
+      onClick={() => { setDraft(toDisplay(rawValue)); setEditing(true); }}
+      onKeyDown={e => { if (e.key === 'Enter') { setDraft(toDisplay(rawValue)); setEditing(true); } }}
+      style={{
+        color: FR.slate, fontSize: 11, textAlign: 'right',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        cursor: 'pointer', borderBottom: `1px dashed rgba(31,58,87,0.35)`,
+      }}
+    >
+      {toDisplay(rawValue)}
+    </div>
+  );
+}
+
+function DataRow({ row, weeks, prevRow, currentWeekIndex, assumptions, seed, dispatch }) {
   const isSubtotal = row.kind === 'subtotal' || row.kind === 'subtotal-out';
+  const isSubRow = !!row.subRow;
+  // Sub-rows (gray italic) sit visually attached to the row above
+  // them — Mercury 3135 under Ads Payable, Mercury 7301 under
+  // Fulfillment Payable. They show how much cash is set aside toward
+  // that liability so the operator can see the funding gap.
   const rowBg = isSubtotal ? 'rgba(235,229,213,0.25)' : 'transparent';
 
   // If the previous row in the same group had the same leftLabel, skip rendering it
@@ -314,6 +480,18 @@ function DataRow({ row, weeks, prevRow, currentWeekIndex }) {
   // Always show leftValue when present (it's the row directly under leftLabel)
   const leftCellTop = row.leftLabel || '';
   const leftCellBottom = row.leftValue || '';
+  const isEditable = !!row.leftEditableKey;
+  // leftEditableTarget: 'assumptions' (default) | 'seed' — controls
+  // both where the value is read from and which dispatch fires on commit.
+  const editTarget = row.leftEditableTarget || 'assumptions';
+  const rawValue = isEditable
+    ? (editTarget === 'seed'
+        ? seed?.[row.leftEditableKey]
+        : (assumptions?.[row.leftEditableKey] ?? CASHFLOW_DEFAULTS[row.leftEditableKey]))
+    : null;
+
+  const labelColor = isSubRow ? FR.stone : FR.slate;
+  const labelStyle = isSubRow ? { fontStyle: 'italic', fontSize: 10.5, paddingLeft: 18 } : {};
 
   return (
     <tr style={{ background: rowBg }}>
@@ -324,7 +502,16 @@ function DataRow({ row, weeks, prevRow, currentWeekIndex }) {
             {leftCellTop}
           </div>
         )}
-        {leftCellBottom && (
+        {isEditable ? (
+          <EditableLeftValue
+            rawValue={rawValue}
+            editableType={row.leftEditableType}
+            onCommit={(next) => dispatch({
+              type: editTarget === 'seed' ? 'UPDATE_SEED' : 'UPDATE_ASSUMPTIONS',
+              payload: { [row.leftEditableKey]: next },
+            })}
+          />
+        ) : leftCellBottom && (
           <div style={{ color: FR.slate, fontSize: 11, textAlign: 'right', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
             {leftCellBottom}
           </div>
@@ -332,11 +519,20 @@ function DataRow({ row, weeks, prevRow, currentWeekIndex }) {
       </td>
       <td className="sticky px-3 py-1"
           style={{
-            background: 'white', color: FR.slate, fontWeight: isSubtotal ? 600 : 400,
+            background: 'white', color: labelColor, fontWeight: isSubtotal ? 600 : 400,
             position: 'sticky', left: COL_W_LEFT, zIndex: 9, minWidth: COL_W_LABEL,
             borderRight: `1px solid ${FR.sand}`,
+            ...labelStyle,
           }}>
         {row.label}
+        {row.subLabel && (
+          <div style={{
+            color: FR.stone, fontStyle: 'italic', fontSize: 9.5,
+            lineHeight: 1.2, marginTop: 1, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          }}>
+            {row.subLabel}
+          </div>
+        )}
       </td>
       {weeks.map((w, wi) => {
         const v = w[row.key];
@@ -344,15 +540,19 @@ function DataRow({ row, weeks, prevRow, currentWeekIndex }) {
         const display = row.kind === 'pending'
           ? <span style={{ color: FR.stone, fontStyle: 'italic', fontSize: 10 }}>pending</span>
           : fmt(v, row.kind);
-        const color = colorFor(v, row.kind, w.isHistorical, isCurrentCol);
+        // Sub-rows always render in muted stone italic regardless of sign —
+        // they're informational ("cash earmarked toward this liability"),
+        // not part of any P&L.
+        const color = isSubRow ? FR.stone : colorFor(v, row.kind, w.isHistorical, isCurrentCol, row.informational);
         return (
           <td key={wi} className="px-2 py-1 text-right border-l tabular-nums"
               style={{
                 color, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                 fontWeight: isSubtotal ? 600 : 400,
+                fontStyle: isSubRow ? 'italic' : undefined,
                 borderColor: FR.sand,
                 background: isCurrentCol ? 'rgba(31,58,87,0.06)' : undefined,
-                fontSize: 11,
+                fontSize: isSubRow ? 10.5 : 11,
               }}>
             {display}
           </td>

@@ -192,6 +192,33 @@ serve(async (req) => {
   const { data: sprint } = await supabase.from('sprints').select('*').eq('id', render.sprint_id).maybeSingle();
   if (!sprint) return json({ error: 'Sprint not found for render' }, 404, origin);
 
+  // ── Brand defaults from creative_knowledge.kind='brand' ────────────────
+  // Both targeting and the destination URL come from the brand
+  // knowledge record so they're operator-editable without code
+  // changes. Sprint-level overrides take precedence.
+  const { data: brandRow } = await supabase
+    .from('creative_knowledge')
+    .select('fields')
+    .eq('kind', 'brand')
+    .maybeSingle();
+  const brand = (brandRow?.fields as Record<string, unknown>) || {};
+  const brandTargeting = (brand.targeting_defaults as Record<string, unknown>) || {};
+  const sprintTargetingOverrides = (sprint.targeting_overrides as Record<string, unknown>) || {};
+  // Final targeting = brand defaults + sprint overrides + hard-coded floor.
+  const targeting = {
+    geo_locations:        { countries: ['US'] },
+    age_min:              22,
+    age_max:              55,
+    publisher_platforms:  ['facebook', 'instagram'],
+    facebook_positions:   ['feed', 'video_feeds'],
+    instagram_positions:  ['stream', 'story', 'reels'],
+    ...brandTargeting,
+    ...sprintTargetingOverrides,
+  };
+
+  const shopUrl  = ((brand.shop_url as string) || 'https://foreignresource.com').replace(/\/+$/, '');
+  const linkPath = (sprint.link_path as string) || '/';
+
   // ── Budget guardrail ───────────────────────────────────────────────────
   const guardrail = await checkBudgetGuardrail(supabase);
   if (!guardrail.ok) {
@@ -239,14 +266,7 @@ serve(async (req) => {
       optimization_goal: 'LINK_CLICKS',
       bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
       status: 'PAUSED',
-      targeting: {
-        geo_locations: { countries: ['US'] },
-        age_min: 22,
-        age_max: 55,
-        publisher_platforms: ['facebook', 'instagram'],
-        facebook_positions: ['feed', 'video_feeds'],
-        instagram_positions: ['stream', 'story', 'reels'],
-      },
+      targeting,
     });
     adsetId = a.id as string;
   } catch (err) {
@@ -255,7 +275,7 @@ serve(async (req) => {
 
   // ── Create ad creative ────────────────────────────────────────────────
   const utm = `utm_source=meta&utm_medium=paid&utm_campaign=S${sprint.sprint_number}&utm_content=${slug}`;
-  const linkUrl = `https://foreignresource.com/?${utm}`;
+  const linkUrl = `${shopUrl}${linkPath.startsWith('/') ? linkPath : `/${linkPath}`}${linkPath.includes('?') ? '&' : '?'}${utm}`;
 
   let creativeId: string;
   try {

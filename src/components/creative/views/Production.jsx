@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react';
+import { Send, Loader2 } from 'lucide-react';
 import { listSprints } from '../../../utils/sprintStore';
 import { listRenders } from '../../../utils/renderStore';
 import { listAds } from '../../../utils/adStore';
 import { callUploadMetaAd } from '../../../utils/liveDataSync';
-import { LANES, LANE_VALUES } from '../../../types/creative';
-
-const FR = { slate: '#3A3A3A', salt: '#F5F0E8', sand: '#EBE5D5', stone: '#716F70' };
-
-const LANE_LABEL = { ai: 'AI', high_production: 'High Production', creator: 'Creator', founder: 'Founder' };
+import { LANE_VALUES } from '../../../types/creative';
+import { FR, LANE_TOKEN, RENDER_STATUS_TOKEN, pillStyle, dotStyle, DOT_COLOR } from '../palette';
 
 export default function Production() {
   const [renders, setRenders] = useState(null);
@@ -43,68 +41,137 @@ export default function Production() {
     }
   };
 
+  const lanesWithWork = LANE_VALUES.filter(lane => renders?.some(r => (sprintMap[r.sprint_id] || {}).lane === lane));
+  const empty = renders !== null && lanesWithWork.length === 0;
+
   return (
     <div>
-      <h2 style={{ fontFamily: 'Cormorant Garamond, Georgia, serif', fontSize: 22, fontWeight: 400, color: FR.slate, marginBottom: 24 }}>
-        Production
-      </h2>
-      {renders === null
-        ? <p style={{ fontSize: 13, color: FR.stone }}>Loading…</p>
-        : LANE_VALUES.map(lane => {
-          const laneRenders = renders.filter(r => (sprintMap[r.sprint_id] || {}).lane === lane);
-          if (laneRenders.length === 0) return null;
-          return (
-            <div key={lane} style={{ marginBottom: 32 }}>
-              <p style={{ fontSize: 11, letterSpacing: '0.08em', color: FR.stone, textTransform: 'uppercase', marginBottom: 12 }}>
-                {LANE_LABEL[lane]} ({laneRenders.length})
-              </p>
-              <div style={{ display: 'grid', gap: 8 }}>
-                {laneRenders.map(r => {
-                  const sprint = sprintMap[r.sprint_id] || {};
-                  const ad = adsByRender[r.id];
-                  const progress = r.status === 'done' || r.status === 'approved' ? 100
-                    : r.status === 'processing' ? 60
-                    : r.status === 'pending' ? 10 : 0;
-                  const canPublish = r.status === 'approved' && r.encoder_passed && !ad;
-                  const isPublishing = !!publishing[r.id];
-                  return (
-                    <div key={r.id} style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, padding: '10px 14px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontFamily: 'ui-monospace, SF Mono, Menlo, monospace', fontSize: 11, color: FR.stone }}>
-                          S{sprint.sprint_number} · variant {r.variant_index + 1}
-                        </span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: 11, color: FR.stone }}>
-                            {r.status}{r.encoder_passed && r.status === 'approved' ? ' · encoded' : ''}{ad ? ' · published' : ''}
-                          </span>
-                          {canPublish && (
-                            <button
-                              onClick={() => handlePublish(r)}
-                              disabled={isPublishing}
-                              style={{
-                                fontSize: 11, padding: '3px 10px', borderRadius: 5,
-                                border: '0.5px solid #3B6D11', color: '#3B6D11',
-                                background: 'transparent', cursor: isPublishing ? 'not-allowed' : 'pointer',
-                              }}
-                            >
-                              {isPublishing ? 'Publishing…' : 'Publish to Meta'}
-                            </button>
-                          )}
+      <div style={{ marginBottom: 6 }}>
+        <h2 style={{ fontFamily: 'Cormorant Garamond, Georgia, serif', fontSize: 22, fontWeight: 400, color: FR.ink, margin: 0 }}>
+          Production
+        </h2>
+        <p style={{ fontSize: 12, color: FR.stone, marginTop: 2, marginBottom: 22 }}>
+          Active creative production across all 4 lanes
+        </p>
+      </div>
+      {renders === null ? (
+        <p style={{ fontSize: 13, color: FR.stone }}>Loading…</p>
+      ) : empty ? (
+        <div style={{
+          background: FR.saltLight, border: '1px dashed rgba(0,0,0,0.12)',
+          borderRadius: 12, padding: '32px 24px', textAlign: 'center',
+        }}>
+          <p style={{ fontSize: 13, color: FR.stone, margin: 0 }}>
+            Nothing in production. Approve a brief and dispatch renders to see them here.
+          </p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 18 }}>
+          {lanesWithWork.map(lane => {
+            const lt = LANE_TOKEN[lane];
+            const laneRenders = renders.filter(r => (sprintMap[r.sprint_id] || {}).lane === lane);
+            const activeCount = laneRenders.filter(r => r.status === 'processing' || r.status === 'done').length;
+            return (
+              <section key={lane} style={{
+                background: '#fff', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 12,
+                overflow: 'hidden', position: 'relative',
+              }}>
+                {/* Lane accent stripe */}
+                <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 3, background: lt.stripe }} />
+                <header style={{
+                  padding: '14px 18px 12px', borderBottom: '1px solid rgba(0,0,0,0.05)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  paddingLeft: 22,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={pillStyle(lt)}>{lt.label}</span>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: FR.ink }}>
+                      {laneProviderLabel(lane)}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: 11, color: FR.stone }}>
+                    {activeCount} active · {laneRenders.length} total
+                  </span>
+                </header>
+                <div style={{ padding: '4px 18px 14px', paddingLeft: 22 }}>
+                  {laneRenders.map(r => {
+                    const sprint = sprintMap[r.sprint_id] || {};
+                    const ad = adsByRender[r.id];
+                    const token = RENDER_STATUS_TOKEN[r.status] || RENDER_STATUS_TOKEN.pending;
+                    const progress = renderProgress(r, !!ad);
+                    const canPublish = r.status === 'approved' && r.encoder_passed && !ad;
+                    const isPublishing = !!publishing[r.id];
+                    return (
+                      <div key={r.id} style={{ padding: '10px 0', borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
+                            <span style={{ fontFamily: 'ui-monospace, SF Mono, Menlo, monospace', fontSize: 12, color: FR.ink, fontWeight: 500 }}>
+                              S{sprint.sprint_number}-{String.fromCharCode(65 + (r.variant_index ?? 0))}
+                            </span>
+                            <span style={{ fontSize: 11, color: FR.stone, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {r.provider || '—'}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={pillStyle(token)}>
+                              <span style={{ ...dotStyle(DOT_COLOR[token.dot] || FR.stone, token.dot === 'amber'), marginRight: 4 }} />
+                              {ad ? 'Published' : token.label}
+                              {r.encoder_passed && r.status === 'approved' && !ad ? ' · Encoded' : ''}
+                            </span>
+                            {canPublish && (
+                              <button
+                                onClick={() => handlePublish(r)}
+                                disabled={isPublishing}
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                                  fontSize: 11, padding: '4px 10px', borderRadius: 6,
+                                  border: '1px solid #A7F3D0', background: FR.greenLight, color: FR.green,
+                                  cursor: isPublishing ? 'not-allowed' : 'pointer', fontWeight: 500,
+                                }}
+                              >
+                                {isPublishing ? <Loader2 size={11} style={{ animation: 'spin 0.7s linear infinite' }} /> : <Send size={11} />}
+                                {isPublishing ? 'Publishing…' : 'Publish to Meta'}
+                              </button>
+                            )}
+                          </div>
                         </div>
+                        <div style={{ height: 4, background: 'rgba(0,0,0,0.05)', borderRadius: 2, overflow: 'hidden' }}>
+                          <div style={{
+                            height: '100%', width: `${progress}%`,
+                            background: progress === 100 ? FR.green : (r.status === 'processing' ? FR.amber : FR.stone),
+                            borderRadius: 2, transition: 'width 400ms ease',
+                          }} />
+                        </div>
+                        {errs[r.id] && (
+                          <p style={{ fontSize: 10.5, color: FR.red, margin: '6px 0 0', wordBreak: 'break-word' }}>{errs[r.id]}</p>
+                        )}
                       </div>
-                      <div style={{ height: 4, background: FR.sand, borderRadius: 2, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${progress}%`, background: FR.slate, borderRadius: 2, transition: 'width 400ms ease' }} />
-                      </div>
-                      {errs[r.id] && (
-                        <p style={{ fontSize: 10, color: '#A32D2D', margin: '6px 0 0', wordBreak: 'break-word' }}>{errs[r.id]}</p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
+}
+
+function laneProviderLabel(lane) {
+  switch (lane) {
+    case 'ai':              return 'fal.ai · Nano Banana 2';
+    case 'high_production': return 'Higgsfield Marketing Studio';
+    case 'creator':         return 'Higgsfield Soul Characters';
+    case 'founder':         return 'Higgsfield Soul — founder';
+    default:                return '';
+  }
+}
+
+function renderProgress(r, isAd) {
+  if (isAd || r.status === 'approved') return 100;
+  if (r.status === 'done')              return 90;
+  if (r.status === 'processing')        return 55;
+  if (r.status === 'pending')           return 10;
+  return 0;
 }

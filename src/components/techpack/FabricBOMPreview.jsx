@@ -9,6 +9,9 @@
 //   chosenColor    — { url, label, hex } | null (library mode = null)
 //   chosenArea     — 'Body' | 'Lining' | … (defaults to fabric.default_garment_area)
 //   chosenFinishes — array overriding fabric.mill_finishes (per-style picks)
+//   chosenNotes    — string overriding fabric.notes (per-style annotations)
+//   chosenPlacementImage — Storage path / URL overriding fabric.garment_placement_image_url
+//   chosenPlacementNotes — string overriding fabric.garment_placement_notes
 //   yieldM         — meters per unit, used for cost / unit headline
 //   styleNumber    — top-right code (FW26-BB-HO-0002) when rendered into a tech pack
 //   pageLabel      — e.g. '03 / 24'
@@ -16,6 +19,7 @@
 import { useEffect, useState } from 'react';
 import { FR } from './techPackConstants';
 import { getAssetUrl, isLegacyDataUrl } from '../../utils/plmAssets';
+import { getVendor } from '../../utils/vendorLibrary';
 
 const PAGE_W = 1123;
 const PAGE_H = 794;
@@ -25,6 +29,49 @@ const esc = (s) => String(s ?? '');
 function clamp(s, maxChars) {
   if (s.length <= maxChars) return s;
   return s.slice(0, Math.max(1, maxChars - 1)) + '…';
+}
+
+// Wrap a string into N lines of approx maxCharsPerLine each. Splits on
+// whitespace; the final line is hard-truncated with an ellipsis if the
+// text would exceed the line budget. Lets the SVG card show fabric notes
+// without bringing in foreignObject.
+function wrapText(text, maxCharsPerLine, maxLines) {
+  if (!text) return [];
+  const words = String(text).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let curr = '';
+  for (const w of words) {
+    const next = curr ? `${curr} ${w}` : w;
+    if (next.length > maxCharsPerLine) {
+      if (curr) lines.push(curr);
+      curr = w;
+      if (lines.length >= maxLines) break;
+    } else {
+      curr = next;
+    }
+  }
+  if (curr && lines.length < maxLines) lines.push(curr);
+  if (lines.length === maxLines) {
+    const used = lines.join(' ').split(/\s+/).length;
+    if (used < words.length) {
+      lines[lines.length - 1] = clamp(lines[lines.length - 1] + '…', maxCharsPerLine);
+    }
+  }
+  return lines;
+}
+
+// Pull contact details for the named vendor synchronously from the
+// localStorage-backed vendor library. Returns null when the vendor isn't
+// in the store (the picker tags those as "Not in library" upstream).
+function vendorContact(name) {
+  if (!name) return null;
+  const v = getVendor(name);
+  if (!v || !v._hasRecord) return null;
+  return {
+    email: v.email || '',
+    phone: v.phone || '',
+    primaryContact: v.primaryContact || '',
+  };
 }
 
 // Resolve a Storage path → signed URL while caching by ref so we never
@@ -61,7 +108,7 @@ function Photo({ x, y, w, h, src, label }) {
 }
 
 function Swatch({ x, y, w, h, entry, picked }) {
-  const resolved = useResolved(entry.url);
+  const resolved = useResolved(entry.url || entry.path);
   return (
     <g>
       <rect x={x} y={y} width={w} height={h} fill={entry.hex || FR.salt}
@@ -85,21 +132,56 @@ function PageBody(props) { return <FabricBOMPreviewBody {...props} />; }
 // TechPackPagePreview's PageFabrics so the tech pack live preview and the
 // library card render through one component. The wrapper above adds the
 // salt background + slate header + soil divider for the standalone view.
-export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFinishes, yieldM }) {
+export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFinishes, chosenNotes, chosenPlacementImage, chosenPlacementNotes, yieldM, chosenPricePerMeterUsd = null, chosenPricePerKgUsd = null }) {
   const allColors = fabric.color_card_images || [];
   const finishes = chosenFinishes != null ? chosenFinishes : (fabric.mill_finishes || []);
+  const notes = chosenNotes != null ? chosenNotes : (fabric.notes || '');
+  const placementImage = chosenPlacementImage != null ? chosenPlacementImage : (fabric.garment_placement_image_url || '');
+  const placementNotes = chosenPlacementNotes != null ? chosenPlacementNotes : (fabric.garment_placement_notes || '');
   const area = chosenArea || fabric.default_garment_area || 'Body';
   const isKnit = (fabric.category || 'knit') === 'knit';
-  const placementResolved = useResolved(fabric.garment_placement_image_url);
+  const placementResolved = useResolved(placementImage);
   const ribImgResolved = useResolved(fabric.ribbing_image_url);
 
-  // Cost / unit headline: base + finishes × yield
-  const baseUsd = parseFloat(fabric.price_per_meter_usd || 0);
-  const finishesUsd = finishes.reduce((s, f) => s + (parseFloat(f.delta_per_meter_usd) || 0), 0);
+  // Cost / unit headline: base + finishes × yield.
+  // chosenPricePerMeterUsd (set in the BOM step) takes priority over the
+  // library's price_per_meter_usd so that per-style cost overrides show here.
+  const _d = fabric.data || fabric;
+  const _gsm = parseFloat(fabric.weight_gsm ?? _d?.weight_gsm) || 0;
+  const _widthCm = parseFloat(fabric.width_cm ?? _d?.width_cm) || 0;
+  const _kpm = (_gsm && _widthCm) ? (_gsm * _widthCm / 100000) : 0;
+  const _kgUsd = parseFloat(fabric.price_per_kg_usd ?? _d?.price_per_kg_usd) || 0;
+  const _fromKg = (_kgUsd && _kpm) ? _kgUsd * _kpm : 0;
+  const _libraryBaseUsd = parseFloat(fabric.price_per_meter_usd) || parseFloat(_d?.price_per_meter_usd) || _fromKg || 0;
+  const _overrideFromKg = (chosenPricePerKgUsd != null && _kpm) ? (parseFloat(chosenPricePerKgUsd) || 0) * _kpm : null;
+  const baseUsd = chosenPricePerMeterUsd != null
+    ? (parseFloat(chosenPricePerMeterUsd) || 0)
+    : (_overrideFromKg != null ? _overrideFromKg : _libraryBaseUsd);
+  const finishesUsd = finishes.reduce((s, f) => {
+    const m = parseFloat(f?.delta_per_meter_usd);
+    if (Number.isFinite(m) && m > 0) return s + m;
+    const k = parseFloat(f?.delta_per_kg_usd);
+    if (Number.isFinite(k) && k > 0 && _kpm) return s + k * _kpm;
+    return s;
+  }, 0);
   const allInUsd = baseUsd + finishesUsd;
   const m = parseFloat(yieldM || 0) || 0;
   const costPerUnit = m > 0 ? allInUsd * m : allInUsd;
   const costLabel = m > 0 ? 'Cost / unit' : 'Cost / m';
+
+  // Resolve color selection number (1-based index in the colorway list).
+  // When in library mode (no chosen color) we still show the grid.
+  const colorIdx = chosenColor
+    ? allColors.findIndex(c => c && (
+        (chosenColor.url && c.url === chosenColor.url) ||
+        (chosenColor.hex && c.hex === chosenColor.hex && c.label === chosenColor.label) ||
+        (chosenColor.label && c.label === chosenColor.label)
+      ))
+    : -1;
+  const colorNum = colorIdx >= 0 ? String(colorIdx + 1).padStart(2, '0') : '01';
+
+  // Vendor contact for the main mill + each secondary facility on finishes.
+  const mainVendor = vendorContact(fabric.mill_id);
 
   return (
     <g>
@@ -110,131 +192,172 @@ export function FabricBOMPreviewBody({ fabric, chosenColor, chosenArea, chosenFi
       <text x="40" y="134" fontSize="10" fill={FR.stone}>
         {clamp(esc([fabric.mill_id, fabric.composition, fabric.weight_gsm ? `${fabric.weight_gsm} GSM` : null].filter(Boolean).join(' · ') || '—'), 80)}
       </text>
-      {/* Area chip top-right of title */}
-      <rect x={PAGE_W - 40 - 110} y="92" width="110" height="26" fill={FR.slate} rx="3" />
-      <text x={PAGE_W - 40 - 55} y="110" textAnchor="middle" fontSize="11" fontWeight="bold" fill={FR.salt} letterSpacing="0.6">
-        {esc(area).toUpperCase()}
+
+      {/* ─── HERO ROW: Photos + Color Selection + Placement ─────────────── */}
+
+      {/* PHOTOS — front + back, shorter than before to make room below */}
+      <Photo x={40}  y={150} w={220} h={260} src={fabric.front_image_url} label="FRONT" />
+      <Photo x={270} y={150} w={220} h={260} src={fabric.back_image_url}  label="BACK"  />
+
+      {/* COLOR SELECTION — smaller swatch with explicit number label */}
+      <text x="520" y="160" fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="1.2">
+        COLOR SELECTION {chosenColor ? colorNum : ''}
       </text>
-
-      {/* PHOTOS — 9:16 front + back, side-by-side hero */}
-      <Photo x={40}  y={150} w={220} h={391} src={fabric.front_image_url} label="FRONT" />
-      <Photo x={270} y={150} w={220} h={391} src={fabric.back_image_url}  label="BACK"  />
-
-      {/* COLOR — big picked square in tech pack mode, grid in library mode */}
       {chosenColor ? (
         <g>
-          <Swatch x={520} y={150} w={300} h={300} entry={chosenColor} picked />
-          <text x={670} y={490} textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="32" fill={FR.slate}>
-            {clamp(esc(chosenColor.label || 'Selected'), 24)}
+          <Swatch x={520} y={170} w={180} h={180} entry={chosenColor} picked />
+          <text x={610} y={378} textAnchor="middle" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="22" fill={FR.slate}>
+            {clamp(esc(chosenColor.label || 'Selected'), 22)}
           </text>
-          {chosenColor.hex && (
-            <text x={670} y={512} textAnchor="middle" fontSize="10" fill={FR.stone} fontFamily="ui-monospace, Menlo, monospace">
-              {esc(chosenColor.hex)}
-            </text>
-          )}
-          <text x={670} y={540} textAnchor="middle" fontSize="9" fill={FR.stone} letterSpacing="1.5">PICKED · {allColors.length} COLORWAYS AVAILABLE</text>
         </g>
       ) : (
         <g>
           {(() => {
-            const cols = 6;
-            const gap = 6;
-            const colW = (300 - (cols - 1) * gap) / cols;
-            const totalRows = 5;
-            const rowH = (300 - (totalRows - 1) * gap) / totalRows;
+            const cols = 4;
+            const gap = 4;
+            const colW = (180 - (cols - 1) * gap) / cols;
+            const totalRows = 4;
+            const rowH = (180 - (totalRows - 1) * gap) / totalRows;
             return Array.from({ length: totalRows }).flatMap((_, r) => (
               Array.from({ length: cols }).map((__, c) => {
                 const idx = r * cols + c;
                 const sw = allColors[idx];
                 if (!sw) return null;
                 const x = 520 + c * (colW + gap);
-                const y = 150 + r * (rowH + gap);
+                const y = 170 + r * (rowH + gap);
                 return <Swatch key={`${r}-${c}`} x={x} y={y} w={colW} h={rowH} entry={sw} picked={false} />;
               })
             ));
           })()}
-          <text x={670} y={540} textAnchor="middle" fontSize="9" fill={FR.stone} letterSpacing="1.5">
-            {allColors.length} COLORWAYS · LIBRARY VIEW
+          <text x={610} y={378} textAnchor="middle" fontSize="9" fill={FR.stone} letterSpacing="1.2">
+            {allColors.length} COLORWAYS
           </text>
         </g>
       )}
 
-      {/* GARMENT PLACEMENT — small silhouette top-right */}
-      <text x="850" y="166" fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="1.2">PLACEMENT</text>
-      <rect x="850" y="172" width="233" height="220" fill={FR.salt} stroke={FR.sand} strokeWidth="0.5" />
+      {/* PLACEMENT — 2:3 portrait silhouette (width=147, height=220). Label shows
+          area name in slate so it reads as content, not a header. */}
+      <text x="750" y="160" fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="1.2">
+        {'PLACEMENT ON GARMENT: '}
+        <tspan fill={FR.slate} fontWeight="500" letterSpacing="0.2">{clamp(esc(area), 28)}</tspan>
+      </text>
+      <rect x="750" y="170" width="147" height="220" fill={FR.salt} stroke={FR.sand} strokeWidth="0.5" />
       {placementResolved
-        ? <image href={placementResolved} x="850" y="172" width="233" height="220" preserveAspectRatio="xMidYMid meet" />
+        ? <image href={placementResolved} x="750" y="170" width="147" height="220" preserveAspectRatio="xMidYMid meet" />
         : (
           <g>
             <g stroke={FR.slate} strokeWidth="1" fill="#fff">
-              <path d="M 925 198 L 940 188 L 990 188 L 1005 198 L 1015 210 L 1010 220 L 998 218 L 998 380 L 935 380 L 935 218 L 923 220 L 918 210 Z" />
-              <path d="M 953 188 Q 965 200 977 188" fill="none" />
+              <path d="M 790 196 L 802 186 L 843 186 L 855 196 L 863 208 L 859 218 L 849 216 L 849 378 L 798 378 L 798 216 L 788 218 L 784 208 Z" />
+              <path d="M 812 186 Q 822 196 832 186" fill="none" />
             </g>
-            <rect x="938" y="222" width="57" height="155" fill={FR.soil} opacity="0.30" />
+            <rect x="800" y="220" width="47" height="155" fill={FR.soil} opacity="0.30" />
           </g>
         )
       }
-      {fabric.garment_placement_notes && (
-        <text x="966" y="408" textAnchor="middle" fontSize="9" fill={FR.stone} fontStyle="italic">
-          {clamp(esc(fabric.garment_placement_notes), 38)}
+      {placementNotes && (
+        <text x="823" y="408" textAnchor="middle" fontSize="9" fill={FR.stone} fontStyle="italic">
+          {clamp(esc(placementNotes), 38)}
         </text>
       )}
 
-      {/* RIBBING — knit only, small chip under placement */}
+      {/* RIBBING — knit only, tucked in the far-right column */}
       {isKnit && fabric.ribbing_fabric_no && (
         <g>
-          <text x="850" y="438" fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="1.2">RIBBING</text>
-          <rect x="850" y="444" width="84" height="84" fill={FR.salt} stroke={FR.sand} strokeWidth="0.5" />
+          <text x="990" y="160" fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="1.2">RIBBING</text>
+          <rect x="990" y="170" width="90" height="90" fill={FR.salt} stroke={FR.sand} strokeWidth="0.5" />
           {ribImgResolved && (
-            <image href={ribImgResolved} x="850.5" y="444.5" width="83" height="83" preserveAspectRatio="xMidYMid slice" />
+            <image href={ribImgResolved} x="990.5" y="170.5" width="89" height="89" preserveAspectRatio="xMidYMid slice" />
           )}
-          <text x="944" y="470" fontFamily="ui-monospace, Menlo, monospace" fontSize="11" fill={FR.slate} fontWeight="bold">
-            {clamp(esc(fabric.ribbing_fabric_no), 16)}
+          <text x="990" y="280" fontFamily="ui-monospace, Menlo, monospace" fontSize="10" fill={FR.slate} fontWeight="bold">
+            {clamp(esc(fabric.ribbing_fabric_no), 14)}
           </text>
-          <text x="944" y="486" fontSize="9" fill={FR.stone}>matched rib</text>
+          <text x="990" y="294" fontSize="8" fill={FR.stone}>matched rib</text>
         </g>
       )}
 
-      {/* MILL FINISHES — chip line with execution location label */}
-      <text x="40" y="580" fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="1.2">MILL FINISHES</text>
+      {/* ─── NOTES SECTION ──────────────────────────────────────────────── */}
+      <text x="40" y="438" fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="1.2">FABRIC NOTES</text>
+      <rect x="40" y="446" width={PAGE_W - 80} height="46" fill={FR.salt} stroke={FR.sand} strokeWidth="0.5" rx="3" />
+      {(() => {
+        const noteText = esc(notes).trim();
+        if (!noteText) {
+          return (
+            <text x="52" y="473" fontSize="10" fill={FR.stone} fontStyle="italic">
+              — no notes
+            </text>
+          );
+        }
+        const lines = wrapText(noteText, 130, 2);
+        return lines.map((line, i) => (
+          <text key={i} x="52" y={465 + i * 14} fontSize="10" fill={FR.slate}>
+            {line}
+          </text>
+        ));
+      })()}
+
+      {/* ─── FABRIC FINISHES — clean detail rows with contact info ────── */}
+      <text x="40" y="514" fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="1.2">FABRIC FINISHES</text>
       {finishes.length === 0 ? (
-        <text x="40" y="606" fontSize="11" fill={FR.stone} fontStyle="italic">— none specified</text>
+        <text x="40" y="538" fontSize="10" fill={FR.stone} fontStyle="italic">— none specified</text>
       ) : (
         <g>
-          {finishes.slice(0, 5).map((f, i) => {
+          {finishes.slice(0, 3).map((f, i) => {
             const badge = execBadge(f.executed_at);
-            const xStart = 40 + i * 200;
+            const isSecondary = f.executed_at === 'secondary';
+            const facilityName = isSecondary ? (f.vendor_id || '') : (fabric.mill_id || '');
+            const facilityContact = vendorContact(facilityName);
+            const rowY = 524 + i * 38;
+            const cny = f.delta_per_meter_cny ? `+¥${parseFloat(f.delta_per_meter_cny).toFixed(2)}` : '';
+            const usd = f.delta_per_meter_usd ? `+$${parseFloat(f.delta_per_meter_usd).toFixed(2)}` : '';
+            const priceLabel = [cny, usd].filter(Boolean).join(' · ');
             return (
               <g key={i}>
-                <rect x={xStart} y={588} width={186} height={38} fill={badge.fill} rx="3" />
-                <text x={xStart + 10} y={604} fontSize="11" fill={FR.slate}>{clamp(esc(f.name || 'Finish'), 22)}</text>
-                <text x={xStart + 176} y={604} textAnchor="end" fontSize="9" fill={badge.stroke} fontFamily="ui-monospace, Menlo, monospace">
-                  {f.delta_per_meter_cny ? `+¥${parseFloat(f.delta_per_meter_cny).toFixed(2)}` : ''}
+                {/* Left chip: name + where + price (300 wide) */}
+                <rect x={40} y={rowY} width={300} height={34} fill={badge.fill} rx="3" />
+                <text x={52} y={rowY + 15} fontSize="11" fontWeight="bold" fill={FR.slate}>
+                  {clamp(esc(f.name || 'Finish'), 32)}
                 </text>
-                <text x={xStart + 10} y={620} fontSize="8" fill={badge.stroke} fontFamily="ui-monospace, Menlo, monospace" letterSpacing="0.5">
-                  {badge.label}
+                <text x={52} y={rowY + 28} fontSize="8" fill={badge.stroke} fontFamily="ui-monospace, Menlo, monospace" letterSpacing="0.4">
+                  {badge.label}{priceLabel ? `  ·  ${priceLabel}` : ''}
+                </text>
+                {/* Right details box: facility + contact (760 wide) */}
+                <rect x={350} y={rowY} width={PAGE_W - 40 - 350} height={34} fill="#fff" stroke={FR.sand} strokeWidth="0.5" rx="3" />
+                <text x={362} y={rowY + 14} fontSize="8" fill={FR.stone} letterSpacing="0.4">FACILITY</text>
+                <text x={362} y={rowY + 28} fontSize="11" fontWeight="bold" fill={FR.slate}>
+                  {clamp(esc(facilityName || '— pick facility'), 38)}
+                </text>
+                <text x={PAGE_W - 52} y={rowY + 14} textAnchor="end" fontSize="8" fill={FR.stone} letterSpacing="0.4">CONTACT</text>
+                <text x={PAGE_W - 52} y={rowY + 28} textAnchor="end" fontSize="10" fill={FR.slate} fontFamily="ui-monospace, Menlo, monospace">
+                  {facilityContact
+                    ? clamp([facilityContact.email, facilityContact.phone].filter(Boolean).join(' · ') || '—', 56)
+                    : '— no contact on file'}
                 </text>
               </g>
             );
           })}
-          {finishes.length > 5 && (
-            <text x={40 + 5 * 200 + 10} y={604} fontSize="10" fill={FR.stone} fontStyle="italic">
-              +{finishes.length - 5} more
+          {finishes.length > 3 && (
+            <text x={40} y={524 + 3 * 38 + 12} fontSize="10" fill={FR.stone} fontStyle="italic">
+              +{finishes.length - 3} more finishes
             </text>
           )}
         </g>
       )}
 
-      {/* VENDOR + COST — clean horizontal strip at the bottom */}
-      <line x1="40" y1="638" x2={PAGE_W - 40} y2="638" stroke={FR.sand} strokeWidth="0.5" />
-      <text x="40" y="668" fontSize="9" fill={FR.stone} letterSpacing="0.4">VENDOR</text>
-      <text x="40" y="690" fontSize="14" fill={FR.slate} fontWeight="bold">{clamp(esc(fabric.mill_id || '—'), 40)}</text>
-      <text x="40" y="710" fontSize="10" fill={FR.stone}>
+      {/* ─── VENDOR + COST strip at the bottom ──────────────────────── */}
+      <line x1="40" y1="666" x2={PAGE_W - 40} y2="666" stroke={FR.sand} strokeWidth="0.5" />
+      <text x="40" y="688" fontSize="9" fill={FR.stone} letterSpacing="0.4">MAIN FABRIC VENDOR</text>
+      <text x="40" y="710" fontSize="14" fill={FR.slate} fontWeight="bold">{clamp(esc(fabric.mill_id || '—'), 40)}</text>
+      <text x="40" y="726" fontSize="10" fill={FR.stone}>
         {esc(fabric.composition || '—')} · {fabric.weight_gsm ? `${fabric.weight_gsm} GSM` : '—'}
       </text>
+      <text x="40" y="744" fontSize="10" fill={FR.slate} fontFamily="ui-monospace, Menlo, monospace">
+        {mainVendor
+          ? clamp([mainVendor.primaryContact, mainVendor.email, mainVendor.phone].filter(Boolean).join(' · ') || '— no contact on file', 86)
+          : '— no contact on file'}
+      </text>
 
-      <text x={PAGE_W - 40} y="668" textAnchor="end" fontSize="9" fill={FR.stone} letterSpacing="0.4">{costLabel.toUpperCase()}</text>
-      <text x={PAGE_W - 40} y="708" textAnchor="end" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="44" fill={FR.soil}>
+      <text x={PAGE_W - 40} y="688" textAnchor="end" fontSize="9" fill={FR.stone} letterSpacing="0.4">{costLabel.toUpperCase()}</text>
+      <text x={PAGE_W - 40} y="738" textAnchor="end" fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="44" fill={FR.soil}>
         ${costPerUnit ? costPerUnit.toFixed(2) : '0.00'}
       </text>
     </g>
@@ -246,7 +369,12 @@ export default function FabricBOMPreview({
   chosenColor = null,
   chosenArea = null,
   chosenFinishes = null,
+  chosenNotes = null,
+  chosenPlacementImage = null,
+  chosenPlacementNotes = null,
   yieldM = null,
+  chosenPricePerMeterUsd = null,
+  chosenPricePerKgUsd = null,
   styleNumber = null,
   pageLabel = null,
 }) {
@@ -268,7 +396,7 @@ export default function FabricBOMPreview({
       )}
       <text x={PAGE_W - 40} y="50" textAnchor="end" fontSize="8" fill={FR.sand} letterSpacing="2">PAGE {pageTag}</text>
       <rect x="0" y="70" width={PAGE_W} height="2" fill={FR.soil} />
-      <PageBody fabric={fabric} chosenColor={chosenColor} chosenArea={chosenArea} chosenFinishes={chosenFinishes} yieldM={yieldM} />
+      <PageBody fabric={fabric} chosenColor={chosenColor} chosenArea={chosenArea} chosenFinishes={chosenFinishes} chosenNotes={chosenNotes} chosenPlacementImage={chosenPlacementImage} chosenPlacementNotes={chosenPlacementNotes} yieldM={yieldM} chosenPricePerMeterUsd={chosenPricePerMeterUsd} chosenPricePerKgUsd={chosenPricePerKgUsd} />
       <text x="40" y="775" fontSize="9" fill={FR.stone}>{styleInfo}</text>
       <text x={PAGE_W - 40} y="775" textAnchor="end" fontSize="9" fill={FR.stone}>PAGE {pageTag}</text>
     </svg>

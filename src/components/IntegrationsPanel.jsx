@@ -2,13 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { ShoppingBag, BarChart3, CreditCard, Mail, Truck, CheckCircle, XCircle, Loader, ChevronDown, ChevronUp, ExternalLink, RefreshCw, Copy, Server, Landmark, Plus, Trash2, Sparkles, Film, Camera, Wand2, Hash, Globe } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { useApp } from '../context/AppContext';
+import { bucketDepositoryAccounts, classifyCreditAccount, cardIdFromMask } from '../utils/bankAccountMap';
 import {
   syncShopifyActuals, syncMetaActuals, testShopifyProxy,
   saveShopifyCredentials, loadShopifyIntegration, deleteShopifyCredentials,
   syncMercuryActuals, testMercuryProxy,
   saveMercuryCredentials, loadMercuryIntegration, deleteMercuryCredentials,
   createPlaidLinkToken, exchangePlaidPublicToken, listPlaidItems,
-  removePlaidItem, syncPlaidActuals,
+  removePlaidItem, syncPlaidActuals, probePlaidEdgeFunction,
   saveAnthropicCredentials, loadAnthropicIntegration, deleteAnthropicCredentials, testAnthropicProxy,
   saveFalCredentials, deleteFalCredentials, testFalProxy,
   saveHiggsfieldCredentials, deleteHiggsfieldCredentials, testHiggsfieldProxy,
@@ -670,6 +671,7 @@ function PlaidLauncher({ linkToken, onSuccess, disabled, label }) {
 }
 
 function PlaidCard({ dispatch }) {
+  const { state } = useApp();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [linkToken, setLinkToken] = useState(null);
@@ -677,8 +679,34 @@ function PlaidCard({ dispatch }) {
   const [connectErr, setConnectErr] = useState('');
   const [syncStatus, setSyncStatus] = useState(null);
   const [syncErr, setSyncErr] = useState('');
+  // Full structured diagnostic from the last failed sync. Includes the
+  // request stage (config/auth/network/http), the proxy URL, status code,
+  // response body, and any per-Plaid-item errors. Rendered verbatim so the
+  // operator can see what's actually failing without DevTools.
+  //
+  // On mount, hydrate from seed.plaidAutoSyncDiagnostic so the operator
+  // sees what the last auto-sync hit even before they click the manual
+  // sync button. Manual sync overwrites with its own result.
+  const persistedDiagnostic = state.seed?.plaidAutoSyncDiagnostic || null;
+  const [syncDiagnostic, setSyncDiagnostic] = useState(persistedDiagnostic);
   const [lastSync, setLastSync] = useState(null);
   const [open, setOpen] = useState(false);
+  // Probe result for the "Run diagnostics" button.
+  const [probeResult, setProbeResult] = useState(null);
+  const [probing, setProbing] = useState(false);
+
+  async function handleProbe() {
+    setProbing(true);
+    setProbeResult(null);
+    try {
+      const r = await probePlaidEdgeFunction();
+      setProbeResult(r);
+    } catch (err) {
+      setProbeResult({ error: err.message });
+    } finally {
+      setProbing(false);
+    }
+  }
 
   const refreshItems = useCallback(async () => {
     try {
@@ -733,34 +761,79 @@ function PlaidCard({ dispatch }) {
     }
   }
 
-  async function handleSync() {
+  async function handleSync(opts = {}) {
     if (items.length === 0) return;
     setSyncStatus('syncing');
     setSyncErr('');
+    setSyncDiagnostic(null);
     try {
-      // Manual click = real-time refresh (hits the bank, costs ~$0.10/account).
-      // Auto-sync on page load uses the cached endpoint (free).
-      const { totals, depositoryAccounts, creditAccounts } = await syncPlaidActuals({ realTime: true });
+      // Default: cached endpoint (free, instant). Plaid keeps these
+      // current via background syncs so for cashflow purposes this is
+      // the right default — and it sidesteps the edge-function timeout
+      // that the real-time endpoint hits when 4+ banks are linked
+      // (each /accounts/balance/get takes 10-30s and Promise.all blows
+      // past Supabase's response budget → browser shows "Failed to fetch").
+      //
+      // Pass { realTime: true } via the optional "Force real-time"
+      // affordance for an explicit live refresh.
+      const realTime = opts.realTime === true;
+      const { totals, depositoryAccounts, creditAccounts, itemErrors } =
+        await syncPlaidActuals({ realTime });
 
-      // Push depository cash into the seed (supplements Mercury if they overlap,
-      // so pick whichever feels right — for now Plaid wins if present).
-      if (totals.depository > 0) {
-        dispatch({
-          type: 'UPDATE_SEED',
-          payload: {
-            totalCash: totals.depository,
-            sbMain: totals.depository,
-          },
+      // Any Plaid item that errored (e.g. ITEM_LOGIN_REQUIRED on Mercury)
+      // is surfaced as a partial-success diagnostic so the operator sees
+      // exactly which institution needs re-linking, rather than silently
+      // dropping that institution's accounts and quietly using stale data.
+      if (itemErrors && itemErrors.length) {
+        setSyncDiagnostic({
+          stage: 'plaid-item-errors',
+          summary: `${itemErrors.length} Plaid item(s) returned an error — their accounts are missing from this sync.`,
+          itemErrors,
         });
       }
 
-      // Match credit accounts by last-4 mask to existing cards and push balances.
+      // Mirror the auto-sync wire-up exactly — Operating Cash = sum of
+      // all Mercury depository accounts (filtered by institution name).
+      const bucketed = bucketDepositoryAccounts(depositoryAccounts);
+      const mercuryAccounts = depositoryAccounts.filter(
+        a => /mercury/i.test(a.institution || ''),
+      );
+      const mercuryTotal = Math.round(
+        mercuryAccounts.reduce((s, a) => s + (a.balance || 0), 0) * 100,
+      ) / 100;
+      if (mercuryAccounts.length === 0) {
+        console.warn(
+          `[manual sync] No Mercury depository accounts found. ` +
+          `Accounts seen: ${depositoryAccounts.map(a => `${a.institution}/${a.name}(${a.mask})`).join(', ') || 'none'}`,
+        );
+      }
+      dispatch({
+        type: 'UPDATE_SEED',
+        payload: {
+          totalCash: totals.depository,
+          ...(mercuryAccounts.length > 0 ? { sbMain: mercuryTotal } : {}),
+          sbSalesTax: -Math.abs(bucketed.salesTax),
+          sbCorpTax: -Math.abs(bucketed.corporateTax),
+          workingCapital: bucketed.workingCapital,
+          mercuryFulfillmentBalance: bucketed.fulfillment,
+          mercuryMarketingBalance: bucketed.marketing,
+          bankAccounts: bucketed.accounts,
+        },
+      });
+
+      // Match credit accounts by last-4 mask to existing cards and push
+      // both the legacy state.creditCards entry AND the cashflow engine's
+      // seed.<key>Balance fields (so Ads Payable + LT Liabilities rows
+      // refresh in step with auto-sync).
       for (const a of creditAccounts) {
         if (!a.mask) continue;
-        // Our card IDs sometimes contain the mask (e.g. 'chase-5718'); fallback to name substring.
-        const id = guessCardIdFromMask(a.mask);
-        if (id) {
-          dispatch({ type: 'UPDATE_CREDIT_CARD', payload: { id, updates: { balance: a.balance } } });
+        const cashflowKey = classifyCreditAccount(a);
+        if (cashflowKey) {
+          dispatch({ type: 'UPDATE_SEED', payload: { [cashflowKey + 'Balance']: a.balance } });
+        }
+        const seedId = cardIdFromMask(a.mask) || guessCardIdFromMask(a.mask);
+        if (seedId) {
+          dispatch({ type: 'UPDATE_CREDIT_CARD', payload: { id: seedId, updates: { balance: a.balance } } });
         }
       }
 
@@ -775,6 +848,15 @@ function PlaidCard({ dispatch }) {
     } catch (err) {
       setSyncStatus('error');
       setSyncErr(err.message);
+      // err.diagnostic is attached by callPlaidProxy with stage / url /
+      // status / response body. Falling back to a synthetic diagnostic
+      // if the error didn't come from there (e.g. an error in our own
+      // post-processing code).
+      setSyncDiagnostic(err.diagnostic || {
+        stage: 'client',
+        cause: err.message,
+        stack: err.stack ? String(err.stack).split('\n').slice(0, 6).join('\n') : null,
+      });
     }
   }
 
@@ -853,29 +935,70 @@ function PlaidCard({ dispatch }) {
             />
           )}
           {hasItems && (
-            <button
-              type="button"
-              onClick={handleSync}
-              disabled={syncStatus === 'syncing'}
-              className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm"
-              style={{
-                background: syncStatus === 'ok' ? FR.green : syncStatus === 'error' ? FR.red : FR.soil,
-                color: 'white', border: 'none',
-                cursor: syncStatus === 'syncing' ? 'not-allowed' : 'pointer',
-              }}>
-              {syncStatus === 'syncing' ? <Loader size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-              {syncStatus === 'syncing' ? 'Syncing…'
-                : syncStatus === 'ok' ? 'Synced — balances pushed to model'
-                : 'Sync balances'}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => handleSync()}
+                disabled={syncStatus === 'syncing'}
+                className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm"
+                style={{
+                  background: syncStatus === 'ok' ? FR.green : syncStatus === 'error' ? FR.red : FR.soil,
+                  color: 'white', border: 'none',
+                  cursor: syncStatus === 'syncing' ? 'not-allowed' : 'pointer',
+                }}>
+                {syncStatus === 'syncing' ? <Loader size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                {syncStatus === 'syncing' ? 'Syncing…'
+                  : syncStatus === 'ok' ? 'Synced — balances pushed to model'
+                  : 'Sync balances'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSync({ realTime: true })}
+                disabled={syncStatus === 'syncing'}
+                title="Forces /accounts/balance/get on every bank — slow, ~$0.10/account. Use only if cached balances look stale."
+                className="text-xs underline"
+                style={{
+                  background: 'transparent', color: FR.stone, border: 'none',
+                  cursor: syncStatus === 'syncing' ? 'not-allowed' : 'pointer',
+                }}>
+                Force real-time
+              </button>
+              <button
+                type="button"
+                onClick={handleProbe}
+                disabled={probing}
+                title="Test each layer of the Plaid edge function call independently — project URL, CORS preflight, function deployment, end-to-end."
+                className="text-xs underline"
+                style={{
+                  background: 'transparent', color: FR.stone, border: 'none',
+                  cursor: probing ? 'not-allowed' : 'pointer',
+                }}>
+                {probing ? 'Probing…' : 'Run diagnostics'}
+              </button>
+            </>
           )}
         </div>
+
+        {probeResult && (
+          <ProbeResultBox result={probeResult} />
+        )}
+
+        {state.seed?.syncedAtBySource?.plaid && (
+          <p className="text-[11px]" style={{ color: FR.stone }}>
+            Last auto-sync (cached): <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+              {new Date(state.seed.syncedAtBySource.plaid).toLocaleString()}
+            </span>
+          </p>
+        )}
 
         {connectStatus === 'error' && connectErr && (
           <p className="text-xs" style={{ color: FR.red }}>{connectErr}</p>
         )}
         {syncStatus === 'error' && syncErr && (
           <p className="text-xs" style={{ color: FR.red }}>{syncErr}</p>
+        )}
+        {syncDiagnostic && (
+          <PlaidDiagnosticBox diagnostic={syncDiagnostic} />
         )}
 
         {lastSync && (
@@ -904,6 +1027,159 @@ function PlaidCard({ dispatch }) {
  * last-4 either in the id or in the card name. Keep this conservative —
  * if we can't confidently match, return null and the user updates manually.
  */
+/**
+ * Renders the full diagnostic block when a Plaid sync fails or partially
+ * succeeds. Operator-readable; surfaces:
+ *   - the stage (network / http / plaid-item-errors / client)
+ *   - the request URL + status code when the proxy returned a non-2xx
+ *   - the actual response body
+ *   - per-Plaid-item errors with institution name + Plaid error_code
+ *
+ * Mostly verbatim — no synthesis. If we can't tell the operator exactly
+ * what's wrong, render the raw shape and let them paste it for support.
+ */
+function PlaidDiagnosticBox({ diagnostic }) {
+  const d = diagnostic || {};
+  const isItemErrors = d.stage === 'plaid-item-errors';
+  const headline = isItemErrors
+    ? d.summary
+    : d.stage === 'network'  ? `Network error reaching the Plaid proxy (${d.action || 'unknown action'})`
+    : d.stage === 'http'     ? `Plaid proxy returned HTTP ${d.status} ${d.statusText || ''}`.trim()
+    : d.stage === 'auth'     ? 'Not signed in'
+    : d.stage === 'config'   ? 'Supabase not configured'
+    : d.stage === 'client'   ? 'Client-side error while processing the sync result'
+    : 'Plaid sync failed';
+
+  return (
+    <div className="mt-2 p-3 rounded-lg text-xs space-y-2"
+         style={{ background: '#FFF7F2', border: '1px solid #E8C8B5', color: FR.slate }}>
+      <div className="font-semibold" style={{ color: FR.red }}>
+        {headline}
+      </div>
+
+      {d.hint && (
+        <div style={{ color: FR.stone }}>{d.hint}</div>
+      )}
+
+      {(d.url || d.action) && (
+        <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11 }}>
+          {d.action && <div><span style={{ color: FR.stone }}>action:</span> {d.action}</div>}
+          {d.url && <div><span style={{ color: FR.stone }}>url:</span> {d.url}</div>}
+          {d.status && (
+            <div><span style={{ color: FR.stone }}>status:</span> {d.status} {d.statusText || ''}</div>
+          )}
+        </div>
+      )}
+
+      {d.cause && (
+        <div style={{ color: FR.stone }}>
+          <span style={{ fontWeight: 600 }}>cause:</span> {d.cause}
+        </div>
+      )}
+
+      {d.stack && (
+        <pre style={{
+          background: 'white', border: '1px solid #EBE5D5', borderRadius: 4, padding: 6,
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10,
+          color: FR.slate, overflow: 'auto', maxHeight: 120, whiteSpace: 'pre-wrap',
+        }}>{d.stack}</pre>
+      )}
+
+      {d.body && (
+        <details>
+          <summary style={{ cursor: 'pointer', color: FR.stone, fontSize: 11 }}>
+            response body
+          </summary>
+          <pre style={{
+            background: 'white', border: '1px solid #EBE5D5', borderRadius: 4, padding: 6,
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10,
+            color: FR.slate, overflow: 'auto', maxHeight: 200, whiteSpace: 'pre-wrap',
+          }}>{JSON.stringify(d.body, null, 2)}</pre>
+        </details>
+      )}
+
+      {isItemErrors && Array.isArray(d.itemErrors) && d.itemErrors.length > 0 && (
+        <div className="space-y-1">
+          {d.itemErrors.map((e, i) => (
+            <div key={i} className="p-2 rounded"
+                 style={{ background: 'white', border: '1px solid #EBE5D5' }}>
+              <div style={{ fontWeight: 600 }}>{e.institution}</div>
+              <div style={{ color: FR.stone, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10 }}>
+                item_id: {e.item_id}
+              </div>
+              <div style={{ marginTop: 2 }}>
+                {typeof e.error === 'string' ? e.error : (
+                  <pre style={{
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10,
+                    whiteSpace: 'pre-wrap', margin: 0,
+                  }}>{JSON.stringify(e.error, null, 2)}</pre>
+                )}
+              </div>
+              {typeof e.error === 'object' && e.error?.error_code === 'ITEM_LOGIN_REQUIRED' && (
+                <div style={{ marginTop: 4, color: FR.red, fontSize: 11 }}>
+                  → Click <strong>Remove</strong> on this institution above and re-link it via "Connect another account".
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Renders the staged Plaid-proxy probe result. Each step shows what was
+ * tested, the outcome (HTTP status / error), the hint for next steps,
+ * and (collapsed) the raw response body.
+ */
+function ProbeResultBox({ result }) {
+  if (!result) return null;
+  if (result.error) {
+    return (
+      <div className="mt-2 p-3 rounded-lg text-xs"
+           style={{ background: '#FFF7F2', border: '1px solid #E8C8B5', color: FR.red }}>
+        Probe failed: {result.error}
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 p-3 rounded-lg text-xs space-y-2"
+         style={{ background: 'white', border: '1px solid #EBE5D5', color: FR.slate }}>
+      <div className="font-semibold" style={{ color: FR.slate }}>
+        Plaid edge function probe
+      </div>
+      <div style={{ color: FR.stone, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10 }}>
+        supabase url: {result.supabaseUrl}
+      </div>
+      {(result.steps || []).map((s, i) => (
+        <div key={i} className="p-2 rounded"
+             style={{ background: s.ok ? '#F2FBF4' : '#FFF7F2', border: `1px solid ${s.ok ? '#C8E2C9' : '#E8C8B5'}` }}>
+          <div style={{ fontWeight: 600, color: s.ok ? FR.green : FR.red }}>
+            {s.ok ? '✓' : '✗'} {s.name} <span style={{ color: FR.stone, fontWeight: 400 }}>({s.elapsedMs}ms)</span>
+          </div>
+          <div style={{ color: FR.stone, marginTop: 2 }}>{s.hint}</div>
+          <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11, marginTop: 4 }}>
+            {s.status != null && <div>status: {s.status} {s.statusText || ''}</div>}
+            {s.accessControlAllowOrigin && <div>CORS Allow-Origin: {s.accessControlAllowOrigin}</div>}
+            {s.error && <div style={{ color: FR.red }}>error: {s.error}</div>}
+          </div>
+          {s.body && (
+            <details style={{ marginTop: 4 }}>
+              <summary style={{ cursor: 'pointer', color: FR.stone, fontSize: 11 }}>response body</summary>
+              <pre style={{
+                background: 'white', border: '1px solid #EBE5D5', borderRadius: 4, padding: 6,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10,
+                color: FR.slate, overflow: 'auto', maxHeight: 200, whiteSpace: 'pre-wrap', margin: 0,
+              }}>{JSON.stringify(s.body, null, 2)}</pre>
+            </details>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function guessCardIdFromMask(mask) {
   const knownCards = [
     { id: 'chase-5718', last4: '5718' },

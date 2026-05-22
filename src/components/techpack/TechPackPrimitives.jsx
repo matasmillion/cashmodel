@@ -203,7 +203,7 @@ export function ArrayTable({ headers, rows, onUpdate, onAdd, onRemove }) {
               {headers.map(h => (
                 <td key={h.key} style={{ padding: '3px 4px', borderBottom: `1px solid ${FR.sand}` }}>
                   {h.render
-                    ? h.render(row[h.key], v => onUpdate(ri, h.key, v), row)
+                    ? h.render(row[h.key], v => onUpdate(ri, h.key, v), row, ri)
                     : <input value={row[h.key] || ''} onChange={e => onUpdate(ri, h.key, e.target.value)} placeholder={h.placeholder || ''}
                         style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box' }} />}
                 </td>

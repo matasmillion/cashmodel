@@ -237,6 +237,117 @@ function repairTruncatedJson(src) {
   return head + tail;
 }
 
+const SWATCH_SYSTEM = `You are analyzing a fabric swatch color card image. Your job is to identify every individual color swatch region in the image.
+
+Return ONLY a JSON array. Each element represents one distinct color swatch:
+[
+  {
+    "label": "color name or number exactly as printed near the swatch (e.g. '01 Ivory', 'Stone', '#4 Navy')",
+    "x": 0.05,
+    "y": 0.10,
+    "w": 0.20,
+    "h": 0.15
+  }
+]
+
+Rules:
+- x, y = top-left corner as a fraction of the full image dimensions (0.0–1.0)
+- w, h = width/height of the swatch region as fractions (0.0–1.0)
+- x + w must be ≤ 1.0, y + h must be ≤ 1.0
+- Include only the actual textile swatch area — not the text label below/beside it
+- If the label text is below the swatch, exclude it from the bounding box
+- Exclude headers, logos, spec tables, white margins, borders
+- If no label is visible for a swatch, use "Color NN" (sequential number)
+- Output ONLY the JSON array, nothing else`;
+
+/**
+ * Run Claude Vision against a single swatch-card image and return detected
+ * swatch regions as [{ label, x, y, w, h }] with coordinates as 0-1 fractions.
+ * @param {{ mediaType: string, base64: string }} media
+ */
+export async function extractSwatchesFromImage({ media }) {
+  if (!media) throw new Error('No image provided.');
+  const json = await callAnthropicProxy({
+    model: MODEL,
+    max_tokens: 8192,
+    system: SWATCH_SYSTEM,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: media.mediaType, data: media.base64 } },
+        { type: 'text', text: 'Identify all individual color swatches in this fabric color card. Return the JSON array of swatch regions.' },
+      ],
+    }],
+  });
+
+  const text = (Array.isArray(json?.content) ? json.content : []).find(b => b?.type === 'text')?.text || '';
+  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+  try {
+    const parsed = JSON.parse(cleaned);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    // A large color card (20-30+ swatches) can blow past max_tokens and cut
+    // the array off mid-element. Salvage the regions that did come through.
+    const repaired = repairTruncatedJson(cleaned);
+    if (repaired !== null) {
+      try {
+        const parsed = JSON.parse(repaired);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch { /* fall through */ }
+    }
+    return [];
+  }
+}
+
+/**
+ * Crop a normalized (0-1 fraction) region out of an image File and return a
+ * WebP Blob. Shared by SwatchScanModal and FabricAIExtract so both produce
+ * identical crops. Returns null if the region is too small to be useful.
+ * @param {File|Blob} file source image
+ * @param {{x:number,y:number,w:number,h:number}} region 0-1 fractions
+ */
+export function cropRegionFromFile(file, { x, y, w, h }) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const srcX = Math.round(img.naturalWidth  * Math.max(0, x));
+      const srcY = Math.round(img.naturalHeight * Math.max(0, y));
+      const srcW = Math.round(img.naturalWidth  * Math.min(w, 1 - x));
+      const srcH = Math.round(img.naturalHeight * Math.min(h, 1 - y));
+      if (srcW < 4 || srcH < 4) { resolve(null); return; }
+      const canvas = document.createElement('canvas');
+      canvas.width  = srcW;
+      canvas.height = srcH;
+      canvas.getContext('2d').drawImage(img, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
+      canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('toBlob failed'))), 'image/webp', 0.92);
+    };
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Image load failed')); };
+    img.src = objectUrl;
+  });
+}
+
+/**
+ * Detect + crop every swatch in a single image File in one call. Returns
+ * [{ label, blob }] ready for upload. Used by both the dedicated scanner and
+ * the general fabric-card importer so a dropped color card always yields the
+ * actual cropped swatch images labeled by their printed color number.
+ * @param {File} file
+ */
+export async function detectAndCropSwatches(file) {
+  const media = await fileToMedia(file);
+  const regions = await extractSwatchesFromImage({ media });
+  const cropped = await Promise.all(regions.map(async (r, i) => {
+    try {
+      const blob = await cropRegionFromFile(file, r);
+      if (!blob) return null;
+      return { label: r.label || `Color ${String(i + 1).padStart(2, '0')}`, blob };
+    } catch { return null; }
+  }));
+  return cropped.filter(Boolean);
+}
+
 /**
  * Read a File into { mediaType, base64 } suitable for extractFabricFromMedia.
  */

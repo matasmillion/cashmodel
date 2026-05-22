@@ -12,9 +12,36 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY     = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const MODEL        = 'claude-opus-4-7';
 
+// Shared scope block both prompts include. The estimator MUST treat
+// fabric, trims, treatments, embellishments and the vendor's profit %
+// as already-tracked-elsewhere so they aren't baked into the CMT number
+// and double-counted by the tech pack roll-up.
+const SCOPE_GUARDRAILS = `
+# WHAT YOUR NUMBER COVERS (your scope = CMT labor only)
+  + Spreading + marker making + cutting (laser / auto / manual)
+  + Bundling + transfer between sewing stations
+  + ALL sewing operations from the stitch table
+  + Pressing + thread trimming + inline QC
+  + Folding + packing the garment into the operator-supplied polybag
+  + Factory overhead (machinery, supervision, electricity)
+  + (Only when the vendor record has NO separate markup %) factory margin
+
+# WHAT YOUR NUMBER MUST NOT INCLUDE (already tracked on other tech-pack steps — including them here = double-counting)
+  − Fabric material cost (already in the Fabrics step, $/m × yield)
+  − Fabric finishes: brushing, antibacterial, water-repellent (already in Fabrics step)
+  − Trims: buttons, zips, labels, drawcords, elastic (already in Trims step)
+  − Packaging: polybag, hangtag, mailer (already in Packaging step)
+  − Wash / dye / distress treatments (already in Treatments step)
+  − Embroidery / screen print / patches (already in Embellishments step)
+  − Vendor profit % markup (the vendor record carries its own markupPct that is added on top by the tech pack — DO NOT bake it in)
+  − Sea freight, duties, fulfillment (handled at the Cash tab)
+
+If a factory benchmark in your head includes any of the above, mentally strip them out before quoting. A "pullover hoodie all-in $6" quote from a factory includes the fabric and trims; the CMT-only conversion-labor slice of that is closer to $4. Quote the CMT-only slice.
+`;
+
 function buildSystemPromptSamRate() {
   return `You are a garment manufacturing cost analyst. The user has provided an EXACT SAM (Standard Allowed Minute) billing rate from their chosen vendor's contract — your job is to estimate the SAM minutes for this specific garment and multiply.
-
+${SCOPE_GUARDRAILS}
 Return ONLY a single JSON object (no markdown fences, no prose) with this exact shape:
 
 {
@@ -59,11 +86,11 @@ Rules:
 }
 
 function buildSystemPromptCmt() {
-  return `You are a garment manufacturing cost analyst. You estimate the BEST-CASE per-garment Cut-Make-Trim (CMT) price an established factory would charge a brand, in USD.
+  return `You are a garment manufacturing cost analyst. You estimate the BEST-CASE per-garment Cut-Make-Trim (CMT) labor price an established factory would charge a brand, in USD.
 
-CMT is the all-in price the factory invoices for cutting, sewing, and finishing one garment. It already INCLUDES: direct sewing labor, indirect labor, factory overhead, machinery cost, and the factory's profit margin. CMT is NOT a raw worker wage. A coastal China factory billing roughly \$0.30–0.45/SAM-minute corresponds to ~\$3–5/hr in actual operator wages — most of the rate is overhead + margin.
-
-Anchor your estimate against the observed CMT BENCHMARKS below (best case → typical for an established mid-tier factory):
+CMT here = pure conversion labor: cutting + sewing + finishing + factory overhead. It is NOT a raw worker wage (a coastal China $0.30–0.45/SAM-min rate corresponds to ~$3–5/hr in actual operator wages — most of the rate is overhead and the factory's own margin). CMT also does NOT include any materials — those are tracked on their own tech-pack steps and roll up separately.
+${SCOPE_GUARDRAILS}
+Anchor your estimate against the observed CMT BENCHMARKS below (best case → typical for an established mid-tier factory). These benchmarks are CMT-only — they exclude fabric/trim material cost:
 
 CHINA (coastal — Guangdong / Zhejiang / Jiangsu / Fujian)
 - Tee / tank:               \$1.20–\$2.50
@@ -137,14 +164,17 @@ Designer notes: ${garment.designNotes || '—'}
 Key features: ${garment.keyFeatures || '—'}
 Fit: ${garment.fit || '—'}
 
-COMPLEXITY
-Fabrics picked: ${garment.fabricsCount} (${garment.fabricsList || 'none'})
-Trims picked: ${garment.trimsCount}
-Seam operations: ${garment.seamCount}
-Pattern pieces: ${garment.pieceCount}
-Treatments: ${garment.treatmentsCount}
+COMPLEXITY DRIVERS THAT BELONG IN YOUR CMT NUMBER
+Seam operations: ${garment.seamCount}    ← drives sewing SAM
+Pattern pieces:  ${garment.pieceCount}   ← drives cutting + handling SAM
 
-Estimate the best-case Cut & Sew labor cost per garment for this vendor, in USD. Return JSON only.`;
+CONTEXT THAT BELONGS ELSEWHERE — for awareness only, DO NOT add the dollar value into your number
+Fabrics picked:  ${garment.fabricsCount} (${garment.fabricsList || 'none'})  ← material $ already in Fabrics step
+Trims picked:    ${garment.trimsCount}                                    ← already in Trims step
+Treatments:      ${garment.treatmentsCount}                               ← already in Treatments step
+(If any of these are unusually high — e.g. 4+ fabrics, 10+ trims, multiple treatments — apply a small COMPLEXITY uplift to SAM only because more pieces means more handling. Never add the per-unit material cost itself.)
+
+Estimate the best-case CMT-only labor cost per garment for this vendor, in USD. Return JSON only.`;
 }
 
 async function callAnthropicProxy(body) {

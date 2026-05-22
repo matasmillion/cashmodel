@@ -18,7 +18,7 @@
 //     and the user reviews before applying.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Save, Trash2, Sparkles, FileDown, Plus, Loader2, X } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, Sparkles, FileDown, Plus, Loader2, X, Scan } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { saveFabric, archiveFabric, restoreFabric } from '../../utils/fabricStore';
 import {
@@ -33,8 +33,9 @@ import FileSlot from './FileSlot';
 import SimpleImageSlot from './SimpleImageSlot';
 import MultiImageSlot from './MultiImageSlot';
 import FabricAIExtract from './FabricAIExtract';
+import SwatchScanModal from './SwatchScanModal';
 import FabricBOMPreview from './FabricBOMPreview';
-import { migrateLegacyCoverIfNeeded, isLegacyDataUrl, uploadAsset } from '../../utils/plmAssets';
+import { migrateLegacyCoverIfNeeded, isLegacyDataUrl, uploadAsset, getAssetUrl } from '../../utils/plmAssets';
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A', label: 'Draft' },
@@ -83,8 +84,71 @@ function docKind(name = '') {
   return 'FILE';
 }
 
+// Full-screen image preview modal. For PDF/other files the caller should
+// use openDocUrl() to open a signed URL in a new tab instead.
+function DocPreviewModal({ path, name, onClose }) {
+  const [url, setUrl] = useState('');
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!path) { setLoading(false); return; }
+    setLoading(true);
+    getAssetUrl(path)
+      .then(u => { setUrl(u || ''); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [path]);
+  const [zoom, setZoom] = useState(false);
+
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
+    >
+      <div style={{ position: 'absolute', top: 18, right: 22, display: 'flex', gap: 12, alignItems: 'center' }}>
+        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+        {url && (
+          <a href={url} download={name} onClick={e => e.stopPropagation()}
+            style={{ fontSize: 11, color: '#fff', background: 'rgba(255,255,255,0.15)', border: '0.5px solid rgba(255,255,255,0.25)', borderRadius: 4, padding: '4px 10px', textDecoration: 'none', fontWeight: 600 }}>
+            Download
+          </a>
+        )}
+        <button onClick={onClose}
+          style={{ background: 'none', border: 'none', color: '#fff', fontSize: 24, cursor: 'pointer', lineHeight: 1, padding: 0 }}>×</button>
+      </div>
+      <div onClick={e => e.stopPropagation()} style={{ maxWidth: '92vw', maxHeight: '84vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {loading && <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>Loading…</div>}
+        {!loading && url && (
+          <img
+            src={url}
+            alt={name}
+            onClick={() => setZoom(z => !z)}
+            style={{
+              maxWidth: zoom ? '96vw' : '80vw',
+              maxHeight: zoom ? '96vh' : '80vh',
+              objectFit: 'contain',
+              borderRadius: 4,
+              cursor: zoom ? 'zoom-out' : 'zoom-in',
+              transition: 'all 0.2s',
+            }}
+          />
+        )}
+        {!loading && !url && (
+          <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>Preview unavailable</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+async function openDocUrl(path) {
+  try {
+    const url = await getAssetUrl(path);
+    if (url) window.open(url, '_blank', 'noopener');
+  } catch { /* ignore */ }
+}
+
 function DocumentsCard({ docs, onChange, fabricId }) {
   const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState(null); // { path, name } | null
   const onPick = async (e) => {
     const list = Array.from(e.target.files || []);
     e.target.value = '';
@@ -107,8 +171,20 @@ function DocumentsCard({ docs, onChange, fabricId }) {
     } finally { setBusy(false); }
   };
   const removeAt = (i) => onChange(docs.filter((_, idx) => idx !== i));
+
+  function handleDocClick(doc) {
+    if (!doc.path) return;
+    const kind = doc.kind || docKind(doc.name);
+    if (kind === 'IMG') {
+      setPreview({ path: doc.path, name: doc.name || 'Image' });
+    } else {
+      openDocUrl(doc.path);
+    }
+  }
+
   return (
     <div style={CARD_STYLE}>
+      {preview && <DocPreviewModal path={preview.path} name={preview.name} onClose={() => setPreview(null)} />}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
         <h4 style={{ ...SECTION_TITLE, marginBottom: 0 }}>Documents</h4>
         <span style={{ fontSize: 10, color: FR.stone }}>
@@ -117,21 +193,29 @@ function DocumentsCard({ docs, onChange, fabricId }) {
       </div>
       {(docs || []).length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
-          {docs.map((doc, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: FR.salt, borderRadius: 4, fontSize: 11 }}>
-              <span style={{ background: FR.sand, padding: '1px 6px', borderRadius: 3, fontSize: 8, letterSpacing: 0.5, textTransform: 'uppercase', color: FR.soil, fontWeight: 600 }}>
-                {doc.kind || docKind(doc.name)}
-              </span>
-              <span style={{ flex: 1, color: FR.slate, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.name || 'Untitled'}</span>
-              <span style={{ fontSize: 9, color: FR.stone, fontFamily: 'ui-monospace, Menlo, monospace' }}>
-                {doc.uploaded_at ? doc.uploaded_at.slice(0, 10) : ''}
-              </span>
-              <button onClick={() => removeAt(i)} title="Remove"
-                style={{ background: 'transparent', border: 'none', color: FR.stone, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                <X size={11} />
-              </button>
-            </div>
-          ))}
+          {docs.map((doc, i) => {
+            const kind = doc.kind || docKind(doc.name);
+            const clickable = !!doc.path;
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: FR.salt, borderRadius: 4, fontSize: 11, cursor: clickable ? 'pointer' : 'default' }}
+                onClick={() => clickable && handleDocClick(doc)}
+                onMouseOver={e => { if (clickable) e.currentTarget.style.background = FR.sand; }}
+                onMouseOut={e => { e.currentTarget.style.background = FR.salt; }}
+                title={clickable ? (kind === 'IMG' ? 'Click to preview' : 'Click to open / download') : ''}>
+                <span style={{ background: FR.sand, padding: '1px 6px', borderRadius: 3, fontSize: 8, letterSpacing: 0.5, textTransform: 'uppercase', color: FR.soil, fontWeight: 600 }}>
+                  {kind}
+                </span>
+                <span style={{ flex: 1, color: FR.slate, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.name || 'Untitled'}</span>
+                <span style={{ fontSize: 9, color: FR.stone, fontFamily: 'ui-monospace, Menlo, monospace' }}>
+                  {doc.uploaded_at ? doc.uploaded_at.slice(0, 10) : ''}
+                </span>
+                <button onClick={e => { e.stopPropagation(); removeAt(i); }} title="Remove"
+                  style={{ background: 'transparent', border: 'none', color: FR.stone, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                  <X size={11} />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12, border: `1px dashed ${FR.sand}`, borderRadius: 4, fontSize: 11, color: busy ? FR.stone : FR.soil, fontStyle: busy ? 'italic' : 'normal', cursor: busy ? 'wait' : 'pointer', fontWeight: 600 }}>
@@ -149,6 +233,7 @@ export default function FabricBuilder({ fabric, onBack }) {
   const [savedAt, setSavedAt] = useState(null);
   const [saving, setSaving] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const [swatchScanOpen, setSwatchScanOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [fx, setFx] = useState(null);
   const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(fabric));
@@ -350,7 +435,7 @@ export default function FabricBuilder({ fabric, onBack }) {
 
   const onApplyAI = async (patch) => {
     setAiOpen(false);
-    const { _aiSourceFiles, ...rest } = patch || {};
+    const { _aiSourceFiles, _aiSwatches, ...rest } = patch || {};
 
     // Archive the raw mill-card files the user dropped into the AI parser.
     // We always want the original card preserved for reference, even though
@@ -379,27 +464,73 @@ export default function FabricBuilder({ fabric, onBack }) {
       }
     }
 
+    // Upload the cropped swatch images the parser produced (real fabric
+    // texture, labeled by the printed color number) and turn them into
+    // color_card_images entries with live image URLs.
+    let newSwatches = [];
+    if (Array.isArray(_aiSwatches) && _aiSwatches.length && draft.id) {
+      const uploaded = await Promise.all(_aiSwatches.map(async (s, i) => {
+        try {
+          const ref = await uploadAsset({
+            scope: 'fabrics',
+            ownerId: draft.id,
+            slot: `swatch-ai-${Date.now()}-${i}`,
+            blob: s.blob,
+            skipCompress: false,
+          });
+          return { url: ref.path, label: s.label || `Color ${String(i + 1).padStart(2, '0')}`, hex: '' };
+        } catch (err) { console.error('AI swatch upload:', err); return null; }
+      }));
+      newSwatches = uploaded.filter(Boolean);
+    }
+
     setDraft(d => {
       const next = { ...d, ...rest };
-      if (Array.isArray(rest.color_card_images) && rest.color_card_images.length) {
-        const existing = Array.isArray(d.color_card_images) ? d.color_card_images : [];
-        const seen = new Set(existing.map(c => (c.hex || '').toLowerCase() || (c.label || '').trim().toLowerCase()).filter(Boolean));
-        const additions = rest.color_card_images.filter(c => {
-          const key = (c.hex || '').toLowerCase() || (c.label || '').trim().toLowerCase();
-          if (!key) return true;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-        next.color_card_images = [...existing, ...additions];
-      } else {
-        next.color_card_images = d.color_card_images || [];
-      }
+      const existing = Array.isArray(d.color_card_images) ? d.color_card_images : [];
+      // Merge hex-only suggestions (rest.color_card_images) and cropped
+      // swatch images (newSwatches) into the existing card, de-duping on
+      // hex / label so re-running the parser doesn't pile up duplicates.
+      const seen = new Set(existing.map(c => (c.hex || '').toLowerCase() || (c.label || '').trim().toLowerCase()).filter(Boolean));
+      const dedupe = (list) => (list || []).filter(c => {
+        const key = (c.hex || '').toLowerCase() || (c.label || '').trim().toLowerCase();
+        if (!key) return true;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      const hexAdds = Array.isArray(rest.color_card_images) ? dedupe(rest.color_card_images) : [];
+      const swatchAdds = dedupe(newSwatches);
+      next.color_card_images = [...existing, ...hexAdds, ...swatchAdds];
       if (newDocs.length) {
         next.documents = [...(d.documents || []), ...newDocs];
       }
       return next;
     });
+  };
+
+  // Apply cropped swatches from the AI swatch scanner. Each swatch is a
+  // { label, blob }. Upload each blob then append to color_card_images.
+  const onApplyScanSwatches = async (swatches) => {
+    setSwatchScanOpen(false);
+    if (!swatches?.length || !draft.id) return;
+    const uploaded = await Promise.all(swatches.map(async (s, i) => {
+      try {
+        const ref = await uploadAsset({
+          scope: 'fabrics',
+          ownerId: draft.id,
+          slot: `swatch-scan-${Date.now()}-${i}`,
+          blob: s.blob,
+          skipCompress: false,
+        });
+        return { url: ref.path, label: s.label || `Color ${String(i + 1).padStart(2, '0')}`, hex: '' };
+      } catch (err) { console.error('SwatchScan upload:', err); return null; }
+    }));
+    const valid = uploaded.filter(Boolean);
+    if (!valid.length) return;
+    setDraft(d => ({
+      ...d,
+      color_card_images: [...(d.color_card_images || []), ...valid],
+    }));
   };
 
   const status = draft.status || 'draft';
@@ -609,10 +740,10 @@ export default function FabricBuilder({ fabric, onBack }) {
             </div>
           </div>
 
-          {/* Mill finishes (NEW) */}
+          {/* Fabric finishes */}
           <div style={CARD_STYLE}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <h4 style={{ ...SECTION_TITLE, marginBottom: 0 }}>Mill finishes</h4>
+              <h4 style={{ ...SECTION_TITLE, marginBottom: 0 }}>Fabric finishes</h4>
               <span style={{ fontSize: 9, color: FR.stone }}>internal · adds to base price</span>
             </div>
             {finishes.length === 0 && (
@@ -717,11 +848,19 @@ export default function FabricBuilder({ fabric, onBack }) {
 
           {/* Color card */}
           <div style={CARD_STYLE}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
-              <h4 style={SECTION_TITLE}>Color card</h4>
-              <span style={{ fontSize: 10, color: FR.stone }}>
-                {(draft.color_card_images || []).length} colors · upload one image per swatch
-              </span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <h4 style={{ ...SECTION_TITLE, marginBottom: 0 }}>Color card</h4>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 10, color: FR.stone }}>
+                  {(draft.color_card_images || []).length} colors
+                </span>
+                <button
+                  onClick={() => setSwatchScanOpen(true)}
+                  title="AI: drop a color card, auto-crop each swatch, label by its color number"
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 5, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
+                  <Scan size={11} /> Scan color card with AI
+                </button>
+              </div>
             </div>
             <MultiImageSlot
               value={draft.color_card_images || []}
@@ -778,28 +917,32 @@ export default function FabricBuilder({ fabric, onBack }) {
             </div>
           )}
 
-          {/* CLO3D + notes */}
+          {/* Fabric notes — surfaces in the live preview's FABRIC NOTES band */}
           <div style={CARD_STYLE}>
-            <h4 style={SECTION_TITLE}>CLO3D &amp; notes</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <Field label=".ZFAB file (CLO3D)">
-                <FileSlot
-                  value={draft.zfab_file_url}
-                  onChange={v => set({ zfab_file_url: v })}
-                  accept=".zfab,.zprj"
-                  hint="Drop a .zfab fabric asset"
-                />
-              </Field>
-              <Field label="Notes">
-                <textarea
-                  value={draft.notes || ''}
-                  onChange={e => set({ notes: e.target.value })}
-                  rows={4}
-                  placeholder="Compatibility, care, certifications…"
-                  style={{ ...INPUT_STYLE, resize: 'vertical' }}
-                />
-              </Field>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <h4 style={{ ...SECTION_TITLE, marginBottom: 0 }}>Fabric notes</h4>
+              <span style={{ fontSize: 9, color: FR.stone }}>shown on every tech pack that uses this fabric</span>
             </div>
+            <textarea
+              value={draft.notes || ''}
+              onChange={e => set({ notes: e.target.value })}
+              rows={3}
+              placeholder="Compatibility, care, certifications, mill quirks the factory rep should know…"
+              style={{ ...INPUT_STYLE, resize: 'vertical', width: '100%', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          {/* CLO3D asset */}
+          <div style={CARD_STYLE}>
+            <h4 style={SECTION_TITLE}>CLO3D</h4>
+            <Field label=".ZFAB file (CLO3D)">
+              <FileSlot
+                value={draft.zfab_file_url}
+                onChange={v => set({ zfab_file_url: v })}
+                accept=".zfab,.zprj"
+                hint="Drop a .zfab fabric asset"
+              />
+            </Field>
           </div>
 
           {/* Documents — AI parser sources, certifications, vendor PDFs, chats */}
@@ -824,6 +967,12 @@ export default function FabricBuilder({ fabric, onBack }) {
         <FabricAIExtract
           onClose={() => setAiOpen(false)}
           onApply={onApplyAI}
+        />
+      )}
+      {swatchScanOpen && (
+        <SwatchScanModal
+          onClose={() => setSwatchScanOpen(false)}
+          onApply={onApplyScanSwatches}
         />
       )}
     </div>

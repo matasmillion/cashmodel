@@ -268,6 +268,413 @@ export async function syncShopifyActuals(/* creds unused — proxy holds creds *
   });
 }
 
+/**
+ * Returns deposit transactions (money entering the account) for the
+ * Mercury depository sub-account with the given mask, over the trailing
+ * `days` window. Pulled via Plaid /transactions/get on every connected
+ * Plaid item.
+ *
+ * Plaid amount sign convention: positive = money OUT of the account,
+ * negative = money IN. So a deposit / credit has amount < 0.
+ *
+ * Returns null if the mask isn't visible in any connected Plaid item
+ * (so callers can distinguish "no deposits" from "account not linked").
+ *
+ * @param {{ mask: string, days?: number }} opts
+ * @returns {Promise<null | Array<{date: string, amount: number, name: string, pending: boolean}>>}
+ */
+export async function syncMercuryDeposits({ mask, days = 7 }) {
+  const items = await listPlaidItems().catch(() => []);
+  if (!items?.length) return null;
+
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  const toISODate = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const sinceStr = toISODate(since);
+  const todayStr = toISODate(new Date());
+
+  let foundMask = false;
+  const deposits = [];
+  for (const item of items) {
+    let txData;
+    try {
+      txData = await callPlaidProxy('transactions/get', {
+        item_id: item.item_id,
+        start_date: sinceStr,
+        end_date: todayStr,
+      });
+    } catch (err) {
+      console.warn('[mercury deposits] transactions/get failed:', err.message);
+      continue;
+    }
+    const targetAccountId = (txData.accounts || []).find(a => a.mask === mask)?.account_id;
+    if (!targetAccountId) continue;
+    foundMask = true;
+    for (const tx of (txData.transactions || [])) {
+      if (tx.account_id !== targetAccountId) continue;
+      // Plaid: positive amount = money out, negative = money in.
+      if (tx.amount >= 0) continue;
+      deposits.push({
+        date: tx.date,
+        amount: Math.round(Math.abs(tx.amount) * 100) / 100,
+        name: tx.name || '',
+        pending: !!tx.pending,
+      });
+    }
+  }
+  return foundMask ? deposits : null;
+}
+
+/**
+ * Match Shopify-reported "paid" payouts against actual Mercury deposits.
+ * Match rule: same amount (±$0.01) within ±3 days of the payout date.
+ *
+ * Returns the SUM (and detail) of Shopify payouts that ARE reported as
+ * paid by Shopify but DON'T yet show up as a deposit in Mercury — money
+ * the operator hasn't received yet, even though Shopify thinks it's
+ * settled.
+ *
+ * @param {Array<{id, date, amount}>} paidPayouts — Shopify paid payouts in the window
+ * @param {Array<{date, amount}>} deposits — Mercury credits in the window
+ * @returns {{ unmatchedTotal: number, unmatched: Array<{id, date, amount}> }}
+ */
+function reconcileShopifyPaidWithMercury(paidPayouts, deposits) {
+  const unmatched = [];
+  const usedDeposits = new Set();
+  for (const p of paidPayouts) {
+    const pAmt = Math.abs(parseFloat(p.amount));
+    if (!Number.isFinite(pAmt)) continue;
+    const pDate = new Date(p.date);
+    const matchIdx = deposits.findIndex((d, i) => {
+      if (usedDeposits.has(i)) return false;
+      if (Math.abs(d.amount - pAmt) > 0.01) return false;
+      const dDate = new Date(d.date);
+      const diffDays = Math.abs((dDate - pDate) / 86400000);
+      return diffDays <= 3;
+    });
+    if (matchIdx === -1) {
+      unmatched.push({ id: p.id, date: p.date, amount: pAmt });
+    } else {
+      usedDeposits.add(matchIdx);
+    }
+  }
+  const unmatchedTotal = Math.round(unmatched.reduce((s, p) => s + p.amount, 0) * 100) / 100;
+  return { unmatchedTotal, unmatched };
+}
+
+/**
+ * Pulls Shopify Payments payouts that haven't yet settled to Mercury
+ * Operating Cash. Two components:
+ *
+ *   1. Shopify-reported pending: status in {scheduled, in_transit}.
+ *   2. Shopify-reported paid in the last `days` window that haven't
+ *      yet appeared as a deposit in the Mercury account with the
+ *      `reconcileMercuryMask` mask (default '6848' = Operating Cash).
+ *      This catches the gap where Shopify marks a payout as paid but
+ *      the ACH hasn't actually landed in Mercury yet.
+ *
+ * Status meanings (per Shopify Admin API docs):
+ *   `scheduled`   → settlement date set, not yet sent
+ *   `in_transit`  → ACH sent, not yet credited at the bank
+ *   `paid`        → Shopify says cleared (we still verify against Mercury)
+ *   `failed` / `cancelled` → excluded
+ *
+ * If the Mercury mask isn't linked through Plaid yet, the reconciliation
+ * step is skipped (we only return Shopify-reported pending) — we'd rather
+ * under-count than mark every paid payout as missing.
+ *
+ * Requires `read_shopify_payments_payouts` Admin scope.
+ *
+ * @param {{ reconcileMercuryMask?: string, days?: number }} opts
+ * @returns {Promise<{
+ *   pendingTotal: number,
+ *   payouts: Array<{date, amount, status, id}>,
+ *   reportedPendingTotal: number,
+ *   unmatchedPaidTotal: number,
+ *   unmatchedPaidPayouts: Array<{id, date, amount}>,
+ *   reconciliationSkipped: boolean,
+ * }>}
+ */
+export async function syncShopifyPayoutsPending({
+  reconcileMercuryMask = '6848',
+  days = 7,
+} = {}) {
+  const reported = [];
+  // Capture per-stage errors so the UI can show *why* the row is $0
+  // instead of just "skipped".
+  const errors = {};
+  // 1. Shopify-reported pending (scheduled + in_transit).
+  for (const status of ['scheduled', 'in_transit']) {
+    let data;
+    try {
+      data = await callShopifyProxy('shopify_payments/payouts.json', { status, limit: 250 });
+    } catch (err) {
+      // 403 = scope missing (need read_shopify_payments_payouts),
+      // 404 = store doesn't have Shopify Payments enabled.
+      console.warn(`[shopify payouts] ${status} fetch failed:`, err.message);
+      errors[`shopify_${status}`] = err.message;
+      continue;
+    }
+    for (const p of (data?.payouts || [])) {
+      const amt = parseFloat(p.amount);
+      if (!Number.isFinite(amt)) continue;
+      reported.push({ id: p.id, date: p.date, amount: amt, status: p.status });
+    }
+  }
+  const reportedPendingTotal = Math.round(reported.reduce((s, p) => s + p.amount, 0) * 100) / 100;
+
+  // 2. Shopify-paid-but-not-in-Mercury reconciliation.
+  let unmatchedPaidTotal = 0;
+  let unmatchedPaidPayouts = [];
+  let reconciliationSkipped = false;
+  let reconciliationSkipReason = null;
+
+  if (reconcileMercuryMask) {
+    try {
+      const sinceDate = new Date();
+      sinceDate.setDate(sinceDate.getDate() - days);
+      const sinceStr =
+        `${sinceDate.getFullYear()}-${String(sinceDate.getMonth() + 1).padStart(2, '0')}-${String(sinceDate.getDate()).padStart(2, '0')}`;
+
+      let paidData;
+      try {
+        paidData = await callShopifyProxy('shopify_payments/payouts.json', {
+          status: 'paid',
+          date_min: sinceStr,
+          limit: 250,
+        });
+      } catch (err) {
+        errors.shopify_paid = err.message;
+        throw err;
+      }
+      const paidPayouts = (paidData?.payouts || [])
+        .map(p => ({ id: p.id, date: p.date, amount: parseFloat(p.amount) }))
+        .filter(p => Number.isFinite(p.amount) && p.amount > 0);
+
+      const depositsResult = await syncMercuryDeposits({ mask: reconcileMercuryMask, days });
+      if (depositsResult == null) {
+        // Mercury 6848 not visible through Plaid — skip reconciliation
+        // so we don't falsely flag every paid payout as missing.
+        reconciliationSkipped = true;
+        reconciliationSkipReason = `Mercury mask ${reconcileMercuryMask} not visible through Plaid — every Plaid item either errored or doesn't contain that account. Most common cause: the Mercury Plaid item was linked without the transactions product (or its token is expired). Re-link Mercury from Integrations.`;
+        console.warn(`[shopify payouts] ${reconciliationSkipReason}`);
+      } else {
+        const recon = reconcileShopifyPaidWithMercury(paidPayouts, depositsResult);
+        unmatchedPaidTotal = recon.unmatchedTotal;
+        unmatchedPaidPayouts = recon.unmatched;
+      }
+    } catch (err) {
+      console.warn('[shopify payouts] paid reconciliation failed:', err.message);
+      reconciliationSkipped = true;
+      reconciliationSkipReason = reconciliationSkipReason || err.message;
+    }
+  }
+
+  const pendingTotal = Math.round((reportedPendingTotal + unmatchedPaidTotal) * 100) / 100;
+  return {
+    pendingTotal,
+    payouts: reported,
+    reportedPendingTotal,
+    unmatchedPaidTotal,
+    unmatchedPaidPayouts,
+    reconciliationSkipped,
+    reconciliationSkipReason,
+    errors,
+  };
+}
+
+/**
+ * Pulls pending Shopify Capital repayments via the Admin GraphQL API.
+ *
+ * Why GraphQL over REST: the GraphQL schema has typed enums for both
+ * the transaction type (`LENDING_CAPITAL_REMITTANCE`) and the associated
+ * payout status (`PAID / SCHEDULED / PENDING / ACTION_REQUIRED / FAILED /
+ * CANCELED`). The REST `shopify_payments/balance/transactions.json`
+ * endpoint uses ad-hoc string values that don't always include the
+ * substring "capital" we were filtering on — that's why the row read $0
+ * even when there were 3 pending remittances in the operator's account.
+ *
+ * Pending = associated payout status is NOT `PAID`. PAID means the
+ * money has already been settled into a Mercury deposit (the operator
+ * sees it land in 6848 and our reconciliation would catch it). Anything
+ * else — SCHEDULED, PENDING, ACTION_REQUIRED — is still money owed to
+ * Shopify Capital that hasn't actually left yet.
+ *
+ * Requires the `read_shopify_payments_payouts` scope (or
+ * `read_shopify_payments_accounts`). Same scope used by syncShopifyPayoutsPending.
+ *
+ * Returns: {
+ *   pendingTotal: number,                          // sum of |amount| across pending remittances
+ *   repayments: Array<{id, amount, date, status, type}>,
+ *   error?: string,                                // top-level error if the call failed
+ * }
+ */
+export async function syncShopifyCapitalRepayment() {
+  // Pull the most recent 100 lending_capital_remittance balance
+  // transactions, regardless of payout state. We filter on the client
+  // because the GraphQL `query` filter for transaction_type doesn't
+  // support combined status filters cleanly.
+  const gqlQuery = `
+    query CapitalRemittances {
+      shopifyPaymentsAccount {
+        balanceTransactions(
+          first: 100,
+          sortKey: PROCESSED_AT,
+          reverse: true,
+          query: "transaction_type:lending_capital_remittance"
+        ) {
+          edges {
+            node {
+              id
+              type
+              amount { amount currencyCode }
+              transactionDate
+              associatedPayout { id status }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  let data;
+  try {
+    data = await callShopifyProxy('graphql.json', null, { query: gqlQuery });
+  } catch (err) {
+    console.warn('[shopify capital] GraphQL fetch failed:', err.message);
+    return { pendingTotal: 0, repayments: [], error: err.message };
+  }
+  if (data?.errors?.length) {
+    const msg = data.errors.map(e => e.message).join('; ');
+    console.warn('[shopify capital] GraphQL errors:', msg);
+    return { pendingTotal: 0, repayments: [], error: msg };
+  }
+
+  const edges = data?.data?.shopifyPaymentsAccount?.balanceTransactions?.edges || [];
+  const repayments = [];
+  for (const edge of edges) {
+    const t = edge?.node;
+    if (!t) continue;
+    const payoutStatus = t.associatedPayout?.status || null;
+    // PAID = already settled. Anything else (SCHEDULED, PENDING,
+    // ACTION_REQUIRED, FAILED, CANCELED, or null) is still owed to
+    // Shopify Capital from the operator's perspective.
+    if (payoutStatus === 'PAID') continue;
+    const amt = Math.abs(parseFloat(t.amount?.amount));
+    if (!Number.isFinite(amt)) continue;
+    repayments.push({
+      id: t.id,
+      amount: amt,
+      date: t.transactionDate,
+      status: payoutStatus || 'PENDING',
+      type: t.type,
+    });
+  }
+
+  const pendingTotal = Math.round(repayments.reduce((s, r) => s + r.amount, 0) * 100) / 100;
+  return { pendingTotal, repayments };
+}
+
+/**
+ * Sums every PAID Shopify Capital remittance ever. The engine subtracts
+ * this from the operator-entered original loan amount to compute the
+ * current outstanding balance:
+ *
+ *   outstanding = originalLoan - paidRepaymentsTotal
+ *
+ * Only PAID remittances reduce the loan principal — pending ones
+ * (associatedPayout.status != PAID) belong on the "Shopify Capital
+ * Repayment" row because the money hasn't actually left yet. They roll
+ * into outstanding next week once Shopify settles them into a payout.
+ *
+ * Why we don't try to find the original loan via the API: the Admin
+ * GraphQL schema has zero Capital/Loan/Advance queries (verified by
+ * dumping QueryRoot). The disbursement also isn't reliably recorded
+ * as any `LENDING_*` balance transaction. The operator enters it once
+ * in column A; we automate everything else.
+ *
+ * Paginates up to 1000 remittances (~2.7 years of daily payments).
+ *
+ * Returns: {
+ *   paidRepaymentsTotal: number,   // sum of |amount| for PAID remittances
+ *   paidCount: number,
+ *   pendingCount: number,          // informational; not used in math
+ *   error?: string,
+ * }
+ */
+export async function syncShopifyCapitalOutstanding() {
+  const gqlQuery = `
+    query CapitalRemittances($cursor: String) {
+      shopifyPaymentsAccount {
+        balanceTransactions(
+          first: 100,
+          after: $cursor,
+          sortKey: PROCESSED_AT,
+          query: "transaction_type:lending_capital_remittance"
+        ) {
+          pageInfo { hasNextPage endCursor }
+          edges {
+            node {
+              id
+              amount { amount }
+              transactionDate
+              associatedPayout { status }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  let paidRepaymentsTotal = 0;
+  let paidCount = 0;
+  let pendingCount = 0;
+  let cursor = null;
+
+  for (let page = 0; page < 10; page++) {
+    let data;
+    try {
+      data = await callShopifyProxy('graphql.json', null, { query: gqlQuery, variables: { cursor } });
+    } catch (err) {
+      console.warn('[shopify capital outstanding] GraphQL fetch failed:', err.message);
+      return { paidRepaymentsTotal: 0, paidCount: 0, pendingCount: 0, error: err.message };
+    }
+    if (data?.errors?.length) {
+      const msg = data.errors.map(e => e.message).join('; ');
+      console.warn('[shopify capital outstanding] GraphQL errors:', msg);
+      return { paidRepaymentsTotal: 0, paidCount: 0, pendingCount: 0, error: msg };
+    }
+
+    const conn = data?.data?.shopifyPaymentsAccount?.balanceTransactions;
+    if (!conn) break;
+    for (const edge of (conn.edges || [])) {
+      const t = edge?.node;
+      if (!t) continue;
+      const amt = parseFloat(t.amount?.amount);
+      if (!Number.isFinite(amt)) continue;
+      const status = t.associatedPayout?.status;
+      if (status === 'PAID') {
+        // Remittance has settled — money has actually left the merchant's
+        // Shopify Balance via a paid payout. This is what reduces the
+        // outstanding loan principal.
+        paidRepaymentsTotal += Math.abs(amt);
+        paidCount += 1;
+      } else {
+        pendingCount += 1;
+      }
+    }
+    if (!conn.pageInfo?.hasNextPage) break;
+    cursor = conn.pageInfo.endCursor;
+  }
+
+  return {
+    paidRepaymentsTotal: Math.round(paidRepaymentsTotal * 100) / 100,
+    paidCount,
+    pendingCount,
+  };
+}
+
 // ─── Shopify variants + per-day sales (Sell-Through page) ────────────────────
 
 /**
@@ -475,28 +882,48 @@ export async function fetchShopifyVariantSalesByDay({ days = 90 } = {}) {
  * Returns an array of { startDate, endDate, label, adSpend, impressions, clicks }.
  */
 export async function syncMetaActuals(creds) {
-  if (!creds?.connected || !creds.accountId || !creds.token) {
+  if (!creds?.connected || !creds.accountId) {
     throw new Error('Meta Ads not connected');
   }
 
   const weeks = getPast13Weeks();
   const accountId = creds.accountId.startsWith('act_') ? creds.accountId : `act_${creds.accountId}`;
-  const token = creds.token;
 
   const since = weeks[0].startDate;
   const until = weeks[12].endDate;
 
-  const url = `https://graph.facebook.com/v19.0/${accountId}/insights?fields=spend,impressions,clicks&time_increment=7&time_range[since]=${since}&time_range[until]=${until}&access_token=${token}`;
-
-  let data = [];
+  // Route the call through the meta-proxy Edge Function so the access_token
+  // stays server-side (in user_integrations.token, RLS-protected). The proxy
+  // already supports arbitrary GET paths, so we just hand it the insights
+  // endpoint + the same query params we used to inline in the URL.
+  let response;
   try {
-    const res = await fetch(url);
-    const json = await res.json();
-    if (json.error) throw new Error(json.error.message);
-    data = json.data || [];
+    response = await callMetaProxy({
+      method: 'GET',
+      path: `${accountId}/insights`,
+      body: {
+        fields: 'spend,impressions,clicks',
+        time_increment: 7,
+        time_range: JSON.stringify({ since, until }),
+      },
+    });
   } catch (err) {
-    throw new Error(err.message);
+    // Fall back to the legacy direct call only if the proxy isn't reachable
+    // (sign-in not configured locally) AND the legacy token is still in
+    // creds. Surfaces a console warning so this doesn't get missed in dev.
+    if (creds.token) {
+      console.warn('[meta] proxy unreachable, falling back to direct fetch (token exposed):', err.message);
+      const url = `https://graph.facebook.com/v19.0/${accountId}/insights?fields=spend,impressions,clicks&time_increment=7&time_range[since]=${since}&time_range[until]=${until}&access_token=${creds.token}`;
+      const res = await fetch(url);
+      response = await res.json();
+      if (response.error) throw new Error(response.error.message);
+    } else {
+      throw err;
+    }
   }
+
+  if (response?.error) throw new Error(response.error.message || 'Meta Insights API error');
+  const data = response?.data || [];
 
   return weeks.map(week => {
     const match = data.find(d => d.date_start >= week.startDate && d.date_start <= week.endDate);
@@ -510,6 +937,92 @@ export async function syncMetaActuals(creds) {
       clicks: match ? parseInt(match.clicks || 0) : 0,
     };
   });
+}
+
+/**
+ * Pulls today's daily_budget from the Meta CBO campaign named "Acquisition"
+ * (case-insensitive). This is the FORWARD-LOOKING daily ad spend the user
+ * has set in Ads Manager — the cashflow projection uses it to anchor the
+ * current and future weeks' ad spend, rather than backing into it from
+ * historical insights (which lag behind plan changes).
+ *
+ * Meta returns daily_budget in the account's MINOR currency unit (cents
+ * for USD), so we divide by 100. Returns null if no matching campaign is
+ * found or the call fails — caller falls back to insights-based spend.
+ */
+export async function syncMetaDailyBudget(creds, campaignName = 'Acquisition') {
+  if (!creds?.connected || !creds.accountId) return null;
+  const accountId = creds.accountId.startsWith('act_') ? creds.accountId : `act_${creds.accountId}`;
+  let response;
+  try {
+    response = await callMetaProxy({
+      method: 'GET',
+      path: `${accountId}/campaigns`,
+      body: {
+        fields: 'id,name,daily_budget,status,effective_status',
+        limit: 200,
+      },
+    });
+  } catch (err) {
+    // Legacy fallback (token client-side) if proxy unavailable.
+    if (creds.token) {
+      const url = `https://graph.facebook.com/v19.0/${accountId}/campaigns?fields=id,name,daily_budget,status,effective_status&limit=200&access_token=${creds.token}`;
+      const res = await fetch(url);
+      response = await res.json();
+    } else {
+      throw err;
+    }
+  }
+  if (response?.error) throw new Error(response.error.message || 'Meta campaigns API error');
+
+  // Substring match (case-insensitive) — most operators name their CBOs
+  // with date suffixes or brand prefixes ("Acquisition - May 2026",
+  // "[FR] Acquisition"). Filter to active campaigns with a daily_budget;
+  // if more than one matches, sum them — the operator may be running
+  // multiple acquisition CBOs in parallel.
+  const target = campaignName.toLowerCase();
+  const all = response?.data || [];
+  const matches = all.filter(c => {
+    const nameOk = (c.name || '').toLowerCase().includes(target);
+    const hasBudget = c.daily_budget != null && c.daily_budget !== '0';
+    const isActive = !c.effective_status
+      || c.effective_status === 'ACTIVE'
+      || c.effective_status === 'IN_PROCESS'
+      || c.effective_status === 'CAMPAIGN_PAUSED';   // include paused so user can plan ahead
+    return nameOk && hasBudget && isActive;
+  });
+
+  if (!matches.length) {
+    // Log every campaign name we did see, so the operator can fix
+    // either the campaign name or the configured `campaignName` arg.
+    const seen = all.map(c => `${c.name || '(unnamed)'} [${c.effective_status || c.status || '?'}, budget=${c.daily_budget ?? 'null'}]`);
+    console.warn(
+      `[meta CBO] No campaign matched "${campaignName}". Campaigns visible to this token (${seen.length}):`,
+      seen,
+    );
+    return null;
+  }
+
+  // Meta returns budget as a string in minor units (cents).
+  const totalCents = matches.reduce((sum, c) => {
+    const cents = parseInt(c.daily_budget, 10);
+    return Number.isFinite(cents) ? sum + cents : sum;
+  }, 0);
+
+  if (matches.length > 1) {
+    console.info(
+      `[meta CBO] Matched ${matches.length} campaigns containing "${campaignName}"; summing daily budgets:`,
+      matches.map(c => `${c.name} = $${parseInt(c.daily_budget, 10) / 100}`),
+    );
+  }
+
+  return {
+    dailyBudget: totalCents / 100,
+    campaignCount: matches.length,
+    campaignId: matches[0].id,
+    campaignName: matches.map(c => c.name).join(' + '),
+    status: matches[0].effective_status || matches[0].status,
+  };
 }
 
 // ─── Mercury (credentials in Supabase, calls via edge function proxy) ───────
@@ -634,31 +1147,191 @@ export async function syncMercuryActuals(/* creds unused — proxy holds creds *
  */
 export async function callPlaidProxy(action, payload = {}) {
   if (!IS_SUPABASE_ENABLED || !supabase) {
-    throw new Error('Supabase not configured — cannot reach the Plaid proxy');
+    const err = new Error('Supabase not configured — cannot reach the Plaid proxy');
+    err.diagnostic = { stage: 'config', action };
+    throw err;
   }
   const token = await getClerkToken();
-  if (!token) throw new Error('Sign in to use the Plaid proxy');
+  if (!token) {
+    const err = new Error('Sign in to use the Plaid proxy');
+    err.diagnostic = { stage: 'auth', action };
+    throw err;
+  }
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const url = `${supabaseUrl}/functions/v1/plaid-proxy`;
 
-  const res = await fetch(`${supabaseUrl}/functions/v1/bright-api`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      apikey: anonKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ action, ...payload }),
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: anonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ action, ...payload }),
+    });
+  } catch (netErr) {
+    // fetch() itself failed — network, CORS, DNS, or the edge function
+    // didn't return (e.g. timeout). The browser shows this as "Failed to
+    // fetch" with no further detail. Attach what we know so the UI can
+    // render something useful.
+    const err = new Error(`Network error reaching plaid-proxy: ${netErr.message}`);
+    err.diagnostic = {
+      stage: 'network',
+      action,
+      url,
+      cause: netErr.message,
+      hint: 'Edge function unreachable. Likely causes: supabase function not deployed, CORS preflight failure, function timeout (60s), or local network block.',
+    };
+    throw err;
+  }
+
   const text = await res.text();
   let data;
   try { data = JSON.parse(text); } catch { data = { raw: text }; }
   if (!res.ok) {
     const msg = data?.error || data?.errors || `${res.status} ${res.statusText}`;
-    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    const err = new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    err.diagnostic = {
+      stage: 'http',
+      action,
+      url,
+      status: res.status,
+      statusText: res.statusText,
+      body: data,
+    };
+    throw err;
   }
   return data;
+}
+
+/**
+ * End-to-end probe of the plaid-proxy edge function so the operator
+ * can see WHICH layer is failing without DevTools. Tests:
+ *
+ *   1. Project root      — does the Supabase project URL respond at
+ *                          all? If 404/000 here, the project is paused
+ *                          (free tier auto-pauses after 7d idle) or
+ *                          the project URL is wrong.
+ *   2. CORS preflight    — OPTIONS to plaid-proxy. Should return 204
+ *                          + Access-Control-Allow-Origin. If "Failed
+ *                          to fetch" here, the function isn't deployed
+ *                          or CORS is misconfigured.
+ *   3. Unauth POST       — POST with no body. Function should respond
+ *                          with 400/401/JSON-with-error and CORS
+ *                          headers. Proves the function is alive.
+ *   4. Authed POST       — POST with action='link-token/create'.
+ *                          Full round-trip including Clerk JWT auth +
+ *                          credential lookup + Plaid call.
+ *
+ * Each step captures status, response body, and any thrown error.
+ * Returns the full result for verbatim rendering.
+ */
+export async function probePlaidEdgeFunction() {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  const results = {
+    supabaseUrl,
+    steps: [],
+  };
+
+  async function step(name, hint, fn) {
+    const started = Date.now();
+    try {
+      const out = await fn();
+      results.steps.push({
+        name,
+        hint,
+        ok: out.ok !== false,
+        ...out,
+        elapsedMs: Date.now() - started,
+      });
+    } catch (err) {
+      results.steps.push({
+        name,
+        hint,
+        ok: false,
+        error: err.message,
+        elapsedMs: Date.now() - started,
+      });
+    }
+  }
+
+  await step(
+    '1. Project root reachable',
+    'Confirms the Supabase project is alive. If this fails, the project is most likely paused — free-tier Supabase projects auto-pause after 7 days of inactivity. Restore it in the Supabase dashboard.',
+    async () => {
+      const res = await fetch(`${supabaseUrl}/rest/v1/`, {
+        method: 'GET',
+        headers: { apikey: anonKey },
+      });
+      return { status: res.status, statusText: res.statusText };
+    },
+  );
+
+  await step(
+    '2. plaid-proxy CORS preflight',
+    'OPTIONS request to the function. Should return 200/204 with Access-Control-Allow-Origin. If this fails or the header is missing, the function is not deployed or its CORS handling is broken.',
+    async () => {
+      const res = await fetch(`${supabaseUrl}/functions/v1/plaid-proxy`, {
+        method: 'OPTIONS',
+        headers: {
+          'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers': 'authorization,apikey,content-type',
+        },
+      });
+      return {
+        status: res.status,
+        statusText: res.statusText,
+        accessControlAllowOrigin: res.headers.get('access-control-allow-origin'),
+        accessControlAllowMethods: res.headers.get('access-control-allow-methods'),
+      };
+    },
+  );
+
+  await step(
+    '3. plaid-proxy unauth POST',
+    'POST with the anon key but no Clerk JWT — the function should respond 401 with a JSON body. If "Failed to fetch", the function is crashing on startup or not deployed. If 401 JSON, the function is alive.',
+    async () => {
+      const res = await fetch(`${supabaseUrl}/functions/v1/plaid-proxy`, {
+        method: 'POST',
+        headers: { apikey: anonKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'link-token/create' }),
+      });
+      const text = await res.text();
+      let body;
+      try { body = JSON.parse(text); } catch { body = { raw: text.slice(0, 500) }; }
+      return { status: res.status, statusText: res.statusText, body };
+    },
+  );
+
+  await step(
+    '4. plaid-proxy authed POST (link-token/create)',
+    'Full round-trip with the user\'s Clerk JWT. If this succeeds, sync should work too. If it errors with a Plaid error code, that error is on the Plaid item itself (e.g. ITEM_LOGIN_REQUIRED).',
+    async () => {
+      const token = await getClerkToken();
+      if (!token) return { ok: false, status: null, error: 'No Clerk JWT — not signed in' };
+      const res = await fetch(`${supabaseUrl}/functions/v1/plaid-proxy`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'link-token/create' }),
+      });
+      const text = await res.text();
+      let body;
+      try { body = JSON.parse(text); } catch { body = { raw: text.slice(0, 500) }; }
+      return { status: res.status, statusText: res.statusText, body };
+    },
+  );
+
+  return results;
 }
 
 /** Returns a short-lived link_token that Plaid Link needs to open. */
@@ -714,25 +1387,58 @@ export async function syncPlaidActuals({ realTime = false } = {}) {
   let creditTotal = 0;
   const creditAccounts = [];
   const depositoryAccounts = [];
+  // Per-item errors from Plaid (e.g. ITEM_LOGIN_REQUIRED, INVALID_ACCESS_TOKEN).
+  // Plaid-proxy returns 200 with each item's accounts OR error inline so one
+  // bad item doesn't take down the whole sync. Surfacing them here so the UI
+  // can display "Mercury needs to be re-linked" rather than silently dropping
+  // every Mercury account.
+  const itemErrors = [];
 
   for (const item of items) {
-    if (item.error) continue;
+    if (item.error) {
+      itemErrors.push({
+        institution: item.institution_name || item.institution_id || item.item_id,
+        item_id: item.item_id,
+        error: item.error,
+      });
+      continue;
+    }
     for (const a of (item.accounts || [])) {
       const current = a.balances?.current ?? 0;
       const available = a.balances?.available ?? null;
       const limit = a.balances?.limit ?? null;
 
       if (a.type === 'depository') {
-        depositoryTotal += current;
+        // Depository accounts use AVAILABLE balance, not current. Plaid's
+        // `available` is current minus pending outflows + pending inflows
+        // — i.e. the actual spendable cash. The Mercury "Available" field
+        // in the dashboard matches this. Using `current` over-counts by
+        // including money already on its way out (e.g. the $1,283 wire
+        // that's pending on the 7301 fulfillment account).
+        const balance = available ?? current;
+        depositoryTotal += balance;
         depositoryAccounts.push({
           institution: item.institution_name,
           name: a.name,
           mask: a.mask,
           subtype: a.subtype,
-          balance: current,
+          balance,
+          // Raw values still surfaced for diagnostics — the cashflow
+          // engine uses `balance` (= available), but the integrations
+          // panel can show both if needed.
+          current,
           available,
         });
       } else if (a.type === 'credit') {
+        // Credit cards use `current` — the amount currently owed. We
+        // DO NOT use `available` here (available = limit - current,
+        // confusingly different semantic). Pending CHARGES (purchases
+        // not yet posted) are added separately via syncPlaidPendingCharges
+        // and summed into the cashflow's Ads Payable row, since `current`
+        // typically EXCLUDES pending purchases. Pending PAYMENTS (money
+        // moving from a depository account to the card) are ignored —
+        // the payment hasn't actually left yet, so we still owe the
+        // full balance.
         creditTotal += current;
         creditAccounts.push({
           institution: item.institution_name,
@@ -749,12 +1455,188 @@ export async function syncPlaidActuals({ realTime = false } = {}) {
 
   return {
     items,
+    itemErrors,
     totals: {
       depository: Math.round(depositoryTotal * 100) / 100,
       credit: Math.round(creditTotal * 100) / 100,
     },
     depositoryAccounts,
     creditAccounts,
+  };
+}
+
+/**
+ * Pulls the past 90 days of credit-card transactions for every connected
+ * Plaid item, filters to payments (transactions that REDUCE the card
+ * balance), and groups them by Monday-of-week per card.
+ *
+ * Returns: { 'YYYY-MM-DD': { chase5718?: number, amexBlue?: number, ... } }
+ *
+ * Used by the cashflow engine as the highest-precedence source for the
+ * card-payment outflow rows. Anything not covered by a real transaction
+ * falls through to the static schedule, then the rule-based generator.
+ */
+export async function syncPlaidCardPayments() {
+  const items = await listPlaidItems().catch(() => []);
+  if (!items?.length) return {};
+
+  // Map a Plaid credit account → cashflow card key by mask first, then by
+  // name pattern (catches AMEX Plum which Plaid surfaces without a mask).
+  // Inlined to avoid a dependency on bankAccountMap from this file.
+  const MASKS = { '5718': 'chase5718', '1005': 'amexBlue' };
+  const classify = (acc) => {
+    if (acc.mask && MASKS[acc.mask]) return MASKS[acc.mask];
+    const lc = (acc.name || '').toLowerCase();
+    if (lc.includes('plum')) return 'amexPlum';
+    if (lc.includes('blue')) return 'amexBlue';
+    if (lc.includes('chase')) return 'chase5718';
+    return null;
+  };
+
+  const mondayOf = (iso) => {
+    // Local-midnight parse — `new Date('YYYY-MM-DDT00:00:00')` is UTC in
+    // some browsers, which shifts the date by 1 day in negative timezones.
+    const [yy, mm, dd0] = iso.split('-').map(Number);
+    const d = new Date(yy, mm - 1, dd0);
+    const day = d.getDay();
+    d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+    // LOCAL ISO so the date matches getPast13Weeks / cashflow engine keys.
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  };
+
+  const out = {};
+  for (const item of items) {
+    let txData;
+    try {
+      txData = await callPlaidProxy('transactions/get', { item_id: item.item_id });
+    } catch (err) {
+      console.warn('[plaid] transactions/get failed for item', item.item_id, err.message);
+      continue;
+    }
+
+    // account_id → card key
+    const cardByAccountId = {};
+    for (const acc of (txData.accounts || [])) {
+      if (acc.type !== 'credit') continue;
+      const key = classify(acc);
+      if (key) cardByAccountId[acc.account_id] = key;
+    }
+    if (!Object.keys(cardByAccountId).length) continue;
+
+    for (const tx of (txData.transactions || [])) {
+      const cardKey = cardByAccountId[tx.account_id];
+      if (!cardKey) continue;
+      // A payment to a credit card lands on the card account as a NEGATIVE
+      // amount (credit reduces balance). Filter on amount sign + payment
+      // category / name pattern so we don't pick up refunds or chargebacks.
+      const isPayment = tx.amount < 0 && (
+        tx.category?.includes('Payment') ||
+        tx.payment_meta?.payee != null ||
+        /payment\s*(received|thank\s*you)/i.test(tx.name || '') ||
+        /autopay/i.test(tx.name || '')
+      );
+      if (!isPayment) continue;
+
+      const monday = mondayOf(tx.date);
+      if (!out[monday]) out[monday] = {};
+      out[monday][cardKey] = Math.round(((out[monday][cardKey] || 0) + Math.abs(tx.amount)) * 100) / 100;
+    }
+  }
+  return out;
+}
+
+/**
+ * Aggregates UNPOSTED (pending=true) transactions per credit-card account
+ * via Plaid's /transactions/get. Used by the Ads Payable row: today's row
+ * = chase7248 statement balance + chase7248 pending charges + Meta owed.
+ *
+ * Returns: { chase7248?: number, chase5718?: number, amexBlue?: number, amexPlum?: number }
+ *
+ * `tx.amount` for credit cards is POSITIVE for purchases (charges that
+ * increase the balance) and NEGATIVE for payments. We only sum positives
+ * here — pending refunds are intentionally excluded so the operator never
+ * underestimates what they owe.
+ */
+export async function syncPlaidPendingCharges() {
+  const { classifyCreditAccount } = await import('./bankAccountMap');
+  const items = await listPlaidItems().catch(() => []);
+  if (!items?.length) return {};
+
+  const out = {};
+  for (const item of items) {
+    let txData;
+    try {
+      txData = await callPlaidProxy('transactions/get', { item_id: item.item_id });
+    } catch (err) {
+      console.warn('[plaid pending] transactions/get failed for item', item.item_id, err.message);
+      continue;
+    }
+
+    const cardByAccountId = {};
+    for (const acc of (txData.accounts || [])) {
+      if (acc.type !== 'credit') continue;
+      const key = classifyCreditAccount(acc);
+      if (key) cardByAccountId[acc.account_id] = key;
+    }
+    if (!Object.keys(cardByAccountId).length) continue;
+
+    for (const tx of (txData.transactions || [])) {
+      if (!tx.pending) continue;
+      const cardKey = cardByAccountId[tx.account_id];
+      if (!cardKey) continue;
+      // Positive amount = purchase / charge on a credit card.
+      if (tx.amount > 0) {
+        out[cardKey] = Math.round(((out[cardKey] || 0) + tx.amount) * 100) / 100;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Pulls the current outstanding amount owed to Meta from the ad account
+ * details endpoint. `balance` is the unpaid balance in MINOR currency units
+ * (cents for USD). `amount_spent` is cumulative lifetime spend — we don't
+ * use it directly here, but it's returned for visibility.
+ *
+ * Returns null if the account doesn't expose `balance` (some accounts
+ * don't surface it via the v19 Graph API) or if the call fails — caller
+ * defaults to 0 in that case.
+ */
+export async function syncMetaBalanceOwed(creds) {
+  if (!creds?.connected || !creds.accountId) return null;
+  const accountId = creds.accountId.startsWith('act_') ? creds.accountId : `act_${creds.accountId}`;
+  let response;
+  try {
+    response = await callMetaProxy({
+      method: 'GET',
+      path: accountId,
+      body: { fields: 'balance,amount_spent,currency' },
+    });
+  } catch (err) {
+    if (creds.token) {
+      const url = `https://graph.facebook.com/v19.0/${accountId}?fields=balance,amount_spent,currency&access_token=${creds.token}`;
+      const res = await fetch(url);
+      response = await res.json();
+    } else {
+      throw err;
+    }
+  }
+  if (response?.error) throw new Error(response.error.message || 'Meta ad account API error');
+
+  const balanceMinor = response?.balance;
+  if (balanceMinor == null) return null;
+
+  const cents = typeof balanceMinor === 'string' ? parseInt(balanceMinor, 10) : balanceMinor;
+  if (!Number.isFinite(cents)) return null;
+
+  return {
+    balanceOwed: Math.round((cents / 100) * 100) / 100,
+    currency: response.currency || 'USD',
+    amountSpentLifetime: response.amount_spent != null ? parseFloat(response.amount_spent) / 100 : null,
   };
 }
 

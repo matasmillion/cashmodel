@@ -57,13 +57,19 @@ type MetricsRow = {
   spend: string;
   impressions: string;
   clicks: string;
+  frequency?: string;
   actions?: Array<{ action_type: string; value: string }>;
+  action_values?: Array<{ action_type: string; value: string }>;
+  video_p100_watched_actions?: Array<{ action_type: string; value: string }>;
 };
 
 async function fetchAdInsights(token: string, adMetaId: string, date: string): Promise<MetricsRow | null> {
   const params = new URLSearchParams({
     access_token: token,
-    fields: 'spend,impressions,clicks,actions',
+    // action_values gets us purchase $ for ROAS. video_p100_watched
+    // gets thruplay rate for retention diagnosis. frequency surfaces
+    // creative burnout (Meta's own >2.5 = problem heuristic).
+    fields: 'spend,impressions,clicks,frequency,actions,action_values,video_p100_watched_actions',
     time_range: JSON.stringify({ since: date, until: date }),
   });
   const url = `${META_API}/${adMetaId}/insights?${params.toString()}`;
@@ -77,16 +83,40 @@ async function fetchAdInsights(token: string, adMetaId: string, date: string): P
   }
 }
 
+// Statistical floor — below this many impressions, any kill/scale call
+// is just noise. Meta's own delivery diagnostics use ~3k as the
+// "delivering normally" cutoff.
+const KILL_IMPRESSION_FLOOR = 3000;
+const SCALE_IMPRESSION_FLOOR = 5000;
+// Dead-creative kill — if CTR is below 0.5% with enough impressions,
+// the hook is broken regardless of CPA. Meta's clothing-vertical
+// median CTR is ~1.0% (2026 industry benchmarks).
+const DEAD_CTR_THRESHOLD = 0.005;
+const DEAD_CTR_IMPRESSION_FLOOR = 1000;
+// Frequency cap — above this, audience is fatigued.
+const FATIGUE_FREQUENCY = 2.5;
+
 function computeRecommendation(
   cpa: number | null,
   cpaTarget: number | null,
   killMult: number,
   scaleThresh: number,
   impressions: number,
+  ctr: number | null,
+  frequency: number | null,
 ): string {
+  // Dead-creative kill fires earliest — bad hook, no point waiting for
+  // CPA signal.
+  if (ctr != null && impressions >= DEAD_CTR_IMPRESSION_FLOOR && ctr < DEAD_CTR_THRESHOLD) {
+    return 'kill_dead_creative';
+  }
+  // Audience fatigue — pause and refresh creative.
+  if (frequency != null && frequency > FATIGUE_FREQUENCY && impressions >= KILL_IMPRESSION_FLOOR) {
+    return 'pause_fatigued';
+  }
   if (cpa == null || cpaTarget == null) return '';
-  if (impressions >= 100 && cpa > cpaTarget * killMult) return 'kill';
-  if (impressions >= 200 && cpa < cpaTarget * scaleThresh) return 'scale';
+  if (impressions >= KILL_IMPRESSION_FLOOR && cpa > cpaTarget * killMult) return 'kill';
+  if (impressions >= SCALE_IMPRESSION_FLOOR && cpa < cpaTarget * scaleThresh) return 'scale';
   return '';
 }
 
@@ -132,11 +162,23 @@ async function evaluateForOrg(
     const spend = parseFloat(insight.spend || '0');
     const impressions = parseInt(insight.impressions || '0', 10);
     const clicks = parseInt(insight.clicks || '0', 10);
+    const frequency = insight.frequency != null ? parseFloat(insight.frequency) : null;
+    // Conversions count (purchase events).
     const conversions = (insight.actions || [])
-      .filter(a => /purchase|complete_registration|lead/i.test(a.action_type))
+      .filter(a => /^(omni_)?purchase$|complete_registration|^lead$/i.test(a.action_type))
       .reduce((sum, a) => sum + parseInt(a.value, 10), 0);
-    const cpa = conversions > 0 ? spend / conversions : null;
-    const ctr = impressions > 0 ? clicks / impressions : null;
+    // Conversion value $ for ROAS.
+    const conversionValue = (insight.action_values || [])
+      .filter(a => /^(omni_)?purchase$/i.test(a.action_type))
+      .reduce((sum, a) => sum + parseFloat(a.value), 0);
+    // 15-second video completions for thruplay rate.
+    const thruplays = (insight.video_p100_watched_actions || [])
+      .reduce((sum, a) => sum + parseInt(a.value, 10), 0);
+
+    const cpa  = conversions > 0 ? spend / conversions : null;
+    const ctr  = impressions > 0 ? clicks / impressions : null;
+    const roas = spend > 0 && conversionValue > 0 ? conversionValue / spend : null;
+    const thruplayRate = impressions > 0 ? thruplays / impressions : null;
 
     // Insert metrics_daily (idempotent via UNIQUE constraint)
     await db
@@ -151,6 +193,9 @@ async function evaluateForOrg(
         conversions,
         cpa,
         ctr,
+        roas,
+        frequency,
+        thruplay_rate: thruplayRate,
       }, { onConflict: 'ad_id,date' });
 
     // Apply thresholds + write recommendation
@@ -161,6 +206,8 @@ async function evaluateForOrg(
       sprint.kill_multiplier || 1.5,
       sprint.scale_threshold || 0.7,
       impressions,
+      ctr,
+      frequency,
     );
 
     await db
@@ -171,6 +218,9 @@ async function evaluateForOrg(
         clicks,
         conversions,
         cpa,
+        roas,
+        frequency,
+        thruplay_rate: thruplayRate,
         recommendation,
       })
       .eq('id', ad.id);

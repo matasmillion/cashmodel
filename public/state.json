@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-09T17:47:33.298Z",
+  "lastUpdated": "2026-05-22T17:56:33.495Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -793,7 +793,7 @@
         "cost": 116,
         "category": "Mandatory",
         "active": true,
-        "billingDate": null
+        "billingDate": 20
       },
       {
         "id": "clo3d",
@@ -854,7 +854,7 @@
       "Revenue/Cost",
       "Luxury"
     ],
-    "billingDatesConfigured": 15
+    "billingDatesConfigured": 16
   },
   "fulfillment": {
     "status": "partial",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "f1ef1ba",
+      "date": "2026-05-10T12:11:55+00:00",
+      "message": "cut-sew: rebuild builder to match TechPackBuilder 3-column layout"
+    },
+    {
+      "sha": "8e1e53e",
+      "date": "2026-05-09T17:50:27+00:00",
+      "message": "fix: resolve merge conflict markers left in CutSewBuilder.jsx"
+    },
+    {
       "sha": "b857010",
       "date": "2026-05-09T17:21:25+00:00",
       "message": "Merge origin/main — resolve CutSewBuilder.jsx conflict (keep 7-tab rebuild)"
@@ -1082,16 +1092,6 @@
       "sha": "db9802a",
       "date": "2026-05-09T19:54:32+03:00",
       "message": "Inventory Phase 6: Forecast tab — assumptions strip, bridge chart, calendar (#105)"
-    },
-    {
-      "sha": "309e662",
-      "date": "2026-05-09T19:52:08+03:00",
-      "message": "cut-sew: 2-col builder with sticky live BOM preview + autosave (#104)"
-    },
-    {
-      "sha": "e213658",
-      "date": "2026-05-09T16:51:47+00:00",
-      "message": "cut-sew: 2-col builder with sticky CutSewBOMPreview + autosave"
     }
   ]
 }

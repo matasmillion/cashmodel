@@ -11,13 +11,15 @@ import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, AspectPhoto,
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
 import { addSupplier } from '../../utils/plmDirectory';
 import { getFRColor } from '../../utils/colorLibrary';
-import { listTreatments, getTreatmentRollups } from '../../utils/treatmentStore';
+import { listTreatments, getTreatmentRollups, createTreatment } from '../../utils/treatmentStore';
 import { TREATMENT_TYPE_LABEL } from '../../utils/treatmentLibrary';
+import { listEmbellishments, createEmbellishment } from '../../utils/embellishmentStore';
 import { computePackDiff } from '../../utils/techPackDiff';
 import { useApp } from '../../context/AppContext';
 import { analyzeGarmentImage, generateGarmentView, imageEntryToDataUrl } from '../../utils/techPackViews';
 import { StepFabrics, StepTrims, StepPackaging } from './TechPackBOMSteps';
 import { estimateLaborCost } from '../../utils/aiLaborCost';
+import CutSewCostChat from './CutSewCostChat';
 import { getVendor } from '../../utils/vendorLibrary';
 
 const COST_TIER_CAP = 5;
@@ -1053,110 +1055,103 @@ export function StepDesignOverview({ data, set, images, onUpload, onRemove }) {
   );
 }
 
+// Compact inline dropdown bar for loading a library block into a step.
+// `items` should be null (loading) or an array; `onSelect(item)` is called
+// with the chosen item. Resets to the placeholder immediately after selection.
+function LibraryDropdownBar({ label, items, getLabel, onSelect, linkedLabel, placeholder }) {
+  return (
+    <div style={{ marginBottom: 12, padding: '8px 12px', background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 6, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 10, color: FR.soil, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap' }}>
+        {label}
+      </span>
+      {linkedLabel && (
+        <span style={{ fontSize: 10, color: FR.stone, fontFamily: "ui-monospace, Menlo, monospace", flex: 1, minWidth: 0 }}>
+          {linkedLabel}
+        </span>
+      )}
+      <select
+        value=""
+        onChange={e => {
+          const id = e.target.value;
+          if (!id || !items) return;
+          const item = items.find(x => x.id === id);
+          if (item) onSelect(item);
+        }}
+        disabled={!items}
+        style={{ padding: '5px 8px', border: `1px solid ${FR.sand}`, borderRadius: 4, fontSize: 11, color: FR.slate, background: FR.salt, cursor: items ? 'pointer' : 'wait', minWidth: 160, maxWidth: 320 }}
+      >
+        <option value="">{!items ? 'Loading…' : (placeholder || '— Load from library —')}</option>
+        {(items || []).map(item => (
+          <option key={item.id} value={item.id}>{getLabel(item)}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+// Applies a cut & sew library block's construction data to tech pack fields.
+// Called from both StepConstruction (seams/pattern) and StepFlatlays (images).
+function applyCutSewBlock(block, set, { onSeedImages } = {}) {
+  if (block.flat_lay_notes) set('flatLayNotes', block.flat_lay_notes);
+  if (block.callout_details_page1?.length) set('constructionDetailsPage1', block.callout_details_page1.map(d => ({ num: d.num, title: d.title || '', description: d.description || '' })));
+  if (block.callout_details_page2?.length) set('constructionDetailsPage2', block.callout_details_page2.map(d => ({ num: d.num, title: d.title || '', description: d.description || '' })));
+  if (block.seam_stitch_blocks?.length) set('seamStitchBlocks', block.seam_stitch_blocks.map(b => ({ num: b.num, label: b.label || '', hidden: b.hidden || false })));
+  if (block.seams?.length) set('seams', block.seams.map(s => ({ operation: s.operation || '', seamType: s.seam_type || '', stitchType: s.stitch_type || '', machine: s.machine || '', spiSpcm: s.spi_spcm || '', threadColor: s.thread_color || '', threadType: s.thread_type || '', notes: s.notes || '' })));
+  if (block.labor_cost_usd) set('cutSewLaborCost', String(block.labor_cost_usd));
+  if (block.pattern_pieces?.length) set('patternPieces', block.pattern_pieces.map(p => ({ pieceNum: p.piece_num || '', pieceName: p.piece_name || '', quantity: p.quantity || '', fabric: p.fabric || '', grain: p.grain || '', fusing: p.fusing || '', notes: p.notes || '' })));
+  if (block.cutting_instructions) set('cuttingInstructions', block.cutting_instructions);
+  if (block.pom_rows?.length) set('poms', block.pom_rows.map(r => ({ name: r.name || '', tol: r.tol || '1', s: r.s || '', m: r.m || '', l: r.l || '', xl: r.xl || '', method: r.method || '' })));
+  if (block.pom_size_type) set('sizeType', block.pom_size_type);
+  if (block.pom_measurement_method) set('measurementMethod', block.pom_measurement_method);
+  if (block.graded_size_matrix?.grading?.length) set('gradedSizeMatrix', block.graded_size_matrix);
+  set('pickedCutSewBlockId', block.id);
+  if (onSeedImages) {
+    const imageMap = {};
+    if (block.flat_lay_front_url) imageMap['flatlay-front'] = block.flat_lay_front_url;
+    if (block.flat_lay_back_url) imageMap['flatlay-back'] = block.flat_lay_back_url;
+    if (block.callout_ref_page1_url) imageMap['sketch-callout-page1'] = block.callout_ref_page1_url;
+    if (block.callout_ref_page2_url) imageMap['sketch-callout-page2'] = block.callout_ref_page2_url;
+    (block.callout_details_page1 || []).forEach(d => { if (d.image_url) imageMap[`construction-detail-${d.num}`] = d.image_url; });
+    (block.callout_details_page2 || []).forEach(d => { if (d.image_url) imageMap[`construction-detail-${d.num}`] = d.image_url; });
+    (block.seam_stitch_blocks || []).forEach(b => { if (b.image_url) imageMap[`seam-stitch-${b.num}`] = b.image_url; });
+    if (block.pattern_layout_url) imageMap['pattern-layout'] = block.pattern_layout_url;
+    if (block.pom_diagram_url) imageMap['pom-diagram'] = block.pom_diagram_url;
+    onSeedImages(imageMap);
+  }
+}
+
 export function StepFlatlays({ data, set, images, onUpload, onRemove, onSeedImages }) {
-  const [blocks, setBlocks] = useState(null); // null = not loaded yet
+  const [blocks, setBlocks] = useState(null);
   const [seeding, setSeeding] = useState(false);
-  const [seedOpen, setSeedOpen] = useState(false);
 
-  const loadBlocks = async () => {
-    if (blocks !== null) { setSeedOpen(true); return; }
-    const { listCutSew } = await import('../../utils/cutSewStore');
-    const rows = await listCutSew({ includeArchived: false });
-    setBlocks(rows || []);
-    setSeedOpen(true);
-  };
+  useEffect(() => {
+    import('../../utils/cutSewStore').then(({ listCutSew }) =>
+      listCutSew({ includeArchived: false }).then(rows => setBlocks(rows || []))
+    );
+  }, []);
 
-  const applyBlock = async (block) => {
+  const applyBlock = (block) => {
     setSeeding(true);
-    setSeedOpen(false);
-    try {
-      // Seed text / table data fields (camelCase = tech pack convention)
-      if (block.flat_lay_notes) set('flatLayNotes', block.flat_lay_notes);
-      if (block.callout_details_page1?.length) set('constructionDetailsPage1', block.callout_details_page1.map(d => ({ num: d.num, title: d.title || '', description: d.description || '' })));
-      if (block.callout_details_page2?.length) set('constructionDetailsPage2', block.callout_details_page2.map(d => ({ num: d.num, title: d.title || '', description: d.description || '' })));
-      if (block.seam_stitch_blocks?.length) set('seamStitchBlocks', block.seam_stitch_blocks.map(b => ({ num: b.num, label: b.label || '', hidden: b.hidden || false })));
-      if (block.seams?.length) set('seams', block.seams.map(s => ({ operation: s.operation || '', seamType: s.seam_type || '', stitchType: s.stitch_type || '', machine: s.machine || '', spiSpcm: s.spi_spcm || '', threadColor: s.thread_color || '', threadType: s.thread_type || '', notes: s.notes || '' })));
-      if (block.labor_cost_usd) set('cutSewLaborCost', String(block.labor_cost_usd));
-      if (block.pattern_pieces?.length) set('patternPieces', block.pattern_pieces.map(p => ({ pieceNum: p.piece_num || '', pieceName: p.piece_name || '', quantity: p.quantity || '', fabric: p.fabric || '', grain: p.grain || '', fusing: p.fusing || '', notes: p.notes || '' })));
-      if (block.cutting_instructions) set('cuttingInstructions', block.cutting_instructions);
-      if (block.pom_rows?.length) set('poms', block.pom_rows.map(r => ({ name: r.name || '', tol: r.tol || '1', s: r.s || '', m: r.m || '', l: r.l || '', xl: r.xl || '', method: r.method || '' })));
-      if (block.pom_size_type) set('sizeType', block.pom_size_type);
-      if (block.pom_measurement_method) set('measurementMethod', block.pom_measurement_method);
-      if (block.graded_size_matrix?.grading?.length) set('gradedSizeMatrix', block.graded_size_matrix);
-      set('pickedCutSewBlockId', block.id);
-
-      // Seed images — inject library asset paths into the tech pack images array
-      if (onSeedImages) {
-        const imageMap = {};
-        if (block.flat_lay_front_url) imageMap['flatlay-front'] = block.flat_lay_front_url;
-        if (block.flat_lay_back_url) imageMap['flatlay-back'] = block.flat_lay_back_url;
-        if (block.callout_ref_page1_url) imageMap['sketch-callout-page1'] = block.callout_ref_page1_url;
-        if (block.callout_ref_page2_url) imageMap['sketch-callout-page2'] = block.callout_ref_page2_url;
-        (block.callout_details_page1 || []).forEach(d => { if (d.image_url) imageMap[`construction-detail-${d.num}`] = d.image_url; });
-        (block.callout_details_page2 || []).forEach(d => { if (d.image_url) imageMap[`construction-detail-${d.num}`] = d.image_url; });
-        (block.seam_stitch_blocks || []).forEach(b => { if (b.image_url) imageMap[`seam-stitch-${b.num}`] = b.image_url; });
-        if (block.pattern_layout_url) imageMap['pattern-layout'] = block.pattern_layout_url;
-        if (block.pom_diagram_url) imageMap['pom-diagram'] = block.pom_diagram_url;
-        onSeedImages(imageMap);
-      }
-    } finally {
-      setSeeding(false);
-    }
+    try { applyCutSewBlock(block, set, { onSeedImages }); }
+    finally { setSeeding(false); }
   };
 
-  const linkedBlockName = data.pickedCutSewBlockId && blocks
-    ? blocks.find(b => b.id === data.pickedCutSewBlockId)?.name || data.pickedCutSewBlockId
+  const linkedName = data.pickedCutSewBlockId && blocks
+    ? (blocks.find(b => b.id === data.pickedCutSewBlockId)?.name || data.pickedCutSewBlockId)
     : null;
 
   return (
     <div>
       <SectionTitle>Flat Lay</SectionTitle>
 
-      {/* Seed from library block */}
-      <div style={{ marginBottom: 16, padding: '10px 14px', background: '#fff', border: `0.5px solid ${FR.sand}`, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: FR.slate, marginBottom: 2 }}>Cut &amp; Sew Library Block</div>
-          {data.pickedCutSewBlockId
-            ? <div style={{ fontSize: 10, color: FR.stone }}>Seeded from: <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', color: FR.slate }}>{linkedBlockName || data.pickedCutSewBlockId}</span></div>
-            : <div style={{ fontSize: 10, color: FR.stone, fontStyle: 'italic' }}>No block linked — data entered manually or seed from library below.</div>
-          }
-        </div>
-        <button
-          onClick={loadBlocks}
-          disabled={seeding}
-          style={{ padding: '6px 14px', background: FR.slate, color: '#fff', border: 'none', borderRadius: 5, fontSize: 11, cursor: seeding ? 'default' : 'pointer', opacity: seeding ? 0.6 : 1, fontWeight: 500, whiteSpace: 'nowrap' }}
-        >
-          {seeding ? 'Seeding…' : 'Seed from block…'}
-        </button>
-      </div>
-
-      {/* Block picker */}
-      {seedOpen && (
-        <div style={{ marginBottom: 16, padding: 12, background: FR.salt, border: `0.5px solid ${FR.sand}`, borderRadius: 6 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: FR.slate }}>Pick a block to seed from:</span>
-            <button onClick={() => setSeedOpen(false)} style={{ background: 'none', border: 'none', color: FR.stone, cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 0 }}>×</button>
-          </div>
-          {(blocks || []).length === 0
-            ? <div style={{ fontSize: 11, color: FR.stone, fontStyle: 'italic' }}>No cut & sew blocks in the library yet.</div>
-            : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 220, overflowY: 'auto' }}>
-                {(blocks || []).map(b => (
-                  <button
-                    key={b.id}
-                    onClick={() => applyBlock(b)}
-                    style={{ textAlign: 'left', padding: '8px 12px', border: `0.5px solid ${FR.sand}`, borderRadius: 4, background: '#fff', cursor: 'pointer', fontSize: 11, color: FR.slate, display: 'flex', gap: 10, alignItems: 'center' }}
-                  >
-                    <span style={{ fontWeight: 600 }}>{b.name || 'Untitled'}</span>
-                    <span style={{ color: FR.stone, fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 10 }}>{b.code}</span>
-                    <span style={{ color: FR.stone, fontSize: 10 }}>{b.version}</span>
-                  </button>
-                ))}
-              </div>
-            )
-          }
-        </div>
-      )}
+      <LibraryDropdownBar
+        label="Garment Block"
+        items={seeding ? null : blocks}
+        getLabel={b => [b.category, b.name || b.code].filter(Boolean).join(' · ')}
+        onSelect={applyBlock}
+        linkedLabel={linkedName ? `Linked: ${linkedName}` : 'No block linked — or select one above to auto-populate construction data.'}
+        placeholder="— Select garment block —"
+      />
 
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, fontStyle: 'italic' }}>
         Front and back technical flats. Each maximised to A4 landscape so callouts stay legible on the printed page.
@@ -1449,10 +1444,23 @@ export function StepColor({ data, set }) {
 }
 
 export function StepArtwork({ data, set, images, onUpload, onRemove }) {
-  const placements = data.artworkPlacements && data.artworkPlacements.length ? data.artworkPlacements : [{ placement: '', artworkFile: '', method: '', sizeCm: '', positionFrom: '', color: '', notes: '' }];
+  const emptyAP = { placement: '', artworkFile: '', method: '', sizeCm: '', positionFrom: '', color: '', notes: '', cost_per_unit_usd: '', embellishment_id: '' };
+  const placements = data.artworkPlacements && data.artworkPlacements.length ? data.artworkPlacements : [emptyAP];
   const updateAP = (i, k, v) => set('artworkPlacements', placements.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
-  const addAP = () => set('artworkPlacements', [...placements, { placement: '', artworkFile: '', method: '', sizeCm: '', positionFrom: '', color: '', notes: '' }]);
+  const patchAP = (i, patch) => set('artworkPlacements', placements.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  const addAP = () => set('artworkPlacements', [...placements, emptyAP]);
   const rmAP = (i) => set('artworkPlacements', placements.filter((_, idx) => idx !== i));
+
+  const [elib, setElib] = useState([]);
+  const [elibTick, setElibTick] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    listEmbellishments({ includeArchived: true }).then(rows => {
+      if (!cancelled) setElib(rows || []);
+    });
+    return () => { cancelled = true; };
+  }, [elibTick]);
+  const refreshElib = () => setElibTick(t => t + 1);
 
   const frColorRender = (v, onChange) => <FRColorCell value={v} onChange={onChange} />;
 
@@ -1481,6 +1489,16 @@ export function StepArtwork({ data, set, images, onUpload, onRemove }) {
 
       <div style={{ marginBottom: 10 }}>
         <label style={sectionLabel}>Placement Detail</label>
+        <p style={{ fontSize: 11, color: FR.stone, marginTop: -4, marginBottom: 6, fontStyle: 'italic' }}>
+          Each placement carries a per-unit cost that rolls into the Embellishments total. Save the row to the Embellishments library to reuse the artwork across packs.
+        </p>
+        <LibraryDropdownBar
+          label="Add from library"
+          items={elib.length ? elib : null}
+          getLabel={a => [a.technique, a.name || a.code].filter(Boolean).join(' · ')}
+          onSelect={atom => set('artworkPlacements', [...(data.artworkPlacements || []), { placement: atom.placement || atom.name || '', method: atom.technique || '', sizeCm: (atom.size_w_cm && atom.size_h_cm) ? `${atom.size_w_cm} × ${atom.size_h_cm}` : '', notes: atom.notes || '', cost_per_unit_usd: atom.cost_per_unit_usd || '', embellishment_id: atom.id }])}
+          placeholder="— Add embellishment from library —"
+        />
         <ArrayTable
           headers={[
             { key: 'placement',    label: 'Placement',    placeholder: 'Center chest / Back yoke' },
@@ -1490,6 +1508,30 @@ export function StepArtwork({ data, set, images, onUpload, onRemove }) {
             { key: 'positionFrom', label: 'Position From',placeholder: '12 cm below HPS' },
             { key: 'color',        label: 'Color',        render: frColorRender },
             { key: 'notes',        label: 'Notes' },
+            { key: 'cost_per_unit_usd', label: 'Cost / unit', render: (v, onChange, row) => (
+              <CostCell row={row} value={v} onChange={onChange} linked={row.embellishment_id ? elib.find(a => a.id === row.embellishment_id) : null} />
+            )},
+            { key: 'embellishment_id', label: 'Library', render: (_v, _onChange, row, ri) => (
+              <LibraryLinkCell
+                row={row} rowIndex={ri} idField="embellishment_id"
+                atoms={elib} atomLabel="Embellishments" nameField="placement"
+                onPatchRow={patchAP}
+                onCreate={async (r) => createEmbellishment({
+                  // Pick a sensible type from the method field; falls back
+                  // to embroidery as the most common default for FR.
+                  type: /screen|print/i.test(r.method || '') ? 'screen_print'
+                      : /heat/i.test(r.method || '') ? 'heat_transfer'
+                      : /patch/i.test(r.method || '') ? 'patch'
+                      : 'embroidery',
+                  name: r.placement || r.artworkFile || 'Untitled embellishment',
+                  technique: r.method || '',
+                  placement: r.placement || '',
+                  notes: r.notes || '',
+                  cost_per_unit_usd: parseFloat(r.cost_per_unit_usd) || 0,
+                })}
+                onCreated={refreshElib}
+              />
+            )},
           ]}
           rows={placements} onUpdate={updateAP} onAdd={addAP} onRemove={rmAP} />
       </div>
@@ -1623,13 +1665,21 @@ function CutSewLaborCostBlock({ data, set, sectionLabel }) {
         </div>
       )}
       <div style={{ fontSize: 11, color: FR.stone, lineHeight: 1.4 }}>
-        Total stitching labor charged by the factory per garment. Click Estimate with AI to anchor the value against the vendor's region and the garment's complexity, then override manually if you have a real quote. Rolls into the Cut &amp; Sew phase pill in the sidebar and the unit-cost total in the header.
+        <strong style={{ color: FR.slate, fontWeight: 600 }}>CMT-only — conversion labor.</strong> Cutting, sewing, finishing, packing, factory overhead. <strong>Excludes</strong> fabric, trims, packaging, treatments, embellishments, and vendor markup % — those live on their own tech-pack steps and roll up separately, so adding them here would double-count. Click Estimate with AI to anchor against the vendor's region or SAM rate, then override manually if you have a real quote.
       </div>
     </div>
   );
 }
 
 export function StepConstruction({ data, set, images, onUpload, onRemove }) {
+  const [cutSewBlocks, setCutSewBlocks] = useState(null);
+
+  useEffect(() => {
+    import('../../utils/cutSewStore').then(({ listCutSew }) =>
+      listCutSew({ includeArchived: false }).then(rows => setCutSewBlocks(rows || []))
+    );
+  }, []);
+
   const seams = data.seams && data.seams.length ? data.seams : [{ operation: '', seamType: '', stitchType: '', machine: '', spiSpcm: '', threadColor: '', threadType: '', notes: '' }];
   const updS = (i, k, v) => set('seams', seams.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
   const addS = () => set('seams', [...seams, { operation: '', seamType: '', stitchType: '', machine: '', spiSpcm: '', threadColor: '', threadType: '', notes: '' }]);
@@ -1654,9 +1704,22 @@ export function StepConstruction({ data, set, images, onUpload, onRemove }) {
   const threadColorRender = (v, onChange) => <FRColorCell value={v} onChange={onChange} />;
   const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
 
+  const linkedBlockName = data.pickedCutSewBlockId && cutSewBlocks
+    ? (cutSewBlocks.find(b => b.id === data.pickedCutSewBlockId)?.name || data.pickedCutSewBlockId)
+    : null;
+
   return (
     <div>
       <SectionTitle>Stitching</SectionTitle>
+
+      <LibraryDropdownBar
+        label="Garment Block"
+        items={cutSewBlocks}
+        getLabel={b => [b.category, b.name || b.code].filter(Boolean).join(' · ')}
+        onSelect={block => applyCutSewBlock(block, set)}
+        linkedLabel={linkedBlockName ? `Linked: ${linkedBlockName}` : null}
+        placeholder="— Select garment block to auto-populate —"
+      />
 
       {/* Stitch reference image blocks — up to six modular 2:3 vertical cells,
           one per stitch the factory will run. Labels (e.g. "401 Coverstitch")
@@ -1729,6 +1792,7 @@ export function StepConstruction({ data, set, images, onUpload, onRemove }) {
       </div>
 
       <CutSewLaborCostBlock data={data} set={set} sectionLabel={sectionLabel} />
+      <CutSewCostChat data={data} set={set} sectionLabel={sectionLabel} />
     </div>
   );
 }
@@ -2209,6 +2273,125 @@ function LinkedTreatmentCard({ treatment, components, rollups }) {
   );
 }
 
+// Cost cell — number input prefixed with "$", stored as string on the row
+// and coerced to Number at roll-up time. Read-only with a small "lib"
+// chip when the row is linked to a library atom (cost flows from the
+// library entry, so editing on the row would silently desync).
+function CostCell({ row, value, onChange, linked }) {
+  if (linked) {
+    const libCost = parseFloat(linked.cost_per_unit_usd) || 0;
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: FR.slate, fontFamily: "'Helvetica Neue',sans-serif" }}>
+        <span style={{ color: FR.stone }}>$</span>
+        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{libCost.toFixed(2)}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 8, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.4 }}>lib</span>
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      <span style={{ color: FR.stone, fontSize: 10 }}>$</span>
+      <input
+        type="number" step="0.01" min="0"
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        placeholder="0.00"
+        style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box', fontVariantNumeric: 'tabular-nums' }} />
+    </div>
+  );
+}
+
+// Library link cell — when row.{idField} is set, shows the linked atom's
+// code with an unlink × button (cost flows from the library entry).
+// Otherwise shows a dropdown of matching-type atoms plus a "+ Save row as
+// new" option that promotes the current row's fields into a library atom.
+function LibraryLinkCell({
+  row,
+  rowIndex,
+  idField,             // 'treatment_id' or 'embellishment_id'
+  atoms,               // pre-filtered list of matching atoms
+  atomLabel = 'Library',
+  nameField = 'name',  // which row field is the primary display name
+  onPatchRow,          // (rowIndex, patch) => void
+  onCreate,            // async (rowData) => createdAtom — caller decides type/shape
+  onCreated,           // () => void — caller refreshes its atom list
+}) {
+  const [busy, setBusy] = useState(false);
+  const linkedId = row?.[idField] || '';
+  const linked = linkedId ? atoms.find(a => a.id === linkedId) : null;
+
+  if (linked) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ fontFamily: 'ui-monospace, SF Mono, Menlo, monospace', fontSize: 10, color: FR.soil, fontWeight: 600 }}>
+          {linked.code || '—'}
+        </span>
+        <button
+          type="button"
+          onClick={() => onPatchRow(rowIndex, { [idField]: '' })}
+          title="Unlink from library"
+          style={{ background: 'none', border: 'none', color: FR.stone, fontSize: 12, cursor: 'pointer', padding: 0, lineHeight: 1 }}>
+          ×
+        </button>
+      </div>
+    );
+  }
+
+  const hasRowContent = !!(row?.[nameField] || row?.treatment || row?.technique);
+
+  return (
+    <select
+      value=""
+      disabled={busy}
+      onChange={async e => {
+        const val = e.target.value;
+        e.target.value = ''; // reset dropdown after action
+        if (!val) return;
+        if (val === '__new__') {
+          if (!hasRowContent) {
+            alert(`Add a name to this row before saving to the ${atomLabel} library.`);
+            return;
+          }
+          setBusy(true);
+          try {
+            const created = await onCreate(row);
+            if (created?.id) {
+              onPatchRow(rowIndex, { [idField]: created.id });
+              if (onCreated) onCreated();
+            }
+          } catch (err) {
+            console.error('save to library:', err);
+            alert(`Could not save to ${atomLabel} library — see console for details.`);
+          } finally {
+            setBusy(false);
+          }
+          return;
+        }
+        const picked = atoms.find(a => a.id === val);
+        if (!picked) return;
+        const cost = parseFloat(picked.cost_per_unit_usd) || 0;
+        onPatchRow(rowIndex, {
+          [idField]: picked.id,
+          [nameField]: picked.name || row[nameField] || '',
+          cost_per_unit_usd: cost,
+        });
+      }}
+      style={{ width: '100%', border: 'none', background: 'transparent', fontSize: 10, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box', cursor: busy ? 'wait' : 'pointer' }}>
+      <option value="">{busy ? 'Saving…' : '—'}</option>
+      {atoms.length > 0 && <optgroup label={`Pick from ${atomLabel} library`}>
+        {atoms.map(a => (
+          <option key={a.id} value={a.id}>
+            {a.code ? `${a.code} · ` : ''}{a.name || 'Untitled'}
+          </option>
+        ))}
+      </optgroup>}
+      <option value="__new__" disabled={!hasRowContent}>
+        {hasRowContent ? '+ Save row as new' : '(fill row first)'}
+      </option>
+    </select>
+  );
+}
+
 export function StepTreatments({ data, set, images, onUpload, onRemove }) {
   // Resolve `treatment_id` selections from BOM fabric rows into rich cards
   // (name, code, process summary, drift) so the designer sees what the
@@ -2216,6 +2399,7 @@ export function StepTreatments({ data, set, images, onUpload, onRemove }) {
   // surface; clearing the link happens on the BOM page.
   const [tlib, setTlib] = useState([]);
   const [rollupsById, setRollupsById] = useState({});
+  const [tlibTick, setTlibTick] = useState(0);
 
   const linked = (() => {
     const byId = new Map();
@@ -2235,7 +2419,8 @@ export function StepTreatments({ data, set, images, onUpload, onRemove }) {
       if (!cancelled) setTlib(rows || []);
     });
     return () => { cancelled = true; };
-  }, []);
+  }, [tlibTick]);
+  const refreshTlib = () => setTlibTick(t => t + 1);
 
   useEffect(() => {
     let cancelled = false;
@@ -2249,15 +2434,32 @@ export function StepTreatments({ data, set, images, onUpload, onRemove }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linked.map(l => l.id).join('|')]);
 
-  const treatments = data.treatments && data.treatments.length ? data.treatments : [{ step: '', treatment: '', process: '', temperature: '', duration: '', chemicals: '', notes: '' }];
+  const emptyWashDye = { step: '', treatment: '', process: '', temperature: '', duration: '', chemicals: '', notes: '', cost_per_unit_usd: '', treatment_id: '' };
+  const treatments = data.treatments && data.treatments.length ? data.treatments : [emptyWashDye];
   const updT = (i, k, v) => set('treatments', treatments.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
-  const addT = () => set('treatments', [...treatments, { step: '', treatment: '', process: '', temperature: '', duration: '', chemicals: '', notes: '' }]);
+  const patchT = (i, patch) => set('treatments', treatments.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  const addT = () => set('treatments', [...treatments, emptyWashDye]);
   const rmT  = (i) => set('treatments', treatments.filter((_, idx) => idx !== i));
 
-  const distressing = data.distressing && data.distressing.length ? data.distressing : [{ area: '', technique: '', intensity: '', referenceImage: '', notes: '' }];
+  const emptyDistress = { area: '', technique: '', intensity: '', referenceImage: '', notes: '', cost_per_unit_usd: '', treatment_id: '' };
+  const distressing = data.distressing && data.distressing.length ? data.distressing : [emptyDistress];
   const updD = (i, k, v) => set('distressing', distressing.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
-  const addD = () => set('distressing', [...distressing, { area: '', technique: '', intensity: '', referenceImage: '', notes: '' }]);
+  const patchD = (i, patch) => set('distressing', distressing.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  const addD = () => set('distressing', [...distressing, emptyDistress]);
   const rmD  = (i) => set('distressing', distressing.filter((_, idx) => idx !== i));
+
+  const emptyWashType = { name: '', notes: '', cost_per_unit_usd: '', treatment_id: '' };
+  const washTypeRows = (data.treatmentWashTypes && data.treatmentWashTypes.length) ? data.treatmentWashTypes : [emptyWashType];
+  const updWT = (i, k, v) => set('treatmentWashTypes', washTypeRows.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const patchWT = (i, patch) => set('treatmentWashTypes', washTypeRows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  const addWT = () => set('treatmentWashTypes', [...washTypeRows, emptyWashType]);
+  const rmWT  = (i) => set('treatmentWashTypes', washTypeRows.filter((_, idx) => idx !== i));
+
+  const washAtoms = tlib.filter(t => t.type === 'wash');
+  // Wash & Dye step accepts wash + both dye families — operators pick the
+  // right family from a combined list rather than guessing the type field.
+  const washDyeAtoms = tlib.filter(t => t.type === 'wash' || t.type === 'garment_dye' || t.type === 'piece_dye');
+  const finishAtoms = tlib.filter(t => t.type === 'finish' || t.type === 'distress');
 
   const intensityRender = (v, onChange) => (
     <select value={v || ''} onChange={e => onChange(e.target.value)}
@@ -2291,17 +2493,41 @@ export function StepTreatments({ data, set, images, onUpload, onRemove }) {
       <div style={{ marginBottom: 22 }}>
         <label style={sectionLabel}>Wash Types</label>
         <p style={{ fontSize: 11, color: FR.stone, marginTop: -2, marginBottom: 8 }}>
-          One row per wash applied to this garment. Stone wash, garment dye, enzyme wash — list each as a separate row.
+          One row per wash applied to this garment. Stone wash, garment dye, enzyme wash — list each as a separate row. Each wash carries a per-unit cost that rolls into the Treatments total. Save the row to the Treatments library to reuse the wash across packs.
         </p>
+        <LibraryDropdownBar
+          label="Add from library"
+          items={tlib.length ? washAtoms : null}
+          getLabel={a => a.name || a.code || 'Untitled'}
+          onSelect={atom => set('treatmentWashTypes', [...(data.treatmentWashTypes || []), { name: atom.name || '', notes: atom.notes || '', cost_per_unit_usd: atom.cost_per_unit_usd || '', treatment_id: atom.id }])}
+          placeholder="— Add wash type from library —"
+        />
         <ArrayTable
           headers={[
             { key: 'name',  label: 'Wash Type', placeholder: 'Stone Wash / Garment Dye / Enzyme Wash' },
             { key: 'notes', label: 'Notes',     placeholder: 'Color / intensity / process detail' },
+            { key: 'cost_per_unit_usd', label: 'Cost / unit', render: (v, onChange, row) => (
+              <CostCell row={row} value={v} onChange={onChange} linked={row.treatment_id ? washAtoms.find(a => a.id === row.treatment_id) : null} />
+            )},
+            { key: 'treatment_id', label: 'Library', render: (_v, _onChange, row, ri) => (
+              <LibraryLinkCell
+                row={row} rowIndex={ri} idField="treatment_id"
+                atoms={washAtoms} atomLabel="Treatments" nameField="name"
+                onPatchRow={patchWT}
+                onCreate={async (r) => createTreatment({
+                  type: 'wash',
+                  name: r.name || 'Untitled wash',
+                  notes: r.notes || '',
+                  cost_per_unit_usd: parseFloat(r.cost_per_unit_usd) || 0,
+                })}
+                onCreated={refreshTlib}
+              />
+            )},
           ]}
-          rows={(data.treatmentWashTypes || [{ name: '', notes: '' }])}
-          onUpdate={(i, k, v) => set('treatmentWashTypes', (data.treatmentWashTypes || [{ name: '', notes: '' }]).map((r, idx) => (idx === i ? { ...r, [k]: v } : r)))}
-          onAdd={() => set('treatmentWashTypes', [...(data.treatmentWashTypes || []), { name: '', notes: '' }])}
-          onRemove={i => set('treatmentWashTypes', (data.treatmentWashTypes || []).filter((_, idx) => idx !== i))}
+          rows={washTypeRows}
+          onUpdate={updWT}
+          onAdd={addWT}
+          onRemove={rmWT}
         />
       </div>
 
@@ -2322,6 +2548,13 @@ export function StepTreatments({ data, set, images, onUpload, onRemove }) {
 
       <div style={{ marginBottom: 18 }}>
         <label style={sectionLabel}>Wash &amp; Dye Treatments</label>
+        <LibraryDropdownBar
+          label="Add from library"
+          items={tlib.length ? washDyeAtoms : null}
+          getLabel={a => [TREATMENT_TYPE_LABEL[a.type] || a.type, a.name || a.code].filter(Boolean).join(' · ')}
+          onSelect={atom => set('treatments', [...(data.treatments || []), { treatment: atom.name || '', process: atom.notes || '', temperature: atom.temperature_c ? `${atom.temperature_c}°C` : '', duration: atom.duration_minutes ? `${atom.duration_minutes} min` : '', chemicals: atom.chemistry || '', cost_per_unit_usd: atom.cost_per_unit_usd || '', treatment_id: atom.id }])}
+          placeholder="— Add wash / dye treatment from library —"
+        />
         <ArrayTable
           headers={[
             { key: 'step',        label: 'Step',                  placeholder: '1 / 2 / 3' },
@@ -2331,12 +2564,41 @@ export function StepTreatments({ data, set, images, onUpload, onRemove }) {
             { key: 'duration',    label: 'Duration',              placeholder: '45 min' },
             { key: 'chemicals',   label: 'Chemicals or Agents',   placeholder: 'Pumice, enzyme, sodium…' },
             { key: 'notes',       label: 'Notes' },
+            { key: 'cost_per_unit_usd', label: 'Cost / unit', render: (v, onChange, row) => (
+              <CostCell row={row} value={v} onChange={onChange} linked={row.treatment_id ? washDyeAtoms.find(a => a.id === row.treatment_id) : null} />
+            )},
+            { key: 'treatment_id', label: 'Library', render: (_v, _onChange, row, ri) => (
+              <LibraryLinkCell
+                row={row} rowIndex={ri} idField="treatment_id"
+                atoms={washDyeAtoms} atomLabel="Treatments" nameField="treatment"
+                onPatchRow={patchT}
+                onCreate={async (r) => createTreatment({
+                  // Default newly-saved Wash & Dye rows to a wash atom; designer
+                  // can flip the type in the library after the fact if needed.
+                  type: 'wash',
+                  name: r.treatment || 'Untitled treatment',
+                  chemistry: r.chemicals || '',
+                  temperature_c: parseFloat(r.temperature) || 0,
+                  duration_minutes: parseFloat(r.duration) || 0,
+                  notes: r.process || r.notes || '',
+                  cost_per_unit_usd: parseFloat(r.cost_per_unit_usd) || 0,
+                })}
+                onCreated={refreshTlib}
+              />
+            )},
           ]}
           rows={treatments} onUpdate={updT} onAdd={addT} onRemove={rmT} />
       </div>
 
       <div style={{ marginBottom: 18 }}>
         <label style={sectionLabel}>Distressing &amp; Special Finishes</label>
+        <LibraryDropdownBar
+          label="Add from library"
+          items={tlib.length ? finishAtoms : null}
+          getLabel={a => [TREATMENT_TYPE_LABEL[a.type] || a.type, a.name || a.code].filter(Boolean).join(' · ')}
+          onSelect={atom => set('distressing', [...(data.distressing || []), { technique: atom.name || '', notes: atom.notes || '', cost_per_unit_usd: atom.cost_per_unit_usd || '', treatment_id: atom.id }])}
+          placeholder="— Add distress / finish from library —"
+        />
         <ArrayTable
           headers={[
             { key: 'area',           label: 'Area',             placeholder: 'Front pocket / Knee' },
@@ -2344,6 +2606,23 @@ export function StepTreatments({ data, set, images, onUpload, onRemove }) {
             { key: 'intensity',      label: 'Intensity (1-5)',  render: intensityRender },
             { key: 'referenceImage', label: 'Reference Image',  placeholder: 'Filename' },
             { key: 'notes',          label: 'Notes' },
+            { key: 'cost_per_unit_usd', label: 'Cost / unit', render: (v, onChange, row) => (
+              <CostCell row={row} value={v} onChange={onChange} linked={row.treatment_id ? finishAtoms.find(a => a.id === row.treatment_id) : null} />
+            )},
+            { key: 'treatment_id', label: 'Library', render: (_v, _onChange, row, ri) => (
+              <LibraryLinkCell
+                row={row} rowIndex={ri} idField="treatment_id"
+                atoms={finishAtoms} atomLabel="Treatments" nameField="technique"
+                onPatchRow={patchD}
+                onCreate={async (r) => createTreatment({
+                  type: 'distress',
+                  name: r.technique || 'Untitled finish',
+                  notes: [r.area, r.notes].filter(Boolean).join(' · '),
+                  cost_per_unit_usd: parseFloat(r.cost_per_unit_usd) || 0,
+                })}
+                onCreated={refreshTlib}
+              />
+            )},
           ]}
           rows={distressing} onUpdate={updD} onAdd={addD} onRemove={rmD} />
       </div>

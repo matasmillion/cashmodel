@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useMemo, useEffect, useRef, useState } from 'react';
 import { PRODUCTS, CURRENT_WEEK_SEED, DEFAULT_ASSUMPTIONS, OPEX_SUBSCRIPTIONS, OPEX_WAREHOUSE, CREDIT_CARDS, LOANS, AD_UNIT_TYPES, DEFAULT_EVENTS } from '../data/seedData';
 import { generateWeeklyProjections, generatePOSchedule } from '../utils/calculations';
-import { syncShopifyActuals, syncShopifyInventory, syncMetaActuals, syncMercuryActuals, syncPlaidActuals, listPlaidItems } from '../utils/liveDataSync';
+import { syncShopifyActuals, syncShopifyInventory, syncShopifyCapitalRepayment, syncShopifyCapitalOutstanding, syncMetaActuals, syncMetaDailyBudget, syncMetaBalanceOwed, syncPlaidActuals, syncPlaidCardPayments, syncShopifyPayoutsPending, syncPlaidPendingCharges, listPlaidItems } from '../utils/liveDataSync';
 import { migrateManualPOsToStore } from '../utils/productionStore';
 import { migrateLegacyInventoryHash } from '../utils/inventoryRouting';
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
@@ -19,15 +19,20 @@ function saveIntegrations(data) {
   window.dispatchEvent(new CustomEvent('integrations-updated'));
 }
 
-// Pulls current-week actuals from any connected integrations and pushes them
-// into the seed. Returns a summary so the UI can show sync state.
-async function runAutoSync(dispatch) {
+// Pulls actuals from every connected integration and pushes them into the
+// seed. Plaid is the single source of truth for bank + card balances now
+// (Mercury accounts surface through Plaid). Shopify and Meta provide the
+// past 13 weeks of revenue / ad spend, all of which we persist into
+// state.actualsHistory so the engine can fill the gap between the seeded
+// historical block and "this Monday" without projecting.
+async function runAutoSync(dispatch, { realTime = false } = {}) {
   const creds = loadIntegrations();
   const now = new Date().toISOString();
   const updated = { ...creds };
   let changed = false;
   const errors = {};
   const sources = [];
+  const syncedAtBySource = {};
 
   const tasks = [];
 
@@ -35,16 +40,24 @@ async function runAutoSync(dispatch) {
     sources.push('shopify');
     tasks.push(
       syncShopifyActuals().then(weeks => {
+        // Persist every week so the engine can fill gap weeks with real revenue
+        const byDate = Object.fromEntries(
+          weeks.filter(w => w.revenue != null).map(w => [w.startDate, { revenue: w.revenue, orders: w.orders }])
+        );
+        dispatch({ type: 'MERGE_ACTUALS', payload: { source: 'shopify', byDate } });
+
         const current = weeks.find(w => w.isCurrent);
-        if (!current) return;
-        dispatch({ type: 'UPDATE_SEED', payload: { revenue: current.revenue, date: current.startDate } });
+        if (current) {
+          dispatch({ type: 'UPDATE_SEED', payload: { revenue: current.revenue, date: current.startDate } });
+        }
+        syncedAtBySource.shopify = now;
         updated.shopify = {
           ...creds.shopify,
           syncedAt: now,
           lastSync: {
             syncedAt: now,
-            currentWeekRevenue: current.revenue,
-            currentWeekOrders: current.orders,
+            currentWeekRevenue: current?.revenue ?? null,
+            currentWeekOrders: current?.orders ?? null,
             weeks,
           },
         };
@@ -65,23 +78,102 @@ async function runAutoSync(dispatch) {
         console.warn('[auto-sync] Shopify inventory:', err.message);
       }),
     );
+
+    // Pending Shopify Payments payouts — drives the "Shopify Payouts"
+    // cashflow row. Two components:
+    //   1. scheduled + in_transit (Shopify-reported pending)
+    //   2. Shopify-reported "paid" in last 7d that don't yet show up
+    //      as a deposit in Mercury Operating Cash (6848) — money the
+    //      operator hasn't actually received yet.
+    tasks.push(
+      syncShopifyPayoutsPending().then(info => {
+        dispatch({
+          type: 'UPDATE_SEED',
+          payload: {
+            shopifyPayoutsPending: info.pendingTotal,
+            shopifyPayoutsPendingDetail: info.payouts,
+            shopifyPayoutsReportedPending: info.reportedPendingTotal,
+            shopifyPayoutsUnmatchedPaidTotal: info.unmatchedPaidTotal,
+            shopifyPayoutsUnmatchedPaidDetail: info.unmatchedPaidPayouts,
+            shopifyPayoutsReconciliationSkipped: info.reconciliationSkipped,
+            shopifyPayoutsReconciliationSkipReason: info.reconciliationSkipReason,
+            shopifyPayoutsErrors: info.errors,
+            shopifyPayoutsPendingSyncedAt: now,
+          },
+        });
+      }).catch(err => {
+        errors.shopifyPayouts = err.message;
+        console.warn('[auto-sync] Shopify pending payouts:', err.message);
+      }),
+    );
+
+    // Pending Shopify Capital repayments (balance transactions with
+    // source_type "shopify_capital_payment" that haven't settled yet).
+    tasks.push(
+      syncShopifyCapitalRepayment().then(info => {
+        dispatch({
+          type: 'UPDATE_SEED',
+          payload: {
+            shopifyCapitalPending: info.pendingTotal,
+            shopifyCapitalPendingDetail: info.repayments,
+            shopifyCapitalPendingError: info.error || null,
+            shopifyCapitalPendingSyncedAt: now,
+          },
+        });
+      }).catch(err => {
+        errors.shopifyCapital = err.message;
+        console.warn('[auto-sync] Shopify Capital repayment:', err.message);
+      }),
+    );
+
+    // Live Shopify Capital OUTSTANDING balance — drives the LT
+    // Liabilities "Shopify Capital" row. Computed by netting all
+    // LENDING_* balance transactions (loan disbursement + remittances).
+    tasks.push(
+      syncShopifyCapitalOutstanding().then(info => {
+        dispatch({
+          type: 'UPDATE_SEED',
+          payload: {
+            shopifyCapitalPaidRepaymentsTotal: info.paidRepaymentsTotal,
+            shopifyCapitalPaidCount: info.paidCount,
+            shopifyCapitalPendingCount: info.pendingCount,
+            shopifyCapitalOutstandingError: info.error || null,
+            shopifyCapitalOutstandingSyncedAt: now,
+          },
+        });
+        console.info(
+          `[shopify capital] paid repayments=$${info.paidRepaymentsTotal} ` +
+          `from ${info.paidCount} paid + ${info.pendingCount} pending remittances`,
+        );
+      }).catch(err => {
+        errors.shopifyCapitalOutstanding = err.message;
+        console.warn('[auto-sync] Shopify Capital outstanding:', err.message);
+      }),
+    );
   }
 
   if (creds.meta?.connected) {
     sources.push('meta');
     tasks.push(
       syncMetaActuals(creds.meta).then(weeks => {
+        const byDate = Object.fromEntries(
+          weeks.filter(w => w.adSpend != null).map(w => [w.startDate, { adSpend: w.adSpend, impressions: w.impressions, clicks: w.clicks }])
+        );
+        dispatch({ type: 'MERGE_ACTUALS', payload: { source: 'meta', byDate } });
+
         const current = weeks.find(w => w.isCurrent);
-        if (!current) return;
-        dispatch({ type: 'UPDATE_SEED', payload: { adSpend: current.adSpend } });
+        if (current) {
+          dispatch({ type: 'UPDATE_SEED', payload: { adSpend: current.adSpend } });
+        }
+        syncedAtBySource.meta = now;
         updated.meta = {
           ...creds.meta,
           syncedAt: now,
           lastSync: {
             syncedAt: now,
-            currentWeekSpend: current.adSpend,
-            currentWeekImpressions: current.impressions,
-            currentWeekClicks: current.clicks,
+            currentWeekSpend: current?.adSpend ?? null,
+            currentWeekImpressions: current?.impressions ?? null,
+            currentWeekClicks: current?.clicks ?? null,
             weeks,
           },
         };
@@ -91,83 +183,213 @@ async function runAutoSync(dispatch) {
         console.warn('[auto-sync] Meta:', err.message);
       }),
     );
-  }
 
-  if (creds.mercury?.connected) {
-    sources.push('mercury');
+    // Current unpaid balance with Meta — feeds the Ads Payable row.
     tasks.push(
-      syncMercuryActuals().then(({ accounts, primaryBalance }) => {
-        dispatch({
-          type: 'UPDATE_SEED',
-          payload: {
-            totalCash: Math.round(primaryBalance * 100) / 100,
-            sbMain: Math.round(primaryBalance * 100) / 100,
-          },
-        });
-        updated.mercury = {
-          ...creds.mercury,
-          syncedAt: now,
-          lastSync: { syncedAt: now, primaryBalance, accountCount: accounts.length },
-        };
-        changed = true;
+      syncMetaBalanceOwed(creds.meta).then(info => {
+        if (info?.balanceOwed != null) {
+          dispatch({
+            type: 'UPDATE_SEED',
+            payload: {
+              metaBalanceOwed: info.balanceOwed,
+              metaBalanceOwedSyncedAt: now,
+            },
+          });
+        }
       }).catch(err => {
-        errors.mercury = err.message;
-        console.warn('[auto-sync] Mercury:', err.message);
+        errors.metaBalance = err.message;
+        console.warn('[auto-sync] Meta balance owed:', err.message);
+      }),
+    );
+
+    // Also fetch the forward-looking daily budget from the CBO campaign
+    // named "Acquisition" (substring match). The engine uses this to
+    // anchor projected daily ad spend.
+    tasks.push(
+      syncMetaDailyBudget(creds.meta).then(info => {
+        if (info?.dailyBudget != null) {
+          dispatch({
+            type: 'UPDATE_SEED',
+            payload: {
+              metaDailyBudget: info.dailyBudget,
+              metaCampaignName: info.campaignName,
+              metaCampaignStatus: info.status,
+              metaDailyBudgetSyncedAt: now,
+            },
+          });
+        } else {
+          // No matching campaign — surface so the operator can see the
+          // mismatch in the sync indicator instead of silently using
+          // partial Meta insights.
+          errors.metaBudget = 'No active CBO matching "Acquisition" found — see console';
+        }
+      }).catch(err => {
+        errors.metaBudget = `Meta CBO sync failed: ${err.message}`;
+        console.warn('[auto-sync] Meta daily budget:', err.message);
       }),
     );
   }
 
-  // Plaid (Mercury / Chase / AMEX / any connected institution). All of the
-  // user's bank + card data flows through Plaid now, so this is the source of
-  // truth for the cashflow's "Cash on Hand" and "OPEX CARDS" rows.
+  // Plaid: now the single source of truth for all bank + card balances.
+  // Mercury accounts surface here too (Plaid links directly to Mercury), so
+  // the legacy mercury-proxy task is gone — keeping it caused a race where
+  // whichever promise resolved last won, often serving stale Mercury cache
+  // even after Plaid had fresh data.
   tasks.push((async () => {
     const items = await listPlaidItems().catch(() => []);
     if (!items || items.length === 0) return;
     sources.push('plaid');
     try {
-      const { totals, depositoryAccounts, creditAccounts } = await syncPlaidActuals();
+      // Auto-sync uses the CACHED Plaid endpoint (/accounts/get) — free
+      // with the Transactions product, and instant. The real-time
+      // endpoint (/accounts/balance/get) fires a fresh call to each
+      // bank in parallel — with 4+ linked items it routinely times out
+      // and surfaces as "Failed to fetch", which blocks every seed
+      // dispatch below (including the 6848 pin). Plaid keeps cached
+      // balances current via background syncs, so for cashflow purposes
+      // this is the right default. Manual "Sync balances" button still
+      // forces real-time when the operator explicitly clicks it.
+      let plaidResult;
+      try {
+        plaidResult = await syncPlaidActuals({ realTime });
+      } catch (err) {
+        // Even cached failed — try one more time before giving up so a
+        // transient blip doesn't leave sbMain stale. Falls back to
+        // cached on retry even if the caller asked for real-time, so
+        // we get *something* fresh into the seed.
+        console.warn(`[auto-sync] Plaid ${realTime ? 'real-time' : 'cached'} fetch failed, retrying with cached:`, err.message);
+        plaidResult = await syncPlaidActuals({ realTime: false });
+      }
+      const { totals, depositoryAccounts, creditAccounts, itemErrors } = plaidResult;
 
-      // Bank accounts → bucketed by name (operating / sales tax / corp tax /
-      // working capital). The cashflow engine reads these to anchor the
-      // current week's balance-sheet rows.
       const bucketed = bucketDepositoryAccounts(depositoryAccounts);
-      dispatch({
-        type: 'UPDATE_SEED',
-        payload: {
-          totalCash: totals.depository,
-          sbMain: bucketed.operating,
-          sbSalesTax: -Math.abs(bucketed.salesTax),     // shown as negative on the BS
-          sbCorpTax: -Math.abs(bucketed.corporateTax),
-          workingCapital: bucketed.workingCapital,
-          bankAccounts: bucketed.accounts,
-        },
-      });
+      // Operating Cash row = SUM of every Mercury depository account
+      // (available balances). Per operator: "the operating cash row
+      // needs to be our total cash balance in Mercury."  We identify
+      // Mercury by institution_name, NOT by the operating-classified
+      // bucket (which would include Shopify Balance's "Main 9773" and
+      // similar). If no Mercury items are visible (e.g. Plaid item
+      // errored), leave sbMain undefined so the reducer keeps the
+      // previous value instead of overwriting with a misleading sum.
+      const mercuryAccounts = depositoryAccounts.filter(
+        a => /mercury/i.test(a.institution || ''),
+      );
+      const mercuryTotal = Math.round(
+        mercuryAccounts.reduce((s, a) => s + (a.balance || 0), 0) * 100,
+      ) / 100;
+      if (mercuryAccounts.length === 0) {
+        console.warn(
+          `[auto-sync] No Mercury depository accounts found in Plaid response. ` +
+          `Accounts seen: ${depositoryAccounts.map(a => `${a.institution}/${a.name}(${a.mask})`).join(', ') || 'none'}. ` +
+          `Item errors: ${itemErrors?.length ? JSON.stringify(itemErrors) : 'none'}`,
+        );
+      }
+      const seedPayload = {
+        totalCash: totals.depository,
+        // Only overwrite sbMain when we actually have Mercury data. If
+        // Mercury's Plaid item errored, the reducer's spread keeps the
+        // last good value rather than wiping it to 0.
+        ...(mercuryAccounts.length > 0 ? { sbMain: mercuryTotal } : {}),
+        sbSalesTax: -Math.abs(bucketed.salesTax),
+        sbCorpTax: -Math.abs(bucketed.corporateTax),
+        workingCapital: bucketed.workingCapital,
+        // Mercury 7301 sub-account balance (classified by mask). Drives
+        // the "Mercury Fulfillment (7301)" cashflow row.
+        // Mercury 7301 / 3135 balances — surfaced as gray italic sub-rows
+        // UNDER Fulfillment Payable / Ads Payable in the cashflow, NOT
+        // as their own line items. They represent the cash earmarked
+        // toward each short-term liability.
+        mercuryFulfillmentBalance: bucketed.fulfillment,
+        mercuryMarketingBalance: bucketed.marketing,
+        bankAccounts: bucketed.accounts,
+        // Persisted diagnostic so the Integrations panel can render
+        // exactly what failed in the last auto-sync, even before the
+        // operator clicks the manual button.
+        plaidAutoSyncDiagnostic: (itemErrors && itemErrors.length) ? {
+          stage: 'plaid-item-errors',
+          summary: `${itemErrors.length} Plaid item(s) errored on auto-sync; their accounts are missing.`,
+          itemErrors,
+          syncedAt: now,
+        } : null,
+      };
 
-      // Credit cards & loans → match by mask first (most reliable), then by
-      // name pattern (catches AMEX Plum which Plaid surfaces without a mask).
       for (const a of creditAccounts) {
+        const cashflowKey = classifyCreditAccount(a);
+        if (cashflowKey) seedPayload[cashflowKey + 'Balance'] = a.balance;
+        // Best-effort sync to the legacy state.creditCards array for any
+        // other UI (POBuilder, etc.) — cashflow engine only reads seed.X
         const seedId = cardIdFromMask(a.mask);
         if (seedId) {
           dispatch({ type: 'UPDATE_CREDIT_CARD', payload: { id: seedId, updates: { balance: a.balance } } });
         }
-        const cashflowKey = classifyCreditAccount(a);
-        if (cashflowKey) {
-          dispatch({
-            type: 'UPDATE_SEED',
-            payload: { [cashflowKey + 'Balance']: a.balance },
-          });
-        }
       }
+
+      dispatch({ type: 'UPDATE_SEED', payload: seedPayload });
+
+      if (depositoryAccounts.length === 0 && creditAccounts.length === 0) {
+        errors.plaid = 'Plaid returned no accounts — re-link your institutions';
+      }
+
+      // Past 90d of card payments → cardPaymentsActuals. The engine
+      // prefers these over the static schedule and the rule generator
+      // for any week we have transaction data for.
+      try {
+        const cardPayments = await syncPlaidCardPayments();
+        if (Object.keys(cardPayments).length) {
+          dispatch({ type: 'SET_CARD_PAYMENT_ACTUALS', payload: cardPayments });
+        }
+      } catch (err) {
+        // Non-fatal — balances already updated; payments stay on the
+        // static schedule until next sync.
+        console.warn('[auto-sync] Plaid card payments:', err.message);
+      }
+
+      // Pending (unposted) charges per card. Used by Ads Payable:
+      //   today = chase7248 balance + chase7248 pending + Meta owed
+      try {
+        const pending = await syncPlaidPendingCharges();
+        const pendingPayload = {};
+        for (const [cardKey, amount] of Object.entries(pending)) {
+          pendingPayload[cardKey + 'PendingCharges'] = amount;
+        }
+        if (Object.keys(pendingPayload).length) {
+          dispatch({ type: 'UPDATE_SEED', payload: pendingPayload });
+        }
+      } catch (err) {
+        console.warn('[auto-sync] Plaid pending charges:', err.message);
+      }
+
+      syncedAtBySource.plaid = now;
     } catch (err) {
       errors.plaid = err.message;
       console.warn('[auto-sync] Plaid:', err.message);
+      // Persist the full diagnostic to seed so IntegrationsPanel can
+      // render it on next mount without the operator needing DevTools.
+      dispatch({
+        type: 'UPDATE_SEED',
+        payload: {
+          plaidAutoSyncDiagnostic: {
+            stage: err.diagnostic?.stage || 'unknown',
+            message: err.message,
+            ...err.diagnostic,
+            syncedAt: now,
+          },
+        },
+      });
     }
   })());
 
-  if (tasks.length === 0) return { sources: [], errors: {}, syncedAt: null };
+  if (tasks.length === 0) return { sources: [], errors: {}, syncedAt: null, bySource: {} };
   await Promise.allSettled(tasks);
+
+  // Stamp the seed with sync timestamps so the UI can show "Synced 4m ago"
+  // and surface staleness if a source quietly fails.
+  if (Object.keys(syncedAtBySource).length) {
+    dispatch({ type: 'UPDATE_SEED', payload: { syncedAt: now, syncedAtBySource } });
+  }
+
   if (changed) saveIntegrations(updated);
-  return { sources, errors, syncedAt: now };
+  return { sources, errors, syncedAt: now, bySource: syncedAtBySource };
 }
 
 const AppContext = createContext();
@@ -184,6 +406,16 @@ const initialState = {
   scheduledAdUnits: [],
   events: DEFAULT_EVENTS,
   rateCard: null,
+  // Per-week actuals from Shopify / Meta / Plaid, keyed by Monday ISO date.
+  // Each entry merges fields from any source that synced for that week:
+  //   { '2026-04-27': { revenue, orders, adSpend, impressions, clicks } }
+  // The cashflow engine prefers actuals over historical seed and projection
+  // for any week we have data for.
+  actualsHistory: {},
+  // Per-week credit-card payments aggregated from Plaid transactions, keyed
+  // by Monday ISO date → { chase5718, amexPlum, amexBlue, ltLoan }. Highest
+  // precedence source for the engine's card-payment outflow rows.
+  cardPaymentsActuals: {},
   scenarios: [
     { id: 'base', name: 'Base Case', assumptions: { ...DEFAULT_ASSUMPTIONS }, isActive: true },
   ],
@@ -194,7 +426,7 @@ const initialState = {
 const PERSISTED_KEYS = [
   'products', 'seed', 'assumptions', 'subscriptions', 'warehouse',
   'creditCards', 'loans', 'adUnitTypes', 'scheduledAdUnits', 'events',
-  'rateCard', 'scenarios', 'activeScenarioId',
+  'rateCard', 'actualsHistory', 'cardPaymentsActuals', 'scenarios', 'activeScenarioId',
 ];
 
 // Top-level routes. The legacy 'sell-through', 'po-schedule', and 'pos'
@@ -217,7 +449,7 @@ function readTabFromHash() {
 // Bump when the shape of `assumptions` (or other persisted state) changes
 // in a way that needs older localStorage payloads to be force-corrected.
 // Migrations run at load time and overwrite the offending fields in-place.
-const STATE_SCHEMA_VERSION = 2;
+const STATE_SCHEMA_VERSION = 5;
 
 function migrateState(saved) {
   const v = saved.schemaVersion || 1;
@@ -234,6 +466,34 @@ function migrateState(saved) {
         ...s,
         assumptions: { ...(s.assumptions || {}), fulfillmentPercent: 0.09 },
       }));
+    }
+  }
+
+  if (v < 3) {
+    // v3: actualsHistory introduced. Initialise to empty so reducers
+    // don't have to defend against undefined.
+    out.actualsHistory = saved.actualsHistory || {};
+  }
+
+  if (v < 4) {
+    // v4: cardPaymentsActuals introduced (Plaid-sourced).
+    out.cardPaymentsActuals = saved.cardPaymentsActuals || {};
+  }
+
+  if (v < 5) {
+    // v5: collapse h1Growth / h2Growth into a single editable weeklyGrowth.
+    // Drops growthSwitchDate + h2StartingDailySpend + weeklyGrowthH1/H2
+    // legacy fields. Preserves any user-set value by preferring h1Growth
+    // (closer to their operating reality).
+    const collapse = (a) => {
+      if (!a) return a;
+      const wg = a.weeklyGrowth ?? a.h1Growth ?? a.weeklyGrowthH1 ?? 1.04;
+      const { h1Growth, h2Growth, weeklyGrowthH1, weeklyGrowthH2, growthSwitchDate, h2StartingDailySpend, ...rest } = a;
+      return { ...rest, weeklyGrowth: wg };
+    };
+    out.assumptions = collapse(saved.assumptions);
+    if (Array.isArray(saved.scenarios)) {
+      out.scenarios = saved.scenarios.map(s => ({ ...s, assumptions: collapse(s.assumptions) }));
     }
   }
 
@@ -334,6 +594,22 @@ function reducer(state, action) {
     case 'UPDATE_SEED':
       return { ...state, seed: { ...state.seed, ...action.payload } };
 
+    case 'MERGE_ACTUALS': {
+      // Merges a {date → {field: value}} map into actualsHistory. Fields
+      // from a new source overlay any existing entry for the same week.
+      const { byDate } = action.payload;
+      const merged = { ...(state.actualsHistory || {}) };
+      for (const [date, fields] of Object.entries(byDate)) {
+        merged[date] = { ...(merged[date] || {}), ...fields };
+      }
+      return { ...state, actualsHistory: merged };
+    }
+
+    case 'SET_CARD_PAYMENT_ACTUALS':
+      // Replaces cardPaymentsActuals with the latest sweep (Plaid is the
+      // source of truth — no need to merge with stale entries).
+      return { ...state, cardPaymentsActuals: action.payload };
+
     case 'UPDATE_LOANS':
       return { ...state, loans: { ...state.loans, ...action.payload } };
 
@@ -360,10 +636,13 @@ export function AppProvider({ children }) {
   const userIdRef = useRef(null);
 
   // Wrap runAutoSync so we can track status in React state.
-  async function triggerAutoSync() {
+  // `realTime` flag is forwarded to the Plaid layer — true = force a
+  // live /accounts/balance/get pull (slow, ~$0.10/account, used by the
+  // cashflow page's "Force real-time" button). Default false = cached.
+  async function triggerAutoSync({ realTime = false } = {}) {
     setAutoSyncState(s => ({ ...s, status: 'syncing', errors: {} }));
     try {
-      const result = await runAutoSync(dispatch);
+      const result = await runAutoSync(dispatch, { realTime });
       if (!result || result.sources.length === 0) {
         setAutoSyncState({ status: 'idle', sources: [], errors: {}, syncedAt: null });
         return;

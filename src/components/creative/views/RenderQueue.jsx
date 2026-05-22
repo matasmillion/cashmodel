@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw, Check, X } from 'lucide-react';
 import { listRenders, saveRender } from '../../../utils/renderStore';
+import { saveSprint } from '../../../utils/sprintStore';
 import { callCheckRenderStatus, callEncoderPass } from '../../../utils/liveDataSync';
-import { RENDER_STATUSES } from '../../../types/creative';
+import { RENDER_STATUSES, SPRINT_STATUSES } from '../../../types/creative';
+import { FR, RENDER_STATUS_TOKEN, DOT_COLOR, pillStyle, dotStyle } from '../palette';
 
-const FR = { slate: '#3A3A3A', salt: '#F5F0E8', sand: '#EBE5D5', stone: '#716F70' };
 const POLL_INTERVAL_MS = 15_000;
 
 export default function RenderQueue() {
@@ -72,6 +73,14 @@ export default function RenderQueue() {
 
   const handleApprove = async (r) => {
     await saveRender(r.id, { status: RENDER_STATUSES.APPROVED, approved_at: new Date().toISOString() });
+    // First approval on a sprint moves it from `rendering` to `in_queue`
+    // so the kanban / metric strip reflect the right state. Idempotent —
+    // re-issuing the update is a no-op.
+    if (r.sprint_id) {
+      saveSprint(r.sprint_id, { status: SPRINT_STATUSES.IN_QUEUE }).catch(err => {
+        console.warn('sprint status update on approve:', err);
+      });
+    }
     setRenders(prev => (prev || []).filter(x => x.id !== r.id));
     // Fire encoder-pass in the background — UI optimistically removes the
     // card from the queue. Failures are surfaced in Production view via
@@ -96,15 +105,15 @@ export default function RenderQueue() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-        <h2 style={{ fontFamily: 'Cormorant Garamond, Georgia, serif', fontSize: 22, fontWeight: 400, color: FR.slate, margin: 0 }}>
+        <h2 style={{ fontFamily: 'Cormorant Garamond, Georgia, serif', fontSize: 22, fontWeight: 400, color: FR.ink, margin: 0 }}>
           Render Queue
         </h2>
         <button
           onClick={handleRefresh}
           style={{
-            fontSize: 11, padding: '4px 10px', borderRadius: 6,
-            border: '0.5px solid rgba(58,58,58,0.2)', background: 'transparent',
-            color: FR.stone, cursor: 'pointer',
+            fontSize: 11, padding: '5px 11px', borderRadius: 7,
+            border: '1px solid rgba(0,0,0,0.12)', background: '#fff',
+            color: FR.ink, cursor: 'pointer',
             display: 'inline-flex', alignItems: 'center', gap: 5,
           }}
         >
@@ -133,7 +142,6 @@ export default function RenderQueue() {
           </div>
         )}
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
@@ -141,46 +149,66 @@ export default function RenderQueue() {
 function RenderCard({ render: r, isPolling, onApprove, onReject }) {
   const isProcessing = r.status === 'processing';
   const isDone = r.status === 'done';
+  const token = RENDER_STATUS_TOKEN[r.status] || RENDER_STATUS_TOKEN.pending;
 
   return (
-    <div style={{ background: '#fff', border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 8, overflow: 'hidden' }}>
+    <div style={{
+      background: '#fff', border: '1px solid rgba(0,0,0,0.07)',
+      borderRadius: 12, overflow: 'hidden',
+      boxShadow: isDone ? '0 2px 12px rgba(0,0,0,0.04)' : 'none',
+    }}>
       <div style={{ position: 'relative' }}>
         {r.raw_url
-          ? <video src={r.raw_url} style={{ width: '100%', aspectRatio: '9/16', objectFit: 'cover', display: 'block' }} controls muted playsInline />
+          ? <video src={r.raw_url} style={{ width: '100%', aspectRatio: '9/16', objectFit: 'cover', display: 'block', background: '#000' }} controls muted playsInline />
           : (
-            <div style={{ width: '100%', aspectRatio: '9/16', background: FR.sand, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <div style={{
+              width: '100%', aspectRatio: '9/16',
+              background: `linear-gradient(135deg, ${FR.sand} 0%, ${FR.sandLight} 100%)`,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}>
               {isProcessing
                 ? <>
-                    <Loader2 size={20} color={FR.stone} style={{ animation: 'spin 1.2s linear infinite' }} />
-                    <span style={{ fontSize: 11, color: FR.stone }}>Generating…</span>
+                    <Loader2 size={22} color={FR.amber} style={{ animation: 'spin 1.2s linear infinite' }} />
+                    <span style={{ fontSize: 11, color: FR.stone, letterSpacing: '0.04em' }}>Generating…</span>
                   </>
                 : <span style={{ fontSize: 11, color: FR.stone }}>No preview</span>}
             </div>
           )}
+        {/* Status pill overlay top-left */}
+        <span style={{
+          position: 'absolute', top: 10, left: 10,
+          ...pillStyle(token),
+          backdropFilter: 'blur(6px)',
+          background: r.raw_url ? 'rgba(255,255,255,0.92)' : token.bg,
+        }}>
+          <span style={{ ...dotStyle(DOT_COLOR[token.dot] || FR.stone, isProcessing), marginRight: 5 }} />
+          {token.label}
+        </span>
         {isPolling && (
           <span style={{
-            position: 'absolute', top: 8, right: 8,
+            position: 'absolute', top: 10, right: 10,
             background: 'rgba(0,0,0,0.55)', color: 'white',
-            fontSize: 10, padding: '2px 6px', borderRadius: 4,
+            fontSize: 10, padding: '3px 7px', borderRadius: 4,
             display: 'inline-flex', alignItems: 'center', gap: 4,
           }}>
             <Loader2 size={9} style={{ animation: 'spin 0.7s linear infinite' }} /> polling
           </span>
         )}
       </div>
-      <div style={{ padding: '10px 12px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+      <div style={{ padding: '12px 14px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: isDone ? 10 : 0 }}>
           <span style={{ fontFamily: 'ui-monospace, SF Mono, Menlo, monospace', fontSize: 11, color: FR.stone }}>
-            {r.provider || '?'} · v{r.variant_index + 1}
-          </span>
-          <span style={{ fontSize: 10, color: FR.stone, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            {r.status}
+            {r.provider || '?'} <span style={{ color: 'rgba(0,0,0,0.2)' }}>·</span> v{(r.variant_index ?? 0) + 1}
           </span>
         </div>
         {isDone && (
           <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={onApprove} style={btnStyle('#3B6D11')}>Approve</button>
-            <button onClick={onReject} style={btnStyle('#A32D2D')}>Reject</button>
+            <button onClick={onApprove} style={btnApprove}>
+              <Check size={12} strokeWidth={2.5} /> Approve
+            </button>
+            <button onClick={onReject} style={btnReject}>
+              <X size={12} strokeWidth={2.5} /> Reject
+            </button>
           </div>
         )}
       </div>
@@ -188,6 +216,19 @@ function RenderCard({ render: r, isPolling, onApprove, onReject }) {
   );
 }
 
-function btnStyle(color) {
-  return { fontSize: 11, padding: '4px 10px', borderRadius: 5, border: `0.5px solid ${color}`, color, background: 'transparent', cursor: 'pointer' };
-}
+const btnApprove = {
+  flex: 1,
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+  fontSize: 12, fontWeight: 500, padding: '6px 12px', borderRadius: 7,
+  border: '1px solid #A7F3D0',
+  background: FR.greenLight, color: FR.green,
+  cursor: 'pointer',
+};
+
+const btnReject = {
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+  fontSize: 12, fontWeight: 500, padding: '6px 12px', borderRadius: 7,
+  border: '1px solid #FECACA',
+  background: FR.redLight, color: FR.red,
+  cursor: 'pointer',
+};

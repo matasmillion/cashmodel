@@ -16,6 +16,8 @@ import { formatCost } from './TechPackPrimitives';
 import { uploadAsset, dataUrlToBlob, isLegacyDataUrl, useResolvedImageEntries, isGhostImage } from '../../utils/plmAssets';
 import { computePackDiff } from '../../utils/techPackDiff';
 import { listTreatments } from '../../utils/treatmentStore';
+import { listEmbellishments } from '../../utils/embellishmentStore';
+import { getVendor } from '../../utils/vendorLibrary';
 
 function sanitizeFilename(s) {
   return (s || 'techpack').replace(/[^\w\-]+/g, '_').slice(0, 60);
@@ -178,6 +180,10 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     const coverIdx = STEPS.findIndex(s => s.id === 'cover');
     return coverIdx >= 0 ? coverIdx : 0;
   });
+  // Sub-page index within the Fabrics step. When the operator picks two or
+  // three fabrics the sidebar surfaces virtual 03.1, 03.2 entries that share
+  // step=fabricsIdx but flip the active fabric in the preview.
+  const [fabricPageIdx, setFabricPageIdx] = useState(0);
   const [data, setData] = useState(pack.data || DEFAULT_DATA);
   const [images, setImages] = useState(pack.images || []);
   const [library, setLibrary] = useState(pack.library || DEFAULT_LIBRARY);
@@ -185,6 +191,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // selections into name/code/process on the live preview without forcing
   // PageTreatments to do async work mid-render.
   const [treatmentsById, setTreatmentsById] = useState({});
+  const [embellishmentsById, setEmbellishmentsById] = useState({});
   useEffect(() => {
     let cancelled = false;
     listTreatments({ includeArchived: true }).then(rows => {
@@ -192,6 +199,12 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       const map = {};
       (rows || []).forEach(t => { if (t.id) map[t.id] = t; });
       setTreatmentsById(map);
+    });
+    listEmbellishments({ includeArchived: true }).then(rows => {
+      if (cancelled) return;
+      const map = {};
+      (rows || []).forEach(e => { if (e.id) map[e.id] = e; });
+      setEmbellishmentsById(map);
     });
     return () => { cancelled = true; };
   }, []);
@@ -317,6 +330,8 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   }, [fabricIdKey, refreshTick]);
 
   const [saving, setSaving] = useState(false);
+  const [savedRecently, setSavedRecently] = useState(false);
+  const savedTimerRef = useRef(null);
   const [saveError, setSaveError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState(null);
@@ -406,9 +421,36 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
 
   const fabricsCost = (data.pickedFabrics || []).reduce((sum, p) => {
     const row = fabricsById[p?.fabricId];
-    const costPerMeter = fabricUnitCost(row);
+    const d = row?.data || row;
+    const gsm = parseFloat(row?.weight_gsm ?? d?.weight_gsm) || 0;
+    const widthCm = parseFloat(row?.width_cm ?? d?.width_cm) || 0;
+    const kpm = (gsm && widthCm) ? gsm * widthCm / 100000 : 0;
+
+    // Per-style overrides take precedence over library cost
+    const mOverride = parseFloat(p?.chosenPricePerMeterUsd);
+    const kOverride = parseFloat(p?.chosenPricePerKgUsd);
+    let baseCostPerMeter;
+    if (Number.isFinite(mOverride) && p?.chosenPricePerMeterUsd != null) {
+      baseCostPerMeter = mOverride;
+    } else if (Number.isFinite(kOverride) && p?.chosenPricePerKgUsd != null && kpm) {
+      baseCostPerMeter = kOverride * kpm;
+    } else {
+      baseCostPerMeter = fabricUnitCost(row);
+    }
+
+    // Finish costs: per-meter delta first, per-kg converted as fallback
+    const finishes = p?.chosenFinishes ?? (d?.finishes || []);
+    const finishCostPerMeter = (finishes || []).reduce((s, f) => {
+      const fm = parseFloat(f?.delta_per_meter_usd);
+      if (Number.isFinite(fm) && fm > 0) return s + fm;
+      const fk = parseFloat(f?.delta_per_kg_usd);
+      if (Number.isFinite(fk) && fk > 0 && kpm) return s + fk * kpm;
+      return s;
+    }, 0);
+
     const mpu = p?.metersPerUnit;
-    return sum + (mpu ? costPerMeter * mpu : costPerMeter);
+    const totalPerMeter = baseCostPerMeter + finishCostPerMeter;
+    return sum + (mpu ? totalPerMeter * mpu : totalPerMeter);
   }, 0);
   const trimsCost = (data.pickedTrims || []).reduce((sum, p) => {
     const full = componentsById[p?.componentId || p?.id];
@@ -419,28 +461,72 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     return sum + componentUnitCost(full) * parseQty(p?.quantity);
   }, 0);
 
+  // Treatments cost: legacy BOM-fabric-linked treatments (data.fabrics[].treatment_id)
+  // plus the per-row costs designers now enter on the Treatments tab — Wash
+  // Types, Wash & Dye, Distressing & Finishes. When a row is linked to a
+  // library atom (treatment_id set), the library's cost wins; otherwise the
+  // row's free-typed cost_per_unit_usd wins. Same precedence we apply to
+  // fabric finishes so a library edit propagates everywhere instantly.
+  const rowTreatmentCost = (r) => {
+    if (r?.treatment_id && treatmentsById[r.treatment_id]) {
+      const t = treatmentsById[r.treatment_id];
+      return parseFloat(t?.cost_per_unit_usd) || parseFloat(t?.target_cost) || parseFloat(t?.cost_per_unit) || 0;
+    }
+    return parseFloat(r?.cost_per_unit_usd) || 0;
+  };
   const treatmentsCost = (() => {
     let sum = 0;
     (data.fabrics || []).forEach(f => {
       if (!f?.treatment_id) return;
       const t = treatmentsById[f.treatment_id];
-      sum += parseFloat(t?.target_cost) || parseFloat(t?.cost_per_unit) || 0;
+      sum += parseFloat(t?.cost_per_unit_usd) || parseFloat(t?.target_cost) || parseFloat(t?.cost_per_unit) || 0;
     });
+    (data.treatmentWashTypes || []).forEach(r => { sum += rowTreatmentCost(r); });
+    (data.treatments || []).forEach(r => { sum += rowTreatmentCost(r); });
+    (data.distressing || []).forEach(r => { sum += rowTreatmentCost(r); });
     return sum;
   })();
+
+  // Embellishments cost: colorways (library-resolved) plus the per-row
+  // artwork placement costs the designer enters on the Embellishments tab.
+  // Linked rows pull from the embellishment library, free rows use their
+  // own cost_per_unit_usd.
+  const artworkRowCost = (r) => {
+    if (r?.embellishment_id && embellishmentsById[r.embellishment_id]) {
+      const e = embellishmentsById[r.embellishment_id];
+      return parseFloat(e?.cost_per_unit_usd) || 0;
+    }
+    return parseFloat(r?.cost_per_unit_usd) || 0;
+  };
+  const artworkRowsCost = (data.artworkPlacements || []).reduce((s, r) => s + artworkRowCost(r), 0);
 
   const cutSewCost = parseFloat(data.cutSewLaborCost) || 0;
 
   const bomCost = computeBOMCost(data);  // legacy free-text BOM, kept for old packs
   const colorwayCost = computeColorwayCost(data, getFRColorCost);
+  const embellishmentsCost = colorwayCost + artworkRowsCost;
   const billOfMaterialsCost = fabricsCost + trimsCost + packagingCost + bomCost;
-  const totalUnitCost = billOfMaterialsCost + colorwayCost + treatmentsCost + cutSewCost;
+  const preMarkupCost = billOfMaterialsCost + embellishmentsCost + treatmentsCost + cutSewCost;
+
+  // Vendor markup: a flat % the named factory tacks on top of landed unit
+  // cost. Lives on the vendor entry so every pack that names this vendor
+  // inherits the same rate. Surfaces as its own line item in the header
+  // so the operator sees where the bump comes from. We track whether
+  // the named vendor has a library record so the UI can hint "set markup
+  // on vendor record" when the lookup falls through to directory-only.
+  const vendorRecord = data.vendor ? getVendor(data.vendor) : null;
+  const vendorMarkupPct = (() => {
+    const n = parseFloat(vendorRecord?.markupPct);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  })();
+  const vendorMarkupCost = preMarkupCost * (vendorMarkupPct / 100);
+  const totalUnitCost = preMarkupCost + vendorMarkupCost;
 
   // Per-phase cost subtotals shown as pills in the sidebar phase headers.
   const phaseCosts = {
     'Bill of Materials': billOfMaterialsCost,
     'Cut & Sew': cutSewCost,
-    'Embellishments': colorwayCost,
+    'Embellishments': embellishmentsCost,
     'Treatments': treatmentsCost,
   };
   const targetFOB = parseFloat(data.targetFOB) || 0;
@@ -481,6 +567,18 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       setData(p => ({ ...p, maxFOB: next }));
     }
   }, [maxFOB, data.maxFOB]);
+
+  // Mirror the fully-computed totalUnitCost back into data so that
+  // techPackStore.computeTotalUnitCost (called at save time) can read
+  // the accurate figure — it lacks access to async fabric library specs,
+  // so the list view / grid cards would otherwise always show $0.00.
+  useEffect(() => {
+    const persisted = parseFloat(data.totalUnitCost);
+    const next = totalUnitCost > 0 ? Number(totalUnitCost.toFixed(2)) : 0;
+    if (next !== persisted && !(next === 0 && isNaN(persisted))) {
+      setData(p => ({ ...p, totalUnitCost: next }));
+    }
+  }, [totalUnitCost, data.totalUnitCost]);
   const fobDeltaColor = fobDelta === null ? FR.stone
     : fobDelta <= 0 ? '#3B6D11'
     : fobDelta / maxFOB <= 0.10 ? '#854F0B'
@@ -514,6 +612,9 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
             replacePLMHash({ section: 'styles', packId: packIdRef.current, step });
           }
           setSaveError(null);
+          setSavedRecently(true);
+          if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+          savedTimerRef.current = setTimeout(() => setSavedRecently(false), 2000);
         }
       } catch (err) {
         console.error('Auto-save failed:', err);
@@ -821,14 +922,31 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           {pendingUploads > 0
             ? <span style={{ fontSize: 10, color: FR.soil }}>Uploading {pendingUploads} image{pendingUploads === 1 ? '' : 's'}…</span>
             : saving
-              ? <span style={{ fontSize: 10, color: FR.sage }}>Saving…</span>
-              : saveError && <span title={saveError} style={{ fontSize: 10, color: '#A32D2D', maxWidth: 460, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>⚠︎ Save failed (kept locally): {saveError}</span>}
-          {/* Cost roll-up — BOM + colorway (wash/dye). */}
-          <div style={{ textAlign: 'right' }} title={`BOM ${formatCost(bomCost)}  ·  Colorways ${formatCost(colorwayCost)}${maxFOB > 0 ? `  ·  Max FOB ${formatCost(maxFOB)}` : ''}`}>
+              ? <span style={{ fontSize: 10, color: FR.stone, fontStyle: 'italic' }}>Saving…</span>
+              : saveError
+                ? <span title={saveError} style={{ fontSize: 10, color: '#A32D2D', maxWidth: 460, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>⚠︎ Save failed (kept locally): {saveError}</span>
+                : savedRecently
+                  ? <span style={{ fontSize: 10, color: '#a8d5a2', fontWeight: 600 }}>✓ Saved</span>
+                  : <span style={{ fontSize: 10, color: FR.stone, opacity: 0.5 }}>Auto-saving…</span>}
+          {/* Cost roll-up — BOM + colorway (wash/dye) + vendor markup. */}
+          <div style={{ textAlign: 'right' }} title={`BOM ${formatCost(bomCost)}  ·  Colorways ${formatCost(colorwayCost)}${vendorMarkupPct > 0 ? `  ·  Vendor +${vendorMarkupPct}% ${formatCost(vendorMarkupCost)}` : ''}${maxFOB > 0 ? `  ·  Max FOB ${formatCost(maxFOB)}` : ''}`}>
             <div style={{ fontSize: 9, color: FR.stone }}>Total Unit Cost</div>
             <div style={{ fontSize: 13, color: totalUnitCost > 0 ? FR.salt : FR.stone, fontWeight: 600 }}>
               {formatCost(totalUnitCost)}
             </div>
+            {data.vendor && (
+              vendorMarkupPct > 0 ? (
+                <div style={{ fontSize: 9, color: FR.sand, marginTop: 1, fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace" }}
+                  title={`Markup on ${data.vendor} (${vendorRecord?._hasRecord ? 'library record' : 'directory-only'})`}>
+                  incl. {data.vendor} +{vendorMarkupPct}% · {formatCost(vendorMarkupCost)}
+                </div>
+              ) : (
+                <div style={{ fontSize: 9, color: FR.stone, marginTop: 1, fontStyle: 'italic' }}
+                  title={`No markup % set on ${data.vendor}. Open PLM → Library → Vendors → ${data.vendor} and fill in "Factory Markup (%)".`}>
+                  {data.vendor} markup not set
+                </div>
+              )
+            )}
             {fobDelta !== null && (
               <div style={{ fontSize: 9, color: fobDeltaColor, fontWeight: 600, marginTop: 1 }}>
                 {fobDelta > 0 ? '+' : ''}{fobDelta.toFixed(2)} vs max FOB
@@ -864,16 +982,36 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
                       )}
                     </div>
                   )}
-                  <button onClick={() => setStep(i)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 16px', border: 'none', cursor: 'pointer', background: i === step ? FR.white : 'transparent', borderLeft: i === step ? `3px solid ${FR.soil}` : '3px solid transparent' }}>
-                    <span style={{ fontSize: 10, color: stepSkipped ? '#C0392B' : (i === step ? FR.soil : FR.stone), fontWeight: 700, width: 18, fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace" }}>
+                  <button onClick={() => { setStep(i); setFabricPageIdx(0); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 16px', border: 'none', cursor: 'pointer', background: i === step && fabricPageIdx === 0 ? FR.white : 'transparent', borderLeft: i === step && fabricPageIdx === 0 ? `3px solid ${FR.soil}` : '3px solid transparent' }}>
+                    <span style={{ fontSize: 10, color: stepSkipped ? '#C0392B' : (i === step && fabricPageIdx === 0 ? FR.soil : FR.stone), fontWeight: 700, width: 18, fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace" }}>
                       {stepSkipped ? '×' : s.icon}
                     </span>
-                    <span style={{ fontSize: 11, color: i === step ? FR.slate : FR.stone, textAlign: 'left', flex: 1, textDecoration: stepSkipped ? 'line-through' : 'none', opacity: stepSkipped ? 0.55 : (stepLocked ? 0.5 : 1) }}>
+                    <span style={{ fontSize: 11, color: i === step && fabricPageIdx === 0 ? FR.slate : FR.stone, textAlign: 'left', flex: 1, textDecoration: stepSkipped ? 'line-through' : 'none', opacity: stepSkipped ? 0.55 : (stepLocked ? 0.5 : 1) }}>
                       {s.title}
                     </span>
                     {stepLocked && !stepSkipped && <span style={{ fontSize: 10, color: FR.stone }}>🔒</span>}
                   </button>
+                  {/* Sub-pages for the Fabrics step — one extra row per
+                      additional picked fabric so each gets its own preview. */}
+                  {s.id === 'fabrics' && (data.pickedFabrics || []).filter(p => p?.fabricId).length > 1 && (
+                    (data.pickedFabrics || []).filter(p => p?.fabricId).slice(1).map((_, j) => {
+                      const subIdx = j + 1;
+                      const active = i === step && fabricPageIdx === subIdx;
+                      return (
+                        <button key={`fab-sub-${subIdx}`}
+                          onClick={() => { setStep(i); setFabricPageIdx(subIdx); }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '6px 16px 6px 28px', border: 'none', cursor: 'pointer', background: active ? FR.white : 'transparent', borderLeft: active ? `3px solid ${FR.soil}` : '3px solid transparent' }}>
+                          <span style={{ fontSize: 10, color: active ? FR.soil : FR.stone, fontWeight: 700, width: 26, fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace" }}>
+                            {`${s.icon}.${subIdx}`}
+                          </span>
+                          <span style={{ fontSize: 11, color: active ? FR.slate : FR.stone, textAlign: 'left', flex: 1 }}>
+                            {s.title}
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
               );
             })}
@@ -926,7 +1064,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
             <div style={{ fontSize: 9, color: FR.stone, letterSpacing: 2, fontWeight: 600, textTransform: 'uppercase' }}>Live Preview</div>
             <div style={{ fontSize: 9, color: FR.stone }}>Page {step + 1} / {STEPS.length}</div>
           </div>
-          <TechPackPagePreview data={data} images={previewImages} step={step} skippedSteps={skippedSteps} treatmentsById={treatmentsById} componentsById={componentsById} fabricsById={fabricsById} />
+          <TechPackPagePreview data={data} images={previewImages} step={step} skippedSteps={skippedSteps} treatmentsById={treatmentsById} componentsById={componentsById} fabricsById={fabricsById} fabricPageIdx={fabricPageIdx} />
         </div>
       </div>
     </div>
