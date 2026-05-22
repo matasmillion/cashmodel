@@ -237,27 +237,33 @@ function repairTruncatedJson(src) {
   return head + tail;
 }
 
-const SWATCH_SYSTEM = `You are analyzing a fabric swatch color card image. Your job is to identify every individual color swatch region in the image.
+const SWATCH_SYSTEM = `You are analyzing a fabric swatch color card image. Each cell on the card contains TWO parts stacked vertically:
+  1. TOP: the actual fabric sample — a colored textile square, often with pinked / serrated / zig-zag cut edges
+  2. BOTTOM: a text label below the fabric (color code, brand name, Chinese characters)
 
-Return ONLY a JSON array. Each element represents one distinct color swatch:
+Your job: for each swatch cell, return a bounding box that covers ONLY the fabric square (part 1). The box must NOT include any text, labels, or the gap between the fabric and the label.
+
+Think of it this way: imagine a horizontal cut right at the bottom edge of the fabric material, just before the white space and text begin. Your bounding box ends at that cut.
+
+Return ONLY a JSON array. Each element is one swatch:
 [
   {
-    "label": "color name or number exactly as printed near the swatch (e.g. '01 Ivory', 'Stone', '#4 Navy')",
+    "label": "the color code / name printed in the text area BELOW the fabric (e.g. 'JF-CCE 002 牙白', 'Stone', '035 SCULPTOR')",
     "x": 0.05,
-    "y": 0.10,
-    "w": 0.20,
-    "h": 0.15
+    "y": 0.08,
+    "w": 0.18,
+    "h": 0.10
   }
 ]
 
 Rules:
-- x, y = top-left corner as a fraction of the full image dimensions (0.0–1.0)
-- w, h = width/height of the swatch region as fractions (0.0–1.0)
-- x + w must be ≤ 1.0, y + h must be ≤ 1.0
-- Include only the actual textile swatch area — not the text label below/beside it
-- If the label text is below the swatch, exclude it from the bounding box
-- Exclude headers, logos, spec tables, white margins, borders
-- If no label is visible for a swatch, use "Color NN" (sequential number)
+- x, y = top-left corner of the FABRIC SQUARE ONLY, as a fraction of the full image (0.0–1.0)
+- w, h = width/height of the FABRIC SQUARE ONLY — stop h before the label text begins
+- x + w ≤ 1.0, y + h ≤ 1.0
+- The "label" value is read from the text BELOW the swatch, not from inside the bounding box
+- Typical fabric square takes roughly the top 65–75% of each cell; the label takes the bottom 25–35%
+- Exclude card borders, headers, spec tables, blank placeholder cells, and any cell with no visible fabric
+- If no label text is visible for a cell, use "Color NN" (sequential number)
 - Output ONLY the JSON array, nothing else`;
 
 /**
