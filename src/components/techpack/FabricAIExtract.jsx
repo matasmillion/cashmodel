@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Sparkles, X, Upload, FileText, Image as ImageIcon, Check, Loader2 } from 'lucide-react';
 import { FR } from './techPackConstants';
-import { extractFabricFromMedia, fileToMedia } from '../../utils/aiFabricExtract';
+import { extractFabricFromMedia, fileToMedia, detectAndCropSwatches } from '../../utils/aiFabricExtract';
 import { categoryForWeave, FABRIC_WEAVES } from '../../utils/fabricLibrary';
 import { listVendors } from '../../utils/vendorLibrary';
 import { getUsdCnyRate, cnyToUsd, usdToCny } from '../../utils/fxRates';
@@ -64,6 +64,11 @@ export default function FabricAIExtract({ onClose, onApply }) {
   const [vendors, setVendors] = useState([]);
   const [vendorMatched, setVendorMatched] = useState(null); // { suggested, matched } | null
   const [instructions, setInstructions] = useState('');
+  const [phase, setPhase] = useState(''); // '' | 'reading' | 'cropping'
+  const [swatches, setSwatches] = useState([]); // [{ label, blob, blobUrl, selected }]
+
+  // Revoke cropped-swatch object URLs on unmount.
+  useEffect(() => () => { swatches.forEach(s => s.blobUrl && URL.revokeObjectURL(s.blobUrl)); }, [swatches]);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,7 +93,9 @@ export default function FabricAIExtract({ onClose, onApply }) {
 
   const run = async () => {
     setError(null); setBusy(true); setResult(null); setVendorMatched(null);
+    setSwatches(prev => { prev.forEach(s => s.blobUrl && URL.revokeObjectURL(s.blobUrl)); return []; });
     try {
+      setPhase('reading');
       const media = await Promise.all(files.map(fileToMedia));
       const knownVendors = vendors.map(v => v.name).filter(Boolean);
       const json = await extractFabricFromMedia({ media, knownVendors, instructions });
@@ -108,13 +115,34 @@ export default function FabricAIExtract({ onClose, onApply }) {
         }
       }
       setResult(json);
+
+      // Second pass: crop the actual swatch images out of every dropped
+      // IMAGE (PDFs can't be cropped client-side). The model labels each
+      // crop with the color number printed on the card, so we store the
+      // real fabric texture instead of a flat hex estimate.
+      const imageFiles = files.filter(f => (f.type || '').startsWith('image/'));
+      if (imageFiles.length) {
+        setPhase('cropping');
+        const all = [];
+        for (const f of imageFiles) {
+          try {
+            const cropped = await detectAndCropSwatches(f);
+            cropped.forEach(c => all.push({ ...c, blobUrl: URL.createObjectURL(c.blob), selected: true }));
+          } catch (err) { console.error('FabricAIExtract swatch crop:', err); }
+        }
+        setSwatches(all);
+      }
     } catch (err) {
       console.error(err);
       setError(err?.message || 'AI extraction failed');
     } finally {
       setBusy(false);
+      setPhase('');
     }
   };
+
+  const toggleSwatch = (i) => setSwatches(prev => prev.map((s, idx) => idx === i ? { ...s, selected: !s.selected } : s));
+  const setSwatchLabel = (i, label) => setSwatches(prev => prev.map((s, idx) => idx === i ? { ...s, label } : s));
 
   const apply = async () => {
     if (!result) return;
@@ -157,15 +185,26 @@ export default function FabricAIExtract({ onClose, onApply }) {
     } catch (err) {
       console.error('FabricAIExtract FX backfill:', err);
     }
-    if (Array.isArray(result.colors) && result.colors.length) {
+    // Prefer the actual cropped swatch images (with their printed color
+    // number as the label) over flat hex estimates. Fall back to hex-only
+    // entries when no crops are available (e.g. the card was a PDF, or
+    // detection found nothing).
+    const selectedSwatches = swatches.filter(s => s.selected);
+    if (!selectedSwatches.length && Array.isArray(result.colors) && result.colors.length) {
       patch.color_card_images = result.colors.map(c => ({
         url: '', label: c.label || '', hex: c.hex || '',
       }));
     }
     // Pass the original mill-card source files up to the builder so they get
     // archived to the fabric's documents list — the user always wants the
-    // raw card preserved for reference, not just the parsed fields.
-    onApply({ ...patch, _aiSourceFiles: files });
+    // raw card preserved for reference, not just the parsed fields. Cropped
+    // swatches ride up as _aiSwatches so the builder uploads each blob and
+    // appends a color_card_images entry with the real image URL.
+    onApply({
+      ...patch,
+      _aiSourceFiles: files,
+      _aiSwatches: selectedSwatches.map(s => ({ label: s.label, blob: s.blob })),
+    });
   };
 
   return (
@@ -277,9 +316,35 @@ export default function FabricAIExtract({ onClose, onApply }) {
               <Row label="Price / kg (USD)" value={result.price_per_kg_usd != null ? `$${Number(result.price_per_kg_usd).toFixed(2)}` : null} />
               <Row label="Price / kg (RMB)" value={result.price_per_kg_cny != null ? `¥${Number(result.price_per_kg_cny).toFixed(2)}` : null} />
               <Row label="Notes"          value={result.notes} />
-              {Array.isArray(result.colors) && result.colors.length > 0 && (
+              {swatches.length > 0 ? (
                 <div style={{ marginTop: 10 }}>
-                  <div style={{ fontSize: 11, color: FR.stone, marginBottom: 6 }}>{result.colors.length} colors detected</div>
+                  <div style={{ fontSize: 11, color: FR.stone, marginBottom: 6 }}>
+                    {swatches.filter(s => s.selected).length} of {swatches.length} cropped swatches — click to deselect, edit the color number
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(78px, 1fr))', gap: 8 }}>
+                    {swatches.map((s, i) => (
+                      <div key={i} style={{ opacity: s.selected ? 1 : 0.35, cursor: 'pointer' }} onClick={() => toggleSwatch(i)}>
+                        <div style={{ position: 'relative', borderRadius: 4, overflow: 'hidden', border: `2px solid ${s.selected ? FR.slate : FR.sand}`, marginBottom: 4 }}>
+                          <img src={s.blobUrl} alt={s.label} style={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', display: 'block' }} />
+                          {!s.selected && (
+                            <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <X size={16} color={FR.stone} />
+                            </div>
+                          )}
+                        </div>
+                        <input
+                          value={s.label}
+                          onChange={e => { e.stopPropagation(); setSwatchLabel(i, e.target.value); }}
+                          onClick={e => e.stopPropagation()}
+                          style={{ width: '100%', fontSize: 9, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '2px 4px', color: FR.slate, background: '#fff', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (Array.isArray(result.colors) && result.colors.length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ fontSize: 11, color: FR.stone, marginBottom: 6 }}>{result.colors.length} colors detected (hex only — drop an image to crop the actual swatches)</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {result.colors.map((c, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', background: '#fff', borderRadius: 4, border: `0.5px solid ${FR.sand}` }}>
@@ -289,7 +354,7 @@ export default function FabricAIExtract({ onClose, onApply }) {
                     ))}
                   </div>
                 </div>
-              )}
+              ))}
             </div>
           )}
         </div>
@@ -305,7 +370,7 @@ export default function FabricAIExtract({ onClose, onApply }) {
           ) : (
             <button onClick={run} disabled={busy || files.length === 0} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: (busy || files.length === 0) ? 'not-allowed' : 'pointer', opacity: files.length === 0 ? 0.55 : 1 }}>
               {busy
-                ? <><Loader2 size={13} className="spin" /> Analyzing…</>
+                ? <><Loader2 size={13} className="spin" /> {phase === 'cropping' ? 'Cropping swatches…' : 'Analyzing…'}</>
                 : <><Sparkles size={13} /> Analyze</>
               }
             </button>

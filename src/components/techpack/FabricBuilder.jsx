@@ -435,7 +435,7 @@ export default function FabricBuilder({ fabric, onBack }) {
 
   const onApplyAI = async (patch) => {
     setAiOpen(false);
-    const { _aiSourceFiles, ...rest } = patch || {};
+    const { _aiSourceFiles, _aiSwatches, ...rest } = patch || {};
 
     // Archive the raw mill-card files the user dropped into the AI parser.
     // We always want the original card preserved for reference, even though
@@ -464,22 +464,43 @@ export default function FabricBuilder({ fabric, onBack }) {
       }
     }
 
+    // Upload the cropped swatch images the parser produced (real fabric
+    // texture, labeled by the printed color number) and turn them into
+    // color_card_images entries with live image URLs.
+    let newSwatches = [];
+    if (Array.isArray(_aiSwatches) && _aiSwatches.length && draft.id) {
+      const uploaded = await Promise.all(_aiSwatches.map(async (s, i) => {
+        try {
+          const ref = await uploadAsset({
+            scope: 'fabrics',
+            ownerId: draft.id,
+            slot: `swatch-ai-${Date.now()}-${i}`,
+            blob: s.blob,
+            skipCompress: false,
+          });
+          return { url: ref.path, label: s.label || `Color ${String(i + 1).padStart(2, '0')}`, hex: '' };
+        } catch (err) { console.error('AI swatch upload:', err); return null; }
+      }));
+      newSwatches = uploaded.filter(Boolean);
+    }
+
     setDraft(d => {
       const next = { ...d, ...rest };
-      if (Array.isArray(rest.color_card_images) && rest.color_card_images.length) {
-        const existing = Array.isArray(d.color_card_images) ? d.color_card_images : [];
-        const seen = new Set(existing.map(c => (c.hex || '').toLowerCase() || (c.label || '').trim().toLowerCase()).filter(Boolean));
-        const additions = rest.color_card_images.filter(c => {
-          const key = (c.hex || '').toLowerCase() || (c.label || '').trim().toLowerCase();
-          if (!key) return true;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-        next.color_card_images = [...existing, ...additions];
-      } else {
-        next.color_card_images = d.color_card_images || [];
-      }
+      const existing = Array.isArray(d.color_card_images) ? d.color_card_images : [];
+      // Merge hex-only suggestions (rest.color_card_images) and cropped
+      // swatch images (newSwatches) into the existing card, de-duping on
+      // hex / label so re-running the parser doesn't pile up duplicates.
+      const seen = new Set(existing.map(c => (c.hex || '').toLowerCase() || (c.label || '').trim().toLowerCase()).filter(Boolean));
+      const dedupe = (list) => (list || []).filter(c => {
+        const key = (c.hex || '').toLowerCase() || (c.label || '').trim().toLowerCase();
+        if (!key) return true;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      const hexAdds = Array.isArray(rest.color_card_images) ? dedupe(rest.color_card_images) : [];
+      const swatchAdds = dedupe(newSwatches);
+      next.color_card_images = [...existing, ...hexAdds, ...swatchAdds];
       if (newDocs.length) {
         next.documents = [...(d.documents || []), ...newDocs];
       }
@@ -835,9 +856,9 @@ export default function FabricBuilder({ fabric, onBack }) {
                 </span>
                 <button
                   onClick={() => setSwatchScanOpen(true)}
-                  title="AI: scan a swatch sheet and crop individual colors"
-                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 9px', background: FR.salt, color: FR.soil, border: `0.5px solid ${FR.sand}`, borderRadius: 5, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
-                  <Scan size={11} /> Scan sheet
+                  title="AI: drop a color card, auto-crop each swatch, label by its color number"
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 5, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
+                  <Scan size={11} /> Scan color card with AI
                 </button>
               </div>
             </div>

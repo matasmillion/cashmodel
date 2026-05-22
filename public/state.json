@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-22T17:29:24.548Z",
+  "lastUpdated": "2026-05-22T17:38:38.730Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "6150d95",
+      "date": "2026-05-22T17:30:24+00:00",
+      "message": "chore: update public/state.json"
+    },
+    {
+      "sha": "ab7211c",
+      "date": "2026-05-22T17:30:05+00:00",
+      "message": "feat(plm): replace Seed from Block button with inline library dropdowns"
+    },
+    {
       "sha": "9061f74",
       "date": "2026-05-18T18:10:54+00:00",
       "message": "fix(plm): lock the Estimate-with-AI prompt to CMT-only labor"
@@ -1082,16 +1092,6 @@
       "sha": "55dc193",
       "date": "2026-05-18T15:17:48+00:00",
       "message": "feat(plm): treatment/embellishment row costs, library save/pick, vendor markup %"
-    },
-    {
-      "sha": "32a4be7",
-      "date": "2026-05-18T15:01:17+00:00",
-      "message": "fix: sidebar BOM total now matches fabric card cost"
-    },
-    {
-      "sha": "2c11eb9",
-      "date": "2026-05-18T14:09:09+00:00",
-      "message": "Merge feature/fabric-polish-swatch-scanner: fabric cost editing + AI swatch image flow"
     }
   ]
 }

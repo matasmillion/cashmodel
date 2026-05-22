@@ -13,29 +13,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, X, Scan } from 'lucide-react';
 import { FR } from './techPackConstants';
-import { extractSwatchesFromImage, fileToMedia } from '../../utils/aiFabricExtract';
-
-async function cropSwatchFromFile(file, { x, y, w, h }) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      const srcX = Math.round(img.naturalWidth  * Math.max(0, x));
-      const srcY = Math.round(img.naturalHeight * Math.max(0, y));
-      const srcW = Math.round(img.naturalWidth  * Math.min(w, 1 - x));
-      const srcH = Math.round(img.naturalHeight * Math.min(h, 1 - y));
-      if (srcW < 4 || srcH < 4) { resolve(null); return; }
-      const canvas = document.createElement('canvas');
-      canvas.width  = srcW;
-      canvas.height = srcH;
-      canvas.getContext('2d').drawImage(img, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
-      canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('toBlob failed'))), 'image/webp', 0.92);
-    };
-    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Image load failed')); };
-    img.src = objectUrl;
-  });
-}
+import { extractSwatchesFromImage, fileToMedia, cropRegionFromFile } from '../../utils/aiFabricExtract';
 
 export default function SwatchScanModal({ onClose, onApply }) {
   const [file, setFile]         = useState(null);
@@ -75,7 +53,7 @@ export default function SwatchScanModal({ onClose, onApply }) {
       // Crop each detected region in parallel
       const cropped = await Promise.all(regions.map(async (r, i) => {
         try {
-          const blob = await cropSwatchFromFile(file, r);
+          const blob = await cropRegionFromFile(file, r);
           if (!blob) return null;
           return { label: r.label || `Color ${String(i + 1).padStart(2, '0')}`, blob, blobUrl: URL.createObjectURL(blob), selected: true };
         } catch { return null; }
