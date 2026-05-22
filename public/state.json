@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-22T18:14:36.649Z",
+  "lastUpdated": "2026-05-22T18:24:01.040Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "ffd2d79",
+      "date": "2026-05-22T18:15:14+00:00",
+      "message": "chore: update public/state.json"
+    },
+    {
+      "sha": "4508b89",
+      "date": "2026-05-22T18:15:00+00:00",
+      "message": "fix(plm): downscale images before Claude Vision to fix 5 MB base64 limit"
+    },
+    {
       "sha": "5c92d95",
       "date": "2026-05-22T17:56:54+00:00",
       "message": "merge: bring dev branch current with main (library dropdowns + fabric doc persistence + swatch cropping)"
@@ -1082,16 +1092,6 @@
       "sha": "77576b1",
       "date": "2026-05-18T17:44:01+00:00",
       "message": "fix: vendor edits no longer disappear after closing the editor modal"
-    },
-    {
-      "sha": "9411116",
-      "date": "2026-05-18T17:31:26+00:00",
-      "message": "feat(ux): autosave indicators on tech pack and vendor editor"
-    },
-    {
-      "sha": "362e5fe",
-      "date": "2026-05-18T17:29:44+00:00",
-      "message": "fix: grid card cost badges now show real unit cost"
     }
   ]
 }
