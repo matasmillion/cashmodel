@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-11T11:55:02.531Z",
+  "lastUpdated": "2026-05-22T17:29:24.548Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,54 +1044,54 @@
   ],
   "changelog": [
     {
-      "sha": "e5e0489",
-      "date": "2026-05-11T14:44:13+03:00",
-      "message": "cashflow: drop Shopify Capital sub-label except on API error (#146)"
+      "sha": "9061f74",
+      "date": "2026-05-18T18:10:54+00:00",
+      "message": "fix(plm): lock the Estimate-with-AI prompt to CMT-only labor"
     },
     {
-      "sha": "cfc02bb",
-      "date": "2026-05-11T13:45:31+03:00",
-      "message": "cashflow: Shopify Capital outstanding = original loan − paid remittances (#145)"
+      "sha": "aefee55",
+      "date": "2026-05-18T18:04:09+00:00",
+      "message": "fix(plm): vendor edits now actually persist + manual Save & Close"
     },
     {
-      "sha": "1d47900",
-      "date": "2026-05-11T13:38:10+03:00",
-      "message": "cashflow: Shopify Capital — try ADVANCE types + add operator override (#144)"
+      "sha": "5c82694",
+      "date": "2026-05-18T17:56:53+00:00",
+      "message": "feat(plm): Cut & Sew cost refinement chat"
     },
     {
-      "sha": "38e0df1",
-      "date": "2026-05-11T13:30:58+03:00",
-      "message": "cashflow: Shopify Capital outstanding via per-type queries (was returning $0) (#143)"
+      "sha": "77576b1",
+      "date": "2026-05-18T17:44:01+00:00",
+      "message": "fix: vendor edits no longer disappear after closing the editor modal"
     },
     {
-      "sha": "17267a3",
-      "date": "2026-05-11T13:27:32+03:00",
-      "message": "cashflow: live Shopify Capital outstanding from netted lending ledger (#142)"
+      "sha": "9411116",
+      "date": "2026-05-18T17:31:26+00:00",
+      "message": "feat(ux): autosave indicators on tech pack and vendor editor"
     },
     {
-      "sha": "506f740",
-      "date": "2026-05-11T13:16:56+03:00",
-      "message": "cashflow: Shopify Capital repayment via GraphQL with proper type filter (#141)"
+      "sha": "362e5fe",
+      "date": "2026-05-18T17:29:44+00:00",
+      "message": "fix: grid card cost badges now show real unit cost"
     },
     {
-      "sha": "f7aeab5",
-      "date": "2026-05-11T13:08:56+03:00",
-      "message": "cashflow: gray italic Sales Tax + Corp Tax rows, strip 'Foreign Resource' from labels (#140)"
+      "sha": "aac5991",
+      "date": "2026-05-18T15:26:34+00:00",
+      "message": "fix(plm): vendor markup line always visible when pack names a vendor"
     },
     {
-      "sha": "4099fc9",
-      "date": "2026-05-11T13:05:34+03:00",
-      "message": "cashflow: clean payouts row + fix Total Assets double-count (#139)"
+      "sha": "55dc193",
+      "date": "2026-05-18T15:17:48+00:00",
+      "message": "feat(plm): treatment/embellishment row costs, library save/pick, vendor markup %"
     },
     {
-      "sha": "977faea",
-      "date": "2026-05-11T13:01:49+03:00",
-      "message": "fix(proxies): shopify-proxy and mercury-proxy use Clerk JWT auth (#138)"
+      "sha": "32a4be7",
+      "date": "2026-05-18T15:01:17+00:00",
+      "message": "fix: sidebar BOM total now matches fabric card cost"
     },
     {
-      "sha": "0d15e28",
-      "date": "2026-05-11T12:57:00+03:00",
-      "message": "cashflow: rename Cash Balance + WC above TCOH (gray) + detailed payouts diagnostic (#137)"
+      "sha": "2c11eb9",
+      "date": "2026-05-18T14:09:09+00:00",
+      "message": "Merge feature/fabric-polish-swatch-scanner: fabric cost editing + AI swatch image flow"
     }
   ]
 }
