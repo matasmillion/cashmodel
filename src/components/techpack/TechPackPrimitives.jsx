@@ -225,19 +225,32 @@ export function ArrayTable({ headers, rows, onUpdate, onAdd, onRemove }) {
 export function PhotoUpload({ label, slotKey, images, onUpload, onRemove, aspect, single }) {
   const fileRef = useRef(null);
   const [dragging, setDragging] = useState(false);
+  const [adjusting, setAdjusting] = useState(null); // { idx, src, name }
   const slotImages = (images || []).filter(img => img.slot === slotKey);
 
   const handleFiles = async (files) => {
     for (const f of files) {
       if (!f.type.startsWith('image/')) continue;
-      // single-image slot — replace the existing image rather than append.
       if (single && slotImages.length > 0) {
         for (let i = slotImages.length - 1; i >= 0; i--) onRemove(slotKey, i);
       }
       onUpload(slotKey, await resizeImage(f), f.name);
-      if (single) break; // only take the first dropped/selected file
+      if (single) break;
     }
   };
+
+  const openAdjust = async (img, idx) => {
+    const src = await entryToDataUrl(img);
+    if (src) setAdjusting({ idx, src, name: img.name || `Photo ${idx + 1}` });
+  };
+
+  const saveAdjusted = (dataUrl) => {
+    if (adjusting === null) return;
+    onRemove(slotKey, adjusting.idx);
+    onUpload(slotKey, dataUrl, adjusting.name);
+    setAdjusting(null);
+  };
+
   const atCapacity = single && slotImages.length >= 1;
   return (
     <div style={{ marginBottom: 14 }}>
@@ -269,8 +282,14 @@ export function PhotoUpload({ label, slotKey, images, onUpload, onRemove, aspect
             {slotImages.map((img, i) => (
               <div key={i} style={{ position: 'relative', width: 100, height: 100, borderRadius: 4, overflow: 'hidden', border: `1px solid ${FR.sand}` }}>
                 <AssetImage image={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                <button onClick={e => { e.stopPropagation(); onRemove(slotKey, i); }}
-                  style={{ position: 'absolute', top: 2, right: 2, width: 18, height: 18, borderRadius: 9, background: FR.slate, color: FR.salt, border: 'none', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                <div style={{ position: 'absolute', inset: 0, opacity: 0, background: 'rgba(58,58,58,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, transition: 'opacity 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                  onMouseLeave={e => e.currentTarget.style.opacity = 0}>
+                  <button onClick={e => { e.stopPropagation(); openAdjust(img, i); }}
+                    style={{ padding: '3px 8px', background: FR.soil, color: FR.salt, border: 'none', borderRadius: 3, fontSize: 9, cursor: 'pointer', fontWeight: 600 }}>Adjust</button>
+                  <button onClick={e => { e.stopPropagation(); onRemove(slotKey, i); }}
+                    style={{ width: 20, height: 20, borderRadius: 10, background: FR.slate, color: FR.salt, border: 'none', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                </div>
                 <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(58,58,58,0.7)', padding: '2px 4px', fontSize: 8, color: FR.salt, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{img.name || `Photo ${i + 1}`}</div>
               </div>
             ))}
@@ -280,6 +299,14 @@ export function PhotoUpload({ label, slotKey, images, onUpload, onRemove, aspect
           </div>
         )}
       </div>
+      {adjusting && (
+        <CropModal
+          src={adjusting.src}
+          aspect={undefined}
+          label="Drag to reposition · scroll to zoom · rotate if needed"
+          onCancel={() => setAdjusting(null)}
+          onConfirm={saveAdjusted} />
+      )}
     </div>
   );
 }
@@ -292,17 +319,29 @@ export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height 
   const fileRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const [cropping, setCropping] = useState(false);
+  const [cropSrc, setCropSrc] = useState(null);
   const slotImages = (images || []).filter(img => img.slot === slotKey);
   const current = slotImages[0];
+  const cropAspect = portrait ? (2 / 3) : undefined;
 
   const handleFile = async (file) => {
     if (!file || !file.type.startsWith('image/')) return;
+    // Always open the crop modal so the user can position/zoom before saving.
+    // This prevents the auto-crop algorithm from silently distorting a pre-cropped image.
+    const rawUrl = await fileToDataUrl(file);
+    setCropSrc(rawUrl);
+  };
+
+  const saveCropped = (dataUrl) => {
     if (current) onRemove(slotKey, 0);
-    let dataUrl = await resizeImage(file);
-    if (autoCropOnUpload) {
-      try { dataUrl = await autoCropDataUrl(dataUrl); } catch (e) { /* keep original */ }
-    }
-    onUpload(slotKey, dataUrl, file.name);
+    onUpload(slotKey, dataUrl, current?.name || 'cover.jpg');
+    setCropSrc(null);
+  };
+
+  const openAdjust = async () => {
+    if (!current) return;
+    const dataUrl = await entryToDataUrl(current);
+    if (dataUrl) setCropSrc(dataUrl);
   };
 
   const handleAutoCropExisting = async () => {
@@ -347,8 +386,13 @@ export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height 
         {current ? (
           <>
             <AssetImage image={current} alt={current.name || 'Cover'}
-              style={{ width: '100%', height: '100%', objectFit: portrait ? 'cover' : 'contain', background: FR.white }} />
+              style={{ width: '100%', height: '100%', objectFit: 'contain', background: FR.white }} />
             <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
+              <button onClick={e => { e.stopPropagation(); openAdjust(); }}
+                title="Adjust position and zoom"
+                style={{ padding: '4px 10px', borderRadius: 12, background: FR.slate, color: FR.salt, border: 'none', fontSize: 10, cursor: 'pointer', fontWeight: 600, letterSpacing: 0.3 }}>
+                Adjust
+              </button>
               <button onClick={e => { e.stopPropagation(); handleAutoCropExisting(); }} disabled={cropping}
                 title="Auto-crop to subject"
                 style={{ padding: '4px 10px', borderRadius: 12, background: FR.soil, color: FR.salt, border: 'none', fontSize: 10, cursor: cropping ? 'wait' : 'pointer', fontWeight: 600, letterSpacing: 0.3 }}>
@@ -366,10 +410,18 @@ export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height 
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 32, color: FR.sand, lineHeight: 1 }}>+</div>
             <div style={{ fontSize: 12, color: FR.stone, marginTop: 6 }}>{uploadPrompt || 'Click or drop the product render here'}</div>
-            <div style={{ fontSize: 10, color: FR.sand, marginTop: 3 }}>Auto-cropped to the subject · becomes the cover card on the list view</div>
+            <div style={{ fontSize: 10, color: FR.sand, marginTop: 3 }}>Opens crop tool to position · Auto-crop removes background</div>
           </div>
         )}
       </div>
+      {cropSrc && (
+        <CropModal
+          src={cropSrc}
+          aspect={cropAspect}
+          label={portrait ? '2:3 portrait · drag to position · scroll to zoom' : 'Drag to position · scroll to zoom'}
+          onCancel={() => setCropSrc(null)}
+          onConfirm={saveCropped} />
+      )}
     </div>
   );
 }
