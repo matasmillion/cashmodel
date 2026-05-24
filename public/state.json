@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-22T18:28:51.252Z",
+  "lastUpdated": "2026-05-24T08:13:37.720Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "c3cd7f1",
+      "date": "2026-05-22T18:29:10+00:00",
+      "message": "chore: update public/state.json"
+    },
+    {
+      "sha": "b2dff37",
+      "date": "2026-05-22T18:29:01+00:00",
+      "message": "fix(plm): programmatically trim bottom 28% of swatch boxes to exclude labels"
+    },
+    {
       "sha": "ab44b96",
       "date": "2026-05-22T18:24:22+00:00",
       "message": "chore: update public/state.json"
@@ -1082,16 +1092,6 @@
       "sha": "ab7211c",
       "date": "2026-05-22T17:30:05+00:00",
       "message": "feat(plm): replace Seed from Block button with inline library dropdowns"
-    },
-    {
-      "sha": "9061f74",
-      "date": "2026-05-18T18:10:54+00:00",
-      "message": "fix(plm): lock the Estimate-with-AI prompt to CMT-only labor"
-    },
-    {
-      "sha": "aefee55",
-      "date": "2026-05-18T18:04:09+00:00",
-      "message": "fix(plm): vendor edits now actually persist + manual Save & Close"
     }
   ]
 }
