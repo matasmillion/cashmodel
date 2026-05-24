@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-24T08:13:37.720Z",
+  "lastUpdated": "2026-05-24T08:19:09.639Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "8f45728",
+      "date": "2026-05-24T08:14:16+00:00",
+      "message": "chore: update public/state.json"
+    },
+    {
+      "sha": "ef2cc5f",
+      "date": "2026-05-24T08:13:59+00:00",
+      "message": "fix(plm): crop modal on image upload + Adjust button on all image slots"
+    },
+    {
       "sha": "c3cd7f1",
       "date": "2026-05-22T18:29:10+00:00",
       "message": "chore: update public/state.json"
@@ -1082,16 +1092,6 @@
       "sha": "bd7fbc1",
       "date": "2026-05-22T17:38:56+00:00",
       "message": "fix(plm): persist fabric documents + crop swatch images in general AI import"
-    },
-    {
-      "sha": "6150d95",
-      "date": "2026-05-22T17:30:24+00:00",
-      "message": "chore: update public/state.json"
-    },
-    {
-      "sha": "ab7211c",
-      "date": "2026-05-22T17:30:05+00:00",
-      "message": "feat(plm): replace Seed from Block button with inline library dropdowns"
     }
   ]
 }
