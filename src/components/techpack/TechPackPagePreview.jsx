@@ -246,7 +246,7 @@ function PageCover({ d, images }) {
         );
       })()}
 
-      {/* ── Band 3: PRICING (target retail + maximum FOB) ───────────────── */}
+      {/* ── Band 3: PRICING (maximum FOB only — retail is internal, excluded from PDF) ── */}
       {(() => {
         const bandY = 430;
         const bandH = 80;
@@ -255,10 +255,8 @@ function PageCover({ d, images }) {
             <rect x={leftX} y={bandY} width={leftW} height={bandH} fill={FR.salt} />
             <rect x={leftX} y={bandY} width="3" height={bandH} fill={FR.soil} />
             <text x={leftX + 16} y={bandY + 18} fontSize="8" fontWeight="bold" fill={FR.soil} letterSpacing="2">PRICING</text>
-            <text x={leftX + 16}              y={bandY + 42} fontSize="8" fontWeight="bold" fill={FR.stone} letterSpacing="1.2">TARGET RETAIL</text>
-            <text x={leftX + 16}              y={bandY + 66} fontFamily="ui-monospace, 'SF Mono', Menlo, monospace" fontSize="22" fill={FR.slate}>{targetRetail}</text>
-            <text x={leftX + leftW * 0.55}    y={bandY + 42} fontSize="8" fontWeight="bold" fill={FR.stone} letterSpacing="1.2">MAXIMUM FOB</text>
-            <text x={leftX + leftW * 0.55}    y={bandY + 66} fontFamily="ui-monospace, 'SF Mono', Menlo, monospace" fontSize="22" fill={FR.soil}>{maxFOB}</text>
+            <text x={leftX + 16} y={bandY + 42} fontSize="8" fontWeight="bold" fill={FR.stone} letterSpacing="1.2">MAXIMUM FOB</text>
+            <text x={leftX + 16} y={bandY + 66} fontFamily="ui-monospace, 'SF Mono', Menlo, monospace" fontSize="22" fill={FR.soil}>{maxFOB}</text>
           </g>
         );
       })()}

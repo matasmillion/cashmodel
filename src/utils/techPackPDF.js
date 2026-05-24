@@ -292,8 +292,7 @@ export async function generateTechPackPDF(pack) {
   field('Category', d.productCategory, 100, y);
   field('Tier', d.productTier, 180, y); y += 14;
   field('Season', d.season, 10, y);
-  field('Target Retail', d.targetRetail, 100, y);
-  field('Target FOB', d.targetFOB, 180, y); y += 14;
+  field('Target FOB', d.targetFOB, 100, y); y += 14;
   field('Status', d.status, 10, y); y += 18;
 
   sectionHeading('SKU & Numbering', y); y += 8;

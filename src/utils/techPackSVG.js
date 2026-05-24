@@ -126,8 +126,7 @@ export function generateTechPackSVG(pack) {
   svg += field('Category', d.productCategory, 400, 145);
   svg += field('Tier', d.productTier, 700, 145);
   svg += field('Season', d.season, 40, 195);
-  svg += field('Target Retail', d.targetRetail, 400, 195);
-  svg += field('Target FOB', d.targetFOB, 700, 195);
+  svg += field('Target FOB', d.targetFOB, 400, 195);
   svg += field('Status', d.status, 40, 245);
   svg += sectionHeading('SKU & Numbering', 40, 310);
   svg += field('Style Number', d.styleNumber, 40, 345);
