@@ -1580,7 +1580,7 @@ export function StepArtwork({ data, set, images, onUpload, onRemove }) {
 // region/tier and the garment's complexity. The model's reasoning,
 // vendor context, and timestamp are stored on data.cutSewLaborCostMeta
 // so the user can see why the estimate is what it is.
-function CutSewLaborCostBlock({ data, set, sectionLabel }) {
+export function CutSewLaborCostBlock({ data, set, sectionLabel }) {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState(null);
   const meta = data.cutSewLaborCostMeta;
