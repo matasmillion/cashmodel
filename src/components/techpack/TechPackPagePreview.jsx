@@ -261,34 +261,68 @@ function PageCover({ d, images }) {
         );
       })()}
 
-      {/* ── Quote strip — large, prominent, full-width below the image ───── */}
+      {/* ── Quote strip — header row + one row per cost tier ───────────── */}
       {(() => {
-        const tiers = d.costTiers || [];
-        const moq = tiers[0];
-        const stripY = 555;
-        const stripH = 110;
-        const stripW = PAGE_W - 80;
-        const cells = [
-          { label: 'MOQ',           value: moq && moq.quantity ? `${moq.quantity}` : '—', sub: 'units' },
-          { label: 'Unit Cost',     value: moq && moq.unitCost ? `$${moq.unitCost}` : '—', sub: 'at MOQ' },
-          { label: 'Lead Time',     value: d.leadTimeDays ? `${d.leadTimeDays}` : '—',  sub: 'days' },
-          { label: 'Sample Lead',   value: d.sampleLeadTimeDays ? `${d.sampleLeadTimeDays}` : '—', sub: 'days' },
-          { label: 'Sample Cost',   value: d.sampleCost ? `$${d.sampleCost}` : '—', sub: 'per unit' },
+        const tiers = (d.costTiers || []).filter(t => t.quantity || t.unitCost);
+        const safeTiers = tiers.length ? tiers : [{}];
+        const stripX   = 40;
+        const stripW   = PAGE_W - 80;
+        const headerH  = 38;
+        const rowH     = 32;
+        const stripY   = 555;
+        const stripH   = headerH + safeTiers.length * rowH + 10;
+        // Column layout: Tier | Qty | Unit Cost | Lead Time | Sample Lead | Sample Cost
+        const cols = [
+          { label: 'Tier',         w: 0.10 },
+          { label: 'Quantity',     w: 0.16 },
+          { label: 'Unit Cost',    w: 0.16 },
+          { label: 'Lead Time',    w: 0.19 },
+          { label: 'Sample Lead',  w: 0.19 },
+          { label: 'Sample Cost',  w: 0.20 },
         ];
-        const cw = stripW / cells.length;
+        let xCursor = 0;
+        const colX = cols.map(c => { const x = xCursor; xCursor += c.w; return x; });
+        const tierLabel = (i) => i === 0 ? 'MOQ' : `T${i + 1}`;
         return (
           <g>
-            <rect x={40} y={stripY} width={stripW} height={stripH} fill={FR.slate} />
-            <text x={40 + 16} y={stripY + 22} fontSize="8" fontWeight="bold" fill={FR.sand} letterSpacing="2">QUOTE  ·  {esc((d.quoteProviderLink || 'Quote provider TBD').toUpperCase())}</text>
-            <rect x={40 + 16} y={stripY + 30} width="40" height="1.5" fill={FR.soil} />
-            {cells.map((c, i) => (
-              <g key={i}>
-                {i > 0 && <line x1={40 + i * cw} y1={stripY + 50} x2={40 + i * cw} y2={stripY + stripH - 14} stroke="rgba(245,240,232,0.18)" />}
-                <text x={40 + i * cw + 16} y={stripY + 60} fontSize="8" fontWeight="bold" fill={FR.sand} letterSpacing="1.5">{esc(c.label.toUpperCase())}</text>
-                <text x={40 + i * cw + 16} y={stripY + 88} fontFamily="ui-monospace, 'SF Mono', Menlo, monospace" fontSize="22" fill={FR.salt}>{esc(c.value)}</text>
-                <text x={40 + i * cw + 16} y={stripY + 102} fontSize="9" fill={FR.sand} fontStyle="italic">{esc(c.sub)}</text>
-              </g>
+            <rect x={stripX} y={stripY} width={stripW} height={stripH} fill={FR.slate} />
+            <text x={stripX + 16} y={stripY + 16} fontSize="8" fontWeight="bold" fill={FR.sand} letterSpacing="2">
+              QUOTE  ·  {esc((d.quoteProviderLink || 'Quote provider TBD').toUpperCase())}
+            </text>
+            <rect x={stripX + 16} y={stripY + 22} width="40" height="1.5" fill={FR.soil} />
+            {/* Column headers */}
+            {cols.map((c, ci) => (
+              <text key={ci} x={stripX + 16 + colX[ci] * stripW} y={stripY + headerH - 6}
+                fontSize="7" fontWeight="bold" fill={FR.sand} letterSpacing="1.2">{c.label.toUpperCase()}</text>
             ))}
+            {/* One row per tier */}
+            {safeTiers.map((t, ti) => {
+              const rowY = stripY + headerH + ti * rowH;
+              const vals = [
+                tierLabel(ti),
+                t.quantity ? `${t.quantity}` : '—',
+                t.unitCost ? `$${t.unitCost}` : '—',
+                ti === 0 && d.leadTimeDays ? `${d.leadTimeDays} days` : (ti === 0 ? '—' : ''),
+                ti === 0 && d.sampleLeadTimeDays ? `${d.sampleLeadTimeDays} days` : (ti === 0 ? '—' : ''),
+                ti === 0 && d.sampleCost ? `$${d.sampleCost}` : (ti === 0 ? '—' : ''),
+              ];
+              return (
+                <g key={ti}>
+                  {ti > 0 && <line x1={stripX} y1={rowY} x2={stripX + stripW} y2={rowY} stroke="rgba(245,240,232,0.10)" />}
+                  {vals.map((v, ci) => (
+                    <text key={ci}
+                      x={stripX + 16 + colX[ci] * stripW}
+                      y={rowY + 20}
+                      fontFamily={ci >= 1 ? "ui-monospace, 'SF Mono', Menlo, monospace" : 'inherit'}
+                      fontSize={ci === 0 ? 9 : 14}
+                      fontWeight={ci === 0 ? 'bold' : 'normal'}
+                      fill={ci === 0 ? FR.soil : FR.salt}>
+                      {esc(v)}
+                    </text>
+                  ))}
+                </g>
+              );
+            })}
           </g>
         );
       })()}

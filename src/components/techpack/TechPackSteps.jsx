@@ -13,6 +13,7 @@ import { addSupplier } from '../../utils/plmDirectory';
 import { getFRColor } from '../../utils/colorLibrary';
 import { listTreatments, getTreatmentRollups, createTreatment } from '../../utils/treatmentStore';
 import { TREATMENT_TYPE_LABEL } from '../../utils/treatmentLibrary';
+import { listVendors } from '../../utils/vendorLibrary';
 import { listEmbellishments, createEmbellishment } from '../../utils/embellishmentStore';
 import { computePackDiff } from '../../utils/techPackDiff';
 import { useApp } from '../../context/AppContext';
@@ -325,6 +326,14 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
   const [libraryColors, setLibraryColors] = useState([]);
   useEffect(() => { setLibraryColors(listFRColors()); }, []);
 
+  // Vendors for quote provider dropdown
+  const [vendorNames, setVendorNames] = useState(null);
+  useEffect(() => {
+    listVendors({ includeArchived: false }).then(rows => {
+      setVendorNames((rows || []).map(r => r.name).filter(Boolean).sort());
+    }).catch(() => setVendorNames([]));
+  }, []);
+
   // Colorways — array of { name, frColor, hex }
   const selectedColorways = Array.isArray(data.colorways) ? data.colorways : [];
   const toggleColorway = (color) => {
@@ -572,9 +581,37 @@ export function StepCover({ data, set, images, onUpload, onRemove, existingSuppl
             </Row>
             <div style={{ marginBottom: 10 }}>
               <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 3, letterSpacing: 0.5, textTransform: 'uppercase' }}>Quote Provider</label>
-              <input value={data.quoteProviderLink || ''} onChange={e => set('quoteProviderLink', e.target.value)}
-                placeholder="e.g. Dongguan Shengde Clothing Ltd."
-                style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontFamily: "'Helvetica Neue', sans-serif", fontSize: 13, color: FR.slate, background: FR.white, outline: 'none', boxSizing: 'border-box' }} />
+              {/* Dropdown from vendor library; falls back to free-text if "Other" selected */}
+              {vendorNames && vendorNames.length > 0 && (() => {
+                const isCustom = data.quoteProviderLink && !vendorNames.includes(data.quoteProviderLink);
+                const selectVal = isCustom ? '__custom__' : (data.quoteProviderLink || '');
+                return (
+                  <>
+                    <select
+                      value={selectVal}
+                      onChange={e => {
+                        if (e.target.value === '__custom__') set('quoteProviderLink', '');
+                        else set('quoteProviderLink', e.target.value);
+                      }}
+                      style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.white, outline: 'none', boxSizing: 'border-box', marginBottom: 4 }}>
+                      <option value="">— Select vendor —</option>
+                      {vendorNames.map(n => <option key={n} value={n}>{n}</option>)}
+                      <option value="__custom__">Other / enter manually…</option>
+                    </select>
+                    {(selectVal === '__custom__' || (!selectVal && isCustom)) && (
+                      <input value={data.quoteProviderLink || ''} onChange={e => set('quoteProviderLink', e.target.value)}
+                        placeholder="Enter manufacturer or sourcing agent name"
+                        autoFocus
+                        style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.white, outline: 'none', boxSizing: 'border-box' }} />
+                    )}
+                  </>
+                );
+              })()}
+              {(!vendorNames || vendorNames.length === 0) && (
+                <input value={data.quoteProviderLink || ''} onChange={e => set('quoteProviderLink', e.target.value)}
+                  placeholder="e.g. Dongguan Shengde Clothing Ltd."
+                  style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.white, outline: 'none', boxSizing: 'border-box' }} />
+              )}
               <p style={{ fontSize: 10, color: FR.stone, marginTop: 4, marginBottom: 0 }}>Manufacturer or sourcing agent that provided this quote.</p>
             </div>
           </div>
