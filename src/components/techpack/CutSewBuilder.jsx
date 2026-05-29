@@ -3,14 +3,15 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Trash2 } from 'lucide-react';
-import { FR } from './techPackConstants';
+import { FR, STEPS } from './techPackConstants';
 import { saveCutSew, archiveCutSew, restoreCutSew } from '../../utils/cutSewStore';
 import { CUT_SEW_CATEGORIES, CUT_SEW_CATEGORY_LABEL, CUT_SEW_STATUSES, STANDARD_SIZE_SETS } from '../../utils/cutSewLibrary';
 import { PhotoUpload, AspectPhoto, ASPECTS, ArrayTable, FRColorCell } from './TechPackPrimitives';
 import { CutSewLaborCostBlock } from './TechPackSteps';
 import CutSewCostChat from './CutSewCostChat';
 import FileSlot from './FileSlot';
-import { migrateLegacyCoverIfNeeded, isLegacyDataUrl } from '../../utils/plmAssets';
+import { migrateLegacyCoverIfNeeded, isLegacyDataUrl, useResolvedImageEntries } from '../../utils/plmAssets';
+import TechPackPagePreview from './TechPackPagePreview';
 import CutSewBOMPreview from './CutSewBOMPreview';
 import CoverImagePicker from './CoverImagePicker';
 
@@ -25,6 +26,19 @@ const PAGES = [
   { id: 'pom',       icon: '11', title: 'POM',                phase: 'Cut & Sew' },
   { id: 'grading',   icon: '12', title: 'Size Grading',       phase: 'Cut & Sew' },
 ];
+
+// Maps each Cut & Sew library page to the equivalent Styles tech-pack STEP id,
+// so the live preview can reuse the exact same TechPackPagePreview renderer the
+// Styles builder uses (identical cards, chrome, tables, photo slots).
+const PAGE_TO_STEP_ID = {
+  flatlay:   'flatlays',
+  callouts1: 'sketches',
+  callouts2: 'sketches-2',
+  stitching: 'construction',
+  pattern:   'pattern',
+  pom:       'pom',
+  grading:   'size-matrix',
+};
 
 const STATUS_PILL = {
   draft:    { bg: 'rgba(116,116,116,0.10)', fg: '#5A5A5A' },
@@ -52,6 +66,22 @@ const SEAM_HEADERS = [
   { key: 'thread_color', label: 'Thread Color', render: (v, onChange) => <FRColorCell value={v} onChange={onChange} /> },
   { key: 'thread_type',  label: 'Thread Type',  placeholder: 'Tex 40 / Polyester' },
   { key: 'notes',        label: 'Notes' },
+];
+
+// Default callout entries — mirrors DEFAULT_DATA in techPackConstants so the
+// Call Outs pages always show 4 cards each (page 1 = 1-4, page 2 = 5-8), exactly
+// like the Styles → Call Outs steps.
+const DEFAULT_CALLOUTS_PAGE1 = [
+  { num: 1, title: '', description: '' },
+  { num: 2, title: '', description: '' },
+  { num: 3, title: '', description: '' },
+  { num: 4, title: '', description: '' },
+];
+const DEFAULT_CALLOUTS_PAGE2 = [
+  { num: 5, title: '', description: '' },
+  { num: 6, title: '', description: '' },
+  { num: 7, title: '', description: '' },
+  { num: 8, title: '', description: '' },
 ];
 
 const PIECE_HEADERS = [
@@ -251,6 +281,9 @@ export default function CutSewBuilder({ block, onBack }) {
   }, []);
 
   const images = draft.images || [];
+  // Resolve path-only / blob image entries to signed URLs the SVG <image>
+  // tags can render — same pipeline the Styles builder feeds its preview.
+  const previewImages = useResolvedImageEntries(images);
 
   const toggleArchive = async () => {
     if (draft.status === 'archived') {
@@ -264,25 +297,32 @@ export default function CutSewBuilder({ block, onBack }) {
     }
   };
 
-  // Array helpers — seams
-  const updSeam = (i, k, v) => set({ seams: (draft.seams || []).map((r, idx) => idx === i ? { ...r, [k]: v } : r) });
-  const addSeam = () => set({ seams: [...(draft.seams || []), { operation: '', seam_type: '', stitch_type: '', machine: '', spi_spcm: '', thread_color: '', thread_type: '', notes: '' }] });
-  const rmSeam  = (i) => set({ seams: (draft.seams || []).filter((_, idx) => idx !== i) });
+  // Array helpers — seams. Seed one blank row when empty, like StepConstruction.
+  const seamRows = (draft.seams && draft.seams.length) ? draft.seams : [{ operation: '', seam_type: '', stitch_type: '', machine: '', spi_spcm: '', thread_color: '', thread_type: '', notes: '' }];
+  const updSeam = (i, k, v) => set({ seams: seamRows.map((r, idx) => idx === i ? { ...r, [k]: v } : r) });
+  const addSeam = () => set({ seams: [...seamRows, { operation: '', seam_type: '', stitch_type: '', machine: '', spi_spcm: '', thread_color: '', thread_type: '', notes: '' }] });
+  const rmSeam  = (i) => set({ seams: seamRows.filter((_, idx) => idx !== i) });
 
-  // Array helpers — pattern pieces
-  const updPiece = (i, k, v) => set({ pattern_pieces: (draft.pattern_pieces || []).map((r, idx) => idx === i ? { ...r, [k]: v } : r) });
-  const addPiece = () => set({ pattern_pieces: [...(draft.pattern_pieces || []), { piece_num: '', piece_name: '', quantity: '', fabric: '', grain: '', fusing: '', notes: '' }] });
-  const rmPiece  = (i) => set({ pattern_pieces: (draft.pattern_pieces || []).filter((_, idx) => idx !== i) });
+  // Array helpers — pattern pieces. Seed one blank row when empty, like StepPattern.
+  const pieceRows = (draft.pattern_pieces && draft.pattern_pieces.length) ? draft.pattern_pieces : [{ piece_num: '', piece_name: '', quantity: '', fabric: '', grain: '', fusing: '', notes: '' }];
+  const updPiece = (i, k, v) => set({ pattern_pieces: pieceRows.map((r, idx) => idx === i ? { ...r, [k]: v } : r) });
+  const addPiece = () => set({ pattern_pieces: [...pieceRows, { piece_num: '', piece_name: '', quantity: '', fabric: '', grain: '', fusing: '', notes: '' }] });
+  const rmPiece  = (i) => set({ pattern_pieces: pieceRows.filter((_, idx) => idx !== i) });
 
-  // Array helpers — POM
-  const updPom = (i, k, v) => set({ pom_rows: (draft.pom_rows || []).map((r, idx) => idx === i ? { ...r, [k]: v } : r) });
-  const addPom = () => set({ pom_rows: [...(draft.pom_rows || []), { name: '', tol: '1', s: '', m: '', l: '', xl: '', method: '' }] });
-  const rmPom  = (i) => set({ pom_rows: (draft.pom_rows || []).filter((_, idx) => idx !== i) });
+  // Array helpers — POM. Seed one blank row when empty, like StepPom.
+  const pomEditRows = (draft.pom_rows && draft.pom_rows.length) ? draft.pom_rows : [{ name: '', tol: '1', s: '', m: '', l: '', xl: '', method: '' }];
+  const updPom = (i, k, v) => set({ pom_rows: pomEditRows.map((r, idx) => idx === i ? { ...r, [k]: v } : r) });
+  const addPom = () => set({ pom_rows: [...pomEditRows, { name: '', tol: '1', s: '', m: '', l: '', xl: '', method: '' }] });
+  const rmPom  = (i) => set({ pom_rows: pomEditRows.filter((_, idx) => idx !== i) });
 
-  // Array helpers — callout entries
+  // Array helpers — callout entries. Seed from the defaults when the field is
+  // empty so editing the first card materialises all four (matches Styles).
   const updCallout = (page, i, next) => {
     const field = page === 1 ? 'callout_details_page1' : 'callout_details_page2';
-    set({ [field]: (draft[field] || []).map((e, idx) => idx === i ? next : e) });
+    const base = (draft[field] && draft[field].length)
+      ? draft[field]
+      : (page === 1 ? DEFAULT_CALLOUTS_PAGE1 : DEFAULT_CALLOUTS_PAGE2);
+    set({ [field]: base.map((e, idx) => idx === i ? next : e) });
   };
 
   // Stitch block helpers
@@ -329,6 +369,57 @@ export default function CutSewBuilder({ block, onBack }) {
   const visibleBlocks = stitchBlocks.filter(b => !b.hidden);
   const hiddenBlocks  = stitchBlocks.filter(b =>  b.hidden);
   const activePage    = PAGES[pageIdx];
+
+  // ── Preview mapping ────────────────────────────────────────────────────────
+  // Map the library atom's snake_case fields onto the camelCase `data` shape the
+  // shared TechPackPagePreview page bodies read. The DB schema stays snake_case;
+  // only the preview input is translated so the cards render identically to the
+  // Styles → Cut & Sew cards.
+  const previewData = useMemo(() => ({
+    styleNumber: draft.code || '',
+    collection: '',
+    season: '',
+    revision: draft.version || '',
+    colorways: [],
+    sizeRange: draft.sizes || [],
+    // Flat Lay — slots flatlay-front / flatlay-back (no mapping needed)
+    // Call Outs — pass undefined when empty so the shared body falls back to
+    // its 4-card default (identical to the Styles preview).
+    constructionDetailsPage1: (draft.callout_details_page1 && draft.callout_details_page1.length) ? draft.callout_details_page1 : undefined,
+    constructionDetailsPage2: (draft.callout_details_page2 && draft.callout_details_page2.length) ? draft.callout_details_page2 : undefined,
+    // Stitching
+    seams: (draft.seams || []).map(s => ({
+      operation: s.operation,
+      seamType: s.seam_type,
+      stitchType: s.stitch_type,
+      machine: s.machine,
+      spiSpcm: s.spi_spcm,
+      threadColor: s.thread_color,
+      threadType: s.thread_type,
+      notes: s.notes,
+    })),
+    seamStitchBlocks: draft.seam_stitch_blocks || [],
+    // Pattern & Cutting
+    patternPieces: (draft.pattern_pieces || []).map(p => ({
+      pieceNum: p.piece_num,
+      pieceName: p.piece_name,
+      quantity: p.quantity,
+      fabric: p.fabric,
+      grain: p.grain,
+      fusing: p.fusing,
+      notes: p.notes,
+    })),
+    cuttingInstructions: draft.cutting_instructions || '',
+    pickedFabrics: [],
+    // POM
+    poms: draft.pom_rows || [],
+    sizeType: draft.pom_size_type || 'apparel',
+    measurementMethod: draft.pom_measurement_method || '',
+    // Size Grading
+    gradedSizeMatrix: draft.graded_size_matrix || { baseSize: 'M', grading: [] },
+  }), [draft]);
+
+  const previewStep = STEPS.findIndex(s => s.id === PAGE_TO_STEP_ID[activePage.id]);
 
   // ── Sidebar ──────────────────────────────────────────────────────────────────
 
@@ -483,7 +574,7 @@ export default function CutSewBuilder({ block, onBack }) {
               />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignContent: 'start' }}>
-              {(draft.callout_details_page1 || []).map((entry, i) => (
+              {((draft.callout_details_page1 && draft.callout_details_page1.length) ? draft.callout_details_page1 : DEFAULT_CALLOUTS_PAGE1).slice(0, 4).map((entry, i) => (
                 <CalloutDetailCard
                   key={entry.num}
                   entry={entry}
@@ -518,7 +609,7 @@ export default function CutSewBuilder({ block, onBack }) {
               />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignContent: 'start' }}>
-              {(draft.callout_details_page2 || []).map((entry, i) => (
+              {((draft.callout_details_page2 && draft.callout_details_page2.length) ? draft.callout_details_page2 : DEFAULT_CALLOUTS_PAGE2).slice(0, 4).map((entry, i) => (
                 <CalloutDetailCard
                   key={entry.num}
                   entry={entry}
@@ -578,7 +669,7 @@ export default function CutSewBuilder({ block, onBack }) {
             <label style={SECTION_LABEL}>Seam &amp; Stitch Specification</label>
             <ArrayTable
               headers={SEAM_HEADERS}
-              rows={draft.seams || []}
+              rows={seamRows}
               onUpdate={updSeam}
               onAdd={addSeam}
               onRemove={rmSeam}
@@ -600,7 +691,7 @@ export default function CutSewBuilder({ block, onBack }) {
             <label style={SECTION_LABEL}>Pattern Piece Index</label>
             <ArrayTable
               headers={PIECE_HEADERS}
-              rows={draft.pattern_pieces || []}
+              rows={pieceRows}
               onUpdate={updPiece}
               onAdd={addPiece}
               onRemove={rmPiece}
@@ -612,7 +703,7 @@ export default function CutSewBuilder({ block, onBack }) {
       );
 
       case 'pom': {
-        const pomRows = draft.pom_rows || [];
+        const pomRows = pomEditRows;
         const szH = draft.pom_size_type === 'waist'
           ? [{ key: 's', label: 'W30' }, { key: 'm', label: 'W32' }, { key: 'l', label: 'W34' }, { key: 'xl', label: 'W36' }]
           : [{ key: 's', label: 'S' }, { key: 'm', label: 'M' }, { key: 'l', label: 'L' }, { key: 'xl', label: 'XL' }];
@@ -827,7 +918,15 @@ export default function CutSewBuilder({ block, onBack }) {
           <div style={{ fontSize: 9, color: FR.stone, letterSpacing: 2, fontWeight: 600, textTransform: 'uppercase' }}>Live Preview</div>
           <div style={{ fontSize: 9, color: FR.stone }}>Page {pageIdx + 1} / {PAGES.length}</div>
         </div>
-        <CutSewBOMPreview block={draft} activePage={activePage.id} />
+        {activePage.id === 'identity' ? (
+          // Identity is a library-only "Block Info" page with no Styles
+          // equivalent — keep the block-summary card for it.
+          <CutSewBOMPreview block={draft} activePage="identity" />
+        ) : (
+          // Every Cut & Sew page reuses the exact same renderer the Styles
+          // builder uses, so the cards are pixel-identical.
+          <TechPackPagePreview data={previewData} images={previewImages} step={previewStep} />
+        )}
       </div>
     </div>
   );
