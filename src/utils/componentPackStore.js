@@ -251,9 +251,11 @@ export async function listComponentPacks() {
   return out.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
 
-export async function getComponentPack(id) {
+// Sync a single component pack from cloud → localStorage, notify on change.
+async function _syncComponentPackFromCloud(id) {
   const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
+  if (!IS_SUPABASE_ENABLED || !orgId) return null;
+  try {
     const db = await getAuthedSupabase();
     const { data, error } = await db
       .from('component_packs')
@@ -261,48 +263,39 @@ export async function getComponentPack(id) {
       .eq('id', id)
       .eq('organization_id', orgId)
       .maybeSingle();
-    if (!error && data) {
-      // Last-write-wins: if the local mirror holds unsynced newer edits, keep
-      // them — don't let a staler cloud row overwrite work that hasn't synced.
-      const localHit = readLocal().find(p => p.id === id);
-      if (localHit && (localHit.updated_at || '') > (data.updated_at || '')) {
-        return migrateLegacyVendorKeys(localHit);
+    if (error || !data) { if (error) console.error('getComponentPack:', error); return null; }
+    const rows = readLocal();
+    const idx = rows.findIndex(p => p.id === id);
+    const localRow = idx >= 0 ? rows[idx] : null;
+    // LWW: keep local if it has unsynced newer edits
+    if (localRow && (localRow.updated_at || '') > (data.updated_at || '')) return migrateLegacyVendorKeys(localRow);
+    let merged = localRow ? { ...localRow, ...data } : data;
+    if (!merged.cover_image) {
+      const cover = extractCover(merged.images);
+      if (cover) {
+        merged = { ...merged, cover_image: cover };
+        getAuthedSupabase().then(authDb => {
+          if (authDb) authDb.from('component_packs').update({ cover_image: cover }).eq('id', id).eq('organization_id', orgId)
+            .then(({ error: upErr }) => { if (upErr) console.error('cover_image backfill:', upErr); });
+        });
       }
-      // Mirror the cloud row into localStorage so subsequent
-      // saveComponentPack calls have a local row to update — without this,
-      // a pack opened from cloud-only state has nothing to update locally
-      // and the local cover_image / image fallback paths in
-      // listComponentPacks return nothing, causing the card to render
-      // without a thumbnail even though the user just uploaded one.
-      try {
-        const rows = readLocal();
-        const idx = rows.findIndex(p => p.id === id);
-        if (idx >= 0) rows[idx] = { ...rows[idx], ...data };
-        else rows.push(data);
-        writeLocal(rows);
-      } catch (err) {
-        console.error('getComponentPack mirror:', err);
-      }
-
-      // Lazy backfill: older rows predate the cover_image column; populate it
-      // the first time they're opened so subsequent list views show the
-      // thumbnail without another edit.
-      if (!data.cover_image) {
-        const cover = extractCover(data.images);
-        if (cover) {
-          getAuthedSupabase().then(authDb => {
-            if (authDb) authDb.from('component_packs').update({ cover_image: cover }).eq('id', id).eq('organization_id', orgId)
-              .then(({ error: upErr }) => { if (upErr) console.error('cover_image backfill:', upErr); });
-          });
-          return migrateLegacyVendorKeys({ ...data, cover_image: cover });
-        }
-      }
-      return migrateLegacyVendorKeys(data);
     }
-    if (error) console.error('getComponentPack:', error);
-  }
+    if (idx >= 0) rows[idx] = merged; else rows.push(merged);
+    writeLocal(rows);
+    window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'component_packs', id } }));
+    return migrateLegacyVendorKeys(merged);
+  } catch { return null; }
+}
+
+export async function getComponentPack(id) {
   const local = readLocal().find(p => p.id === id);
-  return local ? migrateLegacyVendorKeys(local) : null;
+  // Stale-while-revalidate: serve local immediately, sync cloud in background.
+  if (local) {
+    _syncComponentPackFromCloud(id).catch(() => {});
+    return migrateLegacyVendorKeys(local);
+  }
+  // No local copy yet — must wait for cloud (first open from another device).
+  return await _syncComponentPackFromCloud(id);
 }
 
 export async function createComponentPack(defaultData) {

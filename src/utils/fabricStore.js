@@ -157,53 +157,30 @@ export async function listFabrics({ includeArchived = false, status = null, weav
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
 
+async function _syncFabricFromCloud(id) {
+  const orgId = getCurrentOrgIdSync();
+  if (!IS_SUPABASE_ENABLED || !orgId) return null;
+  try {
+    const db = await getAuthedSupabase();
+    const { data, error } = await db.from('fabrics').select('*').eq('id', id).eq('organization_id', orgId).maybeSingle();
+    if (error || !data) { if (error) console.error('getFabric:', error); return null; }
+    const local = readLocal();
+    const idx = local.findIndex(r => r.id === id);
+    const localRow = idx >= 0 ? local[idx] : null;
+    if (localRow && (localRow.updated_at || '') > (data.updated_at || '')) return localRow;
+    const merged = localRow ? { ...localRow, ...data } : data;
+    if (idx >= 0) local[idx] = merged; else local.push(merged);
+    writeLocal(local);
+    window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'fabrics', id } }));
+    return merged;
+  } catch { return null; }
+}
+
 export async function getFabric(id) {
   if (!id) return null;
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const db = await getAuthedSupabase();
-    const { data, error } = await db
-      .from('fabrics')
-      .select('*')
-      .eq('id', id)
-      .eq('organization_id', orgId)
-      .maybeSingle();
-    if (!error && data) {
-      // Mirror cloud row into localStorage so subsequent saveFabric calls
-      // have a row to update — without this, a fabric created on another
-      // device or by another process saves to cloud only and disappears
-      // when listFabrics queries Supabase before the cloud row replicates.
-      //
-      // Return the MERGED local row, not the raw cloud row: local-only fields
-      // (documents, and any column not yet present in the DB schema) survive
-      // the round-trip. Returning raw `data` made dropped files vanish on
-      // reopen because the cloud row never carried them.
-      let result = data;
-      try {
-        const local = readLocal();
-        const idx = local.findIndex(r => r.id === id);
-        if (idx >= 0) {
-          const localRow = local[idx];
-          // Last-write-wins: if the local copy carries unsynced newer edits,
-          // keep them — don't let a staler cloud row overwrite work that hasn't
-          // round-tripped yet. Otherwise adopt the cloud row (merged so any
-          // local-only fields like documents survive).
-          if ((localRow.updated_at || '') > (data.updated_at || '')) {
-            result = localRow;
-          } else {
-            local[idx] = { ...localRow, ...data };
-            result = local[idx];
-          }
-        } else {
-          local.push(data);
-        }
-        writeLocal(local);
-      } catch (err) { console.error('getFabric mirror:', err); }
-      return result;
-    }
-    if (error) console.error('getFabric:', error);
-  }
-  return readLocal().find(r => r.id === id) || null;
+  const local = readLocal().find(r => r.id === id);
+  if (local) { _syncFabricFromCloud(id).catch(() => {}); return local; }
+  return await _syncFabricFromCloud(id);
 }
 
 export async function createFabric({ weave = 'jersey', ...overrides } = {}) {

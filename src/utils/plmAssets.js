@@ -49,6 +49,29 @@ const ORPHAN_DEFERRAL_MS = 5_000;
 const signedUrlCache = new Map(); // path -> { url, expiresAt }
 const pendingOrphans = new Map(); // path -> { timer, deletedAt }
 
+// Persist signed URLs to localStorage so they survive page reloads.
+// Signed URLs have a 24h TTL — cached entries are evicted at or near expiry.
+const URL_CACHE_LS_KEY = 'cashmodel_asset_url_ls';
+(function loadPersistedUrlCache() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(URL_CACHE_LS_KEY) || '{}');
+    const now = Date.now();
+    for (const [path, entry] of Object.entries(stored)) {
+      if (entry && entry.expiresAt - SIGNED_URL_REFRESH_BUFFER_MS > now) {
+        signedUrlCache.set(path, entry);
+      }
+    }
+  } catch { /* localStorage unavailable — in-memory cache only */ }
+})();
+
+function persistUrlCache() {
+  try {
+    const obj = {};
+    for (const [path, entry] of signedUrlCache) obj[path] = entry;
+    localStorage.setItem(URL_CACHE_LS_KEY, JSON.stringify(obj));
+  } catch { /* localStorage quota or unavailable — skip persist */ }
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Compression / encoding
 // ─────────────────────────────────────────────────────────────────────
@@ -279,10 +302,9 @@ export async function getAssetUrl(refOrPath) {
     return null;
   }
 
-  signedUrlCache.set(path, {
-    url: data.signedUrl,
-    expiresAt: Date.now() + SIGNED_URL_TTL_SECONDS * 1000,
-  });
+  const entry = { url: data.signedUrl, expiresAt: Date.now() + SIGNED_URL_TTL_SECONDS * 1000 };
+  signedUrlCache.set(path, entry);
+  persistUrlCache();
   return data.signedUrl;
 }
 
@@ -315,6 +337,7 @@ export async function getAssetUrls(refsOrPaths = []) {
       .from(BUCKET)
       .createSignedUrls(toFetch, SIGNED_URL_TTL_SECONDS);
     if (error) console.error('getAssetUrls:', error);
+    let dirty = false;
     for (const item of data || []) {
       if (!item?.signedUrl || !item?.path) continue;
       signedUrlCache.set(item.path, {
@@ -322,7 +345,9 @@ export async function getAssetUrls(refsOrPaths = []) {
         expiresAt: Date.now() + SIGNED_URL_TTL_SECONDS * 1000,
       });
       result.set(item.path, item.signedUrl);
+      dirty = true;
     }
+    if (dirty) persistUrlCache();
   }
   return result;
 }
@@ -445,6 +470,7 @@ export function cancelOrphanDeletion(refsOrPaths = []) {
  */
 export function clearAssetUrlCache() {
   signedUrlCache.clear();
+  try { localStorage.removeItem(URL_CACHE_LS_KEY); } catch { /* ok */ }
 }
 
 /**
@@ -455,7 +481,7 @@ export function clearAssetUrlCache() {
  */
 export function invalidateAssetUrl(refOrPath) {
   const path = pathOf(refOrPath);
-  if (path) signedUrlCache.delete(path);
+  if (path) { signedUrlCache.delete(path); persistUrlCache(); }
 }
 
 // ─────────────────────────────────────────────────────────────────────

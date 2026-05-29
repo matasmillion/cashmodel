@@ -218,13 +218,16 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // we want every BOM-side resolver to re-fetch so they see the new data.
   const [refreshTick, setRefreshTick] = useState(0);
   useEffect(() => {
-    const onFocus = () => setRefreshTick(t => t + 1);
-    const onVis   = () => { if (!document.hidden) setRefreshTick(t => t + 1); };
+    const bump = () => setRefreshTick(t => t + 1);
+    const onFocus = () => bump();
+    const onVis   = () => { if (!document.hidden) bump(); };
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('plm-store-updated', bump);
     return () => {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('plm-store-updated', bump);
     };
   }, []);
   const componentIdKey = [

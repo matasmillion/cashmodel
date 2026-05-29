@@ -112,40 +112,30 @@ export async function listEmbellishments({ includeArchived = false, status = nul
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
 
+async function _syncEmbellishmentFromCloud(id) {
+  const orgId = getCurrentOrgIdSync();
+  if (!IS_SUPABASE_ENABLED || !orgId) return null;
+  try {
+    const db = await getAuthedSupabase();
+    const { data, error } = await db.from('embellishments').select('*').eq('id', id).eq('organization_id', orgId).maybeSingle();
+    if (error || !data) { if (error) console.error('getEmbellishment:', error); return null; }
+    const local = readLocal();
+    const idx = local.findIndex(r => r.id === id);
+    const localRow = idx >= 0 ? local[idx] : null;
+    if (localRow && (localRow.updated_at || '') > (data.updated_at || '')) return localRow;
+    const merged = localRow ? { ...localRow, ...data } : data;
+    if (idx >= 0) local[idx] = merged; else local.push(merged);
+    writeLocal(local);
+    window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'embellishments', id } }));
+    return merged;
+  } catch { return null; }
+}
+
 export async function getEmbellishment(id) {
   if (!id) return null;
-  const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const db = await getAuthedSupabase();
-    const { data, error } = await db
-      .from('embellishments')
-      .select('*')
-      .eq('id', id)
-      .eq('organization_id', orgId)
-      .maybeSingle();
-    if (!error && data) {
-      let result = data;
-      try {
-        const local = readLocal();
-        const idx = local.findIndex(r => r.id === id);
-        if (idx >= 0) {
-          const localRow = local[idx];
-          if ((localRow.updated_at || '') > (data.updated_at || '')) {
-            result = localRow;
-          } else {
-            local[idx] = { ...localRow, ...data };
-            result = local[idx];
-          }
-        } else {
-          local.push(data);
-        }
-        writeLocal(local);
-      } catch (err) { console.error('getEmbellishment mirror:', err); }
-      return result;
-    }
-    if (error) console.error('getEmbellishment:', error);
-  }
-  return readLocal().find(r => r.id === id) || null;
+  const local = readLocal().find(r => r.id === id);
+  if (local) { _syncEmbellishmentFromCloud(id).catch(() => {}); return local; }
+  return await _syncEmbellishmentFromCloud(id);
 }
 
 export async function createEmbellishment({ type = 'embroidery', ...overrides } = {}) {

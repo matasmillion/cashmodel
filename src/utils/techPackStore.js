@@ -198,49 +198,29 @@ export async function listTechPacks() {
 }
 
 // Fetch one tech pack including data + images
-export async function getTechPack(id) {
+async function _syncTechPackFromCloud(id) {
   const orgId = getCurrentOrgIdSync();
-  if (IS_SUPABASE_ENABLED && orgId) {
+  if (!IS_SUPABASE_ENABLED || !orgId) return null;
+  try {
     const db = await getAuthedSupabase();
-    const { data, error } = await db
-      .from('tech_packs')
-      .select('*')
-      .eq('id', id)
-      .eq('organization_id', orgId)
-      .maybeSingle();
-    if (!error && data) {
-      // Mirror cloud row into localStorage so saveTechPack can find a row
-      // to patch — without this, packs created on another device save to
-      // cloud only, the local list-view fallback returns nothing, and
-      // newly uploaded cover images never appear on the card.
-      //
-      // Last-write-wins: if the local mirror holds unsynced newer edits, keep
-      // them — don't let a staler cloud row overwrite work that hasn't synced.
-      let result = data;
-      try {
-        const packs = readLocal();
-        const idx = packs.findIndex(p => p.id === id);
-        if (idx >= 0) {
-          const localRow = packs[idx];
-          if ((localRow.updated_at || '') > (data.updated_at || '')) {
-            result = localRow;
-          } else {
-            packs[idx] = { ...localRow, ...data };
-            result = packs[idx];
-          }
-        } else {
-          packs.push(data);
-        }
-        writeLocal(packs);
-      } catch (err) {
-        console.error('getTechPack mirror:', err);
-      }
-      return migrateLegacyVendorKeys(result);
-    }
-    if (error) console.error('getTechPack:', error);
-  }
+    const { data, error } = await db.from('tech_packs').select('*').eq('id', id).eq('organization_id', orgId).maybeSingle();
+    if (error || !data) { if (error) console.error('getTechPack:', error); return null; }
+    const packs = readLocal();
+    const idx = packs.findIndex(p => p.id === id);
+    const localRow = idx >= 0 ? packs[idx] : null;
+    if (localRow && (localRow.updated_at || '') > (data.updated_at || '')) return migrateLegacyVendorKeys(localRow);
+    const merged = localRow ? { ...localRow, ...data } : data;
+    if (idx >= 0) packs[idx] = merged; else packs.push(merged);
+    writeLocal(packs);
+    window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'tech_packs', id } }));
+    return migrateLegacyVendorKeys(merged);
+  } catch { return null; }
+}
+
+export async function getTechPack(id) {
   const local = readLocal().find(p => p.id === id);
-  return local ? migrateLegacyVendorKeys(local) : null;
+  if (local) { _syncTechPackFromCloud(id).catch(() => {}); return migrateLegacyVendorKeys(local); }
+  return await _syncTechPackFromCloud(id);
 }
 
 // Create a new empty tech pack
