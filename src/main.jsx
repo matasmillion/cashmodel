@@ -8,6 +8,9 @@ import './utils/plmMigrationStatus'
 // Side-effect import: registers window.plmBackup() so a backup can be
 // triggered from the browser console (also surfaced as a UI button).
 import './utils/plmBackup'
+// Side-effect import: boots the offline sync outbox (flushes queued edits to
+// the cloud on reconnect / interval / at startup).
+import './utils/startSync'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

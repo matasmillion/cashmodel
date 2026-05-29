@@ -12,7 +12,7 @@ import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync } from '../lib/auth';
 import { emptyFabric, FABRIC_WEAVE_CODE } from './fabricLibrary';
 import { copyCoverImage } from './plmAssets';
-import { robustUpsertAtom, robustUpsertAtomBatch } from './atomCloudSync';
+import { robustUpsertAtom, robustUpsertAtomBatch, mergeByIdNewest, dedupeCodesOnce } from './atomCloudSync';
 
 const LOCAL_KEY = 'cashmodel_fabrics';
 
@@ -110,16 +110,13 @@ function filterRows(rows, { includeArchived = false, status = null, weave = null
   return out;
 }
 
-// Cloud + local always get unioned at read time so local-only rows
-// (cloud insert failed silently, RLS rejected, network blip, JWT/org not
-// loaded yet) never disappear from the list view. Cloud wins on conflict;
-// local fills in any rows the cloud doesn't have yet.
+// Cloud + local merged at read time, keeping the NEWEST updated_at per id
+// (last-write-wins). Local-only rows (queued offline edits, RLS blip, JWT not
+// loaded yet) never disappear; an edit made on another computer (newer cloud
+// updated_at) wins over a stale local copy; an unsynced local edit (newer
+// local updated_at) shows until it syncs.
 function unionByIdLocalFirst(cloudRows, localRows) {
-  const seen = new Set();
-  const out = [];
-  (cloudRows || []).forEach(r => { if (r && r.id && !seen.has(r.id)) { seen.add(r.id); out.push(r); } });
-  (localRows || []).forEach(r => { if (r && r.id && !seen.has(r.id)) { seen.add(r.id); out.push(r); } });
-  return out;
+  return mergeByIdNewest(cloudRows, localRows);
 }
 
 // Heal local-only fabrics: any row in localStorage that's not in cloud gets
@@ -151,7 +148,11 @@ export async function listFabrics({ includeArchived = false, status = null, weav
     try { await healOrphanFabrics(readLocal(), cloudRows); }
     catch (err) { console.error('healOrphanFabrics:', err); }
   }
-  const merged = unionByIdLocalFirst(cloudRows, readLocal());
+  let merged = unionByIdLocalFirst(cloudRows, readLocal());
+  if (IS_SUPABASE_ENABLED && orgId) {
+    try { merged = await dedupeCodesOnce(merged, { discriminatorField: 'weave', nextCode: nextCodeFor, save: saveFabric }); }
+    catch (err) { console.error('fabric dedupeCodes:', err); }
+  }
   return filterRows(merged, filterOpts)
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
@@ -181,8 +182,21 @@ export async function getFabric(id) {
       try {
         const local = readLocal();
         const idx = local.findIndex(r => r.id === id);
-        if (idx >= 0) { local[idx] = { ...local[idx], ...data }; result = local[idx]; }
-        else local.push(data);
+        if (idx >= 0) {
+          const localRow = local[idx];
+          // Last-write-wins: if the local copy carries unsynced newer edits,
+          // keep them — don't let a staler cloud row overwrite work that hasn't
+          // round-tripped yet. Otherwise adopt the cloud row (merged so any
+          // local-only fields like documents survive).
+          if ((localRow.updated_at || '') > (data.updated_at || '')) {
+            result = localRow;
+          } else {
+            local[idx] = { ...localRow, ...data };
+            result = local[idx];
+          }
+        } else {
+          local.push(data);
+        }
         writeLocal(local);
       } catch (err) { console.error('getFabric mirror:', err); }
       return result;

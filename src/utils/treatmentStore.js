@@ -18,7 +18,7 @@ import { getCurrentOrgIdSync } from '../lib/auth';
 import { emptyTreatment, TREATMENT_TYPE_CODE } from './treatmentLibrary';
 import { addVendor } from './vendorLibrary';
 import { copyCoverImage } from './plmAssets';
-import { robustUpsertAtom, robustUpsertAtomBatch } from './atomCloudSync';
+import { robustUpsertAtom, robustUpsertAtomBatch, mergeByIdNewest, dedupeCodesOnce } from './atomCloudSync';
 
 const LOCAL_KEY = 'cashmodel_treatments';
 
@@ -90,11 +90,10 @@ function filterRows(rows, { includeArchived = false, status = null, type = null 
 // disappear from the list view (cloud insert failed silently, RLS rejected,
 // network blip, JWT/org not loaded yet).
 function unionByIdCloudFirst(cloudRows, localRows) {
-  const seen = new Set();
-  const out = [];
-  (cloudRows || []).forEach(r => { if (r && r.id && !seen.has(r.id)) { seen.add(r.id); out.push(r); } });
-  (localRows || []).forEach(r => { if (r && r.id && !seen.has(r.id)) { seen.add(r.id); out.push(r); } });
-  return out;
+  // Last-write-wins merge — newest updated_at per id. Local-only rows survive,
+  // an edit from another computer wins over a stale local copy, and an unsynced
+  // local edit shows until it syncs.
+  return mergeByIdNewest(cloudRows, localRows);
 }
 
 async function healOrphanTreatments(localRows, cloudRows) {
@@ -121,7 +120,13 @@ export async function listTreatments({ includeArchived = false, status = null, t
     try { await healOrphanTreatments(readLocal(), cloudRows); }
     catch (err) { console.error('healOrphanTreatments:', err); }
   }
-  const merged = unionByIdCloudFirst(cloudRows, readLocal());
+  let merged = unionByIdCloudFirst(cloudRows, readLocal());
+  // When both devices' rows are visible (online), reconcile any duplicate
+  // codes two computers minted offline. No-op when there are none.
+  if (IS_SUPABASE_ENABLED && orgId) {
+    try { merged = await dedupeCodesOnce(merged, { discriminatorField: 'type', nextCode: nextCodeFor, save: saveTreatment }); }
+    catch (err) { console.error('treatment dedupeCodes:', err); }
+  }
   return filterRows(merged, filterOpts)
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
@@ -138,14 +143,25 @@ export async function getTreatment(id) {
       .eq('organization_id', orgId)
       .maybeSingle();
     if (!error && data) {
+      let result = data;
       try {
         const local = readLocal();
         const idx = local.findIndex(r => r.id === id);
-        if (idx >= 0) local[idx] = { ...local[idx], ...data };
-        else local.push(data);
+        if (idx >= 0) {
+          const localRow = local[idx];
+          // Last-write-wins: keep unsynced newer local edits; otherwise adopt cloud.
+          if ((localRow.updated_at || '') > (data.updated_at || '')) {
+            result = localRow;
+          } else {
+            local[idx] = { ...localRow, ...data };
+            result = local[idx];
+          }
+        } else {
+          local.push(data);
+        }
         writeLocal(local);
       } catch (err) { console.error('getTreatment mirror:', err); }
-      return data;
+      return result;
     }
     if (error) console.error('getTreatment:', error);
   }

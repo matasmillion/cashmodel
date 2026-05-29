@@ -4,6 +4,7 @@
 import { IS_SUPABASE_ENABLED, getAuthedSupabase, refreshAuthedSupabase } from '../lib/supabase';
 import { getCurrentUserIdSync, getCurrentOrgIdSync, getJwtOrgId } from '../lib/auth';
 import { persistableImages, deleteAssets, copyAsset, scheduleOrphanDeletion, cancelOrphanDeletion } from './plmAssets';
+import { enqueue } from './syncQueue';
 
 const LOCAL_KEY = 'cashmodel_techpacks';
 
@@ -169,9 +170,16 @@ export async function listTechPacks() {
   (cloudRows || []).forEach(r => {
     if (!r || !r.id) return;
     seen.add(r.id);
+    const mirror = local.find(l => l.id === r.id);
+    // Last-write-wins: if the local mirror carries unsynced newer edits (e.g.
+    // edited offline, not yet flushed), show the local version, not the staler
+    // cloud row.
+    if (mirror && (mirror.updated_at || '') > (r.updated_at || '')) {
+      out.push(projectLocal(mirror));
+      return;
+    }
     // Backfill cover_image / total_unit_cost from local mirror when cloud
     // doesn't carry those projections.
-    const mirror = local.find(l => l.id === r.id);
     let row = r;
     if (mirror) {
       const localCover = extractCover(mirror.images);
@@ -205,16 +213,29 @@ export async function getTechPack(id) {
       // to patch — without this, packs created on another device save to
       // cloud only, the local list-view fallback returns nothing, and
       // newly uploaded cover images never appear on the card.
+      //
+      // Last-write-wins: if the local mirror holds unsynced newer edits, keep
+      // them — don't let a staler cloud row overwrite work that hasn't synced.
+      let result = data;
       try {
         const packs = readLocal();
         const idx = packs.findIndex(p => p.id === id);
-        if (idx >= 0) packs[idx] = { ...packs[idx], ...data };
-        else packs.push(data);
+        if (idx >= 0) {
+          const localRow = packs[idx];
+          if ((localRow.updated_at || '') > (data.updated_at || '')) {
+            result = localRow;
+          } else {
+            packs[idx] = { ...localRow, ...data };
+            result = packs[idx];
+          }
+        } else {
+          packs.push(data);
+        }
         writeLocal(packs);
       } catch (err) {
         console.error('getTechPack mirror:', err);
       }
-      return migrateLegacyVendorKeys(data);
+      return migrateLegacyVendorKeys(result);
     }
     if (error) console.error('getTechPack:', error);
   }
@@ -297,7 +318,11 @@ export async function saveTechPack(id, updates) {
   if (!jwtOrgId) {
     const jwtErr = Object.assign(new Error('JWT is missing the org_id claim — open Storage Health to diagnose'), { code: 'JWT_NO_ORG_ID' });
     console.error('saveTechPack:', jwtErr);
-    return { ok: false, error: jwtErr };
+    // Park it in the durable outbox — when the JWT/org loads (or wifi returns)
+    // the queue flushes it through the LWW-guarded writer. Edit is already
+    // safe in localStorage; this guarantees it reaches the cloud.
+    enqueue({ table: 'tech_packs', id, op: 'upsert', payload: { id, ...corePatch }, onConflict: 'id', updated_at: now });
+    return { ok: false, error: jwtErr, queued: true };
   }
 
   let db = await getAuthedSupabase();
@@ -405,7 +430,10 @@ export async function saveTechPack(id, updates) {
     break;
   }
   console.error('saveTechPack:', lastError);
-  return { ok: false, error: lastError };
+  // Couldn't reach the cloud after retries (offline / blip / transient RLS) —
+  // park it so the durable outbox heals it later through the LWW-guarded path.
+  enqueue({ table: 'tech_packs', id, op: 'upsert', payload: { id, ...corePatch }, onConflict: 'id', updated_at: now });
+  return { ok: false, error: lastError, queued: true };
 }
 
 // Soft delete — moves a tech pack to Trash. Storage files stay so a

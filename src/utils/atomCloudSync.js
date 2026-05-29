@@ -29,6 +29,8 @@
 
 import { IS_SUPABASE_ENABLED, getAuthedSupabase, refreshAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync, getCurrentUserIdSync, getJwtOrgId } from '../lib/auth';
+import { enqueue, registerFlusher } from './syncQueue';
+import { recordConflict } from './conflictBackup';
 
 const RLS_CODE = '42501';
 const SCHEMA_CACHE_CODE = 'PGRST204';
@@ -39,6 +41,114 @@ const PROTECTED_COLUMNS = new Set(['id', 'organization_id', 'user_id', 'code', '
 const _syncLog = [];
 const _lastErrorByTable = new Map();
 let _ensuredOrgs = new Set();
+
+// localStorage keys for the record-based stores, so the conflict path can
+// converge a device's local mirror to the cloud winner. Keyed by DB table.
+const LOCAL_KEY_BY_TABLE = {
+  fabrics: 'cashmodel_fabrics',
+  treatments: 'cashmodel_treatments',
+  cut_sew: 'cashmodel_cut_sew',
+  embellishments: 'cashmodel_embellishments',
+  patterns: 'cashmodel_patterns',
+  tech_packs: 'cashmodel_techpacks',
+  component_packs: 'cashmodel_component_packs',
+};
+
+function readLocalArray(lsKey) {
+  try { return JSON.parse(localStorage.getItem(lsKey) || '[]'); }
+  catch { return []; }
+}
+
+function writeLocalArray(lsKey, rows) {
+  try { localStorage.setItem(lsKey, JSON.stringify(rows)); }
+  catch (err) { console.error('cloudSync local mirror write:', err); }
+}
+
+// On a lost conflict, overwrite the local copy of {id} with the cloud winner
+// so the device immediately reflects the version that won.
+function applyCloudWinnerToLocal(table, cloudRow) {
+  const lsKey = LOCAL_KEY_BY_TABLE[table];
+  if (!lsKey || !cloudRow || !cloudRow.id) return;
+  const rows = readLocalArray(lsKey);
+  const idx = rows.findIndex(r => r && r.id === cloudRow.id);
+  if (idx >= 0) rows[idx] = { ...rows[idx], ...cloudRow };
+  else rows.push(cloudRow);
+  writeLocalArray(lsKey, rows);
+}
+
+// Transient = worth retrying later from the outbox (offline, blip, timeout,
+// rate-limit, 5xx). Anything else (RLS, bad column) won't fix itself by
+// waiting, so it shouldn't sit in the queue forever.
+export function isTransientNetworkError(err) {
+  const msg = String(err?.message || '').toLowerCase();
+  return /networkerror|failed to fetch|fetch failed|timeout|aborted|temporarily|rate limit|429|503|502|504|connection|offline/i.test(msg);
+}
+
+// Merge cloud + local rows keeping the NEWEST updated_at per id. This is the
+// read-side half of last-write-wins: a record edited offline (newer local
+// updated_at) shows the local edit until it syncs; a record edited on the
+// other laptop (newer cloud updated_at) shows the cloud version. Replaces the
+// old "cloud always wins" union so unsynced local edits never vanish from a
+// list, and stale local copies never mask a newer cloud edit.
+export function mergeByIdNewest(cloudRows, localRows) {
+  const map = new Map();
+  for (const r of cloudRows || []) {
+    if (r && r.id) map.set(r.id, r);
+  }
+  for (const r of localRows || []) {
+    if (!r || !r.id) continue;
+    const existing = map.get(r.id);
+    if (!existing) { map.set(r.id, r); continue; }
+    if ((r.updated_at || '') > (existing.updated_at || '')) map.set(r.id, r);
+  }
+  return [...map.values()];
+}
+
+// Two computers editing the library offline at the same time can both mint the
+// same display code (e.g. TR-WSH-004) because each only sees its own local
+// sequence. Codes aren't primary keys, so this is cosmetic — but the operator
+// asked for it cleaned up. findDuplicateCodeRows returns the rows that should
+// be re-coded: for each duplicated code we keep the earliest-created row and
+// flag the rest.
+export function findDuplicateCodeRows(rows) {
+  const byCode = new Map();
+  for (const r of rows || []) {
+    if (!r || !r.code) continue;
+    const group = byCode.get(r.code) || [];
+    group.push(r);
+    byCode.set(r.code, group);
+  }
+  const dupes = [];
+  for (const group of byCode.values()) {
+    if (group.length < 2) continue;
+    const sorted = [...group].sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+    dupes.push(...sorted.slice(1));
+  }
+  return dupes;
+}
+
+// Reissue colliding codes once. `nextCode(discriminator, rows)` mints a fresh
+// non-colliding code (each atom store's own nextCodeFor); `save(id, patch)`
+// persists it (which also re-syncs through the LWW writer). Returns the row
+// list with the new codes applied so the caller can render the reconciled set
+// immediately. No-op (and zero writes) when there are no duplicates.
+export async function dedupeCodesOnce(rows, { discriminatorField, nextCode, save }) {
+  const dupes = findDuplicateCodeRows(rows);
+  if (!dupes.length) return rows;
+  let working = [...rows];
+  for (const d of dupes) {
+    try {
+      const fresh = nextCode(d[discriminatorField], working);
+      if (!fresh || fresh === d.code) continue;
+      await save(d.id, { code: fresh });
+      working = working.map(r => (r.id === d.id ? { ...r, code: fresh } : r));
+      recordSyncEvent({ table: 'dedupe', op: 'recode', id: d.id, ok: true, from: d.code, to: fresh });
+    } catch (err) {
+      console.error('dedupeCodesOnce:', err);
+    }
+  }
+  return working;
+}
 
 export function recordSyncEvent(evt) {
   const entry = { ts: Date.now(), ...evt };
@@ -186,67 +296,110 @@ export async function robustUpsertAtom(table, row, opts = {}) {
   if (!IS_SUPABASE_ENABLED) {
     return { ok: false, skipped: 'supabase-disabled' };
   }
-  const userId = getCurrentUserIdSync();
-  const orgId = await getReconciledOrgId();
-  if (!orgId) {
-    const error = new Error('JWT is missing the org_id claim — open Sync Diagnostics to investigate.');
-    error.code = 'NO_JWT_ORG_ID';
-    recordSyncEvent({ table, op: 'upsert', id: row?.id, ok: false, error: error.message, code: error.code });
-    return { ok: false, error };
-  }
+  const onConflict = opts.onConflict || 'id';
+  const result = await executeCloudWrite({
+    table, id: row?.id, op: 'upsert', payload: row, onConflict, updated_at: row?.updated_at,
+  });
 
-  let db = await getAuthedSupabase();
-  if (!db) {
-    const error = new Error('Supabase client not available.');
-    recordSyncEvent({ table, op: 'upsert', id: row?.id, ok: false, error: error.message });
-    return { ok: false, error };
-  }
-
-  await ensureOrgExists(db, orgId);
-
-  const initialPayload = { ...row, organization_id: orgId, user_id: row?.user_id || userId };
-  const upsertOpts = opts.onConflict ? { onConflict: opts.onConflict } : undefined;
-
-  let result = await tryUpsertWithSchemaRecovery(db, table, initialPayload, upsertOpts);
   if (result.ok) {
     recordSyncEvent({
-      table, op: 'upsert', id: row?.id, ok: true,
-      droppedColumns: result.dropped.length ? result.dropped : undefined,
+      table, op: 'upsert', id: row?.id, ok: true, retried: result.retried,
+      droppedColumns: result.droppedColumns?.length ? result.droppedColumns : undefined,
     });
-    return { ok: true, droppedColumns: result.dropped };
+    return { ok: true, retried: result.retried, droppedColumns: result.droppedColumns };
   }
 
-  // RLS rejection — refresh the JWT (so a token minted before the
-  // active org was set gets replaced) and retry once with the fresh
-  // org_id. Schema-cache recovery runs on the retry too.
+  // Cloud held a NEWER version — last-write-wins resolved it without us. The
+  // losing copy was stashed (conflictBackup) and local converged to the
+  // winner; from the caller's POV this is a success, not a dropped edit.
+  if (result.conflict) {
+    recordSyncEvent({ table, op: 'upsert', id: row?.id, ok: true, conflict: true });
+    return { ok: true, conflict: true };
+  }
+
+  // Couldn't reach the cloud (offline / blip / JWT not ready) — park the edit
+  // in the durable outbox so it syncs when connectivity returns. The edit is
+  // already safe in localStorage; this just guarantees it reaches the cloud.
+  if (result.retryable) {
+    enqueue({ table, id: row?.id, op: 'upsert', payload: row, onConflict, updated_at: row?.updated_at });
+  }
+  recordSyncEvent({
+    table, op: 'upsert', id: row?.id, ok: false, queued: !!result.retryable,
+    error: result.error?.message, code: result.error?.code,
+    droppedColumns: result.droppedColumns?.length ? result.droppedColumns : undefined,
+  });
+  return { ok: false, error: result.error, queued: !!result.retryable, droppedColumns: result.droppedColumns };
+}
+
+// The canonical cloud writer used by BOTH the immediate save path
+// (robustUpsertAtom) and the outbox flush (registered below). Returns a
+// normalized { ok, retryable, conflict, retried, droppedColumns, error }.
+//
+//   • Last-write-wins guard: for id-keyed records, if the cloud copy carries
+//     a newer updated_at than ours, we stand down — stash our version as a
+//     recoverable backup, converge local to the cloud winner, return
+//     { conflict: true }. This is what stops a stale offline edit from
+//     clobbering a newer edit made on another computer.
+//   • retryable distinguishes "try again later from the queue" (offline,
+//     timeout, 5xx, JWT-not-ready) from "won't fix itself" (RLS, bad column).
+export async function executeCloudWrite(entry) {
+  if (!IS_SUPABASE_ENABLED) return { ok: false, retryable: true, skipped: 'supabase-disabled' };
+
+  const orgId = await getReconciledOrgId();
+  if (!orgId) {
+    const error = Object.assign(new Error('JWT is missing the org_id claim — retry when signed-in/online.'), { code: 'NO_JWT_ORG_ID' });
+    return { ok: false, retryable: true, error };
+  }
+  let db = await getAuthedSupabase();
+  if (!db) return { ok: false, retryable: true, error: new Error('Supabase client not available.') };
+  await ensureOrgExists(db, orgId);
+
+  // Hard delete (purge) — rare; soft-delete/archive flows through upsert.
+  if (entry.op === 'delete') {
+    const { error } = await db.from(entry.table).delete().eq('id', entry.id).eq('organization_id', orgId);
+    if (!error) return { ok: true };
+    if (isTransientNetworkError(error)) return { ok: false, retryable: true, error };
+    if (isRlsError(error)) {
+      db = await refreshAuthedSupabase();
+      const r2 = await db.from(entry.table).delete().eq('id', entry.id).eq('organization_id', orgId);
+      if (!r2.error) return { ok: true };
+      return { ok: false, retryable: isTransientNetworkError(r2.error), error: r2.error };
+    }
+    return { ok: false, retryable: false, error };
+  }
+
+  const onConflict = entry.onConflict || 'id';
+  const userId = getCurrentUserIdSync();
+  const payload = { ...entry.payload, organization_id: orgId, user_id: entry.payload?.user_id || userId };
+
+  // Last-write-wins guard (id-keyed records that carry a timestamp).
+  if (onConflict === 'id' && entry.updated_at) {
+    const sel = await db.from(entry.table).select('*').eq('id', entry.id).eq('organization_id', orgId).maybeSingle();
+    if (sel.error && isTransientNetworkError(sel.error)) return { ok: false, retryable: true, error: sel.error };
+    const cloudRow = sel.data;
+    if (cloudRow && (cloudRow.updated_at || '') > (entry.updated_at || '')) {
+      recordConflict({ table: entry.table, id: entry.id, localVersion: entry.payload, cloudVersion: cloudRow });
+      applyCloudWinnerToLocal(entry.table, cloudRow);
+      return { ok: false, conflict: true };
+    }
+  }
+
+  const upsertOpts = { onConflict };
+  let result = await tryUpsertWithSchemaRecovery(db, entry.table, payload, upsertOpts);
+  if (result.ok) return { ok: true, droppedColumns: result.dropped };
+
+  // RLS rejection — refresh the JWT and retry once with the re-derived org_id.
   if (isRlsError(result.error)) {
     db = await refreshAuthedSupabase();
     const fresh = await getJwtOrgId({ skipCache: true });
-    const retryPayload = fresh
-      ? { ...result.payload, organization_id: fresh }
-      : result.payload;
-    result = await tryUpsertWithSchemaRecovery(db, table, retryPayload, upsertOpts);
-    if (result.ok) {
-      recordSyncEvent({
-        table, op: 'upsert', id: row?.id, ok: true, retried: true,
-        droppedColumns: result.dropped.length ? result.dropped : undefined,
-      });
-      return { ok: true, retried: true, droppedColumns: result.dropped };
-    }
-    recordSyncEvent({
-      table, op: 'upsert', id: row?.id, ok: false, retried: true,
-      error: result.error.message, code: result.error.code,
-      droppedColumns: result.dropped.length ? result.dropped : undefined,
-    });
-    return { ok: false, retried: true, error: result.error, droppedColumns: result.dropped };
+    const retryPayload = fresh ? { ...result.payload, organization_id: fresh } : result.payload;
+    result = await tryUpsertWithSchemaRecovery(db, entry.table, retryPayload, upsertOpts);
+    if (result.ok) return { ok: true, retried: true, droppedColumns: result.dropped };
+    return { ok: false, retryable: isTransientNetworkError(result.error), error: result.error, droppedColumns: result.dropped };
   }
 
-  recordSyncEvent({
-    table, op: 'upsert', id: row?.id, ok: false,
-    error: result.error.message, code: result.error.code, details: result.error.details,
-    droppedColumns: result.dropped.length ? result.dropped : undefined,
-  });
-  return { ok: false, error: result.error, droppedColumns: result.dropped };
+  if (isTransientNetworkError(result.error)) return { ok: false, retryable: true, error: result.error, droppedColumns: result.dropped };
+  return { ok: false, retryable: false, error: result.error, droppedColumns: result.dropped };
 }
 
 // Batch wrapper — iterates per-row so a single bad row doesn't poison
@@ -269,3 +422,19 @@ export async function robustUpsertAtomBatch(table, rows, opts = {}) {
 export function resetEnsureOrgCache() {
   _ensuredOrgs = new Set();
 }
+
+// Wire the durable outbox: when a parked edit is retried, run it through the
+// same canonical writer (LWW guard included) and log the outcome so the Sync
+// Diagnostics panel reflects queue drains. Returning the normalized result
+// lets syncQueue decide keep/drop.
+registerFlusher(async (entry) => {
+  const result = await executeCloudWrite(entry);
+  if (result.ok) {
+    recordSyncEvent({ table: entry.table, op: entry.op, id: entry.id, ok: true, fromQueue: true, retried: result.retried });
+  } else if (result.conflict) {
+    recordSyncEvent({ table: entry.table, op: entry.op, id: entry.id, ok: true, fromQueue: true, conflict: true });
+  } else if (!result.retryable) {
+    recordSyncEvent({ table: entry.table, op: entry.op, id: entry.id, ok: false, fromQueue: true, error: result.error?.message, code: result.error?.code });
+  }
+  return result;
+});

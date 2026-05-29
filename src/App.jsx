@@ -28,6 +28,7 @@ import LegalRoutes from './components/legal/LegalRoutes';
 import TopBar from './components/TopBar';
 import VendorPortalRoutes from './components/vendor/VendorPortalRoutes';
 import OrgSettings from './components/settings/OrgSettings';
+import SyncStatusBadge from './components/SyncStatusBadge';
 
 function OrgGate({ children }) {
   const { isLoaded, organization } = useOrganization();
@@ -82,6 +83,7 @@ function Dashboard() {
       </main>
 
       <SiteFooter />
+      <SyncStatusBadge />
     </div>
   );
 }

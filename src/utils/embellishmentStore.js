@@ -11,7 +11,7 @@ import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync } from '../lib/auth';
 import { emptyEmbellishment, EMBELLISHMENT_TYPE_CODE } from './embellishmentLibrary';
 import { copyCoverImage } from './plmAssets';
-import { robustUpsertAtom, robustUpsertAtomBatch } from './atomCloudSync';
+import { robustUpsertAtom, robustUpsertAtomBatch, mergeByIdNewest, dedupeCodesOnce } from './atomCloudSync';
 
 const LOCAL_KEY = 'cashmodel_embellishments';
 
@@ -75,11 +75,8 @@ function filterRows(rows, { includeArchived = false, status = null, type = null 
 // disappear from the list view (cloud insert failed silently, RLS rejected,
 // network blip, JWT/org not loaded yet).
 function unionByIdCloudFirst(cloudRows, localRows) {
-  const seen = new Set();
-  const out = [];
-  (cloudRows || []).forEach(r => { if (r && r.id && !seen.has(r.id)) { seen.add(r.id); out.push(r); } });
-  (localRows || []).forEach(r => { if (r && r.id && !seen.has(r.id)) { seen.add(r.id); out.push(r); } });
-  return out;
+  // Last-write-wins merge — newest updated_at per id (see atomCloudSync).
+  return mergeByIdNewest(cloudRows, localRows);
 }
 
 async function healOrphanEmbellishments(localRows, cloudRows) {
@@ -106,7 +103,11 @@ export async function listEmbellishments({ includeArchived = false, status = nul
     try { await healOrphanEmbellishments(readLocal(), cloudRows); }
     catch (err) { console.error('healOrphanEmbellishments:', err); }
   }
-  const merged = unionByIdCloudFirst(cloudRows, readLocal());
+  let merged = unionByIdCloudFirst(cloudRows, readLocal());
+  if (IS_SUPABASE_ENABLED && orgId) {
+    try { merged = await dedupeCodesOnce(merged, { discriminatorField: 'type', nextCode: nextCodeFor, save: saveEmbellishment }); }
+    catch (err) { console.error('embellishment dedupeCodes:', err); }
+  }
   return filterRows(merged, filterOpts)
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
@@ -123,14 +124,24 @@ export async function getEmbellishment(id) {
       .eq('organization_id', orgId)
       .maybeSingle();
     if (!error && data) {
+      let result = data;
       try {
         const local = readLocal();
         const idx = local.findIndex(r => r.id === id);
-        if (idx >= 0) local[idx] = { ...local[idx], ...data };
-        else local.push(data);
+        if (idx >= 0) {
+          const localRow = local[idx];
+          if ((localRow.updated_at || '') > (data.updated_at || '')) {
+            result = localRow;
+          } else {
+            local[idx] = { ...localRow, ...data };
+            result = local[idx];
+          }
+        } else {
+          local.push(data);
+        }
         writeLocal(local);
       } catch (err) { console.error('getEmbellishment mirror:', err); }
-      return data;
+      return result;
     }
     if (error) console.error('getEmbellishment:', error);
   }

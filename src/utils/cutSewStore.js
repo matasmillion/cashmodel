@@ -19,7 +19,7 @@ import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync } from '../lib/auth';
 import { emptyCutSew, CUT_SEW_CATEGORIES, CUT_SEW_CATEGORY_CODE } from './cutSewLibrary';
 import { copyCoverImage } from './plmAssets';
-import { robustUpsertAtom, robustUpsertAtomBatch } from './atomCloudSync';
+import { robustUpsertAtom, robustUpsertAtomBatch, mergeByIdNewest, dedupeCodesOnce } from './atomCloudSync';
 
 const LOCAL_KEY = 'cashmodel_cut_sew';
 
@@ -81,11 +81,8 @@ function filterRows(rows, { includeArchived = false, status = null, category = n
 // disappear from the list view (cloud insert failed silently, RLS rejected,
 // network blip, JWT/org not loaded yet).
 function unionByIdCloudFirst(cloudRows, localRows) {
-  const seen = new Set();
-  const out = [];
-  (cloudRows || []).forEach(r => { if (r && r.id && !seen.has(r.id)) { seen.add(r.id); out.push(r); } });
-  (localRows || []).forEach(r => { if (r && r.id && !seen.has(r.id)) { seen.add(r.id); out.push(r); } });
-  return out;
+  // Last-write-wins merge — newest updated_at per id (see atomCloudSync).
+  return mergeByIdNewest(cloudRows, localRows);
 }
 
 async function healOrphanCutSew(localRows, cloudRows) {
@@ -112,7 +109,11 @@ export async function listCutSew({ includeArchived = false, status = null, categ
     try { await healOrphanCutSew(readLocal(), cloudRows); }
     catch (err) { console.error('healOrphanCutSew:', err); }
   }
-  const merged = unionByIdCloudFirst(cloudRows, readLocal());
+  let merged = unionByIdCloudFirst(cloudRows, readLocal());
+  if (IS_SUPABASE_ENABLED && orgId) {
+    try { merged = await dedupeCodesOnce(merged, { discriminatorField: 'category', nextCode: nextCodeFor, save: saveCutSew }); }
+    catch (err) { console.error('cutSew dedupeCodes:', err); }
+  }
   return filterRows(merged, filterOpts)
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
@@ -129,16 +130,27 @@ export async function getCutSew(id) {
       .eq('organization_id', orgId)
       .maybeSingle();
     if (!error && data) {
-      // Mirror cloud row into localStorage so subsequent saveCutSew can
-      // find it and update rather than silently skip.
+      // Mirror cloud row into localStorage so subsequent saveCutSew can find
+      // it. Last-write-wins: keep unsynced newer local edits; otherwise adopt
+      // the cloud row (merged so local-only fields survive).
+      let result = data;
       try {
         const local = readLocal();
         const idx = local.findIndex(r => r.id === id);
-        if (idx >= 0) local[idx] = { ...local[idx], ...data };
-        else local.push(data);
+        if (idx >= 0) {
+          const localRow = local[idx];
+          if ((localRow.updated_at || '') > (data.updated_at || '')) {
+            result = localRow;
+          } else {
+            local[idx] = { ...localRow, ...data };
+            result = local[idx];
+          }
+        } else {
+          local.push(data);
+        }
         writeLocal(local);
       } catch (err) { console.error('getCutSew mirror:', err); }
-      return data;
+      return result;
     }
     if (error) console.error('getCutSew:', error);
   }

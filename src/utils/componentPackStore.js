@@ -5,6 +5,7 @@ import { IS_SUPABASE_ENABLED, getAuthedSupabase, refreshAuthedSupabase } from '.
 import { getCurrentUserIdSync, getCurrentOrgIdSync, getJwtOrgId } from '../lib/auth';
 import { persistableImages, deleteAssets, copyAsset, scheduleOrphanDeletion, cancelOrphanDeletion } from './plmAssets';
 import { robustUpsertAtomBatch } from './atomCloudSync';
+import { enqueue } from './syncQueue';
 
 // Cloud column allow-list. Anything outside this set (transient UI state,
 // legacy fields) gets stripped before going to Supabase — Postgres rejects
@@ -217,6 +218,13 @@ export async function listComponentPacks() {
   (cloudRows || []).forEach(r => {
     if (!r || !r.id) return;
     seen.add(r.id);
+    // Last-write-wins: a local mirror with a newer updated_at holds unsynced
+    // edits (e.g. edited offline) — show it instead of the staler cloud row.
+    const localNewer = localById.get(r.id);
+    if (localNewer && (localNewer.updated_at || '') > (r.updated_at || '')) {
+      out.push(projectLocalRow(localNewer));
+      return;
+    }
     let row = r;
     const mirror = (row.cover_image && row.cost_per_unit) ? null : localById.get(r.id);
     if (!row.cover_image && mirror) {
@@ -254,6 +262,12 @@ export async function getComponentPack(id) {
       .eq('organization_id', orgId)
       .maybeSingle();
     if (!error && data) {
+      // Last-write-wins: if the local mirror holds unsynced newer edits, keep
+      // them — don't let a staler cloud row overwrite work that hasn't synced.
+      const localHit = readLocal().find(p => p.id === id);
+      if (localHit && (localHit.updated_at || '') > (data.updated_at || '')) {
+        return migrateLegacyVendorKeys(localHit);
+      }
       // Mirror the cloud row into localStorage so subsequent
       // saveComponentPack calls have a local row to update — without this,
       // a pack opened from cloud-only state has nothing to update locally
@@ -384,7 +398,9 @@ export async function saveComponentPack(id, updates) {
   if (!jwtOrgId) {
     const jwtErr = Object.assign(new Error('JWT is missing the org_id claim — open Storage Health to diagnose'), { code: 'JWT_NO_ORG_ID' });
     console.error('saveComponentPack:', jwtErr);
-    return { ok: false, error: jwtErr };
+    // Park it in the durable outbox so it flushes once the JWT/org loads.
+    enqueue({ table: 'component_packs', id, op: 'upsert', payload: { id, ...corePatch }, onConflict: 'id', updated_at: now });
+    return { ok: false, error: jwtErr, queued: true };
   }
 
   let db = await getAuthedSupabase();
@@ -522,7 +538,10 @@ export async function saveComponentPack(id, updates) {
     break;
   }
   console.error('saveComponentPack:', lastError);
-  return { ok: false, error: lastError };
+  // Couldn't reach the cloud after retries — park it for the durable outbox to
+  // heal later through the LWW-guarded writer.
+  enqueue({ table: 'component_packs', id, op: 'upsert', payload: { id, ...corePatch }, onConflict: 'id', updated_at: now });
+  return { ok: false, error: lastError, queued: true };
 }
 
 // Soft delete — moves a pack to Trash. Storage files are intentionally
