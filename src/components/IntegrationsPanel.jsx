@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ShoppingBag, BarChart3, CreditCard, Mail, Truck, CheckCircle, XCircle, Loader, ChevronDown, ChevronUp, ExternalLink, RefreshCw, Copy, Server, Landmark, Plus, Trash2, Sparkles, Film, Camera, Wand2, Hash, Globe } from 'lucide-react';
+import { ShoppingBag, BarChart3, CreditCard, Mail, Truck, CheckCircle, XCircle, Loader, ChevronDown, ChevronUp, ExternalLink, RefreshCw, Copy, Server, Landmark, Plus, Trash2, Sparkles, Film, Camera, Wand2, Hash, Globe, Package } from 'lucide-react';
+import {
+  saveShipHeroCredentials, loadShipHeroIntegration, deleteShipHeroCredentials, testShipHeroConnection,
+} from '../utils/shipheroSync';
 import { usePlaidLink } from 'react-plaid-link';
 import { useApp } from '../context/AppContext';
 import { bucketDepositoryAccounts, classifyCreditAccount, cardIdFromMask } from '../utils/bankAccountMap';
@@ -259,6 +262,151 @@ function ShopifyCard({ creds, onSave, onClear, dispatch }) {
 
           {syncStatus === 'error' && syncErrMsg && (
             <p className="text-xs" style={{ color: FR.red }}>{syncErrMsg}</p>
+          )}
+        </div>
+      )}
+    </IntegrationCard>
+  );
+}
+
+// ─── ShipHero (3PL — auto-pushes POs when they transition to "placed") ──────
+function ShipHeroCard({ creds, onSave, onClear }) {
+  const [open, setOpen]     = useState(!creds?.connected);
+  const [refreshToken, setRefreshToken] = useState('');
+  const [warehouseId, setWarehouseId]   = useState(creds?.defaultWarehouseId || '');
+  const [accountId, setAccountId]       = useState(creds?.accountId || '');
+  const [status, setStatus] = useState(null); // null | 'saving' | 'ok' | 'error'
+  const [errMsg, setErrMsg] = useState('');
+  const [account, setAccount] = useState(creds?.account || null);
+
+  useEffect(() => {
+    if (creds?.connected) return;
+    loadShipHeroIntegration().then(row => {
+      if (row?.defaultWarehouseId) setWarehouseId(row.defaultWarehouseId);
+      if (row?.accountId)          setAccountId(row.accountId);
+    }).catch(() => {});
+  }, []);
+
+  async function handleConnect(e) {
+    e.preventDefault();
+    setStatus('saving');
+    setErrMsg('');
+    try {
+      await saveShipHeroCredentials({
+        refreshToken,
+        defaultWarehouseId: warehouseId.trim() || null,
+        accountId:          accountId.trim() || null,
+      });
+      const acc = await testShipHeroConnection();
+      setAccount(acc);
+      setStatus('ok');
+      onSave({
+        connected: true,
+        defaultWarehouseId: warehouseId.trim() || null,
+        accountId:          accountId.trim() || null,
+        account: acc,
+        syncedAt: null,
+      });
+      setRefreshToken('');
+      setOpen(false);
+    } catch (err) {
+      setStatus('error');
+      setErrMsg(err.message);
+    }
+  }
+
+  async function handleDisconnect() {
+    try { await deleteShipHeroCredentials(); } catch {}
+    onClear();
+  }
+
+  return (
+    <IntegrationCard
+      name="ShipHero"
+      description="3PL · auto-push POs · tracking sync"
+      icon={Package}
+      iconColor={FR.soil}
+      connected={creds?.connected}
+      open={open}
+      onToggle={() => setOpen(o => !o)}
+      onDisconnect={handleDisconnect}
+    >
+      {!creds?.connected && (
+        <form onSubmit={handleConnect} className="space-y-3 mt-3">
+          <div className="p-2 rounded-lg text-xs flex items-start gap-2" style={{ background: FR.salt, border: `1px solid ${FR.sand}` }}>
+            <Server size={12} style={{ color: FR.soil, marginTop: 2, flexShrink: 0 }} />
+            <span style={{ color: FR.stone }}>
+              Your refresh token is saved encrypted in our database, scoped to your org only (Row-Level Security). The browser sends requests to a secure proxy that exchanges it for a short-lived access token and forwards calls to ShipHero — your refresh token never leaves the server.
+            </span>
+          </div>
+
+          <div>
+            <label className="block text-xs mb-1" style={{ color: FR.stone }}>ShipHero refresh token</label>
+            <input value={refreshToken} onChange={e => setRefreshToken(e.target.value)} type="password"
+              placeholder="••••••••••••••••" required
+              className="w-full text-sm px-3 py-2 rounded-lg border"
+              style={{ background: FR.salt, borderColor: FR.sand, color: FR.slate }} />
+          </div>
+
+          <div>
+            <label className="block text-xs mb-1" style={{ color: FR.stone }}>Default warehouse ID</label>
+            <input value={warehouseId} onChange={e => setWarehouseId(e.target.value)}
+              placeholder="V2FyZWhvdXNl..." required
+              className="w-full text-sm px-3 py-2 rounded-lg border"
+              style={{ background: FR.salt, borderColor: FR.sand, color: FR.slate }} />
+            <p className="text-[10px] mt-1" style={{ color: FR.stone }}>
+              All auto-synced POs receive into this warehouse. Find it in ShipHero → Settings → Warehouses (the long base64 ID).
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs mb-1" style={{ color: FR.stone }}>Account ID <span style={{ opacity: 0.5 }}>(optional)</span></label>
+            <input value={accountId} onChange={e => setAccountId(e.target.value)}
+              placeholder="Only for 3PL multi-account customers"
+              className="w-full text-sm px-3 py-2 rounded-lg border"
+              style={{ background: FR.salt, borderColor: FR.sand, color: FR.slate }} />
+          </div>
+
+          <details className="text-xs" style={{ color: FR.stone }}>
+            <summary className="cursor-pointer select-none font-medium" style={{ color: FR.slate }}>How to get a refresh token</summary>
+            <ol className="mt-2 space-y-1 list-decimal pl-4">
+              <li>ShipHero admin → My Account → Settings → API</li>
+              <li>Generate a new refresh token (or copy an existing one — they last ~10 years)</li>
+              <li>Copy the warehouse ID from Settings → Warehouses → Edit</li>
+              <li>Paste both above and click Connect</li>
+            </ol>
+          </details>
+
+          <button type="submit" disabled={status === 'saving' || status === 'ok'}
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm"
+            style={{
+              background: status === 'ok' ? FR.green : status === 'error' ? FR.red : FR.slate,
+              color: 'white', cursor: status === 'saving' ? 'not-allowed' : 'pointer', border: 'none',
+            }}>
+            {status === 'saving' && <Loader size={13} className="animate-spin" />}
+            {status === 'ok' && <CheckCircle size={13} />}
+            {status === 'error' && <XCircle size={13} />}
+            {status === 'ok' ? 'Connected' : status === 'saving' ? 'Saving + testing…' : 'Connect ShipHero'}
+          </button>
+          {status === 'error' && errMsg && (
+            <p className="text-xs" style={{ color: FR.red }}>{errMsg}</p>
+          )}
+        </form>
+      )}
+
+      {creds?.connected && (
+        <div className="space-y-2 mt-3">
+          <p className="text-xs flex items-center gap-1.5" style={{ color: FR.green }}>
+            <CheckCircle size={11} />
+            Connected{account?.email ? ` as ${account.email}` : ''}{creds?.defaultWarehouseId ? ' · auto-push enabled' : ''}
+          </p>
+          <p className="text-xs" style={{ color: FR.stone }}>
+            POs that transition to <code>placed</code> auto-sync to ShipHero. Tracking number + carrier from each PO row push via the same proxy.
+          </p>
+          {!creds?.defaultWarehouseId && (
+            <p className="text-xs" style={{ color: FR.red }}>
+              No default warehouse — auto-push will fail until you reconnect with a warehouse ID.
+            </p>
           )}
         </div>
       )}
@@ -1812,6 +1960,7 @@ export default function IntegrationsPanel() {
 
       <div className="space-y-3">
         <ShopifyCard creds={creds.shopify} onSave={d => update('shopify', d)} onClear={() => update('shopify', null)} dispatch={dispatch} />
+        <ShipHeroCard creds={creds.shiphero} onSave={d => update('shiphero', d)} onClear={() => update('shiphero', null)} />
         <MetaAdsCard creds={creds.meta} onSave={d => update('meta', d)} onClear={() => update('meta', null)} dispatch={dispatch} />
         <KlaviyoCard creds={creds.klaviyo} onSave={d => update('klaviyo', d)} onClear={() => update('klaviyo', null)} />
         <MercuryCard creds={creds.mercury} onSave={d => update('mercury', d)} onClear={() => update('mercury', null)} dispatch={dispatch} />
