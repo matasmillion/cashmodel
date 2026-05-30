@@ -263,6 +263,8 @@ export default function CutSewList() {
   };
 
   useEffect(() => { refresh(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { window.addEventListener('plm-store-updated', refresh); return () => window.removeEventListener('plm-store-updated', refresh); }, []);
 
   useEffect(() => {
     let cancelled = false;

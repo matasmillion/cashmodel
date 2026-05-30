@@ -132,28 +132,37 @@ async function healOrphanFabrics(localRows, cloudRows) {
   await robustUpsertAtomBatch('fabrics', orphans.map(r => toFabricCloudRow(r)));
 }
 
-export async function listFabrics({ includeArchived = false, status = null, weave = null } = {}) {
-  const filterOpts = { includeArchived, status, weave };
+async function _syncFabricListFromCloud() {
   const orgId = getCurrentOrgIdSync();
-  let cloudRows = null;
-  if (IS_SUPABASE_ENABLED && orgId) {
+  if (!IS_SUPABASE_ENABLED || !orgId) return;
+  try {
     const db = await getAuthedSupabase();
     const { data, error } = await db
       .from('fabrics')
       .select('*')
       .eq('organization_id', orgId)
       .order('updated_at', { ascending: false });
-    if (!error && Array.isArray(data)) cloudRows = data;
-    else if (error) console.error('listFabrics:', error);
-    try { await healOrphanFabrics(readLocal(), cloudRows); }
-    catch (err) { console.error('healOrphanFabrics:', err); }
+    if (!error && Array.isArray(data)) {
+      try { await healOrphanFabrics(readLocal(), data); } catch { /* ok */ }
+      const merged = unionByIdLocalFirst(data, readLocal());
+      try { writeLocal(merged); } catch { /* ok */ }
+      try { await dedupeCodesOnce(merged, { discriminatorField: 'weave', nextCode: nextCodeFor, save: saveFabric }); } catch { /* ok */ }
+      window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'fabrics' } }));
+    }
+  } catch { /* ok */ }
+}
+
+export async function listFabrics({ includeArchived = false, status = null, weave = null } = {}) {
+  const filterOpts = { includeArchived, status, weave };
+  const local = readLocal();
+  const orgId = getCurrentOrgIdSync();
+  if (local.length > 0) {
+    if (IS_SUPABASE_ENABLED && orgId) _syncFabricListFromCloud().catch(() => {});
+    return filterRows(unionByIdLocalFirst(null, local), filterOpts)
+      .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
   }
-  let merged = unionByIdLocalFirst(cloudRows, readLocal());
-  if (IS_SUPABASE_ENABLED && orgId) {
-    try { merged = await dedupeCodesOnce(merged, { discriminatorField: 'weave', nextCode: nextCodeFor, save: saveFabric }); }
-    catch (err) { console.error('fabric dedupeCodes:', err); }
-  }
-  return filterRows(merged, filterOpts)
+  if (IS_SUPABASE_ENABLED && orgId) await _syncFabricListFromCloud();
+  return filterRows(unionByIdLocalFirst(null, readLocal()), filterOpts)
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
 

@@ -104,30 +104,37 @@ async function healOrphanTreatments(localRows, cloudRows) {
   await robustUpsertAtomBatch('treatments', orphans.map(r => toTreatmentCloudRow(r)));
 }
 
-export async function listTreatments({ includeArchived = false, status = null, type = null } = {}) {
-  const filterOpts = { includeArchived, status, type };
+async function _syncTreatmentListFromCloud() {
   const orgId = getCurrentOrgIdSync();
-  let cloudRows = null;
-  if (IS_SUPABASE_ENABLED && orgId) {
+  if (!IS_SUPABASE_ENABLED || !orgId) return;
+  try {
     const db = await getAuthedSupabase();
     const { data, error } = await db
       .from('treatments')
       .select('*')
       .eq('organization_id', orgId)
       .order('updated_at', { ascending: false });
-    if (!error && Array.isArray(data)) cloudRows = data;
-    else if (error) console.error('listTreatments:', error);
-    try { await healOrphanTreatments(readLocal(), cloudRows); }
-    catch (err) { console.error('healOrphanTreatments:', err); }
+    if (!error && Array.isArray(data)) {
+      try { await healOrphanTreatments(readLocal(), data); } catch { /* ok */ }
+      const merged = unionByIdCloudFirst(data, readLocal());
+      try { writeLocal(merged); } catch { /* ok */ }
+      try { await dedupeCodesOnce(merged, { discriminatorField: 'type', nextCode: nextCodeFor, save: saveTreatment }); } catch { /* ok */ }
+      window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'treatments' } }));
+    }
+  } catch { /* ok */ }
+}
+
+export async function listTreatments({ includeArchived = false, status = null, type = null } = {}) {
+  const filterOpts = { includeArchived, status, type };
+  const local = readLocal();
+  const orgId = getCurrentOrgIdSync();
+  if (local.length > 0) {
+    if (IS_SUPABASE_ENABLED && orgId) _syncTreatmentListFromCloud().catch(() => {});
+    return filterRows(unionByIdCloudFirst(null, local), filterOpts)
+      .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
   }
-  let merged = unionByIdCloudFirst(cloudRows, readLocal());
-  // When both devices' rows are visible (online), reconcile any duplicate
-  // codes two computers minted offline. No-op when there are none.
-  if (IS_SUPABASE_ENABLED && orgId) {
-    try { merged = await dedupeCodesOnce(merged, { discriminatorField: 'type', nextCode: nextCodeFor, save: saveTreatment }); }
-    catch (err) { console.error('treatment dedupeCodes:', err); }
-  }
-  return filterRows(merged, filterOpts)
+  if (IS_SUPABASE_ENABLED && orgId) await _syncTreatmentListFromCloud();
+  return filterRows(unionByIdCloudFirst(null, readLocal()), filterOpts)
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
 

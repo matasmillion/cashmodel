@@ -283,6 +283,8 @@ export default function TreatmentList() {
   };
 
   useEffect(() => { refresh(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { window.addEventListener('plm-store-updated', refresh); return () => window.removeEventListener('plm-store-updated', refresh); }, []);
 
   // Hash-driven open/close — a deep link to /library/treatments/<id>
   // mounts the builder; backing out of the builder clears the id.

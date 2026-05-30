@@ -279,6 +279,9 @@ export default function FabricList() {
   };
 
   useEffect(() => { refresh(); }, []);
+  // Re-fetch when a background cloud sync lands new data locally.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { window.addEventListener('plm-store-updated', refresh); return () => window.removeEventListener('plm-store-updated', refresh); }, []);
 
   useEffect(() => {
     let cancelled = false;

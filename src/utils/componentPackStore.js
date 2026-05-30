@@ -187,39 +187,13 @@ function projectLocalRow(p) {
 // rows (cloud insert failed silently, RLS, JWT/org not loaded), and rows in
 // both (cloud wins, but cover_image / cost_per_unit are filled in from
 // local when the cloud projection is still null) all surface in the list.
-export async function listComponentPacks() {
-  const orgId = getCurrentOrgIdSync();
-  let cloudRows = null;
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const db = await getAuthedSupabase();
-    const { data, error } = await db
-      .from('component_packs')
-      .select('id, component_name, component_category, status, supplier, cost_per_unit, currency, cover_image, updated_at, created_at')
-      .eq('organization_id', orgId)
-      .is('deleted_at', null)
-      .order('updated_at', { ascending: false });
-    if (!error && Array.isArray(data)) cloudRows = data;
-    else if (error) console.error('listComponentPacks:', error);
-    // Fire-and-forget self-heal — push any local-only packs (typically
-    // trims that failed their initial cloud insert on the source device)
-    // through the robust upsert pipeline so the second device sees them
-    // on the next list call. Never blocks the read.
-    try { await healOrphanComponentPacks(readLocal().filter(p => !p?.deleted_at), cloudRows); }
-    catch (err) { console.error('healOrphanComponentPacks:', err); }
-  }
-
-  const local = readLocal().filter(p => !p?.deleted_at);
-  const localById = new Map(local.map(p => [p.id, p]));
+function _mergeComponentPackList(cloudRows, localRows) {
+  const localById = new Map(localRows.map(p => [p.id, p]));
   const seen = new Set();
   const out = [];
-
-  // Cloud rows first. Backfill cover_image / cost_per_unit from local
-  // mirror when the cloud projection columns aren't yet populated.
   (cloudRows || []).forEach(r => {
     if (!r || !r.id) return;
     seen.add(r.id);
-    // Last-write-wins: a local mirror with a newer updated_at holds unsynced
-    // edits (e.g. edited offline) — show it instead of the staler cloud row.
     const localNewer = localById.get(r.id);
     if (localNewer && (localNewer.updated_at || '') > (r.updated_at || '')) {
       out.push(projectLocalRow(localNewer));
@@ -238,17 +212,53 @@ export async function listComponentPacks() {
     }
     out.push(row);
   });
-
-  // Local-only rows: project to the same shape and append. These are
-  // either fresh creates that haven't reached the cloud yet, cloud writes
-  // that failed silently, or rows from a prior session before cloud was
-  // accessible. Either way, the user shouldn't lose visibility on them.
-  local.forEach(p => {
+  localRows.forEach(p => {
     if (!p || !p.id || seen.has(p.id)) return;
     out.push(projectLocalRow(p));
   });
+  return out;
+}
 
-  return out.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+async function _syncComponentPackListFromCloud() {
+  const orgId = getCurrentOrgIdSync();
+  if (!IS_SUPABASE_ENABLED || !orgId) return;
+  try {
+    const db = await getAuthedSupabase();
+    const { data, error } = await db
+      .from('component_packs')
+      .select('*')
+      .eq('organization_id', orgId)
+      .is('deleted_at', null)
+      .order('updated_at', { ascending: false });
+    if (!error && Array.isArray(data)) {
+      const local = readLocal().filter(p => !p?.deleted_at);
+      try { await healOrphanComponentPacks(local, data); } catch { /* ok */ }
+      // Merge full rows into localStorage (LWW) so future fast-path reads are complete
+      const allLocal = readLocal();
+      const cloudById = new Map(data.map(r => [r.id, r]));
+      const merged = allLocal.map(p => {
+        const cloud = cloudById.get(p.id);
+        if (!cloud) return p;
+        return (p.updated_at || '') > (cloud.updated_at || '') ? p : { ...p, ...cloud };
+      });
+      data.forEach(r => { if (!allLocal.some(p => p.id === r.id)) merged.push(r); });
+      try { writeLocal(merged); } catch { /* ok */ }
+      window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'component_packs' } }));
+    }
+  } catch { /* ok */ }
+}
+
+export async function listComponentPacks() {
+  const orgId = getCurrentOrgIdSync();
+  const local = readLocal().filter(p => !p?.deleted_at);
+  if (local.length > 0) {
+    if (IS_SUPABASE_ENABLED && orgId) _syncComponentPackListFromCloud().catch(() => {});
+    return _mergeComponentPackList(null, local)
+      .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+  }
+  if (IS_SUPABASE_ENABLED && orgId) await _syncComponentPackListFromCloud();
+  return _mergeComponentPackList(null, readLocal().filter(p => !p?.deleted_at))
+    .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
 
 // Sync a single component pack from cloud → localStorage, notify on change.

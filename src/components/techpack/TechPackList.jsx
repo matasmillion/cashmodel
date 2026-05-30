@@ -233,6 +233,8 @@ export default function TechPackList() {
   };
 
   useEffect(() => { refresh(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { window.addEventListener('plm-store-updated', refresh); return () => window.removeEventListener('plm-store-updated', refresh); }, []);
 
   // If the URL points to a specific pack on mount or hashchange, open it.
   useEffect(() => {

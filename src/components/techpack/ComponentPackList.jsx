@@ -233,6 +233,8 @@ export default function ComponentPackList() {
   };
 
   useEffect(() => { refresh(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { window.addEventListener('plm-store-updated', refresh); return () => window.removeEventListener('plm-store-updated', refresh); }, []);
 
   // Open the pack referenced by the URL on mount + when the hash changes.
   useEffect(() => {

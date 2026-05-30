@@ -93,28 +93,37 @@ async function healOrphanCutSew(localRows, cloudRows) {
   await robustUpsertAtomBatch('cut_sew', orphans.map(r => toCutSewCloudRow(r)));
 }
 
-export async function listCutSew({ includeArchived = false, status = null, category = null } = {}) {
-  const filterOpts = { includeArchived, status, category };
+async function _syncCutSewListFromCloud() {
   const orgId = getCurrentOrgIdSync();
-  let cloudRows = null;
-  if (IS_SUPABASE_ENABLED && orgId) {
+  if (!IS_SUPABASE_ENABLED || !orgId) return;
+  try {
     const db = await getAuthedSupabase();
     const { data, error } = await db
       .from('cut_sew')
       .select('*')
       .eq('organization_id', orgId)
       .order('updated_at', { ascending: false });
-    if (!error && Array.isArray(data)) cloudRows = data;
-    else if (error) console.error('listCutSew:', error);
-    try { await healOrphanCutSew(readLocal(), cloudRows); }
-    catch (err) { console.error('healOrphanCutSew:', err); }
+    if (!error && Array.isArray(data)) {
+      try { await healOrphanCutSew(readLocal(), data); } catch { /* ok */ }
+      const merged = unionByIdCloudFirst(data, readLocal());
+      try { writeLocal(merged); } catch { /* ok */ }
+      try { await dedupeCodesOnce(merged, { discriminatorField: 'category', nextCode: nextCodeFor, save: saveCutSew }); } catch { /* ok */ }
+      window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'cut_sew' } }));
+    }
+  } catch { /* ok */ }
+}
+
+export async function listCutSew({ includeArchived = false, status = null, category = null } = {}) {
+  const filterOpts = { includeArchived, status, category };
+  const local = readLocal();
+  const orgId = getCurrentOrgIdSync();
+  if (local.length > 0) {
+    if (IS_SUPABASE_ENABLED && orgId) _syncCutSewListFromCloud().catch(() => {});
+    return filterRows(unionByIdCloudFirst(null, local), filterOpts)
+      .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
   }
-  let merged = unionByIdCloudFirst(cloudRows, readLocal());
-  if (IS_SUPABASE_ENABLED && orgId) {
-    try { merged = await dedupeCodesOnce(merged, { discriminatorField: 'category', nextCode: nextCodeFor, save: saveCutSew }); }
-    catch (err) { console.error('cutSew dedupeCodes:', err); }
-  }
-  return filterRows(merged, filterOpts)
+  if (IS_SUPABASE_ENABLED && orgId) await _syncCutSewListFromCloud();
+  return filterRows(unionByIdCloudFirst(null, readLocal()), filterOpts)
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
 

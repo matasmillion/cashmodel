@@ -151,50 +151,43 @@ export async function listTechPacks() {
   });
 
   const orgId = getCurrentOrgIdSync();
-  let cloudRows = null;
-  if (IS_SUPABASE_ENABLED && orgId) {
-    const db = await getAuthedSupabase();
-    const { data, error } = await db
-      .from('tech_packs')
-      .select('id, style_name, product_category, status, completion_pct, updated_at, created_at')
-      .eq('organization_id', orgId)
-      .is('deleted_at', null)
-      .order('updated_at', { ascending: false });
-    if (!error && Array.isArray(data)) cloudRows = data.map(r => ({ ...r, cover_image: null }));
-    else if (error) console.error('listTechPacks:', error);
+  const localAll = readLocal().filter(p => !p?.deleted_at);
+
+  // Background cloud sync — updates localStorage + emits event
+  const syncFromCloud = async () => {
+    if (!IS_SUPABASE_ENABLED || !orgId) return;
+    try {
+      const db = await getAuthedSupabase();
+      const { data, error } = await db
+        .from('tech_packs')
+        .select('id, style_name, product_category, status, completion_pct, updated_at, created_at')
+        .eq('organization_id', orgId)
+        .is('deleted_at', null)
+        .order('updated_at', { ascending: false });
+      if (!error && Array.isArray(data)) {
+        const allLocal = readLocal();
+        const localById = new Map(allLocal.map(p => [p.id, p]));
+        // Mirror any cloud-only rows into localStorage (projection only — no data/images)
+        let dirty = false;
+        data.forEach(r => {
+          if (!localById.has(r.id)) { allLocal.push({ ...r }); dirty = true; }
+        });
+        if (dirty) try { writeLocal(allLocal); } catch { /* ok */ }
+        window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'tech_packs' } }));
+      }
+    } catch { /* ok */ }
+  };
+
+  if (localAll.length > 0) {
+    if (IS_SUPABASE_ENABLED && orgId) syncFromCloud().catch(() => {});
+    return localAll.map(projectLocal)
+      .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
   }
 
-  const local = readLocal().filter(p => !p?.deleted_at);
-  const seen = new Set();
-  const out = [];
-  (cloudRows || []).forEach(r => {
-    if (!r || !r.id) return;
-    seen.add(r.id);
-    const mirror = local.find(l => l.id === r.id);
-    // Last-write-wins: if the local mirror carries unsynced newer edits (e.g.
-    // edited offline, not yet flushed), show the local version, not the staler
-    // cloud row.
-    if (mirror && (mirror.updated_at || '') > (r.updated_at || '')) {
-      out.push(projectLocal(mirror));
-      return;
-    }
-    // Backfill cover_image / total_unit_cost from local mirror when cloud
-    // doesn't carry those projections.
-    let row = r;
-    if (mirror) {
-      const localCover = extractCover(mirror.images);
-      if (localCover && !row.cover_image) row = { ...row, cover_image: localCover };
-      if (row.total_unit_cost == null) {
-        row = { ...row, total_unit_cost: computeTotalUnitCost(mirror.data || {}, { getColorCost: getFRColorCost }) };
-      }
-    }
-    out.push(row);
-  });
-  local.forEach(p => {
-    if (!p || !p.id || seen.has(p.id)) return;
-    out.push(projectLocal(p));
-  });
-  return out.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+  // First load — wait for cloud to populate local
+  if (IS_SUPABASE_ENABLED && orgId) await syncFromCloud();
+  return readLocal().filter(p => !p?.deleted_at).map(projectLocal)
+    .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
 
 // Fetch one tech pack including data + images
