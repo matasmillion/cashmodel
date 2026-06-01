@@ -234,7 +234,17 @@ export default function ComponentPackList() {
 
   useEffect(() => { refresh(); }, []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { window.addEventListener('plm-store-updated', refresh); return () => window.removeEventListener('plm-store-updated', refresh); }, []);
+  useEffect(() => {
+    const silentRefresh = async () => {
+      const [rows, suppliers, people] = await Promise.all([listComponentPacks(), listAllSuppliers(), listAllPeople()]);
+      setPacks(rows || []);
+      setExistingSuppliers(suppliers);
+      setExistingPeople(people);
+      setExistingTrimTypes(listAllTrimTypes());
+    };
+    window.addEventListener('plm-store-updated', silentRefresh);
+    return () => window.removeEventListener('plm-store-updated', silentRefresh);
+  }, []);
 
   // Open the pack referenced by the URL on mount + when the hash changes.
   useEffect(() => {

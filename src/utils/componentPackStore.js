@@ -219,9 +219,12 @@ function _mergeComponentPackList(cloudRows, localRows) {
   return out;
 }
 
+let _componentPackListSyncing = false;
 async function _syncComponentPackListFromCloud() {
+  if (_componentPackListSyncing) return;
+  _componentPackListSyncing = true;
   const orgId = getCurrentOrgIdSync();
-  if (!IS_SUPABASE_ENABLED || !orgId) return;
+  if (!IS_SUPABASE_ENABLED || !orgId) { _componentPackListSyncing = false; return; }
   try {
     const db = await getAuthedSupabase();
     const { data, error } = await db
@@ -231,21 +234,24 @@ async function _syncComponentPackListFromCloud() {
       .is('deleted_at', null)
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) {
-      const local = readLocal().filter(p => !p?.deleted_at);
-      try { await healOrphanComponentPacks(local, data); } catch { /* ok */ }
-      // Merge full rows into localStorage (LWW) so future fast-path reads are complete
       const allLocal = readLocal();
-      const cloudById = new Map(data.map(r => [r.id, r]));
-      const merged = allLocal.map(p => {
-        const cloud = cloudById.get(p.id);
-        if (!cloud) return p;
-        return (p.updated_at || '') > (cloud.updated_at || '') ? p : { ...p, ...cloud };
-      });
-      data.forEach(r => { if (!allLocal.some(p => p.id === r.id)) merged.push(r); });
-      try { writeLocal(merged); } catch { /* ok */ }
-      window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'component_packs' } }));
+      const localById = new Map(allLocal.map(r => [r.id, r]));
+      const hasChanges = data.some(r => { const loc = localById.get(r.id); return !loc || (r.updated_at || '') > (loc.updated_at || ''); });
+      if (hasChanges) {
+        const local = allLocal.filter(p => !p?.deleted_at);
+        try { await healOrphanComponentPacks(local, data); } catch { /* ok */ }
+        const cloudById = new Map(data.map(r => [r.id, r]));
+        const merged = allLocal.map(p => {
+          const cloud = cloudById.get(p.id);
+          if (!cloud) return p;
+          return (p.updated_at || '') > (cloud.updated_at || '') ? p : { ...p, ...cloud };
+        });
+        data.forEach(r => { if (!allLocal.some(p => p.id === r.id)) merged.push(r); });
+        try { writeLocal(merged); } catch { /* ok */ }
+        window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'component_packs' } }));
+      }
     }
-  } catch { /* ok */ }
+  } catch { /* ok */ } finally { _componentPackListSyncing = false; }
 }
 
 export async function listComponentPacks() {

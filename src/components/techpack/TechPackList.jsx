@@ -233,8 +233,18 @@ export default function TechPackList() {
   };
 
   useEffect(() => { refresh(); }, []);
+  // Background cloud updates: refresh without showing the loading skeleton
+  // (data is already visible; we just want the list to update quietly).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { window.addEventListener('plm-store-updated', refresh); return () => window.removeEventListener('plm-store-updated', refresh); }, []);
+  useEffect(() => {
+    const silentRefresh = async () => {
+      const [rows, , suppliers] = await Promise.all([listTechPacks(), listComponentPacks(), listAllSuppliers()]);
+      setPacks(rows || []);
+      setExistingSuppliers(suppliers);
+    };
+    window.addEventListener('plm-store-updated', silentRefresh);
+    return () => window.removeEventListener('plm-store-updated', silentRefresh);
+  }, []);
 
   // If the URL points to a specific pack on mount or hashchange, open it.
   useEffect(() => {

@@ -93,9 +93,12 @@ async function healOrphanCutSew(localRows, cloudRows) {
   await robustUpsertAtomBatch('cut_sew', orphans.map(r => toCutSewCloudRow(r)));
 }
 
+let _cutSewListSyncing = false;
 async function _syncCutSewListFromCloud() {
+  if (_cutSewListSyncing) return;
+  _cutSewListSyncing = true;
   const orgId = getCurrentOrgIdSync();
-  if (!IS_SUPABASE_ENABLED || !orgId) return;
+  if (!IS_SUPABASE_ENABLED || !orgId) { _cutSewListSyncing = false; return; }
   try {
     const db = await getAuthedSupabase();
     const { data, error } = await db
@@ -104,13 +107,18 @@ async function _syncCutSewListFromCloud() {
       .eq('organization_id', orgId)
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) {
-      try { await healOrphanCutSew(readLocal(), data); } catch { /* ok */ }
-      const merged = unionByIdCloudFirst(data, readLocal());
-      try { writeLocal(merged); } catch { /* ok */ }
-      try { await dedupeCodesOnce(merged, { discriminatorField: 'category', nextCode: nextCodeFor, save: saveCutSew }); } catch { /* ok */ }
-      window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'cut_sew' } }));
+      const localNow = readLocal();
+      const localById = new Map(localNow.map(r => [r.id, r]));
+      const hasChanges = data.some(r => { const loc = localById.get(r.id); return !loc || (r.updated_at || '') > (loc.updated_at || ''); });
+      if (hasChanges) {
+        try { await healOrphanCutSew(localNow, data); } catch { /* ok */ }
+        const merged = unionByIdCloudFirst(data, readLocal());
+        try { writeLocal(merged); } catch { /* ok */ }
+        try { await dedupeCodesOnce(merged, { discriminatorField: 'category', nextCode: nextCodeFor, save: saveCutSew }); } catch { /* ok */ }
+        window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'cut_sew' } }));
+      }
     }
-  } catch { /* ok */ }
+  } catch { /* ok */ } finally { _cutSewListSyncing = false; }
 }
 
 export async function listCutSew({ includeArchived = false, status = null, category = null } = {}) {

@@ -132,9 +132,12 @@ async function healOrphanFabrics(localRows, cloudRows) {
   await robustUpsertAtomBatch('fabrics', orphans.map(r => toFabricCloudRow(r)));
 }
 
+let _fabricListSyncing = false;
 async function _syncFabricListFromCloud() {
+  if (_fabricListSyncing) return;
+  _fabricListSyncing = true;
   const orgId = getCurrentOrgIdSync();
-  if (!IS_SUPABASE_ENABLED || !orgId) return;
+  if (!IS_SUPABASE_ENABLED || !orgId) { _fabricListSyncing = false; return; }
   try {
     const db = await getAuthedSupabase();
     const { data, error } = await db
@@ -143,13 +146,18 @@ async function _syncFabricListFromCloud() {
       .eq('organization_id', orgId)
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) {
-      try { await healOrphanFabrics(readLocal(), data); } catch { /* ok */ }
-      const merged = unionByIdLocalFirst(data, readLocal());
-      try { writeLocal(merged); } catch { /* ok */ }
-      try { await dedupeCodesOnce(merged, { discriminatorField: 'weave', nextCode: nextCodeFor, save: saveFabric }); } catch { /* ok */ }
-      window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'fabrics' } }));
+      const localNow = readLocal();
+      const localById = new Map(localNow.map(r => [r.id, r]));
+      const hasChanges = data.some(r => { const loc = localById.get(r.id); return !loc || (r.updated_at || '') > (loc.updated_at || ''); });
+      if (hasChanges) {
+        try { await healOrphanFabrics(localNow, data); } catch { /* ok */ }
+        const merged = unionByIdLocalFirst(data, readLocal());
+        try { writeLocal(merged); } catch { /* ok */ }
+        try { await dedupeCodesOnce(merged, { discriminatorField: 'weave', nextCode: nextCodeFor, save: saveFabric }); } catch { /* ok */ }
+        window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'fabrics' } }));
+      }
     }
-  } catch { /* ok */ }
+  } catch { /* ok */ } finally { _fabricListSyncing = false; }
 }
 
 export async function listFabrics({ includeArchived = false, status = null, weave = null } = {}) {

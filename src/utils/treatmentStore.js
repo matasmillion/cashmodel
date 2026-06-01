@@ -104,9 +104,12 @@ async function healOrphanTreatments(localRows, cloudRows) {
   await robustUpsertAtomBatch('treatments', orphans.map(r => toTreatmentCloudRow(r)));
 }
 
+let _treatmentListSyncing = false;
 async function _syncTreatmentListFromCloud() {
+  if (_treatmentListSyncing) return;
+  _treatmentListSyncing = true;
   const orgId = getCurrentOrgIdSync();
-  if (!IS_SUPABASE_ENABLED || !orgId) return;
+  if (!IS_SUPABASE_ENABLED || !orgId) { _treatmentListSyncing = false; return; }
   try {
     const db = await getAuthedSupabase();
     const { data, error } = await db
@@ -115,13 +118,18 @@ async function _syncTreatmentListFromCloud() {
       .eq('organization_id', orgId)
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) {
-      try { await healOrphanTreatments(readLocal(), data); } catch { /* ok */ }
-      const merged = unionByIdCloudFirst(data, readLocal());
-      try { writeLocal(merged); } catch { /* ok */ }
-      try { await dedupeCodesOnce(merged, { discriminatorField: 'type', nextCode: nextCodeFor, save: saveTreatment }); } catch { /* ok */ }
-      window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'treatments' } }));
+      const localNow = readLocal();
+      const localById = new Map(localNow.map(r => [r.id, r]));
+      const hasChanges = data.some(r => { const loc = localById.get(r.id); return !loc || (r.updated_at || '') > (loc.updated_at || ''); });
+      if (hasChanges) {
+        try { await healOrphanTreatments(localNow, data); } catch { /* ok */ }
+        const merged = unionByIdCloudFirst(data, readLocal());
+        try { writeLocal(merged); } catch { /* ok */ }
+        try { await dedupeCodesOnce(merged, { discriminatorField: 'type', nextCode: nextCodeFor, save: saveTreatment }); } catch { /* ok */ }
+        window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'treatments' } }));
+      }
     }
-  } catch { /* ok */ }
+  } catch { /* ok */ } finally { _treatmentListSyncing = false; }
 }
 
 export async function listTreatments({ includeArchived = false, status = null, type = null } = {}) {

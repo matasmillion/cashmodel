@@ -134,6 +134,7 @@ export function nextProductNumber() {
 // Cloud + local always get unioned. Local-only rows (cloud insert failed
 // silently, RLS rejected, network blip, JWT/org not loaded yet) still
 // surface so the user never loses sight of their work.
+let _techPackListSyncing = false;
 export async function listTechPacks() {
   const { computeTotalUnitCost } = await import('../components/techpack/techPackConstants');
   const { getFRColorCost } = await import('./colorLibrary');
@@ -153,9 +154,9 @@ export async function listTechPacks() {
   const orgId = getCurrentOrgIdSync();
   const localAll = readLocal().filter(p => !p?.deleted_at);
 
-  // Background cloud sync — updates localStorage + emits event
   const syncFromCloud = async () => {
-    if (!IS_SUPABASE_ENABLED || !orgId) return;
+    if (_techPackListSyncing || !IS_SUPABASE_ENABLED || !orgId) return;
+    _techPackListSyncing = true;
     try {
       const db = await getAuthedSupabase();
       const { data, error } = await db
@@ -167,15 +168,14 @@ export async function listTechPacks() {
       if (!error && Array.isArray(data)) {
         const allLocal = readLocal();
         const localById = new Map(allLocal.map(p => [p.id, p]));
-        // Mirror any cloud-only rows into localStorage (projection only — no data/images)
-        let dirty = false;
-        data.forEach(r => {
-          if (!localById.has(r.id)) { allLocal.push({ ...r }); dirty = true; }
-        });
-        if (dirty) try { writeLocal(allLocal); } catch { /* ok */ }
-        window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'tech_packs' } }));
+        const hasChanges = data.some(r => { const loc = localById.get(r.id); return !loc || (r.updated_at || '') > (loc.updated_at || ''); });
+        if (hasChanges) {
+          data.forEach(r => { if (!localById.has(r.id)) allLocal.push({ ...r }); });
+          try { writeLocal(allLocal); } catch { /* ok */ }
+          window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'tech_packs' } }));
+        }
       }
-    } catch { /* ok */ }
+    } catch { /* ok */ } finally { _techPackListSyncing = false; }
   };
 
   if (localAll.length > 0) {

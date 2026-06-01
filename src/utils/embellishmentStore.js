@@ -87,9 +87,12 @@ async function healOrphanEmbellishments(localRows, cloudRows) {
   await robustUpsertAtomBatch('embellishments', orphans.map(r => toEmbellishmentCloudRow(r)));
 }
 
+let _embellishmentListSyncing = false;
 async function _syncEmbellishmentListFromCloud() {
+  if (_embellishmentListSyncing) return;
+  _embellishmentListSyncing = true;
   const orgId = getCurrentOrgIdSync();
-  if (!IS_SUPABASE_ENABLED || !orgId) return;
+  if (!IS_SUPABASE_ENABLED || !orgId) { _embellishmentListSyncing = false; return; }
   try {
     const db = await getAuthedSupabase();
     const { data, error } = await db
@@ -98,13 +101,18 @@ async function _syncEmbellishmentListFromCloud() {
       .eq('organization_id', orgId)
       .order('updated_at', { ascending: false });
     if (!error && Array.isArray(data)) {
-      try { await healOrphanEmbellishments(readLocal(), data); } catch { /* ok */ }
-      const merged = unionByIdCloudFirst(data, readLocal());
-      try { writeLocal(merged); } catch { /* ok */ }
-      try { await dedupeCodesOnce(merged, { discriminatorField: 'type', nextCode: nextCodeFor, save: saveEmbellishment }); } catch { /* ok */ }
-      window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'embellishments' } }));
+      const localNow = readLocal();
+      const localById = new Map(localNow.map(r => [r.id, r]));
+      const hasChanges = data.some(r => { const loc = localById.get(r.id); return !loc || (r.updated_at || '') > (loc.updated_at || ''); });
+      if (hasChanges) {
+        try { await healOrphanEmbellishments(localNow, data); } catch { /* ok */ }
+        const merged = unionByIdCloudFirst(data, readLocal());
+        try { writeLocal(merged); } catch { /* ok */ }
+        try { await dedupeCodesOnce(merged, { discriminatorField: 'type', nextCode: nextCodeFor, save: saveEmbellishment }); } catch { /* ok */ }
+        window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'embellishments' } }));
+      }
     }
-  } catch { /* ok */ }
+  } catch { /* ok */ } finally { _embellishmentListSyncing = false; }
 }
 
 export async function listEmbellishments({ includeArchived = false, status = null, type = null } = {}) {
