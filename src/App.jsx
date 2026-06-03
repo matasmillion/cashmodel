@@ -1,34 +1,49 @@
-import { useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { ClerkProvider, useOrganization, CreateOrganization } from '@clerk/clerk-react';
 import { AppProvider, useApp } from './context/AppContext';
 import { clearAssetUrlCache } from './utils/plmAssets';
 import ErrorBoundary from './components/ErrorBoundary';
+// Eager: the app shell + the default 'dashboard' tab, so first paint is instant
+// with no Suspense flash.
 import KPICards from './components/KPICards';
-import CashflowTable from './components/CashflowTable';
 import Cashflow58WeekTable from './components/Cashflow58WeekTable';
-import UnitEconomics from './components/UnitEconomics';
-import OpexManager from './components/OpexManager';
-import ScenarioManager from './components/ScenarioManager';
-import IntegrationsPanel from './components/IntegrationsPanel';
-import RevenueForecast from './components/RevenueForecast';
-import AdUnitModel from './components/AdUnitModel';
-import RateCardManager from './components/RateCardManager';
-import PLMView from './components/techpack/PLMView';
-import CreativeEngineView from './components/creative/CreativeEngineView';
-import InventoryView from './components/inventory/InventoryView';
 import RequireAuth from './components/auth/RequireAuth';
 import SignInPage from './components/auth/SignInPage';
 import SignUpPage from './components/auth/SignUpPage';
-import AccountSecurityPage from './components/auth/AccountSecurityPage';
-import AccountActivityPage from './components/auth/AccountActivityPage';
-import UserProfilePage from './components/auth/UserProfilePage';
 import SiteFooter from './components/SiteFooter';
-import LegalRoutes from './components/legal/LegalRoutes';
 import TopBar from './components/TopBar';
-import VendorPortalRoutes from './components/vendor/VendorPortalRoutes';
-import OrgSettings from './components/settings/OrgSettings';
 import SyncStatusBadge from './components/SyncStatusBadge';
+
+// Code-split: every other tab module + secondary route surface loads on demand.
+// This is the biggest cold-start win — PLM/Creative/Inventory each pull in large
+// subtrees (recharts, jspdf, html2canvas) that no longer ship in the main bundle.
+const CashflowTable = lazy(() => import('./components/CashflowTable'));
+const UnitEconomics = lazy(() => import('./components/UnitEconomics'));
+const OpexManager = lazy(() => import('./components/OpexManager'));
+const ScenarioManager = lazy(() => import('./components/ScenarioManager'));
+const IntegrationsPanel = lazy(() => import('./components/IntegrationsPanel'));
+const RevenueForecast = lazy(() => import('./components/RevenueForecast'));
+const AdUnitModel = lazy(() => import('./components/AdUnitModel'));
+const RateCardManager = lazy(() => import('./components/RateCardManager'));
+const PLMView = lazy(() => import('./components/techpack/PLMView'));
+const CreativeEngineView = lazy(() => import('./components/creative/CreativeEngineView'));
+const InventoryView = lazy(() => import('./components/inventory/InventoryView'));
+const OrgSettings = lazy(() => import('./components/settings/OrgSettings'));
+const AccountSecurityPage = lazy(() => import('./components/auth/AccountSecurityPage'));
+const AccountActivityPage = lazy(() => import('./components/auth/AccountActivityPage'));
+const UserProfilePage = lazy(() => import('./components/auth/UserProfilePage'));
+const LegalRoutes = lazy(() => import('./components/legal/LegalRoutes'));
+const VendorPortalRoutes = lazy(() => import('./components/vendor/VendorPortalRoutes'));
+
+// Brand-styled fallback shown while a lazy chunk loads.
+function ViewFallback() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '40vh', color: '#716F70', fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 18, letterSpacing: '0.03em' }}>
+      Loading…
+    </div>
+  );
+}
 
 function OrgGate({ children }) {
   const { isLoaded, organization } = useOrganization();
@@ -62,24 +77,26 @@ function Dashboard() {
       <TopBar />
 
       <main className="px-8 py-8 space-y-6">
-        {state.activeTab === 'dashboard' && (
-          <>
-            <KPICards />
-            <Cashflow58WeekTable />
-          </>
-        )}
-        {state.activeTab === 'revenue' && <RevenueForecast />}
-        {state.activeTab === 'cashflow' && <CashflowTable />}
-        {state.activeTab === 'ad-units' && <AdUnitModel />}
-        {state.activeTab === 'unit-economics' && <UnitEconomics />}
-        {state.activeTab === 'product' && <PLMView />}
-        {state.activeTab === 'creative-engine' && <CreativeEngineView />}
-        {state.activeTab === 'inventory' && <InventoryView />}
-        {state.activeTab === 'fulfillment' && <RateCardManager />}
-        {state.activeTab === 'opex' && <OpexManager />}
-        {state.activeTab === 'scenarios' && <ScenarioManager />}
-        {state.activeTab === 'integrations' && <IntegrationsPanel />}
-        {state.activeTab === 'org-settings' && <OrgSettings />}
+        <Suspense fallback={<ViewFallback />}>
+          {state.activeTab === 'dashboard' && (
+            <>
+              <KPICards />
+              <Cashflow58WeekTable />
+            </>
+          )}
+          {state.activeTab === 'revenue' && <RevenueForecast />}
+          {state.activeTab === 'cashflow' && <CashflowTable />}
+          {state.activeTab === 'ad-units' && <AdUnitModel />}
+          {state.activeTab === 'unit-economics' && <UnitEconomics />}
+          {state.activeTab === 'product' && <PLMView />}
+          {state.activeTab === 'creative-engine' && <CreativeEngineView />}
+          {state.activeTab === 'inventory' && <InventoryView />}
+          {state.activeTab === 'fulfillment' && <RateCardManager />}
+          {state.activeTab === 'opex' && <OpexManager />}
+          {state.activeTab === 'scenarios' && <ScenarioManager />}
+          {state.activeTab === 'integrations' && <IntegrationsPanel />}
+          {state.activeTab === 'org-settings' && <OrgSettings />}
+        </Suspense>
       </main>
 
       <SiteFooter />
@@ -115,6 +132,7 @@ function RoutedApp() {
       routerPush={(to) => navigate(to)}
       routerReplace={(to) => navigate(to, { replace: true })}
     >
+      <Suspense fallback={<ViewFallback />}>
       <Routes>
         {/* /legal/* renders standalone, outside the FR app dashboard
             chrome, with no auth gate — these pages are publicly
@@ -162,6 +180,7 @@ function RoutedApp() {
           }
         />
       </Routes>
+      </Suspense>
     </ClerkProvider>
   );
 }
