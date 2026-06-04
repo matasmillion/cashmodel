@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-28T09:01:17.546Z",
+  "lastUpdated": "2026-06-04T11:01:23.967Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,54 +1044,54 @@
   ],
   "changelog": [
     {
-      "sha": "aa9b066",
-      "date": "2026-05-24T08:19:38+00:00",
-      "message": "chore: update public/state.json"
+      "sha": "2bd3143",
+      "date": "2026-06-04T10:42:26+00:00",
+      "message": "Scanner: operator-confirmed grid overlay instead of AI-guessed crop edges"
     },
     {
-      "sha": "1901301",
-      "date": "2026-05-24T08:19:20+00:00",
-      "message": "fix(plm): remove target retail price from all tech pack outputs"
+      "sha": "afeeda9",
+      "date": "2026-06-04T10:20:03+00:00",
+      "message": "Fix color-card scanner crops + add bulk swatch select/delete"
     },
     {
-      "sha": "8f45728",
-      "date": "2026-05-24T08:14:16+00:00",
-      "message": "chore: update public/state.json"
+      "sha": "18513eb",
+      "date": "2026-06-04T12:38:18+03:00",
+      "message": "Merge #158: self-heal broken images when the auth token lapses"
     },
     {
-      "sha": "ef2cc5f",
-      "date": "2026-05-24T08:13:59+00:00",
-      "message": "fix(plm): crop modal on image upload + Adjust button on all image slots"
+      "sha": "b748b5b",
+      "date": "2026-06-04T09:37:58+00:00",
+      "message": "fix(plm): self-heal broken images on auth-token lapse"
     },
     {
-      "sha": "c3cd7f1",
-      "date": "2026-05-22T18:29:10+00:00",
-      "message": "chore: update public/state.json"
+      "sha": "2384473",
+      "date": "2026-06-04T12:06:45+03:00",
+      "message": "Merge #157: fix JWT-expired saves and infinite Loading hangs"
     },
     {
-      "sha": "b2dff37",
-      "date": "2026-05-22T18:29:01+00:00",
-      "message": "fix(plm): programmatically trim bottom 28% of swatch boxes to exclude labels"
+      "sha": "5ff5daf",
+      "date": "2026-06-04T09:06:22+00:00",
+      "message": "fix(auth+plm): stop 'JWT expired' saves and 'Loading…' hangs"
     },
     {
-      "sha": "ab44b96",
-      "date": "2026-05-22T18:24:22+00:00",
-      "message": "chore: update public/state.json"
+      "sha": "a096ecd",
+      "date": "2026-06-04T11:46:53+03:00",
+      "message": "Merge #156: Install button always visible with menu fallback"
     },
     {
-      "sha": "c35a1c3",
-      "date": "2026-05-22T18:24:12+00:00",
-      "message": "fix(plm): tighten swatch bounding box prompt — fabric square only, not label"
+      "sha": "38ecb74",
+      "date": "2026-06-04T08:46:35+00:00",
+      "message": "fix(pwa): make Install button always visible with menu fallback"
     },
     {
-      "sha": "ffd2d79",
-      "date": "2026-05-22T18:15:14+00:00",
-      "message": "chore: update public/state.json"
+      "sha": "b8ae5bd",
+      "date": "2026-06-04T08:36:09+00:00",
+      "message": "fix(sync): Sync now button updates timestamp and pulls from cloud"
     },
     {
-      "sha": "4508b89",
-      "date": "2026-05-22T18:15:00+00:00",
-      "message": "fix(plm): downscale images before Claude Vision to fix 5 MB base64 limit"
+      "sha": "3a65533",
+      "date": "2026-06-04T11:08:55+03:00",
+      "message": "Merge #155: PWA in-app Install button + real PNG app icons"
     }
   ]
 }
