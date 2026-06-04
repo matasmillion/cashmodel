@@ -1,5 +1,7 @@
 // Main Tech Pack builder — 14-step wizard + PLM features (revisions, cost, samples, variants)
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRecordLock } from '../../hooks/useRecordLock';
+import RecordLockBanner from '../RecordLockBanner';
 import { ArrowLeft, History, Plus, CheckCircle, XCircle, Clock, Camera } from 'lucide-react';
 import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STEPS, IMG_STEPS, computeCompletion, isStepLocked, computeBOMCost, computeColorwayCost, SAMPLE_TYPES, SAMPLE_VERDICTS } from './techPackConstants';
 import SendToVendorButton from './SendToVendorButton';
@@ -333,6 +335,12 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   }, [fabricIdKey, refreshTick]);
 
   const [saving, setSaving] = useState(false);
+
+  // Single-writer check-out for this style. While another teammate holds the
+  // lock this view is read-only — navigation + live preview stay usable, but
+  // the step editor and auto-save are inert until the lock frees.
+  const lock = useRecordLock('style', pack?.id);
+  const readOnly = lock.readOnly;
   const [savedRecently, setSavedRecently] = useState(false);
   const savedTimerRef = useRef(null);
   const [saveError, setSaveError] = useState(null);
@@ -590,6 +598,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // Debounced auto-save. Waits for any in-flight Storage uploads before
   // persisting so we never save a placeholder image entry without a path.
   useEffect(() => {
+    if (readOnly) return undefined; // a read-only viewer never persists edits
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
       setSaving(true);
@@ -626,7 +635,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       setTimeout(() => setSaving(false), 300);
     }, 600);
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [data, images, library, pack.id, waitForUploads]);
+  }, [data, images, library, pack.id, waitForUploads, readOnly]);
 
   const set = useCallback((k, v) => setData(p => ({ ...p, [k]: v })), []);
 
@@ -1030,6 +1039,10 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
 
         {/* Main content */}
         <div style={{ flex: 1, minWidth: 0, padding: '20px 28px', maxHeight: '75vh', overflowY: 'auto' }}>
+          {readOnly && <RecordLockBanner holder={lock.holder} isSelf={lock.isSelf} noun="style" />}
+          {/* When read-only, the step editor + skip/revision actions are inert.
+              Sidebar nav, Previous/Next, and the live preview stay usable. */}
+          <fieldset disabled={readOnly} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
           {/* Skip banner */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, padding: '9px 14px', background: isCurrentSkipped ? 'rgba(192,57,43,0.07)' : FR.salt, border: `1px solid ${isCurrentSkipped ? '#C0392B' : FR.sand}`, borderRadius: 6 }}>
             <div style={{ flex: 1, fontSize: 11, color: isCurrentSkipped ? '#C0392B' : FR.stone }}>
@@ -1047,6 +1060,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           {step === STEPS.length - 1 && (
             <RevisionPanel revisions={data.revisions || []} onCreateRevision={createRevision} />
           )}
+          </fieldset>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24, paddingTop: 16, borderTop: `1px solid ${FR.sand}` }}>
             <button onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0}

@@ -18,6 +18,8 @@
 //     and the user reviews before applying.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRecordLock } from '../../hooks/useRecordLock';
+import RecordLockBanner from '../RecordLockBanner';
 import { ArrowLeft, Save, Trash2, Sparkles, FileDown, Plus, Loader2, X, Scan } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { saveFabric, archiveFabric, restoreFabric } from '../../utils/fabricStore';
@@ -238,6 +240,11 @@ export default function FabricBuilder({ fabric, onBack }) {
   const [fx, setFx] = useState(null);
   const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(fabric));
 
+  // Single-writer check-out. If a teammate is already editing this fabric, this
+  // view is read-only until they release it (or their lock expires).
+  const lock = useRecordLock('fabric', fabric?.id);
+  const readOnly = lock.readOnly;
+
   useEffect(() => {
     setDraft(fabric);
     setSavedSnapshot(JSON.stringify(fabric));
@@ -360,7 +367,7 @@ export default function FabricBuilder({ fabric, onBack }) {
   };
 
   const save = async () => {
-    if (saving) return;
+    if (readOnly || saving) return;
     setSaving(true);
     const snapshotAtSave = JSON.stringify(draft);
     try {
@@ -408,6 +415,7 @@ export default function FabricBuilder({ fabric, onBack }) {
   }, [dirty]);
 
   const onBumpVersion = async () => {
+    if (readOnly) return;
     const next = bumpVersion(draft.version);
     set({ version: next });
     try { await saveFabric(draft.id, { version: next }); }
@@ -546,6 +554,11 @@ export default function FabricBuilder({ fabric, onBack }) {
         style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', color: FR.stone, fontSize: 12, cursor: 'pointer', padding: 0, marginBottom: 10 }}>
         <ArrowLeft size={13} /> Fabrics
       </button>
+
+      {readOnly && <RecordLockBanner holder={lock.holder} isSelf={lock.isSelf} noun="fabric" />}
+      {/* When read-only, disabling the fieldset makes every input/button inside
+          inert without restructuring the form. The Back button sits outside it. */}
+      <fieldset disabled={readOnly} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 240 }}>
@@ -975,6 +988,7 @@ export default function FabricBuilder({ fabric, onBack }) {
           onApply={onApplyScanSwatches}
         />
       )}
+      </fieldset>
     </div>
   );
 }

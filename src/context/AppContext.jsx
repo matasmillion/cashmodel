@@ -7,6 +7,7 @@ import { migrateLegacyInventoryHash } from '../utils/inventoryRouting';
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { useCurrentUser, useCurrentOrg } from '../lib/auth';
 import { bucketDepositoryAccounts, classifyCreditAccount, cardIdFromMask } from '../utils/bankAccountMap';
+import { getBlob, setBlob } from '../utils/localDb';
 
 const LOCAL_STORAGE_KEY = 'cashmodel_state';
 const INTEGRATIONS_KEY = 'cashmodel_integrations';
@@ -504,9 +505,12 @@ function migrateState(saved) {
 function loadInitialState() {
   const hashTab = readTabFromHash();
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (raw) {
-      const saved = migrateState(JSON.parse(raw));
+    // Local store is IndexedDB-backed (synchronous read from the warm cache
+    // hydrated at boot). Falls back to localStorage internally if IDB is off.
+    const stored = getBlob(LOCAL_STORAGE_KEY);
+    if (stored) {
+      const saved = migrateState(stored);
+      delete saved.__savedAt; // bookkeeping only — not part of app state
       return { ...initialState, ...saved, ...(hashTab ? { activeTab: hashTab } : {}) };
     }
   } catch (err) {
@@ -699,8 +703,16 @@ export function AppProvider({ children }) {
   const orgId = currentOrg?.id || null;
 
   useEffect(() => {
+    // Integration pulls (Shopify / Meta / Plaid) hit Edge Functions and must
+    // never gate first paint — run them when the browser is idle.
+    const deferAutoSync = () => {
+      const run = () => triggerAutoSync();
+      if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 2000 });
+      else setTimeout(run, 0);
+    };
+
     if (!IS_SUPABASE_ENABLED) {
-      triggerAutoSync();
+      deferAutoSync();
       return;
     }
 
@@ -709,27 +721,35 @@ export function AppProvider({ children }) {
       if (!db) return;
       const { data, error } = await db
         .from('app_state')
-        .select('state')
+        .select('state, updated_at')
         .eq('org_id', id)
         .maybeSingle();
-      if (!error && data?.state) {
-        dispatch({ type: 'LOAD_CLOUD_STATE', payload: data.state });
+      if (error || !data?.state) return;
+      // Adopt cloud state ONLY when it is strictly newer than what we have
+      // locally. A stale cloud row must never clobber unsynced local edits
+      // (the bug that made local changes "disappear" on reload). If local is
+      // newer or equal, keep it — the autosave effect pushes it back to cloud.
+      const localSavedAt = getBlob(LOCAL_STORAGE_KEY)?.__savedAt || '';
+      const cloudSavedAt = data.state.__savedAt || data.updated_at || '';
+      if (!localSavedAt || cloudSavedAt > localSavedAt) {
+        const next = { ...data.state };
+        delete next.__savedAt;
+        dispatch({ type: 'LOAD_CLOUD_STATE', payload: next });
       }
     }
 
     userIdRef.current = orgId;
     if (orgId) {
-      loadCloudState(orgId).then(() => triggerAutoSync());
+      loadCloudState(orgId).then(() => deferAutoSync());
     } else {
-      triggerAutoSync();
+      deferAutoSync();
     }
 
-    // One-time migration: import any legacy manualPOs from localStorage into
-    // productionStore. The shim is idempotent and self-disables after first run.
+    // One-time migration: import any legacy manualPOs into productionStore.
+    // The shim is idempotent and self-disables after first run.
     const legacyPOs = (() => {
       try {
-        const raw = localStorage.getItem('cashmodel_state');
-        return JSON.parse(raw || '{}')?.manualPOs || [];
+        return getBlob(LOCAL_STORAGE_KEY)?.manualPOs || [];
       } catch { return []; }
     })();
     migrateManualPOsToStore(legacyPOs).catch(err =>
@@ -744,11 +764,15 @@ export function AppProvider({ children }) {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
       try {
-        const toSave = {};
+        const savedAt = new Date().toISOString();
+        const toSave = { __savedAt: savedAt };
         for (const key of PERSISTED_KEYS) {
           toSave[key] = state[key];
         }
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(toSave));
+        // Local write is instant + non-blocking (IndexedDB cache, no 5 MB cap,
+        // no main-thread JSON.stringify of the whole blob). The cloud upsert
+        // below already runs inside this debounced timeout, off the render path.
+        setBlob(LOCAL_STORAGE_KEY, toSave);
 
         if (IS_SUPABASE_ENABLED && userIdRef.current) {
           const db = await getAuthedSupabase();
@@ -756,7 +780,7 @@ export function AppProvider({ children }) {
             await db.from('app_state').upsert({
               org_id: userIdRef.current,
               state: toSave,
-              updated_at: new Date().toISOString(),
+              updated_at: savedAt,
             }, { onConflict: 'org_id' });
           }
         }

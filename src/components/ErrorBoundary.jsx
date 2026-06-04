@@ -3,6 +3,7 @@
 // error so we can surface something actionable instead.
 
 import { Component } from 'react';
+import { removeKey } from '../utils/localDb';
 
 const FR = { slate: '#3A3A3A', salt: '#F5F0E8', sand: '#EBE5D5', stone: '#716F70', soil: '#9A816B' };
 
@@ -24,12 +25,10 @@ export default class ErrorBoundary extends Component {
   resetLocalState = () => {
     try {
       // Preserve auth session, clear app state + PLM caches so a bad
-      // migration-era record can't keep crashing on reload.
-      Object.keys(localStorage).forEach(k => {
-        if (k === 'cashmodel_state' || k === 'cashmodel_techpacks' || k === 'cashmodel_component_packs') {
-          localStorage.removeItem(k);
-        }
-      });
+      // migration-era record can't keep crashing on reload. These live in the
+      // IndexedDB-backed local store now, so go through removeKey (which clears
+      // the in-memory cache, IndexedDB, and any legacy localStorage copy).
+      ['cashmodel_state', 'cashmodel_techpacks', 'cashmodel_component_packs'].forEach(removeKey);
       window.location.hash = '';
       window.location.reload();
     } catch (e) { console.error(e); }
