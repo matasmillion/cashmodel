@@ -47,6 +47,25 @@ const ENGINE_DENYLIST = new Set([
 // are converted. See the per-commit conversion notes.
 const RECLAIMABLE_KEYS = new Set([
   'cashmodel_state',
+  // PLM library + production — every reader/writer now goes through the engine,
+  // so the legacy localStorage copies are safe to drop (frees the ~5MB quota).
+  'cashmodel_techpacks',
+  'cashmodel_component_packs',
+  'cashmodel_treatments',
+  'cashmodel_fabrics',
+  'cashmodel_embellishments',
+  'cashmodel_cut_sew',
+  'cashmodel_patterns',
+  'cashmodel_vendors',
+  'cashmodel_fr_colors',
+  'cashmodel_plm_suppliers',
+  'cashmodel_plm_people',
+  'cashmodel_plm_trim_types',
+  'cashmodel_sample_requests',
+  'cashmodel_pos',
+  'cashmodel_bom_snapshots',
+  'cashmodel_atom_usage',
+  'cashmodel_drift_logs',
 ]);
 
 const FLUSH_DEBOUNCE_MS = 120;

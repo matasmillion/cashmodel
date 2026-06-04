@@ -16,6 +16,7 @@
 // records goes missing in the directory dropdowns.
 
 import { supabase, IS_SUPABASE_ENABLED } from '../lib/supabase';
+import { getBlob, setBlob } from './localDb';
 
 const TECHPACKS_KEY = 'cashmodel_techpacks';
 const COMPONENT_PACKS_KEY = 'cashmodel_component_packs';
@@ -26,11 +27,11 @@ const CUSTOM_TRIM_TYPES_KEY = 'cashmodel_plm_trim_types';
 const SEED_TRIM_TYPES = ['Label', 'Zipper', 'Fabric', 'Hardware', 'Packaging'];
 
 function readJSON(key, fallback) {
-  try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
-  catch { return fallback; }
+  const v = getBlob(key);
+  return v == null ? fallback : v;
 }
 function writeJSON(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch (err) { console.error(err); }
+  setBlob(key, value);
 }
 
 function addNormalized(set, value) {

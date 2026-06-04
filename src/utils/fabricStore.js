@@ -10,6 +10,7 @@
 
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync } from '../lib/auth';
+import { getCollection, setCollection } from './localDb';
 import { emptyFabric, FABRIC_WEAVE_CODE } from './fabricLibrary';
 import { copyCoverImage } from './plmAssets';
 import { robustUpsertAtom, robustUpsertAtomBatch, mergeByIdNewest, dedupeCodesOnce } from './atomCloudSync';
@@ -64,26 +65,16 @@ function migrateYardsToMeters(rows) {
     delete r.moq_yards;
     delete r.price_per_yard_usd;
   }
-  if (dirty) {
-    try { localStorage.setItem(LOCAL_KEY, JSON.stringify(rows)); }
-    catch (err) { console.error('fabricStore yards→meters migrate:', err); }
-  }
+  if (dirty) setCollection(LOCAL_KEY, rows);
   return rows;
 }
 
 function readLocal() {
-  try {
-    const raw = localStorage.getItem(LOCAL_KEY);
-    const rows = raw ? JSON.parse(raw) : [];
-    return migrateYardsToMeters(rows);
-  } catch {
-    return [];
-  }
+  return migrateYardsToMeters(getCollection(LOCAL_KEY));
 }
 
 function writeLocal(rows) {
-  try { localStorage.setItem(LOCAL_KEY, JSON.stringify(rows)); }
-  catch (err) { console.error('fabricStore write:', err); }
+  setCollection(LOCAL_KEY, rows);
 }
 
 function newId() {

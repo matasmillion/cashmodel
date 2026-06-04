@@ -5,6 +5,7 @@ import { IS_SUPABASE_ENABLED, getAuthedSupabase, refreshAuthedSupabase } from '.
 import { getCurrentUserIdSync, getCurrentOrgIdSync, getJwtOrgId } from '../lib/auth';
 import { persistableImages, deleteAssets, copyAsset, scheduleOrphanDeletion, cancelOrphanDeletion } from './plmAssets';
 import { enqueue } from './syncQueue';
+import { getCollection, setCollection } from './localDb';
 
 const LOCAL_KEY = 'cashmodel_techpacks';
 
@@ -36,27 +37,14 @@ function migrateLegacyVendorKeys(row) {
 }
 
 function readLocal() {
-  try {
-    const raw = localStorage.getItem(LOCAL_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return getCollection(LOCAL_KEY);
 }
 
 function writeLocal(packs) {
-  try {
-    localStorage.setItem(LOCAL_KEY, JSON.stringify(packs));
-    if (lastQuotaError) lastQuotaError = null;
-    return { ok: true };
-  } catch (err) {
-    console.error('Failed to save tech packs locally:', err);
-    const isQuota = err && (err.name === 'QuotaExceededError'
-      || err.code === 22
-      || /quota/i.test(err.message || ''));
-    if (isQuota) lastQuotaError = err;
-    return { ok: false, error: err, quota: !!isQuota };
-  }
+  const res = setCollection(LOCAL_KEY, packs);
+  if (res.ok) { if (lastQuotaError) lastQuotaError = null; }
+  else if (res.quota) lastQuotaError = res.error;
+  return res;
 }
 
 // Pull the cover image (first entry with slot=cover) out of an images array.
