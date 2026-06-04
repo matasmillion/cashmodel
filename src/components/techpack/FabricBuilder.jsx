@@ -26,7 +26,7 @@ import { saveFabric, archiveFabric, restoreFabric } from '../../utils/fabricStor
 import {
   FABRIC_CATEGORIES, FABRIC_WEAVES, FABRIC_WEAVE_LABEL, FABRIC_STATUSES,
   FABRIC_GARMENT_AREAS, FINISH_EXECUTED_AT, MILL_FINISH_CATALOG,
-  weavesForCategory, categoryForWeave, bumpVersion,
+  weavesForCategory, categoryForWeave, bumpVersion, deriveShrinkSpec,
 } from '../../utils/fabricLibrary';
 import { getUsdCnyRate, cnyToUsd, usdToCny } from '../../utils/fxRates';
 import { generateFabricBOMPDF } from '../../utils/fabricBOMPDF';
@@ -63,6 +63,9 @@ const SECTION_TITLE = {
   fontFamily: "'Cormorant Garamond', serif", fontSize: 15, color: FR.slate,
   margin: 0, marginBottom: 10, letterSpacing: 0.2,
 };
+
+const SPEC_SUBLABEL = { fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 };
+const SPEC_HINT = { fontSize: 9, color: FR.stone, marginTop: 2, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' };
 
 function Field({ label, children }) {
   return (
@@ -298,6 +301,17 @@ export default function FabricBuilder({ fabric, onBack }) {
   const dirty = useMemo(() => JSON.stringify(draft) !== savedSnapshot, [draft, savedSnapshot]);
 
   const set = (patch) => setDraft(d => ({ ...d, ...patch }));
+
+  // Spec derivation. weight_gsm / width_cm are the PRE-wash values; the
+  // finished (post-wash) GSM + width derive from them and the directional
+  // shrinkage. `?? shrinkage_pct` migrates pre-split legacy records on read.
+  const warpPct = draft.shrinkage_warp_pct ?? draft.shrinkage_pct ?? 0;
+  const weftPct = draft.shrinkage_weft_pct ?? draft.shrinkage_pct ?? 0;
+  const shrink = deriveShrinkSpec({ gsmPre: draft.weight_gsm, widthPre: draft.width_cm, warpPct, weftPct });
+  const gsmPostOverridden = draft.weight_gsm_post != null && draft.weight_gsm_post !== '';
+  const widthPostOverridden = draft.width_cm_post != null && draft.width_cm_post !== '';
+  const gsmPostShown = gsmPostOverridden ? draft.weight_gsm_post : (shrink.gsmPost ?? '');
+  const widthPostShown = widthPostOverridden ? draft.width_cm_post : (shrink.widthPost ?? '');
 
   const setPrice = (kind, currency, raw) => {
     const value = parseFloat(raw);
@@ -665,18 +679,64 @@ export default function FabricBuilder({ fabric, onBack }) {
           {/* Spec */}
           <div style={CARD_STYLE}>
             <h4 style={SECTION_TITLE}>Spec</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+
+            {/* Pre-wash — the figures the mill prints; yield math reads these. */}
+            <div style={SPEC_SUBLABEL}>Pre-wash (as supplied)</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
               <Field label="Weight (gsm)">
                 <input type="number" value={draft.weight_gsm ?? 0} onChange={e => set({ weight_gsm: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
               </Field>
               <Field label="Width (cm)">
                 <input type="number" value={draft.width_cm ?? 0} onChange={e => set({ width_cm: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
               </Field>
-              <Field label="Shrinkage (%)">
-                <input type="number" step="0.1" value={draft.shrinkage_pct ?? 0} onChange={e => set({ shrinkage_pct: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
-              </Field>
               <Field label="Stretch (%)">
                 <input type="number" step="0.1" value={draft.stretch_pct ?? 0} onChange={e => set({ stretch_pct: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
+              </Field>
+            </div>
+
+            {/* Directional shrinkage — warp = lengthwise, weft = widthwise.
+                CLO3D render values (the remaining %, 100 − shrink) shown beneath. */}
+            <div style={SPEC_SUBLABEL}>Shrinkage</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 14 }}>
+              <Field label="Warp · lengthwise (%)">
+                <input type="number" step="0.1" value={warpPct} onChange={e => set({ shrinkage_warp_pct: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
+                <div style={SPEC_HINT}>→ CLO3D warp {shrink.cloWarp}</div>
+              </Field>
+              <Field label="Weft · widthwise (%)">
+                <input type="number" step="0.1" value={weftPct} onChange={e => set({ shrinkage_weft_pct: parseFloat(e.target.value) || 0 })} style={INPUT_STYLE} />
+                <div style={SPEC_HINT}>→ CLO3D weft {shrink.cloWeft}</div>
+              </Field>
+            </div>
+
+            {/* Post-wash — derived from pre-wash + shrinkage; editable override. */}
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+              <div style={SPEC_SUBLABEL}>Post-wash (finished)</div>
+              {(gsmPostOverridden || widthPostOverridden) && (
+                <button
+                  onClick={() => set({ weight_gsm_post: null, width_cm_post: null })}
+                  style={{ fontSize: 9, color: FR.soil, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
+                  ↺ reset to derived
+                </button>
+              )}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+              <Field label="Weight (gsm)">
+                <input
+                  type="number"
+                  value={gsmPostShown}
+                  placeholder={shrink.gsmPost != null ? String(shrink.gsmPost) : ''}
+                  onChange={e => set({ weight_gsm_post: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })}
+                  style={{ ...INPUT_STYLE, background: gsmPostOverridden ? '#fff' : '#FBF9F4' }} />
+                <div style={SPEC_HINT}>{gsmPostOverridden ? 'overridden' : 'derived'}</div>
+              </Field>
+              <Field label="Width (cm)">
+                <input
+                  type="number"
+                  value={widthPostShown}
+                  placeholder={shrink.widthPost != null ? String(shrink.widthPost) : ''}
+                  onChange={e => set({ width_cm_post: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })}
+                  style={{ ...INPUT_STYLE, background: widthPostOverridden ? '#fff' : '#FBF9F4' }} />
+                <div style={SPEC_HINT}>{widthPostOverridden ? 'overridden' : 'derived'}</div>
               </Field>
             </div>
           </div>

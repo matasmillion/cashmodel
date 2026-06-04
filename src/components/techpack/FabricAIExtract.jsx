@@ -149,7 +149,8 @@ export default function FabricAIExtract({ onClose, onApply }) {
     const patch = {};
     const fields = [
       'name', 'mill_fabric_no', 'category', 'weave', 'composition',
-      'weight_gsm', 'width_cm', 'shrinkage_pct', 'stretch_pct',
+      'weight_gsm', 'width_cm', 'weight_gsm_post', 'width_cm_post',
+      'shrinkage_warp_pct', 'shrinkage_weft_pct', 'stretch_pct',
       'hand', 'mill_id', 'lead_time_days', 'moq_meters',
       'price_per_meter_usd', 'price_per_meter_cny',
       'price_per_kg_usd',    'price_per_kg_cny',
@@ -298,9 +299,12 @@ export default function FabricAIExtract({ onClose, onApply }) {
               <Row label="Category"       value={result.category} />
               <Row label="Weave"          value={result.weave} />
               <Row label="Composition"    value={result.composition} />
-              <Row label="Weight"         value={result.weight_gsm} suffix=" gsm" />
-              <Row label="Width"          value={result.width_cm} suffix=" cm" />
-              <Row label="Shrinkage"      value={result.shrinkage_pct} suffix=" %" />
+              <Row label="Weight (pre)"   value={result.weight_gsm} suffix=" gsm" />
+              <Row label="Width (pre)"    value={result.width_cm} suffix=" cm" />
+              <Row label="Weight (post)"  value={result.weight_gsm_post} suffix=" gsm" />
+              <Row label="Width (post)"   value={result.width_cm_post} suffix=" cm" />
+              <Row label="Shrink warp"    value={result.shrinkage_warp_pct} suffix=" %" />
+              <Row label="Shrink weft"    value={result.shrinkage_weft_pct} suffix=" %" />
               <Row label="Stretch"        value={result.stretch_pct} suffix=" %" />
               <Row label="Hand"           value={result.hand} />
               <Row label="Vendor"         value={result.mill_id} />

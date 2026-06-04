@@ -21,7 +21,10 @@ import * as _atomTypes from '../types/atoms';
  *   weave: 'jersey'|'french_terry'|'fleece'|'twill'|'denim'|'poplin'|'oxford'|'rib'|'pique'|'canvas'|'other',
  *   hand: string,
  *   width_cm: number,
- *   shrinkage_pct: number,
+ *   shrinkage_warp_pct: number,
+ *   shrinkage_weft_pct: number,
+ *   weight_gsm_post: (number|null),
+ *   width_cm_post: (number|null),
  *   stretch_pct: number,
  *   mill_id: string,
  *   lead_time_days: number,
@@ -78,6 +81,35 @@ export const FABRIC_WEAVE_CODE = Object.fromEntries(
 
 export const FABRIC_STATUSES = ['draft', 'testing', 'approved', 'archived'];
 
+const round1 = n => Math.round(n * 10) / 10;
+
+/**
+ * Derive the finished (post-wash) GSM + width and the CLO3D render values
+ * from the pre-wash spec and the directional shrinkage percentages.
+ *
+ * Convention (confirmed with the operator): lengthwise = warp (经向),
+ * widthwise = weft (纬向). Fabric WIDTH is governed by weft shrink; GSM
+ * rises because the fabric's area shrinks in both directions while its mass
+ * is conserved. CLO3D's Shrinkage-Warp / Shrinkage-Weft fields take the
+ * REMAINING dimension as a percent (5% shrink → 95), so those are exposed
+ * here for copying straight into CLO3D.
+ *
+ * @param {{ gsmPre?:number, widthPre?:number, warpPct?:number, weftPct?:number }} [s]
+ * @returns {{ gsmPost:(number|null), widthPost:(number|null), cloWarp:number, cloWeft:number }}
+ */
+export function deriveShrinkSpec({ gsmPre = 0, widthPre = 0, warpPct = 0, weftPct = 0 } = {}) {
+  const warp = Number(warpPct) || 0;
+  const weft = Number(weftPct) || 0;
+  const cloWarp = round1(100 - warp);
+  const cloWeft = round1(100 - weft);
+  const warpRemain = cloWarp / 100;
+  const weftRemain = cloWeft / 100;
+  const widthPost = widthPre ? round1(Number(widthPre) * weftRemain) : null;
+  const area = warpRemain * weftRemain;
+  const gsmPost = (gsmPre && area > 0) ? Math.round(Number(gsmPre) / area) : null;
+  return { gsmPost, widthPost, cloWarp, cloWeft };
+}
+
 export function emptyFabric(overrides = {}) {
   const now = new Date().toISOString();
   return {
@@ -91,11 +123,19 @@ export function emptyFabric(overrides = {}) {
     category: 'knit',
     mill_fabric_no: '',
     composition: '',
-    weight_gsm: 0,
+    weight_gsm: 0,            // PRE-wash GSM (yield / consumption math reads this)
     weave: 'jersey',
     hand: '',
-    width_cm: 0,
-    shrinkage_pct: 0,
+    width_cm: 0,              // PRE-wash width (yield / consumption math reads this)
+    // Directional shrinkage %: warp = lengthwise (经向), weft = widthwise (纬向).
+    // Width is governed by weft; GSM by both. CLO3D render values are the
+    // remaining dimension (100 − shrink) — see deriveShrinkSpec().
+    shrinkage_warp_pct: null,
+    shrinkage_weft_pct: null,
+    // Finished (post-wash) overrides. null ⇒ use the value derived from the
+    // pre-wash spec + shrinkage; set only when the mill prints a different one.
+    weight_gsm_post: null,
+    width_cm_post: null,
     stretch_pct: 0,
     mill_id: '',
     lead_time_days: 0,

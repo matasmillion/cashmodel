@@ -39,7 +39,10 @@ Return ONLY a single JSON object (no markdown fences, no prose) with this shape:
   "composition": string | null,
   "weight_gsm": number | null,
   "width_cm": number | null,
-  "shrinkage_pct": number | null,
+  "weight_gsm_post": number | null,
+  "width_cm_post": number | null,
+  "shrinkage_warp_pct": number | null,
+  "shrinkage_weft_pct": number | null,
   "stretch_pct": number | null,
   "hand": string | null,
   "mill_id": string | null,
@@ -62,6 +65,10 @@ Rules:
 - Read every distinct color swatch on the card. Estimate hex from the swatch fill where visible; null if unclear.
 - All numeric fields must be plain numbers (no units).
 - Units are METRIC. moq_meters is in meters; price_per_meter_usd is USD per meter.
+- Shrinkage & finished specs:
+  · weight_gsm and width_cm are the PRE-wash (洗前 / 水洗前 / greige) values — the headline figures the mill prints (e.g. 洗前克重, 洗前幅宽). Capture those here.
+  · weight_gsm_post / width_cm_post are the FINISHED / post-wash (洗后 / 水洗后 / 成品 / 挂干) GSM and width. Fill ONLY if the card explicitly prints them; otherwise null — the app derives them from the pre-wash spec + shrinkage.
+  · Directional shrinkage: 经向 / 直向 / 纵向 (lengthwise) → shrinkage_warp_pct; 纬向 / 横向 (crosswise, across the width) → shrinkage_weft_pct. Capture the SHRINKAGE percentage itself (e.g. "缩水率 5%" → 5), NOT the CLO3D remaining value. If the card gives only one overall shrinkage figure, put that same number in BOTH shrinkage_warp_pct and shrinkage_weft_pct.
 - Pricing and MOQ are often buried in free-form notes / footers / margin scrawl rather than a labeled field. SCAN the entire card (including handwritten notes, footnotes, "备注", "价格", "起订量") for these.
   · Capture each price exactly as it appears on the card: if you see "37.5 RMB/m", set price_per_meter_cny = 37.5; if you see "55.12 RMB/kg", set price_per_kg_cny = 55.12; if you see "$5.20/m", set price_per_meter_usd = 5.20. Do NOT convert currencies — the client handles USD ↔ RMB conversion with a live FX rate.
   · price_per_meter and price_per_kg are independent quotes from the mill. Fill in only the ones actually shown; leave the others null. Never derive one unit from the other.
