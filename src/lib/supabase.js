@@ -18,10 +18,27 @@ let _authedCache = { token: null, client: null };
 // RLS policies using auth.jwt() ->> 'org_id' can enforce org isolation.
 // Falls back to the bare anon client if no token is available (unauthed
 // calls will be blocked by RLS, which is the correct behavior).
+//
+// Proactively mints a fresh token when the cached one is at/near expiry, so a
+// cached client never carries a stale JWT into a (possibly slow) request — the
+// cause of "JWT expired" save failures, especially after a laptop sleeps.
+function tokenExpiringSoon(token, withinMs = 60000) {
+  try {
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(atob(b64 + '==='.slice((b64.length + 3) % 4)));
+    if (!payload || typeof payload.exp !== 'number') return false;
+    return payload.exp * 1000 - Date.now() < withinMs;
+  } catch { return false; }
+}
+
 export async function getAuthedSupabase() {
   if (!IS_SUPABASE_ENABLED) return null;
-  const token = await getClerkToken('supabase');
+  let token = await getClerkToken('supabase');
   if (!token) return supabase;
+  if (tokenExpiringSoon(token)) {
+    const fresh = await getClerkToken('supabase', { skipCache: true });
+    if (fresh) token = fresh;
+  }
   if (_authedCache.token === token && _authedCache.client) return _authedCache.client;
   _authedCache = {
     token,

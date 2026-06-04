@@ -184,8 +184,16 @@ export async function listTechPacks() {
       .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
   }
 
-  // First load — wait for cloud to populate local
-  if (IS_SUPABASE_ENABLED && orgId) await syncFromCloud();
+  // First load — give the cloud a brief window to populate local, but never
+  // hang the UI: if it doesn't answer in time (slow/asleep project), return
+  // what's local and let the background sync fill in (it dispatches
+  // plm-store-updated when it lands).
+  if (IS_SUPABASE_ENABLED && orgId) {
+    await Promise.race([
+      syncFromCloud().catch(() => {}),
+      new Promise(res => setTimeout(res, 8000)),
+    ]);
+  }
   return readLocal().filter(p => !p?.deleted_at).map(projectLocal)
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
@@ -325,6 +333,12 @@ export async function saveTechPack(id, updates) {
     const msg = String(err?.message || '').toLowerCase();
     return /networkerror|failed to fetch|timeout|aborted|temporarily|rate limit|503|502|504|connection/i.test(msg);
   };
+  const isJwtExpired = (err) => {
+    const code = String(err?.code || '');
+    const msg = String(err?.message || err?.details || '').toLowerCase();
+    return code === 'PGRST301' || /jwt expired|jwt is expired|token is expired|invalid (jwt|token)/.test(msg);
+  };
+  let jwtRefreshed = false;
   for (let attempt = 0; attempt < 4; attempt++) {
     const { error } = await db
       .from('tech_packs')
@@ -340,6 +354,14 @@ export async function saveTechPack(id, updates) {
     }
     lastError = error;
     const msg = String(error.message || error.details || '');
+
+    // Auth token lapsed (laptop slept, or a slow request outlived the token) —
+    // mint a brand-new JWT and retry. Guarded so it happens at most once.
+    if (isJwtExpired(error) && !jwtRefreshed) {
+      jwtRefreshed = true;
+      db = await refreshAuthedSupabase();
+      continue;
+    }
 
     // RLS rejection — force-refresh JWT + client and retry once.
     if (isRlsError(error) && attempt === 0) {
