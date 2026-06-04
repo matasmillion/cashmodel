@@ -10,6 +10,7 @@
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync } from '../lib/auth';
 import { emptyEmbellishment, EMBELLISHMENT_TYPE_CODE } from './embellishmentLibrary';
+import { getCollection, setCollection } from './localDb';
 import { copyCoverImage } from './plmAssets';
 import { robustUpsertAtom, robustUpsertAtomBatch, mergeByIdNewest, dedupeCodesOnce } from './atomCloudSync';
 
@@ -34,17 +35,11 @@ export function toEmbellishmentCloudRow(row) {
 }
 
 function readLocal() {
-  try {
-    const raw = localStorage.getItem(LOCAL_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return getCollection(LOCAL_KEY);
 }
 
 function writeLocal(rows) {
-  try { localStorage.setItem(LOCAL_KEY, JSON.stringify(rows)); }
-  catch (err) { console.error('embellishmentStore write:', err); }
+  setCollection(LOCAL_KEY, rows);
 }
 
 function newId() {

@@ -25,6 +25,7 @@ import { FR } from './techPackConstants';
 import { getAuthedSupabase } from '../../lib/supabase';
 import { getCurrentOrgIdSync, getCurrentUserIdSync, getClerkToken } from '../../lib/auth';
 import { isGhostImage, persistableImages, deleteAssets } from '../../utils/plmAssets';
+import { getCollection } from '../../utils/localDb';
 
 const BUCKET = 'plm-assets';
 
@@ -247,19 +248,11 @@ const SCOPE_MAP = {
 // only ever existed locally.
 function readLocalIndex(lsKey) {
   if (!lsKey) return new Map();
-  try {
-    const raw = localStorage.getItem(lsKey);
-    if (!raw) return new Map();
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return new Map();
-    const out = new Map();
-    for (const row of arr) {
-      if (row && row.id) out.set(row.id, row);
-    }
-    return out;
-  } catch {
-    return new Map();
+  const out = new Map();
+  for (const row of getCollection(lsKey)) {
+    if (row && row.id) out.set(row.id, row);
   }
+  return out;
 }
 
 // Strip transient / unsafe fields from a local row before upserting it

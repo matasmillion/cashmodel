@@ -15,18 +15,15 @@
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync, getCurrentUserIdSync } from '../lib/auth';
 import { notifyNewSample } from './vendorNotificationStore';
+import { getCollection, setCollection } from './localDb';
 
 const LS_KEY = 'cashmodel_sample_requests';
 
 function readLocal() {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
+  return getCollection(LS_KEY);
 }
 function writeLocal(rows) {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(rows)); }
-  catch (err) { console.error('sampleStore write:', err); }
+  setCollection(LS_KEY, rows);
 }
 function newId() {
   return (crypto.randomUUID && crypto.randomUUID()) || `id-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

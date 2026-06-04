@@ -19,6 +19,7 @@ import { emptyTreatment, TREATMENT_TYPE_CODE } from './treatmentLibrary';
 import { addVendor } from './vendorLibrary';
 import { copyCoverImage } from './plmAssets';
 import { robustUpsertAtom, robustUpsertAtomBatch, mergeByIdNewest, dedupeCodesOnce } from './atomCloudSync';
+import { getCollection, setCollection } from './localDb';
 
 const LOCAL_KEY = 'cashmodel_treatments';
 
@@ -42,17 +43,11 @@ export function toTreatmentCloudRow(row) {
 }
 
 function readLocal() {
-  try {
-    const raw = localStorage.getItem(LOCAL_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return getCollection(LOCAL_KEY);
 }
 
 function writeLocal(rows) {
-  try { localStorage.setItem(LOCAL_KEY, JSON.stringify(rows)); }
-  catch (err) { console.error('treatmentStore write:', err); }
+  setCollection(LOCAL_KEY, rows);
 }
 
 function newId() {

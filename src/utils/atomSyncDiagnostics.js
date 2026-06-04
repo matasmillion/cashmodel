@@ -20,6 +20,7 @@ import {
   getLastSyncErrorByTable,
   resetEnsureOrgCache,
 } from './atomCloudSync';
+import { getCollection, getBlob } from './localDb';
 
 // One entry per atom-style table we want to inspect. The first four
 // drive the fix; vendors + colors are pulled in as a control so the
@@ -51,18 +52,17 @@ function decodeJwtPayload(token) {
 
 function readLocalRows({ table, lsKey, shape }) {
   try {
-    const raw = localStorage.getItem(lsKey);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      // Atoms are stored as an array of rows keyed by id.
-      return parsed.filter(r => r && r.id).map(r => ({ id: r.id, name: r.name || r.code || r.id }));
-    }
-    if (parsed && typeof parsed === 'object' && shape === 'object') {
+    if (shape === 'object') {
       // Vendor + color libraries are stored as a name-keyed map.
-      return Object.keys(parsed).map(name => ({ id: name, name }));
+      const obj = getBlob(lsKey);
+      if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+        return Object.keys(obj).map(name => ({ id: name, name }));
+      }
+      return [];
     }
-    return [];
+    // Atoms are stored as an array of rows keyed by id.
+    const parsed = getCollection(lsKey);
+    return parsed.filter(r => r && r.id).map(r => ({ id: r.id, name: r.name || r.code || r.id }));
   } catch (err) {
     console.error(`atomSyncDiagnostics readLocal ${table}:`, err);
     return [];
@@ -214,12 +214,8 @@ export async function forceResyncAllAtoms() {
   ];
 
   for (const t of atomTables) {
-    let local = [];
-    try {
-      const raw = localStorage.getItem(t.lsKey);
-      local = raw ? JSON.parse(raw) : [];
-      if (!Array.isArray(local)) local = [];
-    } catch { local = []; }
+    let local = getCollection(t.lsKey);
+    if (!Array.isArray(local)) local = [];
 
     if (local.length === 0) {
       results.push({ table: t.table, attempted: 0, succeeded: 0, failed: 0, errors: [] });
