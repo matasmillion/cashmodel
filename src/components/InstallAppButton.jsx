@@ -1,17 +1,14 @@
-// "Install app" button for the top bar. Gives users a visible, obvious way to
-// install the PWA instead of hunting through the browser's own menus.
-//
-// Behaviour by platform:
-//   • Chrome / Edge → captures the `beforeinstallprompt` event and fires the
-//     native install prompt on click. Only appears once the app actually meets
-//     installability (valid manifest + PNG icons + service worker).
-//   • iOS Safari / macOS Safari → no programmatic prompt exists, so the button
-//     shows a short how-to popover (Share → Add to Home Screen / File → Add to
-//     Dock) instead.
-//   • Already installed (standalone) or unsupported (e.g. Firefox) → hidden.
+// "Install app" button for the top bar. Always visible (until the app is
+// actually installed) so it can't hide from the user. Behaviour:
+//   • If Chrome/Edge handed us a one-click install prompt → fire it.
+//   • Otherwise → show a short, browser-specific how-to (Chrome's own Install
+//     menu, Safari's Add to Dock, iOS Add to Home Screen, etc.). This is the
+//     reliable path: Chrome's prompt is flaky (needs page engagement, fires
+//     once, can be missed), but its menu install always works.
 
 import { useEffect, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
+import { getInstallPrompt, onInstallPromptChange, clearInstallPrompt } from '../utils/pwaInstall';
 
 const FR = { slate: '#3A3A3A', sand: '#EBE5D5' };
 
@@ -20,60 +17,53 @@ function isStandalone() {
     || window.navigator.standalone === true;
 }
 
-function detectPlatform() {
+function detectBrowser() {
   const ua = navigator.userAgent || '';
-  const iOS = /iPad|iPhone|iPod/.test(ua)
-    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const iOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isFirefox = /firefox|fxios/i.test(ua);
   const isSafari = /^((?!chrome|android|crios|fxios|edg).)*safari/i.test(ua);
-  return { iOS, macSafari: isSafari && /Macintosh/.test(ua) && !iOS };
+  const macSafari = isSafari && /Macintosh/.test(ua) && !iOS;
+  return { iOS, isFirefox, macSafari };
+}
+
+function instructionsFor(b) {
+  if (b.iOS) return 'In Safari, tap the Share button (the box with an up-arrow), then “Add to Home Screen.”';
+  if (b.macSafari) return 'In Safari, open the File menu (or the Share button) and choose “Add to Dock.”';
+  if (b.isFirefox) return 'Firefox can’t install web apps. Open this page in Chrome, Edge, or Safari, then use their Install option.';
+  // Chrome / Edge / other Chromium.
+  return 'Open the browser menu (the ⋮ at the top-right of Chrome). Choose “Cast, save, and share” → “Install page as app.” If you only see “Create shortcut,” click it and tick “Open as window.” Then confirm Install.';
 }
 
 export default function InstallAppButton() {
-  const [deferred, setDeferred] = useState(null);
+  const [prompt, setPrompt] = useState(() => getInstallPrompt());
   const [installed, setInstalled] = useState(() => isStandalone());
-  const [showHint, setShowHint] = useState(false);
+  const [hint, setHint] = useState(null);
   const wrapRef = useRef(null);
-  const { iOS, macSafari } = detectPlatform();
 
+  useEffect(() => onInstallPromptChange((p) => setPrompt(p)), []);
   useEffect(() => {
-    if (installed) return undefined; // already running as an installed app
-    const onPrompt = (e) => { e.preventDefault(); setDeferred(e); };
-    const onInstalled = () => { setInstalled(true); setDeferred(null); };
-    window.addEventListener('beforeinstallprompt', onPrompt);
+    const onInstalled = () => setInstalled(true);
     window.addEventListener('appinstalled', onInstalled);
-    return () => {
-      window.removeEventListener('beforeinstallprompt', onPrompt);
-      window.removeEventListener('appinstalled', onInstalled);
-    };
-  }, [installed]);
-
+    return () => window.removeEventListener('appinstalled', onInstalled);
+  }, []);
   useEffect(() => {
-    if (!showHint) return undefined;
-    const onDoc = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setShowHint(false); };
+    if (!hint) return undefined;
+    const onDoc = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setHint(null); };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, [showHint]);
+  }, [hint]);
 
   if (installed) return null;
 
-  const canPrompt = !!deferred;
-  // Only render when there's an actionable path. Otherwise stay hidden so we
-  // never show a dead button (e.g. Firefox, or Chrome before it's installable).
-  if (!canPrompt && !iOS && !macSafari) return null;
-
   const onClick = async () => {
-    if (canPrompt) {
-      deferred.prompt();
-      try { await deferred.userChoice; } catch { /* user dismissed */ }
-      setDeferred(null);
-    } else {
-      setShowHint((h) => !h);
+    if (prompt) {
+      prompt.prompt();
+      try { await prompt.userChoice; } catch { /* user dismissed */ }
+      clearInstallPrompt();
+      return;
     }
+    setHint((h) => (h ? null : instructionsFor(detectBrowser())));
   };
-
-  const hint = iOS
-    ? 'In Safari, tap the Share button (box with an up-arrow), then “Add to Home Screen.”'
-    : 'In Safari: open the File menu (or the Share button) and choose “Add to Dock.”';
 
   return (
     <div ref={wrapRef} style={{ position: 'relative', display: 'inline-flex' }}>
@@ -92,14 +82,14 @@ export default function InstallAppButton() {
       >
         <Download size={13} strokeWidth={1.6} /> Install app
       </button>
-      {showHint && (
+      {hint && (
         <div
           role="status"
           style={{
-            position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: 244,
+            position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: 280,
             background: '#fff', border: '0.5px solid rgba(58,58,58,0.12)', borderRadius: 8,
-            padding: '10px 12px', boxShadow: '0 8px 24px rgba(58,58,58,0.10)',
-            fontSize: 12, lineHeight: 1.5, color: FR.slate, zIndex: 60,
+            padding: '11px 13px', boxShadow: '0 8px 24px rgba(58,58,58,0.10)',
+            fontSize: 12, lineHeight: 1.55, color: FR.slate, zIndex: 60,
           }}
         >
           {hint}
