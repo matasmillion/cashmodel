@@ -1,18 +1,18 @@
-// SwatchScanModal — Claude Vision predetermines one crop box per fabric
-// swatch, the operator fine-tunes any box that's off, then the modal crops
-// every box from the source image and returns them as uploadable Blobs with
-// labels. The caller (FabricBuilder) uploads and appends them to
-// color_card_images.
+// SwatchScanModal — a two-pass swatch importer. Pass 1 estimates the boxes,
+// the operator crops each one exactly, Pass 2 reads the names off the crops.
+// Returns the selected crops as uploadable Blobs with labels; the caller
+// (FabricBuilder) uploads and appends them to color_card_images.
 //
 // Flow:
 //   1. Drop a single swatch-card photo
-//   2. "Scan" — Claude Vision returns a box per swatch ({label,x,y,w,h}).
-//      The model is reliable on the labels but not always pixel-accurate on
-//      edges, so the boxes are a starting point, not the final word.
-//   3. Edit — operator drags/resizes any box that's off, adds a missing one,
-//      removes a spurious one (SwatchBoxEditor). Every box is independent.
-//   4. Crop — canvas-crop each box from the source image
-//   5. Preview — deselect any, edit labels, "Add X swatches"
+//   2. "Scan" (Pass 1) — Claude Vision estimates how many swatches there are
+//      and a rough full-cell box for each. No labels yet.
+//   3. Edit — operator drags/resizes boxes (SwatchBoxEditor) so each crops a
+//      swatch + its printed code. Shift-click multi-selects for group move /
+//      delete; add or remove boxes as needed. Every box is independent.
+//   4. Crop + read (Pass 2) — canvas-crop each box, then batch the crops back
+//      through Claude Vision to read each printed code as the swatch name.
+//   5. Preview — deselect any, edit names, "Add X swatches"
 
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, X, Scan, Plus, Trash2 } from 'lucide-react';
@@ -42,7 +42,7 @@ export default function SwatchScanModal({ onClose, onApply }) {
   const [error, setError]       = useState(null);
   const [phase, setPhase]       = useState('drop'); // drop | edit | preview
   const [boxes, setBoxes]       = useState([]);     // [{ label, x, y, w, h }]
-  const [selected, setSelected] = useState(null);   // index | null
+  const [selected, setSelected] = useState([]);     // indices of selected boxes
   const [swatches, setSwatches] = useState([]);     // [{ label, blob, blobUrl, selected }]
   const [progress, setProgress] = useState(null);   // { done, total } during Pass-2 OCR
   const fileRef = useRef(null);
@@ -65,7 +65,7 @@ export default function SwatchScanModal({ onClose, onApply }) {
     revokeSwatches(swatches);
     setSwatches([]);
     setBoxes([]);
-    setSelected(null);
+    setSelected([]);
     setPhase('drop');
     setError(null);
   }
@@ -102,7 +102,7 @@ export default function SwatchScanModal({ onClose, onApply }) {
         }
       }
       setBoxes((Array.isArray(regions) ? regions : []).map(normalizeBox));
-      setSelected(null);
+      setSelected([]);
       setPhase('edit');
     } catch (err) {
       setError(err.message || 'Scan failed');
@@ -111,15 +111,27 @@ export default function SwatchScanModal({ onClose, onApply }) {
     }
   }
 
+  // Selection: plain click replaces, shift-click toggles. A plain click on a
+  // box that's already part of a multi-selection keeps the selection (so the
+  // group can be dragged); null clears.
+  function handleSelect(i, additive) {
+    if (i == null) { setSelected([]); return; }
+    setSelected(prev => {
+      if (additive) return prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i];
+      return (prev.includes(i) && prev.length > 1) ? prev : [i];
+    });
+  }
+
   function addBox() {
-    const nb = { label: `Color ${String(boxes.length + 1).padStart(2, '0')}`, x: 0.44, y: 0.44, w: 0.12, h: 0.1 };
+    const nb = { label: '', x: 0.44, y: 0.44, w: 0.12, h: 0.1 };
     setBoxes(prev => [...prev, nb]);
-    setSelected(boxes.length);
+    setSelected([boxes.length]);
   }
   function removeSelected() {
-    if (selected == null) return;
-    setBoxes(prev => prev.filter((_, i) => i !== selected));
-    setSelected(null);
+    if (!selected.length) return;
+    const drop = new Set(selected);
+    setBoxes(prev => prev.filter((_, i) => !drop.has(i)));
+    setSelected([]);
   }
 
   // Crop every box exactly, then Pass 2 — read the printed code off each crop
@@ -213,7 +225,7 @@ export default function SwatchScanModal({ onClose, onApply }) {
               <div style={{ position: 'relative' }}>
                 <img src={preview} alt="Swatch sheet" style={{ width: '100%', borderRadius: 4, border: `0.5px solid ${FR.sand}` }} />
                 <button
-                  onClick={() => { setFile(null); setPreview(''); setBoxes([]); setSelected(null); revokeSwatches(swatches); setSwatches([]); setError(null); }}
+                  onClick={() => { setFile(null); setPreview(''); setBoxes([]); setSelected([]); revokeSwatches(swatches); setSwatches([]); setError(null); }}
                   style={{ position: 'absolute', top: 5, right: 5, width: 20, height: 20, borderRadius: 10, background: FR.slate, color: FR.salt, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <X size={11} />
                 </button>
@@ -239,26 +251,28 @@ export default function SwatchScanModal({ onClose, onApply }) {
           {file && phase === 'edit' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 18, alignItems: 'flex-start' }}>
               <div style={{ maxHeight: '64vh', overflowY: 'auto', border: `0.5px solid ${FR.sand}`, borderRadius: 4 }}>
-                <SwatchBoxEditor src={preview} boxes={boxes} selected={selected} onSelect={setSelected} onChange={setBoxes} />
+                <SwatchBoxEditor src={preview} boxes={boxes} selected={selected} onSelect={handleSelect} onChange={setBoxes} onDeleteSelected={removeSelected} />
               </div>
 
               <div>
                 <div style={{ fontSize: 13, color: FR.slate, fontWeight: 600, marginBottom: 2 }}>{N} swatch{N === 1 ? '' : 'es'} detected</div>
                 <div style={{ fontSize: 10, color: FR.stone, marginBottom: 12, lineHeight: 1.5 }}>
-                  Drag a box to move, a corner to resize. Keep each swatch&apos;s printed code inside its box — names are read from the crops when you submit.
+                  Drag a box to move, a corner to resize. Shift-click to select several, then drag any one to move the group. Keep each swatch&apos;s printed code inside its box — names are read from the crops when you submit.
                 </div>
 
-                {/* Selected box — remove only (names come from Pass 2, editable in preview) */}
+                {/* Selection — group remove (names come from Pass 2, editable in preview) */}
                 <div style={{ marginBottom: 12, padding: 10, background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 6 }}>
-                  <div style={smallLabel}>Selected swatch</div>
-                  {selected == null ? (
-                    <div style={{ fontSize: 10, color: FR.stone }}>Click a box on the card to select it.</div>
+                  <div style={smallLabel}>Selection</div>
+                  {!selected.length ? (
+                    <div style={{ fontSize: 10, color: FR.stone }}>Click a box to select it. Shift-click to add more.</div>
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                      <div style={{ fontSize: 11, color: FR.slate }}>Box {selected + 1} of {N}</div>
+                      <div style={{ fontSize: 11, color: FR.slate }}>
+                        {selected.length === 1 ? `Box ${selected[0] + 1} of ${N}` : `${selected.length} boxes selected`}
+                      </div>
                       <button onClick={removeSelected}
                         style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: '#A32D2D', background: 'none', border: `0.5px solid rgba(163,45,45,0.3)`, borderRadius: 4, padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                        <Trash2 size={11} /> Remove
+                        <Trash2 size={11} /> Remove{selected.length > 1 ? ` ${selected.length}` : ''}
                       </button>
                     </div>
                   )}
@@ -276,7 +290,7 @@ export default function SwatchScanModal({ onClose, onApply }) {
                   {busy ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Scan size={14} />}
                   {busy ? (progress ? `Reading names ${progress.done}/${progress.total}…` : 'Cropping…') : `Crop & read ${N} swatch${N === 1 ? '' : 'es'}`}
                 </button>
-                <button onClick={() => { setFile(null); setPreview(''); setBoxes([]); setSelected(null); setError(null); }}
+                <button onClick={() => { setFile(null); setPreview(''); setBoxes([]); setSelected([]); setError(null); }}
                   style={{ width: '100%', marginTop: 8, fontSize: 10, color: FR.stone, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
                   Start over with a different photo
                 </button>

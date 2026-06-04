@@ -1,14 +1,15 @@
 // SwatchBoxEditor — per-swatch crop editor for the AI Color Scanner.
 //
-// Claude Vision predetermines one bounding box per fabric swatch (via
-// extractSwatchRegions). This editor overlays each of those boxes on the
-// source card and lets the operator fine-tune any one that's off:
-//   · drag a box body to move it
-//   · drag a corner handle to resize it
-//   · click to select; the × removes it
-// Unlike the uniform grid overlay it replaces, every box is an independent
-// crop region ({ label, x, y, w, h } in 0-1 fractions of the source image),
-// so a single drifted swatch can be nudged without disturbing its neighbours.
+// Pass 1 seeds one rough box per swatch (no labels); this editor lets the
+// operator crop each one exactly before Pass 2 reads the names back off the
+// crops. Interactions:
+//   · click a box to select it; drag the body to move it
+//   · shift-click to add/remove boxes from a multi-selection
+//   · drag any selected box to move the whole selection together (rigid)
+//   · drag a corner handle to resize (single selection only)
+//   · × on a box, the side-panel Remove, or Delete key removes the selection
+// Every box is an independent crop region ({ label, x, y, w, h } in 0-1
+// fractions of the source image).
 
 import { useRef, useCallback, useEffect } from 'react';
 import { FR } from './techPackConstants';
@@ -26,9 +27,9 @@ const clamp01 = v => Math.max(0, Math.min(1, v));
 const pctOf = v => `${v * 100}%`;
 const MIN = 0.015; // smallest box edge, as a fraction of the image
 
-export default function SwatchBoxEditor({ src, boxes, selected, onSelect, onChange }) {
+export default function SwatchBoxEditor({ src, boxes, selected, onSelect, onChange, onDeleteSelected }) {
   const wrapRef = useRef(null);
-  const dragRef = useRef(null); // { mode:'move'|cornerId, index, box, grab:{dx,dy} }
+  const dragRef = useRef(null); // move: { mode:'move', start:[{idx,box}], grab } | resize: { mode:cornerId, index, box }
 
   const pointFromEvent = useCallback((e) => {
     const rect = wrapRef.current?.getBoundingClientRect();
@@ -46,25 +47,40 @@ export default function SwatchBoxEditor({ src, boxes, selected, onSelect, onChan
     if (!d) return;
     const p = pointFromEvent(e);
     if (!p) return;
-    onChange(prev => {
-      const next = prev.slice();
-      const b = d.box;
-      if (d.mode === 'move') {
-        const x = Math.max(0, Math.min(p.x - d.grab.dx, 1 - b.w));
-        const y = Math.max(0, Math.min(p.y - d.grab.dy, 1 - b.h));
-        next[d.index] = { ...b, x, y };
-      } else {
-        let { x, y, w, h } = b;
-        const right = x + w;
-        const bottom = y + h;
-        if (d.mode.includes('w')) { x = clamp01(Math.min(p.x, right - MIN)); w = right - x; }
-        if (d.mode.includes('e')) { w = clamp01(Math.max(p.x, x + MIN)) - x; }
-        if (d.mode.includes('n')) { y = clamp01(Math.min(p.y, bottom - MIN)); h = bottom - y; }
-        if (d.mode.includes('s')) { h = clamp01(Math.max(p.y, y + MIN)) - y; }
-        next[d.index] = { ...b, x, y, w, h };
+    if (d.mode === 'move') {
+      // Rigid group move: clamp one shared delta so every moved box stays in
+      // bounds and relative positions are preserved.
+      let dx = p.x - d.grab.x;
+      let dy = p.y - d.grab.y;
+      let loX = -Infinity, hiX = Infinity, loY = -Infinity, hiY = Infinity;
+      for (const m of d.start) {
+        loX = Math.max(loX, -m.box.x);
+        hiX = Math.min(hiX, 1 - m.box.w - m.box.x);
+        loY = Math.max(loY, -m.box.y);
+        hiY = Math.min(hiY, 1 - m.box.h - m.box.y);
       }
-      return next;
-    });
+      dx = Math.max(loX, Math.min(dx, hiX));
+      dy = Math.max(loY, Math.min(dy, hiY));
+      onChange(prev => {
+        const next = prev.slice();
+        for (const m of d.start) next[m.idx] = { ...m.box, x: m.box.x + dx, y: m.box.y + dy };
+        return next;
+      });
+    } else {
+      const b = d.box;
+      let { x, y, w, h } = b;
+      const right = x + w;
+      const bottom = y + h;
+      if (d.mode.includes('w')) { x = clamp01(Math.min(p.x, right - MIN)); w = right - x; }
+      if (d.mode.includes('e')) { w = clamp01(Math.max(p.x, x + MIN)) - x; }
+      if (d.mode.includes('n')) { y = clamp01(Math.min(p.y, bottom - MIN)); h = bottom - y; }
+      if (d.mode.includes('s')) { h = clamp01(Math.max(p.y, y + MIN)) - y; }
+      onChange(prev => {
+        const next = prev.slice();
+        next[d.index] = { ...b, x, y, w, h };
+        return next;
+      });
+    }
   }, [onChange, pointFromEvent]);
 
   const endDrag = useCallback(() => { dragRef.current = null; }, []);
@@ -78,42 +94,63 @@ export default function SwatchBoxEditor({ src, boxes, selected, onSelect, onChan
     };
   }, [onPointerMove, endDrag]);
 
-  const startMove = i => (e) => {
-    const p = pointFromEvent(e);
-    if (!p) return;
+  // Delete / Backspace removes the current selection (unless typing in a field).
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      const el = document.activeElement;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      if (selected.length) { e.preventDefault(); onDeleteSelected?.(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected, onDeleteSelected]);
+
+  const startPointer = i => (e) => {
     e.preventDefault();
     e.stopPropagation();
-    onSelect?.(i);
-    const b = boxes[i];
-    dragRef.current = { mode: 'move', index: i, box: { ...b }, grab: { dx: p.x - b.x, dy: p.y - b.y } };
+    if (e.shiftKey) { onSelect(i, true); return; } // toggle in/out of the selection; no drag
+    // Decide what moves from the CURRENT selection, before the parent updates:
+    // dragging a box already in a multi-selection moves the whole group;
+    // dragging anything else first reduces the selection to that one box.
+    const movers = (selected.includes(i) && selected.length > 1) ? selected : [i];
+    onSelect(i, false);
+    const p = pointFromEvent(e);
+    if (!p) return;
+    dragRef.current = {
+      mode: 'move',
+      start: movers.map(idx => ({ idx, box: { ...boxes[idx] } })),
+      grab: { x: p.x, y: p.y },
+    };
   };
   const startCorner = (i, id) => (e) => {
     e.preventDefault();
     e.stopPropagation();
-    onSelect?.(i);
+    onSelect(i, false);
     dragRef.current = { mode: id, index: i, box: { ...boxes[i] } };
   };
   const removeBox = i => (e) => {
     e.preventDefault();
     e.stopPropagation();
     onChange(prev => prev.filter((_, idx) => idx !== i));
-    onSelect?.(null);
+    onSelect(null);
   };
 
   return (
     <div
       ref={wrapRef}
-      onPointerDown={() => onSelect?.(null)}
+      onPointerDown={() => onSelect(null)}
       style={{ position: 'relative', userSelect: 'none', touchAction: 'none', lineHeight: 0 }}
     >
       <img src={src} alt="" draggable={false} style={{ display: 'block', width: '100%', borderRadius: 4 }} />
 
       {boxes.map((b, i) => {
-        const isSel = i === selected;
+        const isSel = selected.includes(i);
+        const isSolo = isSel && selected.length === 1;
         return (
           <div
             key={i}
-            onPointerDown={startMove(i)}
+            onPointerDown={startPointer(i)}
             style={{
               position: 'absolute',
               left: pctOf(b.x), top: pctOf(b.y), width: pctOf(b.w), height: pctOf(b.h),
@@ -135,7 +172,8 @@ export default function SwatchBoxEditor({ src, boxes, selected, onSelect, onChan
               {b.label || i + 1}
             </div>
 
-            {isSel && (
+            {/* Per-box × and resize handles only when this is the sole selection. */}
+            {isSolo && (
               <>
                 <div
                   onPointerDown={removeBox(i)}
