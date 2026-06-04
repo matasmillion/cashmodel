@@ -86,12 +86,44 @@ async function getFreshToken() {
   return _tokenRefreshPromise;
 }
 
+// Module-level token cache: reuse the last valid JWT across parallel calls so
+// three concurrent view-generation jobs don't each hit Clerk's auth endpoint.
+// Clerk's 'supabase' template requires a round-trip to Clerk's servers — if
+// that call fails transiently the three parallel generateGarmentView calls all
+// see null and throw "Sign in first" even though the user is logged in.
+let _cachedToken = null;
+let _cachedTokenExp = 0;
+
 async function buildHeaders() {
+  const now = Date.now();
+  const MARGIN = 30_000; // 30 s safety margin before expiry
+
+  // Fast path: cached token still valid — no Clerk network call needed
+  if (_cachedToken && _cachedTokenExp - now > MARGIN) {
+    return {
+      Authorization: `Bearer ${_cachedToken}`,
+      apikey: ANON_KEY,
+      'Content-Type': 'application/json',
+    };
+  }
+
+  // Slow path: fetch / refresh from Clerk
   let token = await getClerkToken('supabase');
   if (!token || jwtExpiringSoon(token)) token = await getFreshToken();
   if (!token) throw new Error('Sign in first');
+
+  // Cache with its JWT expiry so we don't refresh until necessary
+  try {
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const { exp } = JSON.parse(atob(b64 + '==='.slice((b64.length + 3) % 4)));
+    _cachedTokenExp = typeof exp === 'number' ? exp * 1000 : now + 3_600_000;
+  } catch {
+    _cachedTokenExp = now + 3_600_000;
+  }
+  _cachedToken = token;
+
   return {
-    Authorization: `Bearer ${token}`,
+    Authorization: `Bearer ${_cachedToken}`,
     apikey: ANON_KEY,
     'Content-Type': 'application/json',
   };
