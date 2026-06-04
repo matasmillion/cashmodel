@@ -70,14 +70,25 @@ function jwtExpiringSoon(token) {
   } catch { return false; }
 }
 
+// One in-flight token refresh at a time — prevents three parallel runOneView
+// calls each racing to hit Clerk's endpoint with skipCache simultaneously.
+let _tokenRefreshPromise = null;
+async function getFreshToken() {
+  if (_tokenRefreshPromise) return _tokenRefreshPromise;
+  _tokenRefreshPromise = (async () => {
+    try {
+      const t = await getClerkToken('supabase', { skipCache: true });
+      return t;
+    } finally {
+      _tokenRefreshPromise = null;
+    }
+  })();
+  return _tokenRefreshPromise;
+}
+
 async function buildHeaders() {
-  // Always check whether the cached Clerk token is close to expiry and force a
-  // fresh one if so — generation jobs can take 1-2 min and a stale JWT will
-  // cause "Credential lookup failed: JWT expired" mid-poll.
   let token = await getClerkToken('supabase');
-  if (!token || jwtExpiringSoon(token)) {
-    token = await getClerkToken('supabase', { skipCache: true });
-  }
+  if (!token || jwtExpiringSoon(token)) token = await getFreshToken();
   if (!token) throw new Error('Sign in first');
   return {
     Authorization: `Bearer ${token}`,
@@ -107,18 +118,23 @@ async function callProxy(name, body) {
   return data;
 }
 
-// Gateway-error statuses from fal.ai that are worth retrying (their infra
-// returns 502/503/504 under load; the job is still queued on their side).
+// Errors worth retrying: 5xx gateway errors AND network-level TypeErrors
+// ("Failed to fetch"). 4xx errors (auth, bad request) are permanent.
 const FAL_RETRYABLE = new Set([502, 503, 504]);
 const POLL_RETRY_DELAY_MS = 5000;
 const POLL_RETRIES = 3;
+
+function isRetryable(err) {
+  if (err.status) return FAL_RETRYABLE.has(err.status); // HTTP error
+  // Network-level TypeError ("Failed to fetch") — no status code
+  return err instanceof TypeError && !err.status;
+}
 
 // Submit a fal queue job, poll status, fetch response body, return image URL.
 async function runFalJob({ endpoint, payload, onStatus }) {
   onStatus?.('submitting');
 
-  // Retry the submit itself on gateway errors — the 504 can happen before the
-  // job is queued (not just during polling) when the payload is large.
+  // Retry the submit on gateway / network errors.
   let submitted;
   let lastSubmitErr;
   for (let attempt = 0; attempt <= POLL_RETRIES; attempt++) {
@@ -128,7 +144,7 @@ async function runFalJob({ endpoint, payload, onStatus }) {
       break;
     } catch (err) {
       lastSubmitErr = err;
-      if (!FAL_RETRYABLE.has(err.status)) throw err;
+      if (!isRetryable(err)) throw err;
       if (attempt < POLL_RETRIES) await new Promise(r => setTimeout(r, POLL_RETRY_DELAY_MS));
     }
   }
@@ -153,7 +169,7 @@ async function runFalJob({ endpoint, payload, onStatus }) {
         break;
       } catch (err) {
         lastPollErr = err;
-        if (!FAL_RETRYABLE.has(err.status)) throw err; // non-retryable — bubble up
+        if (!isRetryable(err)) throw err; // non-retryable — bubble up
         if (attempt < POLL_RETRIES) await new Promise(r => setTimeout(r, POLL_RETRY_DELAY_MS));
       }
     }
