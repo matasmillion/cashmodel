@@ -238,17 +238,19 @@ function repairTruncatedJson(src) {
 }
 
 const SWATCH_SYSTEM = `You are analyzing a fabric swatch color card image. Each cell on the card contains TWO parts stacked vertically:
-  1. TOP: the actual fabric sample — a colored textile square, often with pinked / serrated / zig-zag cut edges
+  1. TOP: the actual fabric sample — a colored textile square with visible knit/weave/pile texture, often with pinked / serrated / zig-zag cut edges
   2. BOTTOM: a text label below the fabric (color code, brand name, Chinese characters)
 
-Your job: for each swatch cell, return a bounding box that covers ONLY the fabric square (part 1). The box must NOT include any text, labels, or the gap between the fabric and the label.
+FABRIC-PRESENCE IS THE GATE. A region is a swatch ONLY if it contains real fabric texture. Regions that hold only text — colour-spec tables (e.g. 洗前克重…), the column-header row that holds only tone names like 炒前/浅炒/中炒/深炒, the masthead/logo, footnotes, or blank paper — contain NO fabric and must be skipped entirely. Never emit a box for a text-only region.
+
+Your job: for each cell that contains fabric, return a bounding box that covers ONLY the fabric square (part 1). The box must NOT include any text, labels, or the gap between the fabric and the label.
 
 Think of it this way: imagine a horizontal cut right at the bottom edge of the fabric material, just before the white space and text begin. Your bounding box ends at that cut.
 
 Return ONLY a JSON array. Each element is one swatch:
 [
   {
-    "label": "the color code / name printed in the text area BELOW the fabric (e.g. 'JF-CCE 002 牙白', 'Stone', '035 SCULPTOR')",
+    "label": "the color code / name printed in the text area BELOW the fabric, transcribed EXACTLY as shown",
     "x": 0.05,
     "y": 0.08,
     "w": 0.18,
@@ -260,7 +262,7 @@ Rules:
 - x, y = top-left corner of the FABRIC SQUARE ONLY, as a fraction of the full image (0.0–1.0)
 - w, h = width/height of the FABRIC SQUARE ONLY — stop h before the label text begins
 - x + w ≤ 1.0, y + h ≤ 1.0
-- The "label" value is read from the text BELOW the swatch, not from inside the bounding box
+- The "label" value is read from the text directly BELOW the swatch, not from inside the bounding box. Transcribe it EXACTLY as printed — do NOT add prefixes (e.g. no "JF-"), do NOT zero-pad numbers, do NOT invent codes.
 - Typical fabric square takes roughly the top 65–75% of each cell; the label takes the bottom 25–35%
 - Exclude card borders, headers, spec tables, blank placeholder cells, and any cell with no visible fabric
 - If no label text is visible for a cell, use "Color NN" (sequential number)
@@ -312,6 +314,149 @@ export async function extractSwatchesFromImage({ media }) {
   return regions.map(r => ({ ...r, h: r.h * 0.72 }));
 }
 
+// Grid-aware swatch detection. Mill color cards are printed as a regular matrix
+// (rows of colors × columns of wash tones). Asking the model to regress ~140
+// independent boxes on a downsampled image is unreliable — boxes drift onto the
+// wrong rows and crop the text-only header bands. Instead we ask only for the
+// GRID GEOMETRY (the fabric-matrix bounding box + the list of row codes +
+// column tone headers + the fabric/label split inside a cell) and compute every
+// crop deterministically on the client. Far fewer reads, no coordinate drift,
+// and labels come out exactly as printed.
+const SWATCH_GRID_SYSTEM = `You are analyzing a fabric color card — a printed sheet where fabric swatches are laid out in a regular grid (rows × columns). Your job is to describe the GRID GEOMETRY so a program can crop each swatch deterministically. You do NOT return per-swatch boxes.
+
+A swatch is a square of REAL FABRIC with visible knit/weave/pile texture. Two facts govern everything:
+  1. FABRIC-PRESENCE IS THE GATE. Only rows/cells that actually contain fabric count. Regions that hold only text — the coloured specification table (e.g. 洗前克重…), the column-header row that holds only tone names like 炒前/浅炒/中炒/深炒, the masthead/logo, footnotes, or blank paper — contain NO fabric and must be excluded from the grid entirely.
+  2. DIRECTLY BENEATH EACH FABRIC SQUARE is its printed code or name. That strip is the label; it is NOT part of the fabric.
+
+Return ONLY a single JSON object (no markdown, no prose):
+
+{
+  "is_regular_grid": true,
+  "grid":   { "x0": 0.30, "y0": 0.17, "x1": 0.99, "y1": 0.97 },
+  "columns": ["炒前","浅炒","中炒","深炒"],
+  "rows":    ["16-YZY","14-FOG","17-YZY","01-ADER"],
+  "cell_fabric_top_frac": 0.0,
+  "cell_fabric_bottom_frac": 0.78
+}
+
+Field rules:
+- "grid" = the bounding box, as 0.0–1.0 fractions of the FULL image, of the FABRIC MATRIX ONLY. Its top edge (y0) starts at the FIRST row that actually contains fabric — BELOW the masthead, the colour-spec table, and the tone-header row. Its left edge (x0) starts at the first fabric column. Exclude all header bands, pure-text side margins, and footers.
+- "columns" = the tone/variant header of each fabric column, left→right, read from the header row above the fabric (e.g. 炒前, 浅炒, 中炒, 深炒). If the card has no per-column split, return a single-element array [""].
+- "rows" = for each fabric row, top→bottom, the code or name printed DIRECTLY BENEATH the fabric in that row. Transcribe EXACTLY as printed — do NOT add prefixes (e.g. no "JF-"), do NOT zero-pad numbers, do NOT invent codes. The length of "rows" MUST equal the number of fabric rows.
+- "cell_fabric_top_frac" / "cell_fabric_bottom_frac" = within one grid cell (cell height = (y1-y0)/number-of-rows), the vertical span that is the FABRIC square, as fractions 0.0–1.0 of the cell height. The strip from cell_fabric_bottom_frac to 1.0 is the printed code/name and is excluded from the crop. Typical: top 0.0, bottom ~0.75–0.82.
+- Set "is_regular_grid": false if the card is NOT a clean rectangular matrix (irregular hand-cut swatches, scattered layout). Other fields may then be omitted.
+
+Output ONLY the JSON object, nothing else.`;
+
+/**
+ * Run Claude Vision against a swatch-card image and return the GRID GEOMETRY
+ * object { is_regular_grid, grid:{x0,y0,x1,y1}, columns, rows,
+ * cell_fabric_top_frac, cell_fabric_bottom_frac }. Returns null if the response
+ * can't be parsed. The client turns this into per-swatch crop regions via
+ * gridToRegions().
+ * @param {{ mediaType: string, base64: string }} media
+ */
+export async function extractSwatchGrid({ media }) {
+  if (!media) throw new Error('No image provided.');
+  const json = await callAnthropicProxy({
+    model: MODEL,
+    max_tokens: 4096,
+    system: SWATCH_GRID_SYSTEM,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: media.mediaType, data: media.base64 } },
+        { type: 'text', text: 'Describe the fabric swatch grid in this color card. Return the JSON object only.' },
+      ],
+    }],
+  });
+
+  const text = (Array.isArray(json?.content) ? json.content : []).find(b => b?.type === 'text')?.text || '';
+  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const repaired = repairTruncatedJson(cleaned);
+    if (repaired !== null) {
+      try { return JSON.parse(repaired); } catch { /* fall through */ }
+    }
+    return null;
+  }
+}
+
+function clamp01(v, fallback) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(1, n));
+}
+
+/**
+ * Turn a grid-geometry object (from extractSwatchGrid) into per-swatch crop
+ * regions [{ label, x, y, w, h }] in 0-1 fractions — the exact shape
+ * cropRegionFromFile consumes. Subdivides the grid box evenly into
+ * rows × columns cells and takes the fabric vertical slice of each, so every
+ * crop is pixel-aligned to the printed matrix (no drifting boxes, no baked-in
+ * label text). Labels are composed as `${rowCode} ${columnTone}`.
+ */
+export function gridToRegions(grid) {
+  if (!grid || !grid.grid) return [];
+  const rows = Array.isArray(grid.rows) ? grid.rows : [];
+  let columns = Array.isArray(grid.columns) ? grid.columns : [];
+  if (!rows.length) return [];
+  if (!columns.length) columns = [''];
+
+  const { x0 = 0, y0 = 0, x1 = 1, y1 = 1 } = grid.grid;
+  const gx = Math.max(0, Math.min(x0, x1));
+  const gy = Math.max(0, Math.min(y0, y1));
+  const gw = Math.abs(x1 - x0);
+  const gh = Math.abs(y1 - y0);
+  if (gw <= 0 || gh <= 0) return [];
+
+  const colW = gw / columns.length;
+  const rowH = gh / rows.length;
+  const topFrac = clamp01(grid.cell_fabric_top_frac, 0);
+  const botFrac = clamp01(grid.cell_fabric_bottom_frac, 0.78);
+  const fabricTop = Math.min(topFrac, botFrac);
+  const fabricBot = Math.max(topFrac, botFrac);
+  const gutter = 0.06; // horizontal inset to avoid column gutters / neighbours
+
+  const out = [];
+  for (let r = 0; r < rows.length; r++) {
+    const rowCode = String(rows[r] ?? '').trim();
+    for (let c = 0; c < columns.length; c++) {
+      const tone = String(columns[c] ?? '').trim();
+      const cellX = gx + c * colW;
+      const cellY = gy + r * rowH;
+      const x = cellX + colW * gutter;
+      const w = colW * (1 - 2 * gutter);
+      const y = cellY + rowH * fabricTop;
+      const h = rowH * (fabricBot - fabricTop);
+      const label = tone ? (rowCode ? `${rowCode} ${tone}` : tone) : rowCode;
+      out.push({ label: label || `Color ${String(out.length + 1).padStart(2, '0')}`, x, y, w, h });
+    }
+  }
+  return out;
+}
+
+/**
+ * Single entry point for swatch detection. Tries the grid-geometry approach
+ * first (deterministic, pixel-aligned crops); falls back to the legacy per-box
+ * detector for irregular / non-grid cards. Returns [{ label, x, y, w, h }] in
+ * 0-1 fractions, ready for cropRegionFromFile.
+ * @param {{ mediaType: string, base64: string }} media
+ */
+export async function extractSwatchRegions({ media }) {
+  if (!media) throw new Error('No image provided.');
+  try {
+    const grid = await extractSwatchGrid({ media });
+    if (grid && grid.is_regular_grid && Array.isArray(grid.rows) && grid.rows.length) {
+      const regions = gridToRegions(grid);
+      if (regions.length) return regions;
+    }
+  } catch { /* fall through to legacy per-box detector */ }
+  return extractSwatchesFromImage({ media });
+}
+
 /**
  * Crop a normalized (0-1 fraction) region out of an image File and return a
  * WebP Blob. Shared by SwatchScanModal and FabricAIExtract so both produce
@@ -350,7 +495,7 @@ export function cropRegionFromFile(file, { x, y, w, h }) {
  */
 export async function detectAndCropSwatches(file) {
   const media = await fileToMedia(file);
-  const regions = await extractSwatchesFromImage({ media });
+  const regions = await extractSwatchRegions({ media });
   const cropped = await Promise.all(regions.map(async (r, i) => {
     try {
       const blob = await cropRegionFromFile(file, r);
