@@ -5,7 +5,7 @@
 
 const FR = { slate: '#3A3A3A', salt: '#F5F0E8', amber: '#854F0B', sand: '#EBE5D5' };
 
-export default function RecordLockBanner({ holder, noun = 'record' }) {
+export default function RecordLockBanner({ holder, noun = 'record', isSelf = false }) {
   const who = holder?.userName || holder?.userId || 'Someone';
   return (
     <div
@@ -20,8 +20,9 @@ export default function RecordLockBanner({ holder, noun = 'record' }) {
     >
       <span style={{ fontWeight: 600, letterSpacing: '0.02em' }}>READ-ONLY</span>
       <span style={{ color: FR.slate }}>
-        {who} is editing this {noun}. You can view it, but it'll unlock for editing
-        once they finish or step away.
+        {isSelf
+          ? `You're already editing this ${noun} in another tab or on another computer. Finish or close it there, and this view unlocks within a few seconds.`
+          : `${who} is editing this ${noun}. You can view it, but it'll unlock for editing once they finish or step away.`}
       </span>
     </div>
   );

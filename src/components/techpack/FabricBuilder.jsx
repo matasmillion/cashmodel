@@ -555,7 +555,7 @@ export default function FabricBuilder({ fabric, onBack }) {
         <ArrowLeft size={13} /> Fabrics
       </button>
 
-      {readOnly && <RecordLockBanner holder={lock.holder} noun="fabric" />}
+      {readOnly && <RecordLockBanner holder={lock.holder} isSelf={lock.isSelf} noun="fabric" />}
       {/* When read-only, disabling the fieldset makes every input/button inside
           inert without restructuring the form. The Back button sits outside it. */}
       <fieldset disabled={readOnly} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>

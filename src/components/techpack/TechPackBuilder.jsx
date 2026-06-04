@@ -1039,7 +1039,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
 
         {/* Main content */}
         <div style={{ flex: 1, minWidth: 0, padding: '20px 28px', maxHeight: '75vh', overflowY: 'auto' }}>
-          {readOnly && <RecordLockBanner holder={lock.holder} noun="style" />}
+          {readOnly && <RecordLockBanner holder={lock.holder} isSelf={lock.isSelf} noun="style" />}
           {/* When read-only, the step editor + skip/revision actions are inert.
               Sidebar nav, Previous/Next, and the live preview stay usable. */}
           <fieldset disabled={readOnly} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
