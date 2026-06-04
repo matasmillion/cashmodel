@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-06-04T11:01:23.967Z",
+  "lastUpdated": "2026-06-04T11:07:37.341Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,16 @@
   ],
   "changelog": [
     {
+      "sha": "5fe9524",
+      "date": "2026-06-04T11:04:03+00:00",
+      "message": "chore: update public/state.json"
+    },
+    {
+      "sha": "c2a103d",
+      "date": "2026-06-04T11:03:20+00:00",
+      "message": "Fabric spec: pre/post-shrink GSM + width and directional (warp/weft) shrinkage"
+    },
+    {
       "sha": "2bd3143",
       "date": "2026-06-04T10:42:26+00:00",
       "message": "Scanner: operator-confirmed grid overlay instead of AI-guessed crop edges"
@@ -1082,16 +1092,6 @@
       "sha": "38ecb74",
       "date": "2026-06-04T08:46:35+00:00",
       "message": "fix(pwa): make Install button always visible with menu fallback"
-    },
-    {
-      "sha": "b8ae5bd",
-      "date": "2026-06-04T08:36:09+00:00",
-      "message": "fix(sync): Sync now button updates timestamp and pulls from cloud"
-    },
-    {
-      "sha": "3a65533",
-      "date": "2026-06-04T11:08:55+03:00",
-      "message": "Merge #155: PWA in-app Install button + real PNG app icons"
     }
   ]
 }
