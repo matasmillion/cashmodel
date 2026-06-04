@@ -2043,7 +2043,7 @@ export function StepPattern({ data, set, images, onUpload, onRemove }) {
                 <span style={{ fontSize: 11, color: FR.slate, fontWeight: 500, minWidth: 90 }}>{role}</span>
                 <span style={{ fontSize: 10, color: FR.stone, flex: 1 }}>
                   {entry.metersPerUnit
-                    ? `${entry.metersPerUnit}m/unit — ${entry.yieldIsActual ? 'CLO3D actual' : 'std. estimate'}`
+                    ? `${entry.metersPerUnit}m/unit — ${entry.yieldIsActual ? 'CLO3D actual' : entry.yieldIsManual ? 'manual' : 'std. estimate'}`
                     : 'No yield set'}
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

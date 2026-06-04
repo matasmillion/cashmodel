@@ -1056,9 +1056,9 @@ function PagePattern({ d, images }) {
               {hasMpu ? `${entry.metersPerUnit}m` : '— TBD'}
             </text>
             <text x={fx + 10} y={592} fontSize={8}
-              fill={hasMpu ? (entry.yieldIsActual ? '#3B6D11' : '#854F0B') : '#854F0B'}>
+              fill={hasMpu ? (entry.yieldIsActual || entry.yieldIsManual ? '#3B6D11' : '#854F0B') : '#854F0B'}>
               {hasMpu
-                ? (entry.yieldIsActual ? 'CLO3D actual' : 'std. estimate')
+                ? (entry.yieldIsActual ? 'CLO3D actual' : entry.yieldIsManual ? 'manual' : 'std. estimate')
                 : 'set garment type in BOM step'}
             </text>
           </g>

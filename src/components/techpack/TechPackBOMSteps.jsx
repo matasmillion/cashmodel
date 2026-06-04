@@ -925,15 +925,15 @@ export function StepFabrics({ data, set }) {
                     );
                   })()}
 
-                  {/* Yield selector — garment type picks a standard m/unit estimate */}
+                  {/* Yield selector — garment type estimate or manual override */}
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       <span style={{ fontSize: 9, color: FR.soil, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Yield</span>
                       <select
-                        value={entry.yieldIsActual ? '' : (entry.metersPerUnit || '')}
+                        value={(!entry.yieldIsActual && !entry.yieldIsManual) ? (entry.metersPerUnit || '') : ''}
                         onChange={e => {
                           const v = e.target.value;
-                          setSlot(i, { ...entry, metersPerUnit: v ? parseFloat(v) : null, yieldIsActual: false });
+                          setSlot(i, { ...entry, metersPerUnit: v ? parseFloat(v) : null, yieldIsActual: false, yieldIsManual: false });
                         }}
                         style={{ flex: 1, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '3px 5px', fontSize: 10, color: FR.slate, background: FR.white, outline: 'none' }}
                       >
@@ -943,9 +943,26 @@ export function StepFabrics({ data, set }) {
                         ))}
                       </select>
                     </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.1"
+                        max="30"
+                        value={entry.metersPerUnit != null ? entry.metersPerUnit : ''}
+                        placeholder="or enter m/unit"
+                        onChange={e => {
+                          const v = parseFloat(e.target.value);
+                          const isValid = Number.isFinite(v) && v > 0;
+                          setSlot(i, { ...entry, metersPerUnit: isValid ? v : null, yieldIsActual: false, yieldIsManual: isValid });
+                        }}
+                        style={{ flex: 1, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '3px 5px', fontSize: 10, color: FR.slate, background: FR.white, outline: 'none' }}
+                      />
+                      <span style={{ fontSize: 9, color: FR.stone, whiteSpace: 'nowrap' }}>m/unit</span>
+                    </div>
                     {entry.metersPerUnit && (
-                      <div style={{ marginTop: 3, fontSize: 8, fontFamily: 'ui-monospace, Menlo, monospace', color: entry.yieldIsActual ? '#3B6D11' : '#854F0B' }}>
-                        {entry.metersPerUnit}m/unit · {entry.yieldIsActual ? 'CLO3D actual' : 'std. estimate'}
+                      <div style={{ marginTop: 3, fontSize: 8, fontFamily: 'ui-monospace, Menlo, monospace', color: entry.yieldIsActual ? '#3B6D11' : entry.yieldIsManual ? '#3B6D11' : '#854F0B' }}>
+                        {entry.metersPerUnit}m/unit · {entry.yieldIsActual ? 'CLO3D actual' : entry.yieldIsManual ? 'manual' : 'std. estimate'}
                       </div>
                     )}
                   </div>
