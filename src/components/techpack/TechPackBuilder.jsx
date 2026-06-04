@@ -215,6 +215,11 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // covers, vendor, color, length, size all come from the library, not from
   // the pack's own data. Keyed by component pack id.
   const [componentsById, setComponentsById] = useState({});
+  // Mirror of componentsById for the async resolver below, so it can reuse
+  // already-resolved entries (and their signed image URLs) instead of
+  // re-fetching + re-signing every image on every refresh tick.
+  const componentsByIdRef = useRef({});
+  useEffect(() => { componentsByIdRef.current = componentsById; }, [componentsById]);
   // Bumps every time the window regains focus or this tab becomes visible.
   // Library edits typically happen in another tab; when the user comes back
   // we want every BOM-side resolver to re-fetch so they see the new data.
@@ -240,21 +245,26 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     let cancelled = false;
     (async () => {
       const ids = componentIdKey.split('|').filter(Boolean);
-      if (!ids.length) { setComponentsById({}); return; }
+      if (!ids.length) { setComponentsById(prev => (Object.keys(prev).length ? {} : prev)); return; }
       const { getComponentPack } = await import('../../utils/componentPackStore');
       const { getAssetUrl, invalidateAssetUrl } = await import('../../utils/plmAssets');
+      const prev = componentsByIdRef.current || {};
       const next = {};
+      let changed = false;
       for (const id of ids) {
-        // Always re-fetch — library edits to a component pack must reflect
-        // here on next render, not stay frozen behind a cached row.
-        const row = await getComponentPack(id);
+        const row = await getComponentPack(id);   // local-first → instant
         if (cancelled) return;
-        if (!row) continue;
+        if (!row) { if (prev[id]) changed = true; continue; }
         const v = row.updated_at;
-        // Bypass the signed-URL cache for any path that belongs to this
-        // pack — when the cover changes the path is the same and the
-        // browser would otherwise serve the old image. invalidate forces
-        // a fresh signed URL on the next call.
+        // Reuse the already-resolved entry (including its signed image URLs)
+        // when this pack hasn't changed since we last resolved it. This is what
+        // stops images from re-loading every time the tab refocuses, a sync
+        // fires, or you click around — and it breaks the refresh→re-resolve loop.
+        const existing = prev[id];
+        if (existing && existing._resolvedAt === v) { next[id] = existing; continue; }
+        changed = true;
+        // Pack changed (or first load) — re-sign its images. invalidate forces a
+        // fresh signed URL since a changed cover can reuse the same path.
         const stripQuery = (s) => (typeof s === 'string' ? s.split('?')[0] : s);
         const resolveCover = async (path) => {
           if (!path || typeof path !== 'string') return null;
@@ -281,9 +291,16 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           cover_image: top || row.cover_image,
           data: { ...(row.data || {}), cover_image: nested || row?.data?.cover_image },
           _constructionDiagram: diagramUrl,
+          _resolvedAt: v,
         };
       }
-      if (!cancelled) setComponentsById(next);
+      if (cancelled) return;
+      // Only commit when something actually changed — an unchanged refresh tick
+      // must not setState, or it re-triggers the plm-store-updated loop.
+      if (changed || Object.keys(next).length !== Object.keys(prev).length) {
+        componentsByIdRef.current = next;
+        setComponentsById(next);
+      }
     })();
     return () => { cancelled = true; };
   }, [componentIdKey, refreshTick]);
