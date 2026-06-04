@@ -84,30 +84,28 @@ export const FABRIC_STATUSES = ['draft', 'testing', 'approved', 'archived'];
 const round1 = n => Math.round(n * 10) / 10;
 
 /**
- * Derive the finished (post-wash) GSM + width and the CLO3D render values
- * from the pre-wash spec and the directional shrinkage percentages.
+ * Spec read-outs for the fabric form. Pre-wash and post-wash GSM/width are
+ * captured as printed on the mill card; this only computes the derived
+ * helpers shown read-only beside them.
  *
  * Convention (confirmed with the operator): lengthwise = warp (经向),
- * widthwise = weft (纬向). Fabric WIDTH is governed by weft shrink; GSM
- * rises because the fabric's area shrinks in both directions while its mass
- * is conserved. CLO3D's Shrinkage-Warp / Shrinkage-Weft fields take the
- * REMAINING dimension as a percent (5% shrink → 95), so those are exposed
- * here for copying straight into CLO3D.
+ * widthwise = weft (纬向). CLO3D's Shrinkage-Warp / Shrinkage-Weft fields
+ * take the REMAINING dimension as a percent (5% shrink → 95), so those are
+ * exposed for copying straight into CLO3D. The implied width shrink + GSM
+ * gain are a cross-check derived from the pre/post pair (null until both
+ * sides of a pair are entered).
  *
- * @param {{ gsmPre?:number, widthPre?:number, warpPct?:number, weftPct?:number }} [s]
- * @returns {{ gsmPost:(number|null), widthPost:(number|null), cloWarp:number, cloWeft:number }}
+ * @param {{ gsmPre?:number, widthPre?:number, gsmPost?:number, widthPost?:number, warpPct?:number, weftPct?:number }} [s]
+ * @returns {{ cloWarp:number, cloWeft:number, impliedWidthShrink:(number|null), impliedGsmGain:(number|null) }}
  */
-export function deriveShrinkSpec({ gsmPre = 0, widthPre = 0, warpPct = 0, weftPct = 0 } = {}) {
-  const warp = Number(warpPct) || 0;
-  const weft = Number(weftPct) || 0;
-  const cloWarp = round1(100 - warp);
-  const cloWeft = round1(100 - weft);
-  const warpRemain = cloWarp / 100;
-  const weftRemain = cloWeft / 100;
-  const widthPost = widthPre ? round1(Number(widthPre) * weftRemain) : null;
-  const area = warpRemain * weftRemain;
-  const gsmPost = (gsmPre && area > 0) ? Math.round(Number(gsmPre) / area) : null;
-  return { gsmPost, widthPost, cloWarp, cloWeft };
+export function deriveShrinkSpec({ gsmPre = 0, widthPre = 0, gsmPost = 0, widthPost = 0, warpPct = 0, weftPct = 0 } = {}) {
+  const cloWarp = round1(100 - (Number(warpPct) || 0));
+  const cloWeft = round1(100 - (Number(weftPct) || 0));
+  const gp = Number(gsmPost) || 0;
+  const wp = Number(widthPost) || 0;
+  const impliedWidthShrink = (widthPre && wp) ? round1((1 - wp / Number(widthPre)) * 100) : null;
+  const impliedGsmGain = (gsmPre && gp) ? round1((gp / Number(gsmPre) - 1) * 100) : null;
+  return { cloWarp, cloWeft, impliedWidthShrink, impliedGsmGain };
 }
 
 export function emptyFabric(overrides = {}) {
@@ -132,8 +130,8 @@ export function emptyFabric(overrides = {}) {
     // remaining dimension (100 − shrink) — see deriveShrinkSpec().
     shrinkage_warp_pct: null,
     shrinkage_weft_pct: null,
-    // Finished (post-wash) overrides. null ⇒ use the value derived from the
-    // pre-wash spec + shrinkage; set only when the mill prints a different one.
+    // Finished (post-wash) GSM + width, captured as printed on the card.
+    // null ⇒ not provided (the form shows the implied shrink as a cross-check).
     weight_gsm_post: null,
     width_cm_post: null,
     stretch_pct: 0,

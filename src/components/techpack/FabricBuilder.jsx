@@ -302,16 +302,16 @@ export default function FabricBuilder({ fabric, onBack }) {
 
   const set = (patch) => setDraft(d => ({ ...d, ...patch }));
 
-  // Spec derivation. weight_gsm / width_cm are the PRE-wash values; the
-  // finished (post-wash) GSM + width derive from them and the directional
-  // shrinkage. `?? shrinkage_pct` migrates pre-split legacy records on read.
+  // Spec read-outs. Pre-wash and post-wash GSM/width are captured as printed;
+  // CLO3D warp/weft and the implied-shrink cross-check are derived for display.
+  // `?? shrinkage_pct` migrates pre-split legacy records on read.
   const warpPct = draft.shrinkage_warp_pct ?? draft.shrinkage_pct ?? 0;
   const weftPct = draft.shrinkage_weft_pct ?? draft.shrinkage_pct ?? 0;
-  const shrink = deriveShrinkSpec({ gsmPre: draft.weight_gsm, widthPre: draft.width_cm, warpPct, weftPct });
-  const gsmPostOverridden = draft.weight_gsm_post != null && draft.weight_gsm_post !== '';
-  const widthPostOverridden = draft.width_cm_post != null && draft.width_cm_post !== '';
-  const gsmPostShown = gsmPostOverridden ? draft.weight_gsm_post : (shrink.gsmPost ?? '');
-  const widthPostShown = widthPostOverridden ? draft.width_cm_post : (shrink.widthPost ?? '');
+  const shrink = deriveShrinkSpec({
+    gsmPre: draft.weight_gsm, widthPre: draft.width_cm,
+    gsmPost: draft.weight_gsm_post, widthPost: draft.width_cm_post,
+    warpPct, weftPct,
+  });
 
   const setPrice = (kind, currency, raw) => {
     const value = parseFloat(raw);
@@ -708,35 +708,25 @@ export default function FabricBuilder({ fabric, onBack }) {
               </Field>
             </div>
 
-            {/* Post-wash — derived from pre-wash + shrinkage; editable override. */}
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-              <div style={SPEC_SUBLABEL}>Post-wash (finished)</div>
-              {(gsmPostOverridden || widthPostOverridden) && (
-                <button
-                  onClick={() => set({ weight_gsm_post: null, width_cm_post: null })}
-                  style={{ fontSize: 9, color: FR.soil, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
-                  ↺ reset to derived
-                </button>
-              )}
-            </div>
+            {/* Post-wash — entered exactly as the card prints them. The implied
+                width shrink + GSM gain from the pre/post pair are a read-only check. */}
+            <div style={SPEC_SUBLABEL}>Post-wash (finished, as printed)</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
               <Field label="Weight (gsm)">
                 <input
                   type="number"
-                  value={gsmPostShown}
-                  placeholder={shrink.gsmPost != null ? String(shrink.gsmPost) : ''}
+                  value={draft.weight_gsm_post ?? ''}
                   onChange={e => set({ weight_gsm_post: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })}
-                  style={{ ...INPUT_STYLE, background: gsmPostOverridden ? '#fff' : '#FBF9F4' }} />
-                <div style={SPEC_HINT}>{gsmPostOverridden ? 'overridden' : 'derived'}</div>
+                  style={INPUT_STYLE} />
+                <div style={SPEC_HINT}>{shrink.impliedGsmGain != null ? `+${shrink.impliedGsmGain}% vs pre` : 'as printed'}</div>
               </Field>
               <Field label="Width (cm)">
                 <input
                   type="number"
-                  value={widthPostShown}
-                  placeholder={shrink.widthPost != null ? String(shrink.widthPost) : ''}
+                  value={draft.width_cm_post ?? ''}
                   onChange={e => set({ width_cm_post: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })}
-                  style={{ ...INPUT_STYLE, background: widthPostOverridden ? '#fff' : '#FBF9F4' }} />
-                <div style={SPEC_HINT}>{widthPostOverridden ? 'overridden' : 'derived'}</div>
+                  style={INPUT_STYLE} />
+                <div style={SPEC_HINT}>{shrink.impliedWidthShrink != null ? `−${shrink.impliedWidthShrink}% vs pre (≈ weft)` : 'as printed'}</div>
               </Field>
             </div>
           </div>
