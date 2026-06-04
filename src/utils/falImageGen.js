@@ -135,7 +135,7 @@ export async function analyzeGarmentImage(imageBase64, mediaType = 'image/jpeg')
   if (!IS_SUPABASE_ENABLED) throw new Error('Supabase not configured');
 
   const result = await callProxy('anthropic-proxy', {
-    model: 'claude-opus-4-7',
+    model: 'claude-sonnet-4-6',
     max_tokens: 1024,
     messages: [{
       role: 'user',

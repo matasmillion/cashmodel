@@ -68,12 +68,39 @@ export async function imageEntryToDataUrl(entry) {
 }
 
 async function fetchToDataUrl(src) {
-  const res = await fetch(src);
+  const res = await fetch(src, { mode: 'cors', credentials: 'omit' });
+  if (!res.ok) throw new Error(`Image load failed: HTTP ${res.status}`);
   const blob = await res.blob();
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = e => resolve(e.target.result);
     reader.onerror = reject;
     reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Shrink a data URL to a max dimension before sending to Claude Vision.
+ * Keeps the payload well under Supabase Edge Function's ~6 MB body limit.
+ *
+ * @param {string} dataUrl
+ * @param {number} [maxDim=1024]
+ * @returns {Promise<string>} JPEG data URL at reduced size
+ */
+export function resizeDataUrlForAI(dataUrl, maxDim = 1024) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.88));
+    };
+    img.onerror = () => reject(new Error('Could not decode image for resize'));
+    img.src = dataUrl;
   });
 }

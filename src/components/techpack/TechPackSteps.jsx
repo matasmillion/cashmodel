@@ -17,7 +17,7 @@ import { listVendors } from '../../utils/vendorLibrary';
 import { listEmbellishments, createEmbellishment } from '../../utils/embellishmentStore';
 import { computePackDiff } from '../../utils/techPackDiff';
 import { useApp } from '../../context/AppContext';
-import { analyzeGarmentImage, generateGarmentView, imageEntryToDataUrl } from '../../utils/techPackViews';
+import { analyzeGarmentImage, generateGarmentView, imageEntryToDataUrl, resizeDataUrlForAI } from '../../utils/techPackViews';
 import { StepFabrics, StepTrims, StepPackaging } from './TechPackBOMSteps';
 import { estimateLaborCost } from '../../utils/aiLaborCost';
 import CutSewCostChat from './CutSewCostChat';
@@ -698,16 +698,21 @@ function GenerateViewsModal({ viewSources, sharedRefs, customContext, style, bgC
     try {
       setPhase('analyzing');
 
-      // Resolve per-view sources + shared refs in parallel
-      const [frontUrl, backUrl, sideUrl, ...sharedUrls] = await Promise.all([
-        viewSources?.front ? imageEntryToDataUrl(viewSources.front) : Promise.resolve(null),
-        viewSources?.back  ? imageEntryToDataUrl(viewSources.back)  : Promise.resolve(null),
-        viewSources?.side  ? imageEntryToDataUrl(viewSources.side)  : Promise.resolve(null),
-        ...(sharedRefs || []).map(imageEntryToDataUrl),
-      ]);
+      // Step 1: convert image entries to data URLs
+      let imageUrls;
+      try {
+        const [frontUrl, backUrl, sideUrl, ...sharedUrls] = await Promise.all([
+          viewSources?.front ? imageEntryToDataUrl(viewSources.front) : Promise.resolve(null),
+          viewSources?.back  ? imageEntryToDataUrl(viewSources.back)  : Promise.resolve(null),
+          viewSources?.side  ? imageEntryToDataUrl(viewSources.side)  : Promise.resolve(null),
+          ...(sharedRefs || []).map(imageEntryToDataUrl),
+        ]);
+        imageUrls = { frontUrl, backUrl, sideUrl, sharedClean: sharedUrls.filter(Boolean) };
+      } catch (e) {
+        throw new Error(`Could not load reference image: ${toMsg(e)}`);
+      }
 
-      const sharedClean = sharedUrls.filter(Boolean);
-
+      const { frontUrl, backUrl, sideUrl, sharedClean } = imageUrls;
       const refs = {
         front: [frontUrl, ...sharedClean].filter(Boolean),
         back:  [backUrl,  ...sharedClean].filter(Boolean),
@@ -715,19 +720,34 @@ function GenerateViewsModal({ viewSources, sharedRefs, customContext, style, bgC
       };
 
       const seed = frontUrl || backUrl || sideUrl || sharedClean[0];
-      if (!seed) throw new Error('Could not read any reference images');
+      if (!seed) throw new Error('Upload at least one reference image first');
       setPVR(refs);
 
-      const mime = seed.match(/^data:([^;]+);/)?.[1] || 'image/jpeg';
-      const b64  = seed.replace(/^data:[^;]+;base64,/, '');
-      const desc = await analyzeGarmentImage(b64, mime);
+      // Step 2: resize to ≤1024px so the payload fits under Supabase's 6 MB limit
+      let smallSeed;
+      try {
+        smallSeed = await resizeDataUrlForAI(seed, 1024);
+      } catch {
+        smallSeed = seed; // best-effort: use original if canvas resize fails
+      }
+
+      // Step 3: Claude Vision — describe the garment
+      let desc;
+      try {
+        const mime = 'image/jpeg';
+        const b64  = smallSeed.replace(/^data:[^;]+;base64,/, '');
+        desc = await analyzeGarmentImage(b64, mime);
+      } catch (e) {
+        throw new Error(`Garment analysis failed: ${toMsg(e)}`);
+      }
       setDesc(desc);
 
+      // Step 4: fal.ai generation
       setPhase('generating');
       await Promise.all(viewsToRun.map(view => runOneView(view, desc, refs[view], customContext)));
       setPhase('done');
     } catch (e) {
-      console.error('[techpack-views] analyze failed:', e);
+      console.error('[techpack-views] generate failed:', e);
       setErrMsg(toMsg(e));
       setPhase('error');
     }
