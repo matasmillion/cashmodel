@@ -1,62 +1,49 @@
-// SwatchScanModal — Claude Vision reads a fabric swatch sheet, then the
-// operator confirms the grid geometry and the modal crops every swatch from
-// the source image and returns them as uploadable Blobs with labels. The
-// caller (FabricBuilder) uploads and appends them to color_card_images.
+// SwatchScanModal — Claude Vision predetermines one crop box per fabric
+// swatch, the operator fine-tunes any box that's off, then the modal crops
+// every box from the source image and returns them as uploadable Blobs with
+// labels. The caller (FabricBuilder) uploads and appends them to
+// color_card_images.
 //
 // Flow:
 //   1. Drop a single swatch-card photo
-//   2. "Scan" — Claude Vision returns a draft grid (matrix box + row codes +
-//      column tones + row/col counts). The model is reliable on the labels
-//      and counts but NOT on pixel-accurate edges, so this is only a guess.
-//   3. Edit — operator drags the grid rectangle onto the fabric matrix and
-//      adjusts rows/cols + the fabric/label split (SwatchGridEditor). Because
-//      a printed card is a uniform grid, the corners + counts fix every cell.
-//   4. Crop — even-divide the box (gridToRegions) and canvas-crop each cell
+//   2. "Scan" — Claude Vision returns a box per swatch ({label,x,y,w,h}).
+//      The model is reliable on the labels but not always pixel-accurate on
+//      edges, so the boxes are a starting point, not the final word.
+//   3. Edit — operator drags/resizes any box that's off, adds a missing one,
+//      removes a spurious one (SwatchBoxEditor). Every box is independent.
+//   4. Crop — canvas-crop each box from the source image
 //   5. Preview — deselect any, edit labels, "Add X swatches"
 
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, X, Scan, Plus, Minus } from 'lucide-react';
+import { Loader2, X, Scan, Plus, Trash2 } from 'lucide-react';
 import { FR } from './techPackConstants';
-import { extractSwatchGrid, gridToRegions, fileToMedia, cropRegionFromFile } from '../../utils/aiFabricExtract';
-import SwatchGridEditor from './SwatchGridEditor';
+import { extractSwatchRegions, fileToMedia, cropRegionFromFile } from '../../utils/aiFabricExtract';
+import SwatchBoxEditor from './SwatchBoxEditor';
 
-const clampNum = (v, fallback) => (Number.isFinite(Number(v)) ? Number(v) : fallback);
-const clamp01 = (v, fallback) => Math.max(0, Math.min(1, clampNum(v, fallback)));
+const clamp01 = (v, fallback = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : fallback;
+};
 
-// Pad / trim an array of strings to length n.
-function resizeArr(arr, n, fill = '') {
-  const a = (Array.isArray(arr) ? arr : []).slice(0, n).map(s => String(s ?? ''));
-  while (a.length < n) a.push(fill);
-  return a;
-}
-
-// Turn a (possibly missing / non-grid) model response into a starting grid the
-// operator can drag. The model's box is used as a hint only — it's routinely
-// anchored too high, which is exactly what the operator corrects.
-function gridFromGuess(g) {
-  const rect = g && g.grid ? g.grid : {};
-  const rows = Array.isArray(g?.rows) && g.rows.length ? g.rows.map(String) : Array(8).fill('');
-  const columns = Array.isArray(g?.columns) && g.columns.length ? g.columns.map(String) : [''];
-  return {
-    x0: clamp01(rect.x0, 0.06),
-    y0: clamp01(rect.y0, 0.20),
-    x1: clamp01(rect.x1, 0.97),
-    y1: clamp01(rect.y1, 0.97),
-    rows,
-    columns,
-    cell_fabric_bottom_frac: clamp01(g?.cell_fabric_bottom_frac, 0.78),
-  };
+// Coerce a model region into a safe in-bounds box with a non-empty label.
+function normalizeBox(r, i) {
+  const x = clamp01(r?.x, 0);
+  const y = clamp01(r?.y, 0);
+  const w = Math.min(clamp01(r?.w, 0.1) || 0.1, 1 - x);
+  const h = Math.min(clamp01(r?.h, 0.1) || 0.1, 1 - y);
+  const label = String(r?.label ?? '').trim() || `Color ${String(i + 1).padStart(2, '0')}`;
+  return { label, x, y, w, h };
 }
 
 export default function SwatchScanModal({ onClose, onApply }) {
-  const [file, setFile]       = useState(null);
-  const [preview, setPreview] = useState(''); // object URL of dropped image
-  const [busy, setBusy]       = useState(false);
-  const [error, setError]     = useState(null);
-  const [phase, setPhase]     = useState('drop'); // drop | edit | preview
-  const [grid, setGrid]       = useState(null);
-  const [editRows, setEditRows] = useState(false); // reveal the per-row code list
-  const [swatches, setSwatches] = useState([]); // [{ label, blob, blobUrl, selected }]
+  const [file, setFile]         = useState(null);
+  const [preview, setPreview]   = useState(''); // object URL of dropped image
+  const [busy, setBusy]         = useState(false);
+  const [error, setError]       = useState(null);
+  const [phase, setPhase]       = useState('drop'); // drop | edit | preview
+  const [boxes, setBoxes]       = useState([]);     // [{ label, x, y, w, h }]
+  const [selected, setSelected] = useState(null);   // index | null
+  const [swatches, setSwatches] = useState([]);     // [{ label, blob, blobUrl, selected }]
   const fileRef = useRef(null);
 
   const revokeSwatches = (list) => list.forEach(s => s.blobUrl && URL.revokeObjectURL(s.blobUrl));
@@ -76,27 +63,29 @@ export default function SwatchScanModal({ onClose, onApply }) {
     setPreview(URL.createObjectURL(f));
     revokeSwatches(swatches);
     setSwatches([]);
-    setGrid(null);
+    setBoxes([]);
+    setSelected(null);
     setPhase('drop');
     setError(null);
   }
 
-  // Ask the model for a draft grid, then drop the operator into the editor.
-  // If the model call fails (or returns no grid), still enter the editor with
-  // a default rectangle so a card can always be gridded by hand.
+  // Ask the model for one box per swatch, then drop the operator into the
+  // editor. If the call fails (or returns nothing), still enter the editor so
+  // a card can always be boxed by hand.
   async function runScan() {
     if (!file) return;
     setBusy(true);
     setError(null);
     try {
       const media = await fileToMedia(file);
-      let guess = null;
+      let regions = [];
       try {
-        guess = await extractSwatchGrid({ media });
+        regions = await extractSwatchRegions({ media });
       } catch (err) {
-        setError(`${err.message || 'Auto-detect failed'} — set the grid manually below.`);
+        setError(`${err.message || 'Auto-detect failed'} — add the boxes manually below.`);
       }
-      setGrid(gridFromGuess(guess));
+      setBoxes((Array.isArray(regions) ? regions : []).map(normalizeBox));
+      setSelected(null);
       setPhase('edit');
     } catch (err) {
       setError(err.message || 'Scan failed');
@@ -105,50 +94,36 @@ export default function SwatchScanModal({ onClose, onApply }) {
     }
   }
 
-  function patchGrid(patch) { setGrid(g => ({ ...g, ...patch })); }
-  function setRowCount(n) {
-    const R = Math.max(1, Math.min(200, Math.round(n)));
-    patchGrid({ rows: resizeArr(grid.rows, R) });
+  function addBox() {
+    const nb = { label: `Color ${String(boxes.length + 1).padStart(2, '0')}`, x: 0.44, y: 0.44, w: 0.12, h: 0.1 };
+    setBoxes(prev => [...prev, nb]);
+    setSelected(boxes.length);
   }
-  function setColCount(n) {
-    const C = Math.max(1, Math.min(20, Math.round(n)));
-    patchGrid({ columns: resizeArr(grid.columns, C) });
+  function removeSelected() {
+    if (selected == null) return;
+    setBoxes(prev => prev.filter((_, i) => i !== selected));
+    setSelected(null);
   }
-  function setColLabel(i, v) {
-    const columns = grid.columns.slice();
-    columns[i] = v;
-    patchGrid({ columns });
-  }
-  function setRowLabel(i, v) {
-    const rows = grid.rows.slice();
-    rows[i] = v;
-    patchGrid({ rows });
+  function setBoxLabel(i, label) {
+    setBoxes(prev => prev.map((b, idx) => idx === i ? { ...b, label } : b));
   }
 
-  // Even-divide the confirmed box into cells and crop each from the source.
-  async function cropFromGrid() {
-    if (!file || !grid) return;
+  // Canvas-crop each confirmed box from the source image.
+  async function cropFromBoxes() {
+    if (!file || !boxes.length) { setError('Add at least one swatch box.'); return; }
     setBusy(true);
     setError(null);
-    const regions = gridToRegions({
-      grid: { x0: grid.x0, y0: grid.y0, x1: grid.x1, y1: grid.y1 },
-      rows: grid.rows,
-      columns: grid.columns,
-      cell_fabric_top_frac: 0,
-      cell_fabric_bottom_frac: grid.cell_fabric_bottom_frac,
-    });
-    if (!regions.length) { setError('Set at least one row and column.'); setBusy(false); return; }
     try {
-      const cropped = await Promise.all(regions.map(async (r, i) => {
+      const cropped = await Promise.all(boxes.map(async (b, i) => {
         try {
-          const blob = await cropRegionFromFile(file, r);
+          const blob = await cropRegionFromFile(file, b);
           if (!blob) return null;
-          return { label: r.label || `Color ${String(i + 1).padStart(2, '0')}`, blob, blobUrl: URL.createObjectURL(blob), selected: true };
+          return { label: b.label || `Color ${String(i + 1).padStart(2, '0')}`, blob, blobUrl: URL.createObjectURL(blob), selected: true };
         } catch { return null; }
       }));
       revokeSwatches(swatches);
       const valid = cropped.filter(Boolean);
-      if (!valid.length) { setError('No crops produced — check the grid box covers the fabric.'); setBusy(false); return; }
+      if (!valid.length) { setError('No crops produced — check the boxes cover fabric.'); setBusy(false); return; }
       setSwatches(valid);
       setPhase('preview');
     } catch (err) {
@@ -167,13 +142,10 @@ export default function SwatchScanModal({ onClose, onApply }) {
   const selectAll   = () => setSwatches(prev => prev.map(s => ({ ...s, selected: true })));
   const deselectAll = () => setSwatches(prev => prev.map(s => ({ ...s, selected: false })));
 
-  const selected = swatches.filter(s => s.selected);
-  const R = grid ? Math.max(1, grid.rows.length) : 0;
-  const C = grid ? Math.max(1, grid.columns.length) : 0;
+  const chosen = swatches.filter(s => s.selected);
+  const N = boxes.length;
 
-  const miniBtn = { fontSize: 9, color: FR.slate, background: 'none', border: `0.5px solid ${FR.sand}`, borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit' };
-  const stepBtn = { width: 24, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `0.5px solid ${FR.sand}`, background: FR.white, color: FR.slate, cursor: 'pointer', borderRadius: 4 };
-  const countInput = { width: 44, textAlign: 'center', fontSize: 12, padding: '4px 2px', border: `0.5px solid ${FR.sand}`, borderRadius: 4, color: FR.slate, background: FR.white, fontFamily: 'inherit' };
+  const miniBtn    = { fontSize: 9, color: FR.slate, background: 'none', border: `0.5px solid ${FR.sand}`, borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit' };
   const smallLabel = { fontSize: 9, color: FR.stone, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 5 };
 
   return (
@@ -185,8 +157,8 @@ export default function SwatchScanModal({ onClose, onApply }) {
             <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 22, color: FR.slate }}>AI Color Scanner</div>
             <div style={{ fontSize: 11, color: FR.stone, marginTop: 4 }}>
               {phase === 'edit'
-                ? 'Drag the box onto the fabric grid, set rows × columns, then crop. Printed cards are uniform — the corners fix every cell.'
-                : 'Drop a swatch sheet photo. Claude reads the codes; you confirm the grid; the modal crops each fabric square.'}
+                ? 'Claude boxed each swatch. Drag a box to move it, drag a corner to resize, click to select. Fix any that are off, then crop.'
+                : 'Drop a swatch sheet photo. Claude boxes each fabric square; you fine-tune the crops; the modal cuts them out.'}
             </div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: FR.stone, lineHeight: 1 }}>×</button>
@@ -208,13 +180,13 @@ export default function SwatchScanModal({ onClose, onApply }) {
             </div>
           )}
 
-          {/* Scan step — image + scan button before a grid exists */}
+          {/* Scan step — image + scan button before boxes exist */}
           {file && phase === 'drop' && (
             <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 16, alignItems: 'flex-start' }}>
               <div style={{ position: 'relative' }}>
                 <img src={preview} alt="Swatch sheet" style={{ width: '100%', borderRadius: 4, border: `0.5px solid ${FR.sand}` }} />
                 <button
-                  onClick={() => { setFile(null); setPreview(''); setGrid(null); revokeSwatches(swatches); setSwatches([]); setError(null); }}
+                  onClick={() => { setFile(null); setPreview(''); setBoxes([]); setSelected(null); revokeSwatches(swatches); setSwatches([]); setError(null); }}
                   style={{ position: 'absolute', top: 5, right: 5, width: 20, height: 20, borderRadius: 10, background: FR.slate, color: FR.salt, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <X size={11} />
                 </button>
@@ -236,78 +208,52 @@ export default function SwatchScanModal({ onClose, onApply }) {
             </div>
           )}
 
-          {/* Edit step — drag the grid */}
-          {file && phase === 'edit' && grid && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 18, alignItems: 'flex-start' }}>
-              <div style={{ maxHeight: '62vh', overflowY: 'auto', border: `0.5px solid ${FR.sand}`, borderRadius: 4 }}>
-                <SwatchGridEditor src={preview} grid={grid} onChange={setGrid} />
+          {/* Edit step — adjust the per-swatch boxes */}
+          {file && phase === 'edit' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 18, alignItems: 'flex-start' }}>
+              <div style={{ maxHeight: '64vh', overflowY: 'auto', border: `0.5px solid ${FR.sand}`, borderRadius: 4 }}>
+                <SwatchBoxEditor src={preview} boxes={boxes} selected={selected} onSelect={setSelected} onChange={setBoxes} />
               </div>
 
               <div>
-                <div style={{ display: 'flex', gap: 14, marginBottom: 14 }}>
-                  <div>
-                    <div style={smallLabel}>Rows (colors)</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <button style={stepBtn} onClick={() => setRowCount(R - 1)}><Minus size={12} /></button>
-                      <input style={countInput} value={R} onChange={e => setRowCount(Number(e.target.value) || 1)} />
-                      <button style={stepBtn} onClick={() => setRowCount(R + 1)}><Plus size={12} /></button>
-                    </div>
-                  </div>
-                  <div>
-                    <div style={smallLabel}>Columns (tones)</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <button style={stepBtn} onClick={() => setColCount(C - 1)}><Minus size={12} /></button>
-                      <input style={countInput} value={C} onChange={e => setColCount(Number(e.target.value) || 1)} />
-                      <button style={stepBtn} onClick={() => setColCount(C + 1)}><Plus size={12} /></button>
-                    </div>
-                  </div>
+                <div style={{ fontSize: 13, color: FR.slate, fontWeight: 600, marginBottom: 2 }}>{N} swatch{N === 1 ? '' : 'es'} detected</div>
+                <div style={{ fontSize: 10, color: FR.stone, marginBottom: 12, lineHeight: 1.5 }}>
+                  Drag a box to move, a corner to resize. Click to select; the × on a box removes it.
                 </div>
 
-                <div style={{ marginBottom: 14 }}>
-                  <div style={smallLabel}>Fabric / label split — {Math.round(grid.cell_fabric_bottom_frac * 100)}% fabric</div>
-                  <input
-                    type="range" min={0.4} max={1} step={0.01}
-                    value={grid.cell_fabric_bottom_frac}
-                    onChange={e => patchGrid({ cell_fabric_bottom_frac: Number(e.target.value) })}
-                    style={{ width: '100%', accentColor: FR.sienna }}
-                  />
-                  <div style={{ fontSize: 9, color: FR.stone }}>The shaded strip under each cell (the printed code) is trimmed off.</div>
-                </div>
-
-                {/* Column tone headers */}
-                <div style={{ marginBottom: 12 }}>
-                  <div style={smallLabel}>Column tones</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                    {grid.columns.map((c, i) => (
-                      <input key={i} value={c} onChange={e => setColLabel(i, e.target.value)} placeholder={`Tone ${i + 1}`}
-                        style={{ width: 64, fontSize: 10, padding: '3px 5px', border: `0.5px solid ${FR.sand}`, borderRadius: 4, color: FR.slate, background: FR.white, fontFamily: 'inherit' }} />
-                    ))}
-                  </div>
-                </div>
-
-                {/* Row codes (collapsed by default — usually correct from the scan) */}
-                <div style={{ marginBottom: 14 }}>
-                  <button onClick={() => setEditRows(v => !v)} style={{ ...miniBtn, marginBottom: editRows ? 8 : 0 }}>
-                    {editRows ? 'Hide' : 'Edit'} row codes ({R})
-                  </button>
-                  {editRows && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto', paddingRight: 4 }}>
-                      {grid.rows.map((r, i) => (
-                        <input key={i} value={r} onChange={e => setRowLabel(i, e.target.value)} placeholder={`Row ${i + 1}`}
-                          style={{ fontSize: 10, padding: '3px 6px', border: `0.5px solid ${FR.sand}`, borderRadius: 4, color: FR.slate, background: FR.white, fontFamily: 'inherit' }} />
-                      ))}
-                    </div>
+                {/* Selected box — label + delete */}
+                <div style={{ marginBottom: 12, padding: 10, background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 6 }}>
+                  <div style={smallLabel}>Selected swatch</div>
+                  {selected == null ? (
+                    <div style={{ fontSize: 10, color: FR.stone }}>Click a box on the card to select it.</div>
+                  ) : (
+                    <>
+                      <input
+                        value={boxes[selected]?.label ?? ''}
+                        onChange={e => setBoxLabel(selected, e.target.value)}
+                        placeholder={`Color ${selected + 1}`}
+                        style={{ width: '100%', fontSize: 11, padding: '5px 7px', border: `0.5px solid ${FR.sand}`, borderRadius: 4, color: FR.slate, background: FR.salt, fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 8 }} />
+                      <button onClick={removeSelected}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: '#A32D2D', background: 'none', border: `0.5px solid rgba(163,45,45,0.3)`, borderRadius: 4, padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                        <Trash2 size={11} /> Remove box
+                      </button>
+                    </>
                   )}
                 </div>
 
+                <button onClick={addBox}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', justifyContent: 'center', fontSize: 11, color: FR.slate, background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 6, padding: '7px 10px', cursor: 'pointer', fontFamily: 'inherit', marginBottom: 14 }}>
+                  <Plus size={13} /> Add a box
+                </button>
+
                 {error && <div style={{ fontSize: 11, color: '#A32D2D', marginBottom: 10, padding: '8px 10px', background: 'rgba(163,45,45,0.07)', borderRadius: 4 }}>{error}</div>}
 
-                <button onClick={cropFromGrid} disabled={busy}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 18px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: busy ? 'wait' : 'pointer' }}>
+                <button onClick={cropFromBoxes} disabled={busy || !N}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 18px', background: (busy || !N) ? FR.sand : FR.slate, color: FR.salt, border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: (busy || !N) ? 'default' : 'pointer' }}>
                   {busy ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Scan size={14} />}
-                  {busy ? 'Cropping…' : `Crop ${R * C} swatches`}
+                  {busy ? 'Cropping…' : `Crop ${N} swatch${N === 1 ? '' : 'es'}`}
                 </button>
-                <button onClick={() => { setFile(null); setPreview(''); setGrid(null); setError(null); }}
+                <button onClick={() => { setFile(null); setPreview(''); setBoxes([]); setSelected(null); setError(null); }}
                   style={{ width: '100%', marginTop: 8, fontSize: 10, color: FR.stone, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
                   Start over with a different photo
                 </button>
@@ -320,12 +266,12 @@ export default function SwatchScanModal({ onClose, onApply }) {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
                 <div style={{ fontSize: 10, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                  {selected.length}/{swatches.length} selected — click to toggle, edit labels
+                  {chosen.length}/{swatches.length} selected — click to toggle, edit labels
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button onClick={selectAll} style={miniBtn}>Select all</button>
                   <button onClick={deselectAll} style={miniBtn}>Deselect all</button>
-                  <button onClick={() => setPhase('edit')} style={miniBtn}>← Adjust grid</button>
+                  <button onClick={() => setPhase('edit')} style={miniBtn}>← Adjust boxes</button>
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(88px, 1fr))', gap: 8 }}>
@@ -359,10 +305,10 @@ export default function SwatchScanModal({ onClose, onApply }) {
             Cancel
           </button>
           <button
-            onClick={() => selected.length && onApply(selected.map(s => ({ label: s.label, blob: s.blob })))}
-            disabled={phase !== 'preview' || !selected.length}
-            style={{ padding: '7px 18px', background: (phase === 'preview' && selected.length) ? FR.slate : FR.sand, color: FR.salt, border: 'none', borderRadius: 6, cursor: (phase === 'preview' && selected.length) ? 'pointer' : 'default', fontSize: 11, fontWeight: 600 }}>
-            Add {phase === 'preview' && selected.length ? selected.length : ''} swatch{selected.length === 1 ? '' : 'es'}
+            onClick={() => chosen.length && onApply(chosen.map(s => ({ label: s.label, blob: s.blob })))}
+            disabled={phase !== 'preview' || !chosen.length}
+            style={{ padding: '7px 18px', background: (phase === 'preview' && chosen.length) ? FR.slate : FR.sand, color: FR.salt, border: 'none', borderRadius: 6, cursor: (phase === 'preview' && chosen.length) ? 'pointer' : 'default', fontSize: 11, fontWeight: 600 }}>
+            Add {phase === 'preview' && chosen.length ? chosen.length : ''} swatch{chosen.length === 1 ? '' : 'es'}
           </button>
         </div>
       </div>
