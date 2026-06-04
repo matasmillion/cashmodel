@@ -20,7 +20,7 @@
 // (1h TTL by default) and cached in memory for the life of the page.
 
 import { useEffect, useMemo, useState } from 'react';
-import { getAuthedSupabase } from '../lib/supabase';
+import { getAuthedSupabase, refreshAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync } from '../lib/auth';
 
 const BUCKET = 'plm-assets';
@@ -290,12 +290,24 @@ export async function getAssetUrl(refOrPath) {
     return cached.url;
   }
 
-  const supabase = await getAuthedSupabase();
+  let supabase = await getAuthedSupabase();
   if (!supabase) return null;
 
-  const { data, error } = await supabase.storage
+  let { data, error } = await supabase.storage
     .from(BUCKET)
     .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
+
+  // Re-signing needs a live auth token. If it lapsed (the same cause as the
+  // "JWT expired" save errors), mint a fresh token and retry once so the image
+  // recovers instead of breaking until a full page reload.
+  if (error || !data?.signedUrl) {
+    supabase = await refreshAuthedSupabase();
+    if (supabase) {
+      ({ data, error } = await supabase.storage
+        .from(BUCKET)
+        .createSignedUrl(path, SIGNED_URL_TTL_SECONDS));
+    }
+  }
 
   if (error || !data?.signedUrl) {
     if (error) console.error('getAssetUrl:', error);
@@ -331,11 +343,20 @@ export async function getAssetUrls(refsOrPaths = []) {
   }
 
   if (toFetch.length) {
-    const supabase = await getAuthedSupabase();
+    let supabase = await getAuthedSupabase();
     if (!supabase) return result;
-    const { data, error } = await supabase.storage
+    let { data, error } = await supabase.storage
       .from(BUCKET)
       .createSignedUrls(toFetch, SIGNED_URL_TTL_SECONDS);
+    // Token lapsed → refresh and retry once before giving up on the batch.
+    if (error || !Array.isArray(data) || !data.length) {
+      supabase = await refreshAuthedSupabase();
+      if (supabase) {
+        ({ data, error } = await supabase.storage
+          .from(BUCKET)
+          .createSignedUrls(toFetch, SIGNED_URL_TTL_SECONDS));
+      }
+    }
     if (error) console.error('getAssetUrls:', error);
     let dirty = false;
     for (const item of data || []) {
