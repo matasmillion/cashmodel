@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-06-04T13:49:01.465Z",
+  "lastUpdated": "2026-06-04T14:24:38.258Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,11 @@
   ],
   "changelog": [
     {
+      "sha": "33e21b3",
+      "date": "2026-06-04T13:49:22+00:00",
+      "message": "Scanner: add-box uses detected size; confirm overlap-safe crops"
+    },
+    {
       "sha": "eabe9e1",
       "date": "2026-06-04T13:43:33+00:00",
       "message": "Scanner: shift-click multi-select for group move / delete"
@@ -1087,11 +1092,6 @@
       "sha": "c2a103d",
       "date": "2026-06-04T11:03:20+00:00",
       "message": "Fabric spec: pre/post-shrink GSM + width and directional (warp/weft) shrinkage"
-    },
-    {
-      "sha": "2bd3143",
-      "date": "2026-06-04T10:42:26+00:00",
-      "message": "Scanner: operator-confirmed grid overlay instead of AI-guessed crop edges"
     }
   ]
 }

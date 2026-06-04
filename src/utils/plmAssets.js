@@ -162,8 +162,11 @@ async function supportsWebP() {
  *   blob:         Blob/File to upload
  *   skipCompress: pass true for already-optimized inputs
  *   compressOpts: { maxDim, quality, format }
+ *   ext:          optional file extension override (e.g. 'zfab') — preserves
+ *                 the real extension for non-image binaries that have no
+ *                 image content-type to derive it from.
  */
-export async function uploadAsset({ scope, ownerId, slot, blob, skipCompress = false, compressOpts = {} } = {}) {
+export async function uploadAsset({ scope, ownerId, slot, blob, skipCompress = false, compressOpts = {}, ext: extOverride } = {}) {
   if (!scope) throw new Error('uploadAsset: scope is required');
   if (!ownerId) throw new Error('uploadAsset: ownerId is required');
   if (!slot) throw new Error('uploadAsset: slot is required');
@@ -179,7 +182,7 @@ export async function uploadAsset({ scope, ownerId, slot, blob, skipCompress = f
     ? { blob, width: null, height: null, contentType: blob.type || 'application/octet-stream' }
     : await compressForUpload(blob, compressOpts);
 
-  const ext = extFromContentType(compressed.contentType);
+  const ext = (extOverride && String(extOverride).toLowerCase().replace(/[^a-z0-9]+/g, '')) || extFromContentType(compressed.contentType);
   const uuid = (typeof crypto !== 'undefined' && crypto.randomUUID)
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2) + Date.now().toString(36);

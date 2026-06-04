@@ -781,6 +781,8 @@ export default function FabricBuilder({ fabric, onBack }) {
                 assetScope="fabrics"
                 assetOwnerId={draft.id}
                 assetSlot="placement"
+                cropAspect={2 / 3}
+                cropLabel="2:3 placement · drag to position · scroll to zoom"
               />
               <div>
                 <Field label="Area of product">
@@ -895,6 +897,8 @@ export default function FabricBuilder({ fabric, onBack }) {
                 assetScope="fabrics"
                 assetOwnerId={draft.id}
                 assetSlot="front"
+                cropAspect={220 / 260}
+                cropLabel="Front · drag to position · scroll to zoom"
               />
               <SimpleImageSlot
                 value={draft.back_image_url}
@@ -905,6 +909,8 @@ export default function FabricBuilder({ fabric, onBack }) {
                 assetScope="fabrics"
                 assetOwnerId={draft.id}
                 assetSlot="back"
+                cropAspect={220 / 260}
+                cropLabel="Back · drag to position · scroll to zoom"
               />
             </div>
           </div>
@@ -968,6 +974,8 @@ export default function FabricBuilder({ fabric, onBack }) {
                   assetScope="fabrics"
                   assetOwnerId={draft.id}
                   assetSlot="ribbing"
+                  cropAspect={1}
+                  cropLabel="Rib swatch · drag to position · scroll to zoom"
                 />
                 <Field label="Rib fabric #">
                   <input
@@ -1005,6 +1013,9 @@ export default function FabricBuilder({ fabric, onBack }) {
                 onChange={v => set({ zfab_file_url: v })}
                 accept=".zfab,.zprj"
                 hint="Drop a .zfab fabric asset"
+                assetScope="fabrics"
+                assetOwnerId={draft.id}
+                assetSlot="zfab"
               />
             </Field>
           </div>
