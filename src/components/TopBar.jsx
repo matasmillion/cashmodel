@@ -18,6 +18,7 @@ import { useApp } from '../context/AppContext';
 import { useCurrentOrg, useSignOut, useCurrentUser } from '../lib/auth';
 import { setInventoryHash } from '../utils/inventoryRouting';
 import SyncIndicator from './SyncIndicator';
+import InstallAppButton from './InstallAppButton';
 
 const FR = {
   slate: '#3A3A3A',
@@ -347,6 +348,7 @@ export default function TopBar() {
 
             {/* Divider + settings gear */}
             <div style={{ width: 1, height: 18, background: 'rgba(58,58,58,0.12)', margin: '0 8px' }} />
+            <InstallAppButton />
             <HoverMenu
               align="right"
               trigger={({ open }) => (
