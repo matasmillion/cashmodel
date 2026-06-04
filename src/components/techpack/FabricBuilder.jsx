@@ -882,6 +882,7 @@ export default function FabricBuilder({ fabric, onBack }) {
               assetOwnerId={draft.id}
               assetSlot="swatch"
               hint="Drop swatch photos"
+              selectable
             />
 
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: `0.5px solid ${FR.sand}` }}>

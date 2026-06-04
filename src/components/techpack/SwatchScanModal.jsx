@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, X, Scan } from 'lucide-react';
 import { FR } from './techPackConstants';
-import { extractSwatchesFromImage, fileToMedia, cropRegionFromFile } from '../../utils/aiFabricExtract';
+import { extractSwatchRegions, fileToMedia, cropRegionFromFile } from '../../utils/aiFabricExtract';
 
 export default function SwatchScanModal({ onClose, onApply }) {
   const [file, setFile]         = useState(null);
@@ -47,7 +47,7 @@ export default function SwatchScanModal({ onClose, onApply }) {
     setSwatches([]);
     try {
       const media = await fileToMedia(file);
-      const regions = await extractSwatchesFromImage({ media });
+      const regions = await extractSwatchRegions({ media });
       if (!regions.length) { setError('No swatches detected. Try a clearer photo of a color card.'); setBusy(false); return; }
 
       // Crop each detected region in parallel
@@ -74,7 +74,11 @@ export default function SwatchScanModal({ onClose, onApply }) {
     setSwatches(prev => prev.map((s, idx) => idx === i ? { ...s, label } : s));
   }
 
+  const selectAll   = () => setSwatches(prev => prev.map(s => ({ ...s, selected: true })));
+  const deselectAll = () => setSwatches(prev => prev.map(s => ({ ...s, selected: false })));
+
   const selected = swatches.filter(s => s.selected);
+  const miniBtn = { fontSize: 9, color: FR.slate, background: 'none', border: `0.5px solid ${FR.sand}`, borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit' };
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(58,58,58,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
@@ -134,8 +138,14 @@ export default function SwatchScanModal({ onClose, onApply }) {
 
                 {swatches.length > 0 && (
                   <>
-                    <div style={{ fontSize: 10, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>
-                      {swatches.length} swatches detected — click to deselect, edit labels
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+                      <div style={{ fontSize: 10, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                        {selected.length}/{swatches.length} selected — click to toggle, edit labels
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={selectAll} style={miniBtn}>Select all</button>
+                        <button onClick={deselectAll} style={miniBtn}>Deselect all</button>
+                      </div>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(88px, 1fr))', gap: 8, marginBottom: 12 }}>
                       {swatches.map((s, i) => (
