@@ -127,7 +127,10 @@ export async function flush({ force = false } = {}) {
   _flushing = true;
   try {
     let q = read();
-    if (q.length === 0) return;
+    if (q.length === 0) {
+      if (force) markSynced(); // always stamp the timestamp on an explicit "Sync now"
+      return;
+    }
     const now = Date.now();
     const remaining = [];
     let synced = 0;

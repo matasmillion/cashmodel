@@ -75,8 +75,15 @@ export default function SyncStatusBadge() {
 
   const handleSyncNow = async () => {
     setBusy(true);
-    try { await syncNow(); }
-    finally { setBusy(false); setPending(queueLength()); setLastSync(getLastSyncAt()); }
+    try {
+      await syncNow();
+      // Also pull from cloud so any changes made on other devices appear now.
+      window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'all', forced: true } }));
+    } finally {
+      setBusy(false);
+      setPending(queueLength());
+      setLastSync(getLastSyncAt());
+    }
   };
 
   const handleRestore = async (c) => {
