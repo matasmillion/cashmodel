@@ -116,7 +116,23 @@ const POLL_RETRIES = 3;
 // Submit a fal queue job, poll status, fetch response body, return image URL.
 async function runFalJob({ endpoint, payload, onStatus }) {
   onStatus?.('submitting');
-  const submitted = await callProxy('fal-proxy', { endpoint, payload });
+
+  // Retry the submit itself on gateway errors — the 504 can happen before the
+  // job is queued (not just during polling) when the payload is large.
+  let submitted;
+  let lastSubmitErr;
+  for (let attempt = 0; attempt <= POLL_RETRIES; attempt++) {
+    try {
+      submitted = await callProxy('fal-proxy', { endpoint, payload });
+      lastSubmitErr = null;
+      break;
+    } catch (err) {
+      lastSubmitErr = err;
+      if (!FAL_RETRYABLE.has(err.status)) throw err;
+      if (attempt < POLL_RETRIES) await new Promise(r => setTimeout(r, POLL_RETRY_DELAY_MS));
+    }
+  }
+  if (lastSubmitErr) throw lastSubmitErr;
   if (!submitted.request_id) throw new Error('No request_id from fal');
 
   const statusUrl = submitted.status_url

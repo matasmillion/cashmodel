@@ -723,13 +723,24 @@ function GenerateViewsModal({ viewSources, sharedRefs, customContext, style, bgC
       if (!seed) throw new Error('Upload at least one reference image first');
       setPVR(refs);
 
-      // Step 2: resize to ≤1024px so the payload fits under Supabase's 6 MB limit
-      let smallSeed;
-      try {
-        smallSeed = await resizeDataUrlForAI(seed, 1024);
-      } catch {
-        smallSeed = seed; // best-effort: use original if canvas resize fails
-      }
+      // Step 2: resize all images — two budgets:
+      //   • 1024px for Claude Vision (JSON body through anthropic-proxy)
+      //   • 768px for fal.ai references (image_urls payload through fal-proxy)
+      // Without this, full-res photos (~3-5 MB base64) time out the Supabase
+      // Edge Function before fal.ai can even queue the job (504).
+      const safeResize = async (url, maxDim) => {
+        if (!url) return url;
+        try { return await resizeDataUrlForAI(url, maxDim); } catch { return url; }
+      };
+
+      const [smallSeed, ...resizedRefArrays] = await Promise.all([
+        safeResize(seed, 1024),
+        Promise.all(refs.front.map(u => safeResize(u, 768))),
+        Promise.all(refs.back.map(u => safeResize(u, 768))),
+        Promise.all(refs.side.map(u => safeResize(u, 768))),
+      ]);
+      const [smallFront, smallBack, smallSide] = resizedRefArrays;
+      const smallRefs = { front: smallFront, back: smallBack, side: smallSide };
 
       // Step 3: Claude Vision — describe the garment
       let desc;
@@ -742,9 +753,9 @@ function GenerateViewsModal({ viewSources, sharedRefs, customContext, style, bgC
       }
       setDesc(desc);
 
-      // Step 4: fal.ai generation
+      // Step 4: fal.ai generation (references capped at 768px each)
       setPhase('generating');
-      await Promise.all(viewsToRun.map(view => runOneView(view, desc, refs[view], customContext)));
+      await Promise.all(viewsToRun.map(view => runOneView(view, desc, smallRefs[view], customContext)));
       setPhase('done');
     } catch (e) {
       console.error('[techpack-views] generate failed:', e);
