@@ -262,7 +262,14 @@ export async function listComponentPacks() {
     return _mergeComponentPackList(null, local)
       .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
   }
-  if (IS_SUPABASE_ENABLED && orgId) await _syncComponentPackListFromCloud();
+  // Brief cloud window, but never hang the picker if the project is slow/asleep:
+  // fall back to local and let the background sync fill in via plm-store-updated.
+  if (IS_SUPABASE_ENABLED && orgId) {
+    await Promise.race([
+      _syncComponentPackListFromCloud().catch(() => {}),
+      new Promise(res => setTimeout(res, 8000)),
+    ]);
+  }
   return _mergeComponentPackList(null, readLocal().filter(p => !p?.deleted_at))
     .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 }
