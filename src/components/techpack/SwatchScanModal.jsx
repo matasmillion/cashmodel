@@ -25,6 +25,19 @@ const clamp01 = (v, fallback = 0) => {
   return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : fallback;
 };
 
+// Median box size of the current detections, so a manually added box matches
+// the size Claude estimated for this card rather than a fixed default. Falls
+// back to a sensible default when there's nothing to measure yet.
+function medianBoxSize(list) {
+  if (!list || !list.length) return { w: 0.12, h: 0.1 };
+  const med = (vals) => {
+    const a = vals.slice().sort((p, q) => p - q);
+    const m = Math.floor(a.length / 2);
+    return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+  };
+  return { w: med(list.map(b => b.w)), h: med(list.map(b => b.h)) };
+}
+
 // Coerce a model region into a safe in-bounds box. Pass 1 estimates shape
 // only — the label is left blank and read off the finalized crop in Pass 2.
 function normalizeBox(r) {
@@ -122,8 +135,14 @@ export default function SwatchScanModal({ onClose, onApply }) {
     });
   }
 
+  // A new box copies the typical detected box size so it matches the rest of
+  // the grid — the operator just drags it into place. Dropped at centre;
+  // overlapping existing boxes is fine (every box crops independently).
   function addBox() {
-    const nb = { label: '', x: 0.44, y: 0.44, w: 0.12, h: 0.1 };
+    const { w, h } = medianBoxSize(boxes);
+    const x = clamp01(0.5 - w / 2);
+    const y = clamp01(0.5 - h / 2);
+    const nb = { label: '', x, y, w: Math.min(w, 1 - x), h: Math.min(h, 1 - y) };
     setBoxes(prev => [...prev, nb]);
     setSelected([boxes.length]);
   }
@@ -143,6 +162,9 @@ export default function SwatchScanModal({ onClose, onApply }) {
     setError(null);
     setProgress(null);
     try {
+      // Each box is cut from the source independently, so boxes may overlap
+      // freely — we never composite them into one image. Pass 2 then reads the
+      // code off each individual crop.
       const cropped = await Promise.all(boxes.map(async (b) => {
         try {
           const blob = await cropRegionFromFile(file, b);
