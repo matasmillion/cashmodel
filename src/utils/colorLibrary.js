@@ -10,21 +10,17 @@
 import { FR_COLOR_OPTIONS } from '../components/techpack/techPackConstants';
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync } from '../lib/auth';
+import { getBlob, setBlob } from './localDb';
 
 const LS_KEY = 'cashmodel_fr_colors';
 
 function readStore() {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
+  const v = getBlob(LS_KEY);
+  return v && typeof v === 'object' ? v : {};
 }
 
 function writeStore(store) {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(store)); }
-  catch (err) { console.error('colorLibrary write:', err); }
+  setBlob(LS_KEY, store);
 }
 
 function toSupabaseRow(orgId, name, entry) {

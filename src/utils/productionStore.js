@@ -13,6 +13,7 @@
 
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentUserIdSync, getCurrentOrgIdSync } from '../lib/auth';
+import { getCollection, setCollection } from './localDb';
 
 const PO_KEY        = 'cashmodel_pos';
 const BOM_SNAP_KEY  = 'cashmodel_bom_snapshots';
@@ -22,14 +23,10 @@ const DRIFT_LOG_KEY = 'cashmodel_drift_logs';
 // ── Storage primitives ─────────────────────────────────────────────────────
 
 function readLocal(key) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
+  return getCollection(key);
 }
 function writeLocal(key, rows) {
-  try { localStorage.setItem(key, JSON.stringify(rows)); }
-  catch (err) { console.error('productionStore write:', err); }
+  setCollection(key, rows);
 }
 function newId() {
   return (crypto.randomUUID && crypto.randomUUID()) || `id-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -521,9 +518,7 @@ const SEED_VENDOR_NAME = 'Guangdong Ocean Wash';
 
 function ensureSeedStyle() {
   const TECHPACKS_KEY = 'cashmodel_techpacks';
-  let packs;
-  try { packs = JSON.parse(localStorage.getItem(TECHPACKS_KEY) || '[]'); }
-  catch { packs = []; }
+  const packs = getCollection(TECHPACKS_KEY);
   if (packs.find(p => p.id === SEED_STYLE_ID)) return;
   const now = new Date().toISOString();
   packs.push({
@@ -556,8 +551,7 @@ function ensureSeedStyle() {
     created_at: now,
     updated_at: now,
   });
-  try { localStorage.setItem(TECHPACKS_KEY, JSON.stringify(packs)); }
-  catch (err) { console.error('seed style write:', err); }
+  setCollection(TECHPACKS_KEY, packs);
 }
 
 export async function seedProductionIfEmpty() {

@@ -20,6 +20,7 @@
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync } from '../lib/auth';
 import { downloadBlob } from './downloadBlob';
+import { getCollection } from './localDb';
 
 // Tables that carry organization_id — the cloud-side query filters on it.
 const ORG_TABLES = [
@@ -54,12 +55,7 @@ const LOCAL_FALLBACK_KEYS = {
 function readLocalFallback(table) {
   const key = LOCAL_FALLBACK_KEYS[table];
   if (!key) return [];
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return getCollection(key);
 }
 
 /**

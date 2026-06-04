@@ -31,6 +31,7 @@ import { IS_SUPABASE_ENABLED, getAuthedSupabase, refreshAuthedSupabase } from '.
 import { getCurrentOrgIdSync, getCurrentUserIdSync, getJwtOrgId } from '../lib/auth';
 import { enqueue, registerFlusher } from './syncQueue';
 import { recordConflict } from './conflictBackup';
+import { getCollection, setCollection } from './localDb';
 
 const RLS_CODE = '42501';
 const SCHEMA_CACHE_CODE = 'PGRST204';
@@ -55,13 +56,11 @@ const LOCAL_KEY_BY_TABLE = {
 };
 
 function readLocalArray(lsKey) {
-  try { return JSON.parse(localStorage.getItem(lsKey) || '[]'); }
-  catch { return []; }
+  return getCollection(lsKey);
 }
 
 function writeLocalArray(lsKey, rows) {
-  try { localStorage.setItem(lsKey, JSON.stringify(rows)); }
-  catch (err) { console.error('cloudSync local mirror write:', err); }
+  setCollection(lsKey, rows);
 }
 
 // On a lost conflict, overwrite the local copy of {id} with the cloud winner

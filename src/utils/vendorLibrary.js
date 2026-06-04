@@ -23,6 +23,7 @@ import * as _atomTypes from '../types/atoms';
 import { listAllSuppliers } from './plmDirectory';
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync } from '../lib/auth';
+import { getCollection, setCollection, getBlob, setBlob } from './localDb';
 
 const LS_KEY = 'cashmodel_vendors';
 const LEGACY_LS_KEY = 'cashmodel_factories';
@@ -40,8 +41,7 @@ function migrateLegacyIfNeeded() {
     const legacyRaw = localStorage.getItem(LEGACY_LS_KEY);
     if (!legacyRaw) return;
     const legacy = JSON.parse(legacyRaw) || {};
-    const currentRaw = localStorage.getItem(LS_KEY);
-    const current = currentRaw ? JSON.parse(currentRaw) : {};
+    const current = getBlob(LS_KEY) || {};
     let changed = false;
     Object.keys(legacy).forEach(name => {
       if (!current[name]) {
@@ -49,7 +49,7 @@ function migrateLegacyIfNeeded() {
         changed = true;
       }
     });
-    if (changed) localStorage.setItem(LS_KEY, JSON.stringify(current));
+    if (changed) setBlob(LS_KEY, current);
   } catch (err) {
     console.error('vendorLibrary migrate:', err);
   }
@@ -137,17 +137,12 @@ async function hydrateVendorsFromCloud() {
 
 function readStore() {
   migrateLegacyIfNeeded();
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
+  const v = getBlob(LS_KEY);
+  return v && typeof v === 'object' ? v : {};
 }
 
 function writeStore(store) {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(store)); }
-  catch (err) { console.error('vendorLibrary write:', err); }
+  setBlob(LS_KEY, store);
 }
 
 // Build the snake_case Supabase row from the camelCase entry. Numerics
@@ -415,15 +410,9 @@ export function deleteVendor(name) {
   // Also scrub the manually-added supplier list (cashmodel_plm_suppliers)
   // so a directory-only vendor disappears for real after delete.
   try {
-    const customRaw = localStorage.getItem('cashmodel_plm_suppliers');
-    if (customRaw) {
-      const arr = JSON.parse(customRaw);
-      if (Array.isArray(arr) && arr.includes(name)) {
-        localStorage.setItem(
-          'cashmodel_plm_suppliers',
-          JSON.stringify(arr.filter(s => s !== name))
-        );
-      }
+    const arr = getBlob('cashmodel_plm_suppliers');
+    if (Array.isArray(arr) && arr.includes(name)) {
+      setBlob('cashmodel_plm_suppliers', arr.filter(s => s !== name));
     }
   } catch {/* ignore */}
   return { ok: true };
@@ -497,12 +486,8 @@ export function renameVendor(oldName, newName) {
   let localRefsUpdated = 0;
   const VENDOR_REF_KEYS = ['cashmodel_techpacks', 'cashmodel_component_packs', 'cashmodel_treatments', 'cashmodel_embellishments', 'cashmodel_fabrics', 'cashmodel_cut_sew', 'cashmodel_purchase_orders', 'cashmodel_production'];
   for (const lsKey of VENDOR_REF_KEYS) {
-    let raw;
-    try { raw = localStorage.getItem(lsKey); } catch { continue; }
-    if (!raw) continue;
-    let parsed;
-    try { parsed = JSON.parse(raw); } catch { continue; }
-    if (!Array.isArray(parsed)) continue;
+    const parsed = getCollection(lsKey);
+    if (!Array.isArray(parsed) || !parsed.length) continue;
     let dirty = false;
     for (const row of parsed) {
       if (!row || typeof row !== 'object') continue;
@@ -519,10 +504,7 @@ export function renameVendor(oldName, newName) {
         }
       }
     }
-    if (dirty) {
-      try { localStorage.setItem(lsKey, JSON.stringify(parsed)); }
-      catch (err) { console.error('renameVendor cascade write:', err); }
-    }
+    if (dirty) setCollection(lsKey, parsed);
   }
 
   // 3. Cloud-side: update the vendor row's name. Cross-table refs

@@ -20,6 +20,7 @@ import { getCurrentOrgIdSync } from '../lib/auth';
 import { emptyCutSew, CUT_SEW_CATEGORIES, CUT_SEW_CATEGORY_CODE } from './cutSewLibrary';
 import { copyCoverImage } from './plmAssets';
 import { robustUpsertAtom, robustUpsertAtomBatch, mergeByIdNewest, dedupeCodesOnce } from './atomCloudSync';
+import { getCollection, setCollection } from './localDb';
 
 const LOCAL_KEY = 'cashmodel_cut_sew';
 
@@ -40,17 +41,11 @@ export function toCutSewCloudRow(row) {
 }
 
 function readLocal() {
-  try {
-    const raw = localStorage.getItem(LOCAL_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return getCollection(LOCAL_KEY);
 }
 
 function writeLocal(rows) {
-  try { localStorage.setItem(LOCAL_KEY, JSON.stringify(rows)); }
-  catch (err) { console.error('cutSewStore write:', err); }
+  setCollection(LOCAL_KEY, rows);
 }
 
 function newId() {

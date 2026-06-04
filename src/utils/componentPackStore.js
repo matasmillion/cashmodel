@@ -6,6 +6,7 @@ import { getCurrentUserIdSync, getCurrentOrgIdSync, getJwtOrgId } from '../lib/a
 import { persistableImages, deleteAssets, copyAsset, scheduleOrphanDeletion, cancelOrphanDeletion } from './plmAssets';
 import { robustUpsertAtomBatch } from './atomCloudSync';
 import { enqueue } from './syncQueue';
+import { getCollection, setCollection } from './localDb';
 
 // Cloud column allow-list. Anything outside this set (transient UI state,
 // legacy fields) gets stripped before going to Supabase — Postgres rejects
@@ -71,26 +72,13 @@ function migrateLegacyVendorKeys(row) {
 }
 
 function readLocal() {
-  try { return JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]'); } catch { return []; }
+  return getCollection(LOCAL_KEY);
 }
 function writeLocal(rows) {
-  try {
-    localStorage.setItem(LOCAL_KEY, JSON.stringify(rows));
-    if (lastQuotaError) lastQuotaError = null;
-    return { ok: true };
-  } catch (err) {
-    // Quota errors are how localStorage tells us "your local backup is
-    // stale and any future cross-session edits will lean entirely on
-    // cloud." Capture the error so the builder UI can surface it
-    // prominently — silent swallowing was the failure mode that
-    // produced months of confusion.
-    console.error('writeLocal:', err);
-    const isQuota = err && (err.name === 'QuotaExceededError'
-      || err.code === 22
-      || /quota/i.test(err.message || ''));
-    if (isQuota) lastQuotaError = err;
-    return { ok: false, error: err, quota: !!isQuota };
-  }
+  const res = setCollection(LOCAL_KEY, rows);
+  if (res.ok) { if (lastQuotaError) lastQuotaError = null; }
+  else if (res.quota) lastQuotaError = res.error;
+  return res;
 }
 
 // Cover extraction handles both shapes:
