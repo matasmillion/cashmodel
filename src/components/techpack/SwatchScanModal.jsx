@@ -17,7 +17,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, X, Scan, Plus, Trash2 } from 'lucide-react';
 import { FR } from './techPackConstants';
-import { extractSwatchRegions, fileToMedia, cropRegionFromFile } from '../../utils/aiFabricExtract';
+import { extractSwatchGrid, gridToRegions, extractSwatchesFromImage, fileToMedia, cropRegionFromFile, readSwatchLabels } from '../../utils/aiFabricExtract';
 import SwatchBoxEditor from './SwatchBoxEditor';
 
 const clamp01 = (v, fallback = 0) => {
@@ -25,14 +25,14 @@ const clamp01 = (v, fallback = 0) => {
   return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : fallback;
 };
 
-// Coerce a model region into a safe in-bounds box with a non-empty label.
-function normalizeBox(r, i) {
+// Coerce a model region into a safe in-bounds box. Pass 1 estimates shape
+// only — the label is left blank and read off the finalized crop in Pass 2.
+function normalizeBox(r) {
   const x = clamp01(r?.x, 0);
   const y = clamp01(r?.y, 0);
   const w = Math.min(clamp01(r?.w, 0.1) || 0.1, 1 - x);
   const h = Math.min(clamp01(r?.h, 0.1) || 0.1, 1 - y);
-  const label = String(r?.label ?? '').trim() || `Color ${String(i + 1).padStart(2, '0')}`;
-  return { label, x, y, w, h };
+  return { label: '', x, y, w, h };
 }
 
 export default function SwatchScanModal({ onClose, onApply }) {
@@ -44,6 +44,7 @@ export default function SwatchScanModal({ onClose, onApply }) {
   const [boxes, setBoxes]       = useState([]);     // [{ label, x, y, w, h }]
   const [selected, setSelected] = useState(null);   // index | null
   const [swatches, setSwatches] = useState([]);     // [{ label, blob, blobUrl, selected }]
+  const [progress, setProgress] = useState(null);   // { done, total } during Pass-2 OCR
   const fileRef = useRef(null);
 
   const revokeSwatches = (list) => list.forEach(s => s.blobUrl && URL.revokeObjectURL(s.blobUrl));
@@ -69,9 +70,11 @@ export default function SwatchScanModal({ onClose, onApply }) {
     setError(null);
   }
 
-  // Ask the model for one box per swatch, then drop the operator into the
-  // editor. If the call fails (or returns nothing), still enter the editor so
-  // a card can always be boxed by hand.
+  // Pass 1 — estimate how many swatches there are and a rough box for each.
+  // Boxes cover the full cell (fabric + the printed code beneath it) so the
+  // operator can keep the code inside the crop and Pass 2 can read it back.
+  // Labels are intentionally left blank here. If detection fails the operator
+  // still lands in the editor and can box the card by hand.
   async function runScan() {
     if (!file) return;
     setBusy(true);
@@ -80,9 +83,23 @@ export default function SwatchScanModal({ onClose, onApply }) {
       const media = await fileToMedia(file);
       let regions = [];
       try {
-        regions = await extractSwatchRegions({ media });
-      } catch (err) {
-        setError(`${err.message || 'Auto-detect failed'} — add the boxes manually below.`);
+        const grid = await extractSwatchGrid({ media });
+        if (grid && grid.is_regular_grid && Array.isArray(grid.rows) && grid.rows.length) {
+          regions = gridToRegions({
+            grid: grid.grid, rows: grid.rows, columns: grid.columns,
+            cell_fabric_top_frac: 0, cell_fabric_bottom_frac: 1,
+          });
+        }
+      } catch { /* fall through to per-box detection */ }
+      if (!regions.length) {
+        try {
+          const detected = await extractSwatchesFromImage({ media });
+          // That detector trims to the fabric square; grow each box back down
+          // to include the printed code so Pass 2 can read it.
+          regions = detected.map(r => ({ ...r, h: Math.min((r.h || 0.1) / 0.72, 1 - (r.y || 0)) }));
+        } catch (err) {
+          setError(`${err.message || 'Auto-detect failed'} — add the boxes manually below.`);
+        }
       }
       setBoxes((Array.isArray(regions) ? regions : []).map(normalizeBox));
       setSelected(null);
@@ -104,32 +121,42 @@ export default function SwatchScanModal({ onClose, onApply }) {
     setBoxes(prev => prev.filter((_, i) => i !== selected));
     setSelected(null);
   }
-  function setBoxLabel(i, label) {
-    setBoxes(prev => prev.map((b, idx) => idx === i ? { ...b, label } : b));
-  }
 
-  // Canvas-crop each confirmed box from the source image.
+  // Crop every box exactly, then Pass 2 — read the printed code off each crop
+  // to name it. OCR failures degrade to a numbered placeholder; the operator
+  // can fix any name in the preview step.
   async function cropFromBoxes() {
     if (!file || !boxes.length) { setError('Add at least one swatch box.'); return; }
     setBusy(true);
     setError(null);
+    setProgress(null);
     try {
-      const cropped = await Promise.all(boxes.map(async (b, i) => {
+      const cropped = await Promise.all(boxes.map(async (b) => {
         try {
           const blob = await cropRegionFromFile(file, b);
-          if (!blob) return null;
-          return { label: b.label || `Color ${String(i + 1).padStart(2, '0')}`, blob, blobUrl: URL.createObjectURL(blob), selected: true };
+          return blob ? { blob, blobUrl: URL.createObjectURL(blob) } : null;
         } catch { return null; }
       }));
-      revokeSwatches(swatches);
       const valid = cropped.filter(Boolean);
       if (!valid.length) { setError('No crops produced — check the boxes cover fabric.'); setBusy(false); return; }
-      setSwatches(valid);
+
+      setProgress({ done: 0, total: valid.length });
+      let labels = [];
+      try {
+        labels = await readSwatchLabels(valid.map(c => c.blob), { onProgress: (done, total) => setProgress({ done, total }) });
+      } catch { labels = []; }
+
+      revokeSwatches(swatches);
+      setSwatches(valid.map((c, i) => ({
+        label: labels[i] || `Color ${String(i + 1).padStart(2, '0')}`,
+        blob: c.blob, blobUrl: c.blobUrl, selected: true,
+      })));
       setPhase('preview');
     } catch (err) {
       setError(err.message || 'Cropping failed');
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -157,8 +184,8 @@ export default function SwatchScanModal({ onClose, onApply }) {
             <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 22, color: FR.slate }}>AI Color Scanner</div>
             <div style={{ fontSize: 11, color: FR.stone, marginTop: 4 }}>
               {phase === 'edit'
-                ? 'Claude boxed each swatch. Drag a box to move it, drag a corner to resize, click to select. Fix any that are off, then crop.'
-                : 'Drop a swatch sheet photo. Claude boxes each fabric square; you fine-tune the crops; the modal cuts them out.'}
+                ? 'Claude estimated the swatch boxes. Drag/resize so each covers a swatch and its printed code, then submit — the names are read from your crops.'
+                : 'Drop a swatch sheet photo. Claude estimates the swatch boxes; you crop each exactly; the names are read back from your crops.'}
             </div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: FR.stone, lineHeight: 1 }}>×</button>
@@ -218,26 +245,22 @@ export default function SwatchScanModal({ onClose, onApply }) {
               <div>
                 <div style={{ fontSize: 13, color: FR.slate, fontWeight: 600, marginBottom: 2 }}>{N} swatch{N === 1 ? '' : 'es'} detected</div>
                 <div style={{ fontSize: 10, color: FR.stone, marginBottom: 12, lineHeight: 1.5 }}>
-                  Drag a box to move, a corner to resize. Click to select; the × on a box removes it.
+                  Drag a box to move, a corner to resize. Keep each swatch&apos;s printed code inside its box — names are read from the crops when you submit.
                 </div>
 
-                {/* Selected box — label + delete */}
+                {/* Selected box — remove only (names come from Pass 2, editable in preview) */}
                 <div style={{ marginBottom: 12, padding: 10, background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 6 }}>
                   <div style={smallLabel}>Selected swatch</div>
                   {selected == null ? (
                     <div style={{ fontSize: 10, color: FR.stone }}>Click a box on the card to select it.</div>
                   ) : (
-                    <>
-                      <input
-                        value={boxes[selected]?.label ?? ''}
-                        onChange={e => setBoxLabel(selected, e.target.value)}
-                        placeholder={`Color ${selected + 1}`}
-                        style={{ width: '100%', fontSize: 11, padding: '5px 7px', border: `0.5px solid ${FR.sand}`, borderRadius: 4, color: FR.slate, background: FR.salt, fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 8 }} />
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                      <div style={{ fontSize: 11, color: FR.slate }}>Box {selected + 1} of {N}</div>
                       <button onClick={removeSelected}
                         style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: '#A32D2D', background: 'none', border: `0.5px solid rgba(163,45,45,0.3)`, borderRadius: 4, padding: '4px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                        <Trash2 size={11} /> Remove box
+                        <Trash2 size={11} /> Remove
                       </button>
-                    </>
+                    </div>
                   )}
                 </div>
 
@@ -251,7 +274,7 @@ export default function SwatchScanModal({ onClose, onApply }) {
                 <button onClick={cropFromBoxes} disabled={busy || !N}
                   style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 18px', background: (busy || !N) ? FR.sand : FR.slate, color: FR.salt, border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: (busy || !N) ? 'default' : 'pointer' }}>
                   {busy ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Scan size={14} />}
-                  {busy ? 'Cropping…' : `Crop ${N} swatch${N === 1 ? '' : 'es'}`}
+                  {busy ? (progress ? `Reading names ${progress.done}/${progress.total}…` : 'Cropping…') : `Crop & read ${N} swatch${N === 1 ? '' : 'es'}`}
                 </button>
                 <button onClick={() => { setFile(null); setPreview(''); setBoxes([]); setSelected(null); setError(null); }}
                   style={{ width: '100%', marginTop: 8, fontSize: 10, color: FR.stone, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>

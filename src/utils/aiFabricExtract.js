@@ -464,6 +464,59 @@ export async function extractSwatchRegions({ media }) {
   return extractSwatchesFromImage({ media });
 }
 
+// Pass 2 of the swatch flow. Pass 1 only estimates how many swatches there are
+// and the approximate box for each; the operator then crops each one exactly.
+// This reads the printed code/name back OFF each finalized crop, so the label
+// always matches what's actually in the crop (no grid-derived label drift).
+const SWATCH_LABEL_SYSTEM = `You read the printed colour code / name on fabric swatch crops from an Asian mill colour card. You are given several crops in order; each crop is ONE swatch — a square of fabric with its code printed directly beneath or beside it (e.g. "16-YZY", "14-FOG", "01-ADER", sometimes with a Chinese tone word like 炒前 / 浅炒 / 中炒 / 深炒).
+
+Return ONLY a JSON array of strings — exactly one entry per crop, in the SAME order given. Each string is that crop's printed code, transcribed EXACTLY as printed: do NOT add prefixes (no "JF-"), do NOT zero-pad numbers, do NOT invent or translate codes. If a crop shows no legible printed code, return "" for it. The array length MUST equal the number of crops provided.`;
+
+/**
+ * Read the printed code off each finalized swatch crop (Pass 2). Batches the
+ * crops through Claude Vision and returns a string[] of labels aligned 1:1 to
+ * the input order. Failures degrade to "" for the affected crop rather than
+ * throwing, so a single bad chunk never sinks the whole scan.
+ * @param {Array<File|Blob>} blobs finalized crop images, in order
+ * @param {{ onProgress?: (done:number, total:number) => void, chunk?: number }} [opts]
+ * @returns {Promise<string[]>}
+ */
+export async function readSwatchLabels(blobs, { onProgress, chunk = 12 } = {}) {
+  const labels = new Array(blobs.length).fill('');
+  let done = 0;
+  for (let start = 0; start < blobs.length; start += chunk) {
+    const slice = blobs.slice(start, start + chunk);
+    // Crops are tiny; 512px is plenty to read a printed code and keeps the
+    // batched payload small.
+    const medias = await Promise.all(slice.map(b => fileToMedia(b, { maxPx: 512 })));
+    const content = [];
+    medias.forEach((m, i) => {
+      content.push({ type: 'text', text: `Crop ${i + 1}:` });
+      content.push({ type: 'image', source: { type: 'base64', media_type: m.mediaType, data: m.base64 } });
+    });
+    content.push({ type: 'text', text: `Return ONLY a JSON array of ${slice.length} strings — the printed code on each crop above, in order.` });
+    try {
+      const json = await callAnthropicProxy({
+        model: MODEL,
+        max_tokens: 2048,
+        system: SWATCH_LABEL_SYSTEM,
+        messages: [{ role: 'user', content }],
+      });
+      const text = (Array.isArray(json?.content) ? json.content : []).find(b => b?.type === 'text')?.text || '';
+      const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+      let arr;
+      try { arr = JSON.parse(cleaned); }
+      catch { const r = repairTruncatedJson(cleaned); arr = r ? JSON.parse(r) : []; }
+      if (Array.isArray(arr)) {
+        for (let i = 0; i < slice.length; i++) labels[start + i] = String(arr[i] ?? '').trim();
+      }
+    } catch { /* leave this chunk's labels blank */ }
+    done += slice.length;
+    onProgress?.(done, blobs.length);
+  }
+  return labels;
+}
+
 /**
  * Crop a normalized (0-1 fraction) region out of an image File and return a
  * WebP Blob. Shared by SwatchScanModal and FabricAIExtract so both produce
