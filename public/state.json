@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-06-04T11:07:37.341Z",
+  "lastUpdated": "2026-06-04T11:24:49.150Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,21 @@
   ],
   "changelog": [
     {
+      "sha": "ad71612",
+      "date": "2026-06-04T11:24:22+00:00",
+      "message": "Merge remote-tracking branch 'origin/main' into claude/eager-lamport-2MgVV"
+    },
+    {
+      "sha": "220335c",
+      "date": "2026-06-04T11:08:46+00:00",
+      "message": "chore: update public/state.json"
+    },
+    {
+      "sha": "6b9f304",
+      "date": "2026-06-04T11:08:16+00:00",
+      "message": "Fabric spec: capture pre & post as printed (drop auto-derive)"
+    },
+    {
       "sha": "5fe9524",
       "date": "2026-06-04T11:04:03+00:00",
       "message": "chore: update public/state.json"
@@ -1059,39 +1074,24 @@
       "message": "Scanner: operator-confirmed grid overlay instead of AI-guessed crop edges"
     },
     {
+      "sha": "cd0e8e0",
+      "date": "2026-06-04T13:28:44+03:00",
+      "message": "Merge #161: PLM library + production are now local-first (IndexedDB)"
+    },
+    {
+      "sha": "276a873",
+      "date": "2026-06-04T10:27:58+00:00",
+      "message": "feat(plm): move PLM library + production to local-first IndexedDB store"
+    },
+    {
+      "sha": "39cac08",
+      "date": "2026-06-04T13:22:03+03:00",
+      "message": "Merge pull request #160 from matasmillion/claude/eager-lamport-2MgVV"
+    },
+    {
       "sha": "afeeda9",
       "date": "2026-06-04T10:20:03+00:00",
       "message": "Fix color-card scanner crops + add bulk swatch select/delete"
-    },
-    {
-      "sha": "18513eb",
-      "date": "2026-06-04T12:38:18+03:00",
-      "message": "Merge #158: self-heal broken images when the auth token lapses"
-    },
-    {
-      "sha": "b748b5b",
-      "date": "2026-06-04T09:37:58+00:00",
-      "message": "fix(plm): self-heal broken images on auth-token lapse"
-    },
-    {
-      "sha": "2384473",
-      "date": "2026-06-04T12:06:45+03:00",
-      "message": "Merge #157: fix JWT-expired saves and infinite Loading hangs"
-    },
-    {
-      "sha": "5ff5daf",
-      "date": "2026-06-04T09:06:22+00:00",
-      "message": "fix(auth+plm): stop 'JWT expired' saves and 'Loading…' hangs"
-    },
-    {
-      "sha": "a096ecd",
-      "date": "2026-06-04T11:46:53+03:00",
-      "message": "Merge #156: Install button always visible with menu fallback"
-    },
-    {
-      "sha": "38ecb74",
-      "date": "2026-06-04T08:46:35+00:00",
-      "message": "fix(pwa): make Install button always visible with menu fallback"
     }
   ]
 }
