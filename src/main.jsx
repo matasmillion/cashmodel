@@ -14,6 +14,9 @@ import './utils/plmBackup'
 // Side-effect import: boots the offline sync outbox (flushes queued edits to
 // the cloud on reconnect / interval / at startup).
 import './utils/startSync'
+// Side-effect: capture the PWA install prompt early (it can fire before React
+// mounts) so the in-app Install button can trigger one-click install.
+import './utils/pwaInstall'
 
 // Hydrate the local store (fast local-disk read, not network), then mount.
 // hydrate() never rejects — it falls back to localStorage internally — so the
