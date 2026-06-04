@@ -60,8 +60,24 @@ const RES = {
 };
 
 // ─── Edge function plumbing ──────────────────────────────────────────────────
+
+// Detect a JWT that is already expired or will expire within 90 seconds.
+function jwtExpiringSoon(token) {
+  try {
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const { exp } = JSON.parse(atob(b64 + '==='.slice((b64.length + 3) % 4)));
+    return typeof exp === 'number' && exp * 1000 - Date.now() < 90_000;
+  } catch { return false; }
+}
+
 async function buildHeaders() {
-  const token = await getClerkToken();
+  // Always check whether the cached Clerk token is close to expiry and force a
+  // fresh one if so — generation jobs can take 1-2 min and a stale JWT will
+  // cause "Credential lookup failed: JWT expired" mid-poll.
+  let token = await getClerkToken('supabase');
+  if (!token || jwtExpiringSoon(token)) {
+    token = await getClerkToken('supabase', { skipCache: true });
+  }
   if (!token) throw new Error('Sign in first');
   return {
     Authorization: `Bearer ${token}`,
@@ -84,10 +100,18 @@ async function callProxy(name, body) {
     const msg = typeof e === 'string'
       ? e
       : (e?.message || e?.type || JSON.stringify(e) || `${name} returned ${res.status}`);
-    throw new Error(msg);
+    const err = new Error(msg);
+    err.status = res.status;
+    throw err;
   }
   return data;
 }
+
+// Gateway-error statuses from fal.ai that are worth retrying (their infra
+// returns 502/503/504 under load; the job is still queued on their side).
+const FAL_RETRYABLE = new Set([502, 503, 504]);
+const POLL_RETRY_DELAY_MS = 5000;
+const POLL_RETRIES = 3;
 
 // Submit a fal queue job, poll status, fetch response body, return image URL.
 async function runFalJob({ endpoint, payload, onStatus }) {
@@ -104,7 +128,20 @@ async function runFalJob({ endpoint, payload, onStatus }) {
     await new Promise(r => setTimeout(r, POLL_MS));
     onStatus?.('polling', i + 1);
 
-    const s = await callProxy('fal-proxy', { endpoint: statusUrl, method: 'GET' });
+    let s;
+    let lastPollErr;
+    for (let attempt = 0; attempt <= POLL_RETRIES; attempt++) {
+      try {
+        s = await callProxy('fal-proxy', { endpoint: statusUrl, method: 'GET' });
+        lastPollErr = null;
+        break;
+      } catch (err) {
+        lastPollErr = err;
+        if (!FAL_RETRYABLE.has(err.status)) throw err; // non-retryable — bubble up
+        if (attempt < POLL_RETRIES) await new Promise(r => setTimeout(r, POLL_RETRY_DELAY_MS));
+      }
+    }
+    if (lastPollErr) throw lastPollErr; // exhausted retries
 
     if (s.status === 'COMPLETED') {
       const result = await callProxy('fal-proxy', { endpoint: responseUrl, method: 'GET' });
