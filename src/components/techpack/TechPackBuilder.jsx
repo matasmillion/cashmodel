@@ -549,6 +549,13 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   })();
   const vendorMarkupCost = preMarkupCost * (vendorMarkupPct / 100);
   const totalUnitCost = preMarkupCost + vendorMarkupCost;
+  // Show the persisted (settled) figure so the header reads the known cost
+  // instantly on open and never visibly climbs from $0 while the fabric / trim /
+  // treatment libraries resolve — and so it matches the grid card (both read
+  // data.totalUnitCost). New styles with nothing saved fall back to the live
+  // figure (climbing as you add items is expected there).
+  const savedUnitCost = parseFloat(data.totalUnitCost);
+  const displayUnitCost = (Number.isFinite(savedUnitCost) && savedUnitCost > 0) ? savedUnitCost : totalUnitCost;
 
   // Per-phase cost subtotals shown as pills in the sidebar phase headers.
   const phaseCosts = {
@@ -584,7 +591,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   const maxFOB = targetRetail > 0
     ? targetRetail * (cogsRate + fulfillmentPercent) - fulfillmentUnitCost + shippingCharge - seaFreightCost
     : 0;
-  const fobDelta = maxFOB > 0 ? totalUnitCost - maxFOB : null;
+  const fobDelta = maxFOB > 0 ? displayUnitCost - maxFOB : null;
 
   // Mirror computed maxFOB into data so the SVG preview can render it without
   // re-pulling AppContext. Debounced + skip-if-matching like totalUnitCost so we
@@ -979,8 +986,8 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           {/* Cost roll-up — BOM + colorway (wash/dye) + vendor markup. */}
           <div style={{ textAlign: 'right' }} title={`BOM ${formatCost(bomCost)}  ·  Colorways ${formatCost(colorwayCost)}${vendorMarkupPct > 0 ? `  ·  Vendor +${vendorMarkupPct}% ${formatCost(vendorMarkupCost)}` : ''}${maxFOB > 0 ? `  ·  Max FOB ${formatCost(maxFOB)}` : ''}`}>
             <div style={{ fontSize: 9, color: FR.stone }}>Total Unit Cost</div>
-            <div style={{ fontSize: 13, color: totalUnitCost > 0 ? FR.salt : FR.stone, fontWeight: 600 }}>
-              {formatCost(totalUnitCost)}
+            <div style={{ fontSize: 13, color: displayUnitCost > 0 ? FR.salt : FR.stone, fontWeight: 600 }}>
+              {formatCost(displayUnitCost)}
             </div>
             {data.vendor && (
               vendorMarkupPct > 0 ? (
