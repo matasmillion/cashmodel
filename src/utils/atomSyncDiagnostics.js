@@ -12,7 +12,7 @@
 // row through the robust upsert path.
 
 import { IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
-import { getCurrentOrgIdSync, getCurrentUserIdSync, getClerkToken, getJwtOrgId } from '../lib/auth';
+import { getCurrentOrgIdSync, getCurrentUserIdSync, getClerkToken, getJwtOrgId, getLastClerkTokenError, describeAuthFailure } from '../lib/auth';
 import {
   getReconciledOrgId,
   robustUpsertAtomBatch,
@@ -149,13 +149,16 @@ export async function getSyncDiagnosticsReport() {
     jwtSub: jwtPayload?.sub || null,
     jwtExp: jwtPayload?.exp || null,
     tokenPresent: !!token,
+    // Classified reason the most recent token mint failed (null on success) —
+    // surfaces the real Clerk error that used to be swallowed into "Sign in first".
+    lastTokenError: getLastClerkTokenError(),
   };
 
   const issues = [];
   if (!IS_SUPABASE_ENABLED) issues.push({ severity: 'fatal', message: 'Supabase is not enabled in this build (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY missing).' });
   if (!userId) issues.push({ severity: 'fatal', message: 'No Clerk user is signed in.' });
   if (!clientOrgId) issues.push({ severity: 'fatal', message: 'No active Clerk organization. Open the org switcher and pick one.' });
-  if (!token) issues.push({ severity: 'fatal', message: 'Clerk did not produce a Supabase JWT — open the Clerk dashboard JWT template named "supabase".' });
+  if (!token) issues.push({ severity: 'fatal', message: `Clerk did not produce a Supabase JWT. ${describeAuthFailure()}` });
   if (token && !jwtOrgId) issues.push({ severity: 'fatal', message: 'JWT is missing the org_id claim. Add { "org_id": "{{org.id}}" } to the Clerk Supabase JWT template.' });
   if (token && jwtOrgId && clientOrgId && jwtOrgId !== clientOrgId) {
     issues.push({ severity: 'warn', message: `JWT carries org "${jwtOrgId}" but the active client org is "${clientOrgId}". Sign out + back in.` });

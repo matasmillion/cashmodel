@@ -1,7 +1,7 @@
 // Live data sync utilities — Shopify, Meta Ads, Mercury
 
 import { supabase, IS_SUPABASE_ENABLED, getAuthedSupabase } from '../lib/supabase';
-import { getCurrentUserIdSync, getCurrentOrgIdSync, getClerkToken } from '../lib/auth';
+import { getCurrentUserIdSync, getCurrentOrgIdSync, getClerkToken, describeAuthFailure } from '../lib/auth';
 
 // ─── Week helpers ─────────────────────────────────────────────────────────────
 
@@ -1827,7 +1827,7 @@ export async function testAnthropicProxy() {
     throw new Error('Supabase not configured');
   }
   const token = await getClerkToken();
-  if (!token) throw new Error('Sign in first');
+  if (!token) throw new Error(describeAuthFailure());
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -2175,7 +2175,7 @@ async function callEdgeFunction(name, body) {
     throw new Error(`Supabase not configured — cannot reach ${name}`);
   }
   const token = await getClerkToken();
-  if (!token) throw new Error('Sign in first');
+  if (!token) throw new Error(describeAuthFailure());
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -2209,7 +2209,7 @@ async function callProxyEndpoint(name, body, opts = {}) {
     throw new Error(`Supabase not configured — cannot reach ${name}`);
   }
   const token = await getClerkToken();
-  if (!token) throw new Error('Sign in first');
+  if (!token) throw new Error(describeAuthFailure());
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;

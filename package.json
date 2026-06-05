@@ -9,6 +9,7 @@
     "build": "vite build",
     "gen:state": "node scripts/generate-state.js",
     "lint": "eslint .",
+    "test": "node --test 'src/**/*.test.mjs'",
     "preview": "vite preview"
   },
   "dependencies": {

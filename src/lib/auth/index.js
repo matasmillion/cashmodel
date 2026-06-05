@@ -104,55 +104,20 @@ export function getCurrentUserIdSync() {
   return clerk?.user?.id ?? null;
 }
 
-/**
- * Async — fetches a JWT issued by Clerk under the named template (the
- * "supabase" template if not specified) for authenticating calls to
- * Supabase Edge Functions or RLS-protected reads. Returns null if
- * Clerk hasn't loaded or no user is signed in.
- *
- * Pair with the Clerk Dashboard "Supabase" JWT template — see
- * https://clerk.com/docs/integrations/databases/supabase. Until that
- * template is configured every call returns null and Supabase rejects
- * the request as anon, which the call site should treat as
- * "not-yet-wired" rather than an error.
- *
- * @param {string} [template]
- * @returns {Promise<string | null>}
- */
-export async function getClerkToken(template = 'supabase', { skipCache = false } = {}) {
-  if (typeof window === 'undefined') return null;
-  const clerk = /** @type {any} */ (window).Clerk;
-  if (!clerk?.session) return null;
-  try {
-    return await clerk.session.getToken({ template, skipCache });
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Decode the Clerk "supabase" JWT and return its org_id claim — the value
- * Postgres will see via auth.jwt() ->> 'org_id'. Using this claim (rather
- * than getCurrentOrgIdSync) as the body's organization_id keeps the request
- * body and the JWT in lock-step by construction.
- *
- * @param {{ skipCache?: boolean }} [opts]
- * @returns {Promise<string | null>}
- */
-export async function getJwtOrgId({ skipCache = false } = {}) {
-  const token = await getClerkToken('supabase', { skipCache });
-  if (!token) return null;
-  const parts = token.split('.');
-  if (parts.length !== 3) return null;
-  try {
-    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const padded = b64 + '==='.slice((b64.length + 3) % 4);
-    const payload = JSON.parse(atob(padded));
-    return payload.org_id || null;
-  } catch {
-    return null;
-  }
-}
+// Token acquisition lives in ./clerkToken — a React-free, unit-testable
+// module. Re-exported here so every consumer keeps importing from
+// `src/lib/auth` (the module boundary) and never reaches for the internals.
+//   • getClerkToken / getJwtOrgId — the JWT fetch + org_id decode.
+//   • getLastClerkTokenError      — the classified reason the last fetch
+//                                   failed (for Storage Health diagnostics).
+//   • describeAuthFailure         — an actionable operator sentence that
+//                                   replaces the old misleading "Sign in first".
+export {
+  getClerkToken,
+  getJwtOrgId,
+  getLastClerkTokenError,
+  describeAuthFailure,
+} from './clerkToken';
 
 /**
  * Throws when the current user's role is below the required level.

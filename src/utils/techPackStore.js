@@ -2,7 +2,7 @@
 // Used by the TechPack list and builder views
 
 import { IS_SUPABASE_ENABLED, getAuthedSupabase, refreshAuthedSupabase } from '../lib/supabase';
-import { getCurrentUserIdSync, getCurrentOrgIdSync, getJwtOrgId } from '../lib/auth';
+import { getCurrentUserIdSync, getCurrentOrgIdSync, getJwtOrgId, describeAuthFailure } from '../lib/auth';
 import { persistableImages, deleteAssets, copyAsset, scheduleOrphanDeletion, cancelOrphanDeletion } from './plmAssets';
 import { enqueue } from './syncQueue';
 import { getCollection, setCollection } from './localDb';
@@ -285,7 +285,7 @@ export async function saveTechPack(id, updates) {
     jwtOrgId = await getJwtOrgId({ skipCache: true });
   }
   if (!jwtOrgId) {
-    const jwtErr = Object.assign(new Error('JWT is missing the org_id claim — open Storage Health to diagnose'), { code: 'JWT_NO_ORG_ID' });
+    const jwtErr = Object.assign(new Error(describeAuthFailure()), { code: 'JWT_NO_ORG_ID' });
     console.error('saveTechPack:', jwtErr);
     // Park it in the durable outbox — when the JWT/org loads (or wifi returns)
     // the queue flushes it through the LWW-guarded writer. Edit is already
