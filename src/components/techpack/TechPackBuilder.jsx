@@ -586,26 +586,45 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     : 0;
   const fobDelta = maxFOB > 0 ? totalUnitCost - maxFOB : null;
 
-  // Mirror computed maxFOB into data so the SVG preview can render it
-  // without re-pulling AppContext.
+  // Mirror computed maxFOB into data so the SVG preview can render it without
+  // re-pulling AppContext. Debounced + skip-if-matching like totalUnitCost so we
+  // persist the settled value (not partials while cashflow assumptions resolve)
+  // and don't bump updated_at just from opening a style.
   useEffect(() => {
+    const next = maxFOB > 0 ? Number(maxFOB.toFixed(2)) : 0;
+    if (next <= 0) return undefined;
     const persisted = parseFloat(data.maxFOB);
-    const next = maxFOB > 0 ? Number(maxFOB.toFixed(2)) : '';
-    if (next !== persisted && !(isNaN(persisted) && next === '')) {
-      setData(p => ({ ...p, maxFOB: next }));
-    }
+    if (Number.isFinite(persisted) && Math.abs(next - persisted) < 0.005) return undefined;
+    const t = setTimeout(() => {
+      setData(p => {
+        const cur = parseFloat(p.maxFOB);
+        if (Number.isFinite(cur) && Math.abs(next - cur) < 0.005) return p;
+        return { ...p, maxFOB: next };
+      });
+    }, 1500);
+    return () => clearTimeout(t);
   }, [maxFOB, data.maxFOB]);
 
-  // Mirror the fully-computed totalUnitCost back into data so that
-  // techPackStore.computeTotalUnitCost (called at save time) can read
-  // the accurate figure — it lacks access to async fabric library specs,
-  // so the list view / grid cards would otherwise always show $0.00.
+  // Mirror the fully-computed totalUnitCost into data.totalUnitCost so the grid
+  // cards (which can't resolve async fabric/trim/treatment library specs) read a
+  // stable, accurate figure. CRITICAL: debounce so we persist the SETTLED value,
+  // not the partial values that appear while those libraries resolve on open —
+  // persisting intermediates was why card prices changed on every reload and
+  // didn't match the builder. Skip when the stored value already matches so
+  // merely opening a style doesn't bump updated_at / churn sync.
   useEffect(() => {
-    const persisted = parseFloat(data.totalUnitCost);
     const next = totalUnitCost > 0 ? Number(totalUnitCost.toFixed(2)) : 0;
-    if (next !== persisted && !(next === 0 && isNaN(persisted))) {
-      setData(p => ({ ...p, totalUnitCost: next }));
-    }
+    if (next <= 0) return undefined;
+    const persisted = parseFloat(data.totalUnitCost);
+    if (Number.isFinite(persisted) && Math.abs(next - persisted) < 0.005) return undefined;
+    const t = setTimeout(() => {
+      setData(p => {
+        const cur = parseFloat(p.totalUnitCost);
+        if (Number.isFinite(cur) && Math.abs(next - cur) < 0.005) return p;
+        return { ...p, totalUnitCost: next };
+      });
+    }, 1500);
+    return () => clearTimeout(t);
   }, [totalUnitCost, data.totalUnitCost]);
   const fobDeltaColor = fobDelta === null ? FR.stone
     : fobDelta <= 0 ? '#3B6D11'
