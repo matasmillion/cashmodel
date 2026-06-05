@@ -18,23 +18,50 @@ import SyncStatusBadge from './components/SyncStatusBadge';
 // Code-split: every other tab module + secondary route surface loads on demand.
 // This is the biggest cold-start win — PLM/Creative/Inventory each pull in large
 // subtrees (recharts, jspdf, html2canvas) that no longer ship in the main bundle.
-const CashflowTable = lazy(() => import('./components/CashflowTable'));
-const UnitEconomics = lazy(() => import('./components/UnitEconomics'));
-const OpexManager = lazy(() => import('./components/OpexManager'));
-const ScenarioManager = lazy(() => import('./components/ScenarioManager'));
-const IntegrationsPanel = lazy(() => import('./components/IntegrationsPanel'));
-const RevenueForecast = lazy(() => import('./components/RevenueForecast'));
-const AdUnitModel = lazy(() => import('./components/AdUnitModel'));
-const RateCardManager = lazy(() => import('./components/RateCardManager'));
-const PLMView = lazy(() => import('./components/techpack/PLMView'));
-const CreativeEngineView = lazy(() => import('./components/creative/CreativeEngineView'));
-const InventoryView = lazy(() => import('./components/inventory/InventoryView'));
-const OrgSettings = lazy(() => import('./components/settings/OrgSettings'));
-const AccountSecurityPage = lazy(() => import('./components/auth/AccountSecurityPage'));
-const AccountActivityPage = lazy(() => import('./components/auth/AccountActivityPage'));
-const UserProfilePage = lazy(() => import('./components/auth/UserProfilePage'));
-const LegalRoutes = lazy(() => import('./components/legal/LegalRoutes'));
-const VendorPortalRoutes = lazy(() => import('./components/vendor/VendorPortalRoutes'));
+//
+// lazyWithReload survives deploys: chunk filenames carry a content hash, so each
+// deploy renames them. An already-open older page that then opens a tab would
+// request a chunk that no longer exists → "Failed to fetch dynamically imported
+// module". We retry once, then force a single reload to pick up the new build's
+// index.html + chunk names. A sessionStorage timestamp prevents reload loops.
+function lazyWithReload(factory) {
+  return lazy(() =>
+    factory().catch(async (err) => {
+      try {
+        return await factory(); // retry once — covers a transient network blip
+      } catch (err2) {
+        const msg = `${err?.message || ''} ${err2?.message || ''}`;
+        const isChunkError = /dynamically imported module|module script failed|failed to fetch|error loading dynamically/i.test(msg);
+        const KEY = 'fr_chunk_reloaded_at';
+        const last = Number(sessionStorage.getItem(KEY) || 0);
+        if (isChunkError && Date.now() - last > 15000) {
+          try { sessionStorage.setItem(KEY, String(Date.now())); } catch { /* ignore */ }
+          window.location.reload();
+          return new Promise(() => {}); // hang until the reload happens
+        }
+        throw err2;
+      }
+    })
+  );
+}
+
+const CashflowTable = lazyWithReload(() => import('./components/CashflowTable'));
+const UnitEconomics = lazyWithReload(() => import('./components/UnitEconomics'));
+const OpexManager = lazyWithReload(() => import('./components/OpexManager'));
+const ScenarioManager = lazyWithReload(() => import('./components/ScenarioManager'));
+const IntegrationsPanel = lazyWithReload(() => import('./components/IntegrationsPanel'));
+const RevenueForecast = lazyWithReload(() => import('./components/RevenueForecast'));
+const AdUnitModel = lazyWithReload(() => import('./components/AdUnitModel'));
+const RateCardManager = lazyWithReload(() => import('./components/RateCardManager'));
+const PLMView = lazyWithReload(() => import('./components/techpack/PLMView'));
+const CreativeEngineView = lazyWithReload(() => import('./components/creative/CreativeEngineView'));
+const InventoryView = lazyWithReload(() => import('./components/inventory/InventoryView'));
+const OrgSettings = lazyWithReload(() => import('./components/settings/OrgSettings'));
+const AccountSecurityPage = lazyWithReload(() => import('./components/auth/AccountSecurityPage'));
+const AccountActivityPage = lazyWithReload(() => import('./components/auth/AccountActivityPage'));
+const UserProfilePage = lazyWithReload(() => import('./components/auth/UserProfilePage'));
+const LegalRoutes = lazyWithReload(() => import('./components/legal/LegalRoutes'));
+const VendorPortalRoutes = lazyWithReload(() => import('./components/vendor/VendorPortalRoutes'));
 
 // Brand-styled fallback shown while a lazy chunk loads.
 function ViewFallback() {

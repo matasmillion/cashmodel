@@ -19,6 +19,22 @@ export default class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error('[ErrorBoundary]', error, info);
+    // A failed dynamic import almost always means a newer version deployed and
+    // the old chunk filenames are gone (content-hashed). Auto-reload once to
+    // pick up the new build instead of showing a scary crash screen. Guarded so
+    // it can't loop if a reload doesn't resolve it.
+    const msg = String(error?.message || '');
+    if (/dynamically imported module|module script failed|failed to fetch|error loading dynamically/i.test(msg)) {
+      try {
+        const KEY = 'fr_chunk_reloaded_at';
+        const last = Number(sessionStorage.getItem(KEY) || 0);
+        if (Date.now() - last > 15000) {
+          sessionStorage.setItem(KEY, String(Date.now()));
+          window.location.reload();
+          return;
+        }
+      } catch { /* sessionStorage unavailable — fall through to the error UI */ }
+    }
     this.setState({ info });
   }
 
