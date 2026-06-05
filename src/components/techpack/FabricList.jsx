@@ -10,6 +10,7 @@
 // eslint-disable-next-line no-unused-vars
 import * as _atomTypes from '../../types/atoms';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePlmStoreRefresh } from '../../hooks/usePlmStoreRefresh';
 import { Plus, Search, MoreVertical, Copy, Archive, RotateCcw, Layers, LayoutGrid, Columns3 } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
@@ -279,9 +280,9 @@ export default function FabricList() {
   };
 
   useEffect(() => { refresh(); }, []);
-  // Re-fetch when a background cloud sync lands new data locally.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { window.addEventListener('plm-store-updated', refresh); return () => window.removeEventListener('plm-store-updated', refresh); }, []);
+  // Debounced background refresh — coalesces bursts of plm-store-updated so the
+  // grid doesn't re-fetch/re-render on every sync tick (see usePlmStoreRefresh).
+  usePlmStoreRefresh(refresh);
 
   useEffect(() => {
     let cancelled = false;
