@@ -12,8 +12,8 @@ export default defineConfig({
     // (src/utils/localDb.js) holds the data; the service worker precaches the
     // build so the app launches from the dock/taskbar and runs without network.
     // autoUpdate + Vite's hashed filenames mean each deploy refreshes the cache
-    // cleanly (no stale-asset lock-in). Supabase/Clerk API calls are never
-    // cached — there's no runtimeCaching, so they always hit the network.
+    // cleanly (no stale-asset lock-in). Supabase/Clerk DB + auth calls are never
+    // cached — only PLM image bytes (Storage) are, via the runtimeCaching rule.
     VitePWA({
       registerType: 'autoUpdate',
       // base is '/cashmodel/' so the SW scope and start_url stay under it.
@@ -43,6 +43,25 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
+        runtimeCaching: [
+          {
+            // PLM image bytes live in Supabase Storage. Cache them locally so a
+            // photo loads instantly after the first view and never re-downloads
+            // — the signed URL's ?token changes on every re-sign, so we match
+            // ignoring the query string (the object path is what's stable).
+            // This is the image half of local-first: kills the placeholder /
+            // slow-thumbnail / broken-image churn. Scoped to /storage/ only, so
+            // DB / auth / RPC calls are untouched and always hit the network.
+            urlPattern: ({ url }) => url.pathname.includes('/storage/v1/object/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'fr-plm-images',
+              matchOptions: { ignoreSearch: true },
+              expiration: { maxEntries: 600, maxAgeSeconds: 60 * 60 * 24 * 30, purgeOnQuotaError: true },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
     }),
   ],

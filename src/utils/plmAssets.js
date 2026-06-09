@@ -34,10 +34,11 @@ const BUCKET = 'plm-assets';
 // regression on vendor-facing spec sheets is a known way to lose face.
 const DEFAULT_MAX_DIM = 2400;
 const DEFAULT_QUALITY = 0.92;
-// 24h signed-URL TTL lets a tab sit idle through a working day without
-// covers expiring. 5-min refresh buffer means active pages always have
-// a fresh URL well before it actually dies.
-const SIGNED_URL_TTL_SECONDS = 24 * 60 * 60;
+// 7-day signed-URL TTL: now that the service worker caches image *bytes*
+// locally (CacheFirst), the only cloud cost of a photo is re-signing its URL,
+// so a long TTL keeps that rare. 5-min refresh buffer keeps active pages ahead
+// of expiry.
+const SIGNED_URL_TTL_SECONDS = 7 * 24 * 60 * 60;
 const SIGNED_URL_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
 // 5-second deferred GC window: when a save's orphaned paths are queued
