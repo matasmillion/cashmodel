@@ -192,19 +192,24 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // PageTreatments to do async work mid-render.
   const [treatmentsById, setTreatmentsById] = useState({});
   const [embellishmentsById, setEmbellishmentsById] = useState({});
+  // True once BOTH the treatment + embellishment libraries have loaded. The cost
+  // roll-up waits on this (via costInputsReady) so it never persists a partial
+  // total computed before these maps are populated. Monotonic — only flips true.
+  const [librariesLoaded, setLibrariesLoaded] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    listTreatments({ includeArchived: true }).then(rows => {
+    Promise.all([
+      listTreatments({ includeArchived: true }),
+      listEmbellishments({ includeArchived: true }),
+    ]).then(([trows, erows]) => {
       if (cancelled) return;
-      const map = {};
-      (rows || []).forEach(t => { if (t.id) map[t.id] = t; });
-      setTreatmentsById(map);
-    });
-    listEmbellishments({ includeArchived: true }).then(rows => {
-      if (cancelled) return;
-      const map = {};
-      (rows || []).forEach(e => { if (e.id) map[e.id] = e; });
-      setEmbellishmentsById(map);
+      const tmap = {};
+      (trows || []).forEach(t => { if (t.id) tmap[t.id] = t; });
+      setTreatmentsById(tmap);
+      const emap = {};
+      (erows || []).forEach(e => { if (e.id) emap[e.id] = e; });
+      setEmbellishmentsById(emap);
+      setLibrariesLoaded(true);
     });
     return () => { cancelled = true; };
   }, []);
@@ -213,6 +218,8 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // covers, vendor, color, length, size all come from the library, not from
   // the pack's own data. Keyed by component pack id.
   const [componentsById, setComponentsById] = useState({});
+  // Tracks the componentIdKey the resolver finished a pass for — feeds costInputsReady.
+  const [componentsResolvedKey, setComponentsResolvedKey] = useState('');
   // Mirror of componentsById for the async resolver below, so it can reuse
   // already-resolved entries (and their signed image URLs) instead of
   // re-fetching + re-signing every image on every refresh tick.
@@ -243,7 +250,11 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     let cancelled = false;
     (async () => {
       const ids = componentIdKey.split('|').filter(Boolean);
-      if (!ids.length) { setComponentsById(prev => (Object.keys(prev).length ? {} : prev)); return; }
+      if (!ids.length) {
+        setComponentsById(prev => (Object.keys(prev).length ? {} : prev));
+        setComponentsResolvedKey(k => (k === componentIdKey ? k : componentIdKey));
+        return;
+      }
       const { getComponentPack } = await import('../../utils/componentPackStore');
       const { getAssetUrl, invalidateAssetUrl } = await import('../../utils/plmAssets');
       const prev = componentsByIdRef.current || {};
@@ -299,28 +310,46 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
         componentsByIdRef.current = next;
         setComponentsById(next);
       }
+      setComponentsResolvedKey(k => (k === componentIdKey ? k : componentIdKey));
     })();
     return () => { cancelled = true; };
   }, [componentIdKey, refreshTick]);
 
   // Same idea for picked fabrics — fabric library row + resolved cover.
   const [fabricsById, setFabricsById] = useState({});
+  // Mirror so the resolver can reuse already-resolved entries (and their signed
+  // cover URLs) instead of re-fetching + re-signing on every refresh tick — this
+  // is what stops the fabric preview from re-showing "Loading fabric…" on focus.
+  const fabricsByIdRef = useRef({});
+  useEffect(() => { fabricsByIdRef.current = fabricsById; }, [fabricsById]);
+  // Tracks the fabricIdKey the resolver finished a pass for — feeds costInputsReady.
+  const [fabricsResolvedKey, setFabricsResolvedKey] = useState('');
   const fabricIdKey = (data.pickedFabrics || []).map(p => p?.fabricId || '').filter(Boolean).join('|');
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const ids = fabricIdKey.split('|').filter(Boolean);
-      if (!ids.length) { setFabricsById({}); return; }
+      if (!ids.length) {
+        setFabricsById(prev => (Object.keys(prev).length ? {} : prev));
+        setFabricsResolvedKey(k => (k === fabricIdKey ? k : fabricIdKey));
+        return;
+      }
       const { getFabric } = await import('../../utils/fabricStore');
       const { getAssetUrl, invalidateAssetUrl } = await import('../../utils/plmAssets');
       const { getVendor } = await import('../../utils/vendorLibrary');
+      const prev = fabricsByIdRef.current || {};
       const next = {};
+      let changed = false;
       for (const id of ids) {
-        // Always re-fetch — picks up library edits on every render.
-        const row = await getFabric(id);
+        const row = await getFabric(id);   // local-first → instant
         if (cancelled) return;
-        if (!row) continue;
+        if (!row) { if (prev[id]) changed = true; continue; }
         const v = row.updated_at;
+        // Reuse the already-resolved entry (incl. its signed cover URL) when this
+        // fabric hasn't changed since we last resolved it — no re-sign, no reload.
+        const existing = prev[id];
+        if (existing && existing._resolvedAt === v) { next[id] = existing; continue; }
+        changed = true;
         // Match the Fabric library's priority (front_image_url first) so the
         // BOM card and live preview render the same swatch the library card shows.
         let cover = row.front_image_url || row.cover_image || null;
@@ -329,11 +358,8 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           cover = await getAssetUrl(cover).catch(() => null) || row.front_image_url || row.cover_image;
         }
         const tagged = cover ? `${cover}${cover.includes('?') ? '&' : '?'}v=${encodeURIComponent(v || '')}` : null;
-        // Vendor contact lookup so the SVG card can show email / phone /
-        // primary contact alongside the mill name.
+        // Vendor contact lookup so the SVG card can show email / phone / contact.
         const vendor = row.mill_id ? getVendor(row.mill_id) : null;
-        // Overwrite both fields with the resolved tagged URL so the live
-        // preview reads the same image regardless of which it checks first.
         const finalUrl = tagged || cover || row.cover_image;
         next[id] = {
           ...row,
@@ -342,9 +368,17 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           _vendorEmail:     vendor?.email || '',
           _vendorPhone:     vendor?.phone || '',
           _vendorContact:   vendor?.primary_contact || '',
+          _resolvedAt:      v,
         };
       }
-      if (!cancelled) setFabricsById(next);
+      if (cancelled) return;
+      // Only commit when something actually changed — an unchanged refresh tick
+      // must not setState (it would re-trigger the store-updated loop).
+      if (changed || Object.keys(next).length !== Object.keys(prev).length) {
+        fabricsByIdRef.current = next;
+        setFabricsById(next);
+      }
+      setFabricsResolvedKey(k => (k === fabricIdKey ? k : fabricIdKey));
     })();
     return () => { cancelled = true; };
   }, [fabricIdKey, refreshTick]);
@@ -553,6 +587,17 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // figure (climbing as you add items is expected there).
   const savedUnitCost = parseFloat(data.totalUnitCost);
   const displayUnitCost = (Number.isFinite(savedUnitCost) && savedUnitCost > 0) ? savedUnitCost : totalUnitCost;
+  // The async library maps (fabrics, trims/packaging, treatments, embellishments)
+  // fill in over a few ticks; until they're all resolved, `totalUnitCost` is a
+  // PARTIAL sum that climbs. Gate the persist below on this so we only ever write
+  // the fully-resolved figure into data.totalUnitCost (the field both the builder
+  // header and the grid card read) — no more climbing / card-vs-builder mismatch.
+  // Key-equality (not map-has-every-id) avoids a deadlock when a picked id is
+  // genuinely missing; empty packs are ready immediately ('' === '').
+  const costInputsReady =
+    librariesLoaded &&
+    fabricsResolvedKey === fabricIdKey &&
+    componentsResolvedKey === componentIdKey;
 
   // Per-phase cost subtotals shown as pills in the sidebar phase headers.
   const phaseCosts = {
@@ -617,6 +662,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // didn't match the builder. Skip when the stored value already matches so
   // merely opening a style doesn't bump updated_at / churn sync.
   useEffect(() => {
+    if (!costInputsReady) return undefined; // never persist a partial/climbing value
     const next = totalUnitCost > 0 ? Number(totalUnitCost.toFixed(2)) : 0;
     if (next <= 0) return undefined;
     const persisted = parseFloat(data.totalUnitCost);
@@ -629,7 +675,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       });
     }, 1500);
     return () => clearTimeout(t);
-  }, [totalUnitCost, data.totalUnitCost]);
+  }, [costInputsReady, totalUnitCost, data.totalUnitCost]);
   const fobDeltaColor = fobDelta === null ? FR.stone
     : fobDelta <= 0 ? '#3B6D11'
     : fobDelta / maxFOB <= 0.10 ? '#854F0B'
