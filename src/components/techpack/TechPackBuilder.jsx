@@ -1,7 +1,8 @@
 // Main Tech Pack builder — 14-step wizard + PLM features (revisions, cost, samples, variants)
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRecordLock } from '../../hooks/useRecordLock';
+import RecordLockBanner from '../RecordLockBanner';
 import { ArrowLeft, History, Plus, CheckCircle, XCircle, Clock, Camera } from 'lucide-react';
-import VersionHistoryPanel from './VersionHistoryPanel';
 import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STEPS, IMG_STEPS, computeCompletion, isStepLocked, computeBOMCost, computeColorwayCost, SAMPLE_TYPES, SAMPLE_VERDICTS } from './techPackConstants';
 import SendToVendorButton from './SendToVendorButton';
 import { useApp } from '../../context/AppContext';
@@ -193,24 +194,19 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // PageTreatments to do async work mid-render.
   const [treatmentsById, setTreatmentsById] = useState({});
   const [embellishmentsById, setEmbellishmentsById] = useState({});
-  // True once BOTH the treatment + embellishment libraries have loaded. The cost
-  // roll-up waits on this (via costInputsReady) so it never persists a partial
-  // total computed before these maps are populated. Monotonic — only flips true.
-  const [librariesLoaded, setLibrariesLoaded] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      listTreatments({ includeArchived: true }),
-      listEmbellishments({ includeArchived: true }),
-    ]).then(([trows, erows]) => {
+    listTreatments({ includeArchived: true }).then(rows => {
       if (cancelled) return;
-      const tmap = {};
-      (trows || []).forEach(t => { if (t.id) tmap[t.id] = t; });
-      setTreatmentsById(tmap);
-      const emap = {};
-      (erows || []).forEach(e => { if (e.id) emap[e.id] = e; });
-      setEmbellishmentsById(emap);
-      setLibrariesLoaded(true);
+      const map = {};
+      (rows || []).forEach(t => { if (t.id) map[t.id] = t; });
+      setTreatmentsById(map);
+    });
+    listEmbellishments({ includeArchived: true }).then(rows => {
+      if (cancelled) return;
+      const map = {};
+      (rows || []).forEach(e => { if (e.id) map[e.id] = e; });
+      setEmbellishmentsById(map);
     });
     return () => { cancelled = true; };
   }, []);
@@ -219,8 +215,6 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // covers, vendor, color, length, size all come from the library, not from
   // the pack's own data. Keyed by component pack id.
   const [componentsById, setComponentsById] = useState({});
-  // Tracks the componentIdKey the resolver finished a pass for — feeds costInputsReady.
-  const [componentsResolvedKey, setComponentsResolvedKey] = useState('');
   // Mirror of componentsById for the async resolver below, so it can reuse
   // already-resolved entries (and their signed image URLs) instead of
   // re-fetching + re-signing every image on every refresh tick.
@@ -251,11 +245,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     let cancelled = false;
     (async () => {
       const ids = componentIdKey.split('|').filter(Boolean);
-      if (!ids.length) {
-        setComponentsById(prev => (Object.keys(prev).length ? {} : prev));
-        setComponentsResolvedKey(k => (k === componentIdKey ? k : componentIdKey));
-        return;
-      }
+      if (!ids.length) { setComponentsById(prev => (Object.keys(prev).length ? {} : prev)); return; }
       const { getComponentPack } = await import('../../utils/componentPackStore');
       const { getAssetUrl, invalidateAssetUrl } = await import('../../utils/plmAssets');
       const prev = componentsByIdRef.current || {};
@@ -311,46 +301,28 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
         componentsByIdRef.current = next;
         setComponentsById(next);
       }
-      setComponentsResolvedKey(k => (k === componentIdKey ? k : componentIdKey));
     })();
     return () => { cancelled = true; };
   }, [componentIdKey, refreshTick]);
 
   // Same idea for picked fabrics — fabric library row + resolved cover.
   const [fabricsById, setFabricsById] = useState({});
-  // Mirror so the resolver can reuse already-resolved entries (and their signed
-  // cover URLs) instead of re-fetching + re-signing on every refresh tick — this
-  // is what stops the fabric preview from re-showing "Loading fabric…" on focus.
-  const fabricsByIdRef = useRef({});
-  useEffect(() => { fabricsByIdRef.current = fabricsById; }, [fabricsById]);
-  // Tracks the fabricIdKey the resolver finished a pass for — feeds costInputsReady.
-  const [fabricsResolvedKey, setFabricsResolvedKey] = useState('');
   const fabricIdKey = (data.pickedFabrics || []).map(p => p?.fabricId || '').filter(Boolean).join('|');
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const ids = fabricIdKey.split('|').filter(Boolean);
-      if (!ids.length) {
-        setFabricsById(prev => (Object.keys(prev).length ? {} : prev));
-        setFabricsResolvedKey(k => (k === fabricIdKey ? k : fabricIdKey));
-        return;
-      }
+      if (!ids.length) { setFabricsById({}); return; }
       const { getFabric } = await import('../../utils/fabricStore');
       const { getAssetUrl, invalidateAssetUrl } = await import('../../utils/plmAssets');
       const { getVendor } = await import('../../utils/vendorLibrary');
-      const prev = fabricsByIdRef.current || {};
       const next = {};
-      let changed = false;
       for (const id of ids) {
-        const row = await getFabric(id);   // local-first → instant
+        // Always re-fetch — picks up library edits on every render.
+        const row = await getFabric(id);
         if (cancelled) return;
-        if (!row) { if (prev[id]) changed = true; continue; }
+        if (!row) continue;
         const v = row.updated_at;
-        // Reuse the already-resolved entry (incl. its signed cover URL) when this
-        // fabric hasn't changed since we last resolved it — no re-sign, no reload.
-        const existing = prev[id];
-        if (existing && existing._resolvedAt === v) { next[id] = existing; continue; }
-        changed = true;
         // Match the Fabric library's priority (front_image_url first) so the
         // BOM card and live preview render the same swatch the library card shows.
         let cover = row.front_image_url || row.cover_image || null;
@@ -359,8 +331,11 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           cover = await getAssetUrl(cover).catch(() => null) || row.front_image_url || row.cover_image;
         }
         const tagged = cover ? `${cover}${cover.includes('?') ? '&' : '?'}v=${encodeURIComponent(v || '')}` : null;
-        // Vendor contact lookup so the SVG card can show email / phone / contact.
+        // Vendor contact lookup so the SVG card can show email / phone /
+        // primary contact alongside the mill name.
         const vendor = row.mill_id ? getVendor(row.mill_id) : null;
+        // Overwrite both fields with the resolved tagged URL so the live
+        // preview reads the same image regardless of which it checks first.
         const finalUrl = tagged || cover || row.cover_image;
         next[id] = {
           ...row,
@@ -369,28 +344,20 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           _vendorEmail:     vendor?.email || '',
           _vendorPhone:     vendor?.phone || '',
           _vendorContact:   vendor?.primary_contact || '',
-          _resolvedAt:      v,
         };
       }
-      if (cancelled) return;
-      // Only commit when something actually changed — an unchanged refresh tick
-      // must not setState (it would re-trigger the store-updated loop).
-      if (changed || Object.keys(next).length !== Object.keys(prev).length) {
-        fabricsByIdRef.current = next;
-        setFabricsById(next);
-      }
-      setFabricsResolvedKey(k => (k === fabricIdKey ? k : fabricIdKey));
+      if (!cancelled) setFabricsById(next);
     })();
     return () => { cancelled = true; };
   }, [fabricIdKey, refreshTick]);
 
   const [saving, setSaving] = useState(false);
-  const [showVersions, setShowVersions] = useState(false);
 
-  // Single-writer locking removed (solo operator, two devices) — the editor is
-  // always editable. `readOnly` is kept as a constant so the existing guards
-  // (auto-save skip, fieldset) stay valid without restructuring the workflow.
-  const readOnly = false;
+  // Single-writer check-out for this style. While another teammate holds the
+  // lock this view is read-only — navigation + live preview stay usable, but
+  // the step editor and auto-save are inert until the lock frees.
+  const lock = useRecordLock('style', pack?.id);
+  const readOnly = lock.readOnly;
   const [savedRecently, setSavedRecently] = useState(false);
   const savedTimerRef = useRef(null);
   const [saveError, setSaveError] = useState(null);
@@ -589,17 +556,6 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // figure (climbing as you add items is expected there).
   const savedUnitCost = parseFloat(data.totalUnitCost);
   const displayUnitCost = (Number.isFinite(savedUnitCost) && savedUnitCost > 0) ? savedUnitCost : totalUnitCost;
-  // The async library maps (fabrics, trims/packaging, treatments, embellishments)
-  // fill in over a few ticks; until they're all resolved, `totalUnitCost` is a
-  // PARTIAL sum that climbs. Gate the persist below on this so we only ever write
-  // the fully-resolved figure into data.totalUnitCost (the field both the builder
-  // header and the grid card read) — no more climbing / card-vs-builder mismatch.
-  // Key-equality (not map-has-every-id) avoids a deadlock when a picked id is
-  // genuinely missing; empty packs are ready immediately ('' === '').
-  const costInputsReady =
-    librariesLoaded &&
-    fabricsResolvedKey === fabricIdKey &&
-    componentsResolvedKey === componentIdKey;
 
   // Per-phase cost subtotals shown as pills in the sidebar phase headers.
   const phaseCosts = {
@@ -664,7 +620,6 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // didn't match the builder. Skip when the stored value already matches so
   // merely opening a style doesn't bump updated_at / churn sync.
   useEffect(() => {
-    if (!costInputsReady) return undefined; // never persist a partial/climbing value
     const next = totalUnitCost > 0 ? Number(totalUnitCost.toFixed(2)) : 0;
     if (next <= 0) return undefined;
     const persisted = parseFloat(data.totalUnitCost);
@@ -677,7 +632,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       });
     }, 1500);
     return () => clearTimeout(t);
-  }, [costInputsReady, totalUnitCost, data.totalUnitCost]);
+  }, [totalUnitCost, data.totalUnitCost]);
   const fobDeltaColor = fobDelta === null ? FR.stone
     : fobDelta <= 0 ? '#3B6D11'
     : fobDelta / maxFOB <= 0.10 ? '#854F0B'
@@ -988,23 +943,12 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
 
   return (
     <div style={{ background: FR.salt, fontFamily: "'Helvetica Neue','Inter',sans-serif", borderRadius: 8, overflow: 'hidden', border: `1px solid ${FR.sand}` }}>
-      <VersionHistoryPanel
-        table="tech_packs"
-        id={packIdRef.current}
-        open={showVersions}
-        onClose={() => setShowVersions(false)}
-        onRestore={(v) => { if (v?.data) setData(v.data); if (v && 'images' in v) setImages(v.images || []); }}
-      />
       {/* Header */}
       <div style={{ background: FR.slate, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button onClick={onBack}
             style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: FR.salt, padding: '5px 10px', borderRadius: 3, fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
             <ArrowLeft size={12} /> Back
-          </button>
-          <button onClick={() => setShowVersions(true)} title="Browse and restore past saved versions of this style"
-            style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: FR.salt, padding: '5px 10px', borderRadius: 3, fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <History size={12} /> Restore points
           </button>
           <div>
             <div style={{
@@ -1142,6 +1086,9 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
 
         {/* Main content */}
         <div style={{ flex: 1, minWidth: 0, padding: '20px 28px', maxHeight: '75vh', overflowY: 'auto' }}>
+          {readOnly && <RecordLockBanner holder={lock.holder} isSelf={lock.isSelf} noun="style" />}
+          {/* When read-only, the step editor + skip/revision actions are inert.
+              Sidebar nav, Previous/Next, and the live preview stay usable. */}
           <fieldset disabled={readOnly} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
           {/* Skip banner */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, padding: '9px 14px', background: isCurrentSkipped ? 'rgba(192,57,43,0.07)' : FR.salt, border: `1px solid ${isCurrentSkipped ? '#C0392B' : FR.sand}`, borderRadius: 6 }}>

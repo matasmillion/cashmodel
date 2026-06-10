@@ -18,6 +18,8 @@
 //     and the user reviews before applying.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRecordLock } from '../../hooks/useRecordLock';
+import RecordLockBanner from '../RecordLockBanner';
 import { ArrowLeft, Save, Trash2, Sparkles, FileDown, Plus, Loader2, X, Scan } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { saveFabric, archiveFabric, restoreFabric } from '../../utils/fabricStore';
@@ -241,10 +243,10 @@ export default function FabricBuilder({ fabric, onBack }) {
   const [fx, setFx] = useState(null);
   const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(fabric));
 
-  // Single-writer locking removed (solo operator, two devices) — the editor is
-  // always editable. `readOnly` is kept as a constant so the guards below stay
-  // valid without restructuring the form.
-  const readOnly = false;
+  // Single-writer check-out. If a teammate is already editing this fabric, this
+  // view is read-only until they release it (or their lock expires).
+  const lock = useRecordLock('fabric', fabric?.id);
+  const readOnly = lock.readOnly;
 
   useEffect(() => {
     setDraft(fabric);
@@ -567,6 +569,9 @@ export default function FabricBuilder({ fabric, onBack }) {
         <ArrowLeft size={13} /> Fabrics
       </button>
 
+      {readOnly && <RecordLockBanner holder={lock.holder} isSelf={lock.isSelf} noun="fabric" />}
+      {/* When read-only, disabling the fieldset makes every input/button inside
+          inert without restructuring the form. The Back button sits outside it. */}
       <fieldset disabled={readOnly} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
