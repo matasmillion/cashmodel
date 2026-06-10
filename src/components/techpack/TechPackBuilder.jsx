@@ -1,8 +1,7 @@
 // Main Tech Pack builder — 14-step wizard + PLM features (revisions, cost, samples, variants)
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRecordLock } from '../../hooks/useRecordLock';
-import RecordLockBanner from '../RecordLockBanner';
-import { ArrowLeft, History, Plus, CheckCircle, XCircle, Clock, Camera } from 'lucide-react';
+import { ArrowLeft, History, Plus, CheckCircle, XCircle, Clock, Camera, Save } from 'lucide-react';
+import VersionHistoryPanel from './VersionHistoryPanel';
 import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STEPS, IMG_STEPS, computeCompletion, isStepLocked, computeBOMCost, computeColorwayCost, SAMPLE_TYPES, SAMPLE_VERDICTS } from './techPackConstants';
 import SendToVendorButton from './SendToVendorButton';
 import { useApp } from '../../context/AppContext';
@@ -194,19 +193,24 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // PageTreatments to do async work mid-render.
   const [treatmentsById, setTreatmentsById] = useState({});
   const [embellishmentsById, setEmbellishmentsById] = useState({});
+  // True once BOTH the treatment + embellishment libraries have loaded. The cost
+  // roll-up waits on this (via costInputsReady) so it never persists a partial
+  // total computed before these maps are populated. Monotonic — only flips true.
+  const [librariesLoaded, setLibrariesLoaded] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    listTreatments({ includeArchived: true }).then(rows => {
+    Promise.all([
+      listTreatments({ includeArchived: true }),
+      listEmbellishments({ includeArchived: true }),
+    ]).then(([trows, erows]) => {
       if (cancelled) return;
-      const map = {};
-      (rows || []).forEach(t => { if (t.id) map[t.id] = t; });
-      setTreatmentsById(map);
-    });
-    listEmbellishments({ includeArchived: true }).then(rows => {
-      if (cancelled) return;
-      const map = {};
-      (rows || []).forEach(e => { if (e.id) map[e.id] = e; });
-      setEmbellishmentsById(map);
+      const tmap = {};
+      (trows || []).forEach(t => { if (t.id) tmap[t.id] = t; });
+      setTreatmentsById(tmap);
+      const emap = {};
+      (erows || []).forEach(e => { if (e.id) emap[e.id] = e; });
+      setEmbellishmentsById(emap);
+      setLibrariesLoaded(true);
     });
     return () => { cancelled = true; };
   }, []);
@@ -215,6 +219,8 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // covers, vendor, color, length, size all come from the library, not from
   // the pack's own data. Keyed by component pack id.
   const [componentsById, setComponentsById] = useState({});
+  // Tracks the componentIdKey the resolver finished a pass for — feeds costInputsReady.
+  const [componentsResolvedKey, setComponentsResolvedKey] = useState('');
   // Mirror of componentsById for the async resolver below, so it can reuse
   // already-resolved entries (and their signed image URLs) instead of
   // re-fetching + re-signing every image on every refresh tick.
@@ -245,7 +251,11 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     let cancelled = false;
     (async () => {
       const ids = componentIdKey.split('|').filter(Boolean);
-      if (!ids.length) { setComponentsById(prev => (Object.keys(prev).length ? {} : prev)); return; }
+      if (!ids.length) {
+        setComponentsById(prev => (Object.keys(prev).length ? {} : prev));
+        setComponentsResolvedKey(k => (k === componentIdKey ? k : componentIdKey));
+        return;
+      }
       const { getComponentPack } = await import('../../utils/componentPackStore');
       const { getAssetUrl, invalidateAssetUrl } = await import('../../utils/plmAssets');
       const prev = componentsByIdRef.current || {};
@@ -301,28 +311,46 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
         componentsByIdRef.current = next;
         setComponentsById(next);
       }
+      setComponentsResolvedKey(k => (k === componentIdKey ? k : componentIdKey));
     })();
     return () => { cancelled = true; };
   }, [componentIdKey, refreshTick]);
 
   // Same idea for picked fabrics — fabric library row + resolved cover.
   const [fabricsById, setFabricsById] = useState({});
+  // Mirror so the resolver can reuse already-resolved entries (and their signed
+  // cover URLs) instead of re-fetching + re-signing on every refresh tick — this
+  // is what stops the fabric preview from re-showing "Loading fabric…" on focus.
+  const fabricsByIdRef = useRef({});
+  useEffect(() => { fabricsByIdRef.current = fabricsById; }, [fabricsById]);
+  // Tracks the fabricIdKey the resolver finished a pass for — feeds costInputsReady.
+  const [fabricsResolvedKey, setFabricsResolvedKey] = useState('');
   const fabricIdKey = (data.pickedFabrics || []).map(p => p?.fabricId || '').filter(Boolean).join('|');
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const ids = fabricIdKey.split('|').filter(Boolean);
-      if (!ids.length) { setFabricsById({}); return; }
+      if (!ids.length) {
+        setFabricsById(prev => (Object.keys(prev).length ? {} : prev));
+        setFabricsResolvedKey(k => (k === fabricIdKey ? k : fabricIdKey));
+        return;
+      }
       const { getFabric } = await import('../../utils/fabricStore');
       const { getAssetUrl, invalidateAssetUrl } = await import('../../utils/plmAssets');
       const { getVendor } = await import('../../utils/vendorLibrary');
+      const prev = fabricsByIdRef.current || {};
       const next = {};
+      let changed = false;
       for (const id of ids) {
-        // Always re-fetch — picks up library edits on every render.
-        const row = await getFabric(id);
+        const row = await getFabric(id);   // local-first → instant
         if (cancelled) return;
-        if (!row) continue;
+        if (!row) { if (prev[id]) changed = true; continue; }
         const v = row.updated_at;
+        // Reuse the already-resolved entry (incl. its signed cover URL) when this
+        // fabric hasn't changed since we last resolved it — no re-sign, no reload.
+        const existing = prev[id];
+        if (existing && existing._resolvedAt === v) { next[id] = existing; continue; }
+        changed = true;
         // Match the Fabric library's priority (front_image_url first) so the
         // BOM card and live preview render the same swatch the library card shows.
         let cover = row.front_image_url || row.cover_image || null;
@@ -331,11 +359,8 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           cover = await getAssetUrl(cover).catch(() => null) || row.front_image_url || row.cover_image;
         }
         const tagged = cover ? `${cover}${cover.includes('?') ? '&' : '?'}v=${encodeURIComponent(v || '')}` : null;
-        // Vendor contact lookup so the SVG card can show email / phone /
-        // primary contact alongside the mill name.
+        // Vendor contact lookup so the SVG card can show email / phone / contact.
         const vendor = row.mill_id ? getVendor(row.mill_id) : null;
-        // Overwrite both fields with the resolved tagged URL so the live
-        // preview reads the same image regardless of which it checks first.
         const finalUrl = tagged || cover || row.cover_image;
         next[id] = {
           ...row,
@@ -344,23 +369,38 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           _vendorEmail:     vendor?.email || '',
           _vendorPhone:     vendor?.phone || '',
           _vendorContact:   vendor?.primary_contact || '',
+          _resolvedAt:      v,
         };
       }
-      if (!cancelled) setFabricsById(next);
+      if (cancelled) return;
+      // Only commit when something actually changed — an unchanged refresh tick
+      // must not setState (it would re-trigger the store-updated loop).
+      if (changed || Object.keys(next).length !== Object.keys(prev).length) {
+        fabricsByIdRef.current = next;
+        setFabricsById(next);
+      }
+      setFabricsResolvedKey(k => (k === fabricIdKey ? k : fabricIdKey));
     })();
     return () => { cancelled = true; };
   }, [fabricIdKey, refreshTick]);
 
   const [saving, setSaving] = useState(false);
+  const [showVersions, setShowVersions] = useState(false);
 
-  // Single-writer check-out for this style. While another teammate holds the
-  // lock this view is read-only — navigation + live preview stay usable, but
-  // the step editor and auto-save are inert until the lock frees.
-  const lock = useRecordLock('style', pack?.id);
-  const readOnly = lock.readOnly;
+  // Single-writer locking removed (solo operator, two devices) — the editor is
+  // always editable. `readOnly` is kept as a constant so the existing guards
+  // (auto-save skip, fieldset) stay valid without restructuring the workflow.
+  const readOnly = false;
   const [savedRecently, setSavedRecently] = useState(false);
   const savedTimerRef = useRef(null);
   const [saveError, setSaveError] = useState(null);
+  // Manual-save layer state (additive). `dirty` reflects edits not yet confirmed
+  // saved; dirtyRef mirrors it for synchronous reads in the unload / exit guards.
+  // hydratedRef skips the first edit-tracking pass so opening a style is not
+  // mis-read as "unsaved".
+  const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
+  const hydratedRef = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState(null);
   const saveTimerRef = useRef(null);
@@ -556,6 +596,17 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // figure (climbing as you add items is expected there).
   const savedUnitCost = parseFloat(data.totalUnitCost);
   const displayUnitCost = (Number.isFinite(savedUnitCost) && savedUnitCost > 0) ? savedUnitCost : totalUnitCost;
+  // The async library maps (fabrics, trims/packaging, treatments, embellishments)
+  // fill in over a few ticks; until they're all resolved, `totalUnitCost` is a
+  // PARTIAL sum that climbs. Gate the persist below on this so we only ever write
+  // the fully-resolved figure into data.totalUnitCost (the field both the builder
+  // header and the grid card read) — no more climbing / card-vs-builder mismatch.
+  // Key-equality (not map-has-every-id) avoids a deadlock when a picked id is
+  // genuinely missing; empty packs are ready immediately ('' === '').
+  const costInputsReady =
+    librariesLoaded &&
+    fabricsResolvedKey === fabricIdKey &&
+    componentsResolvedKey === componentIdKey;
 
   // Per-phase cost subtotals shown as pills in the sidebar phase headers.
   const phaseCosts = {
@@ -620,6 +671,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // didn't match the builder. Skip when the stored value already matches so
   // merely opening a style doesn't bump updated_at / churn sync.
   useEffect(() => {
+    if (!costInputsReady) return undefined; // never persist a partial/climbing value
     const next = totalUnitCost > 0 ? Number(totalUnitCost.toFixed(2)) : 0;
     if (next <= 0) return undefined;
     const persisted = parseFloat(data.totalUnitCost);
@@ -632,57 +684,125 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       });
     }, 1500);
     return () => clearTimeout(t);
-  }, [totalUnitCost, data.totalUnitCost]);
+  }, [costInputsReady, totalUnitCost, data.totalUnitCost]);
   const fobDeltaColor = fobDelta === null ? FR.stone
     : fobDelta <= 0 ? '#3B6D11'
     : fobDelta / maxFOB <= 0.10 ? '#854F0B'
     : '#A32D2D';
 
-  // Debounced auto-save. Waits for any in-flight Storage uploads before
-  // persisting so we never save a placeholder image entry without a path.
+  // ── Manual-save layer (additive; the debounced auto-save below stays the
+  // backstop). Mark dirty on real edits. Skip the first effect pass so opening
+  // a style — which hydrates data/images/library asynchronously — doesn't read
+  // as "unsaved".
+  useEffect(() => {
+    if (!hydratedRef.current) { hydratedRef.current = true; return undefined; }
+    dirtyRef.current = true;
+    setDirty(true);
+    return undefined;
+  }, [data, images, library]);
+
+  // Single persistence path shared by the debounced auto-save AND the manual
+  // Save button / ⌘S / exit guard. Waits for in-flight Storage uploads first so
+  // we never persist a placeholder image entry without a path. Returns true when
+  // the work is safely persisted (cloud-saved, or saved locally + queued to the
+  // durable outbox); false only on a genuine failure.
+  const persistNow = useCallback(async () => {
+    if (readOnly) return true; // a read-only viewer never persists edits
+    setSaving(true);
+    const uploadsSettled = await waitForUploads();
+    if (!uploadsSettled) {
+      setSaveError('Image upload still pending — try again in a moment');
+      setSaving(false);
+      return false;
+    }
+    try {
+      const result = await saveTechPack(packIdRef.current, {
+        data, images, library,
+        style_name: data.styleNumber || data.styleName || '',
+        product_category: data.productCategory || '',
+        status: data.status || 'Design',
+        completion_pct: computeCompletion(data),
+      });
+      if (result && result.ok === false) {
+        // A queued result means the LOCAL save succeeded and the cloud copy is
+        // safely parked in the durable outbox (the global Sync badge shows the
+        // pending state). That is NOT a failure — don't raise the red "Save
+        // failed" alarm for it; only surface genuine, non-queued errors.
+        setSaveError(result.queued ? null : (result.error?.message || 'Cloud save failed'));
+        if (result.queued) { dirtyRef.current = false; setDirty(false); }
+        setTimeout(() => setSaving(false), 300);
+        return !!result.queued;
+      }
+      if (result && result.idChanged) {
+        packIdRef.current = result.idChanged.to;
+        replacePLMHash({ section: 'styles', packId: packIdRef.current, step });
+      }
+      setSaveError(null);
+      dirtyRef.current = false; setDirty(false);
+      setSavedRecently(true);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => setSavedRecently(false), 2000);
+      setTimeout(() => setSaving(false), 300);
+      return true;
+    } catch (err) {
+      console.error('Save failed:', err);
+      setSaveError(err?.message || String(err));
+      setTimeout(() => setSaving(false), 300);
+      return false;
+    }
+  }, [data, images, library, waitForUploads, readOnly]);
+
+  // Save immediately, cancelling any pending debounce so we never double-save.
+  const saveNow = useCallback(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    return persistNow();
+  }, [persistNow]);
+
+  // Debounced auto-save — unchanged 600ms cadence, now routed through persistNow
+  // so the manual Save button and auto-save share one persistence path.
   useEffect(() => {
     if (readOnly) return undefined; // a read-only viewer never persists edits
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(async () => {
-      setSaving(true);
-      const uploadsSettled = await waitForUploads();
-      if (!uploadsSettled) {
-        setSaveError('Image upload still pending — try again in a moment');
-        setSaving(false);
-        return;
-      }
-      try {
-        const result = await saveTechPack(packIdRef.current, {
-          data, images, library,
-          style_name: data.styleNumber || data.styleName || '',
-          product_category: data.productCategory || '',
-          status: data.status || 'Design',
-          completion_pct: computeCompletion(data),
-        });
-        if (result && result.ok === false) {
-          // A queued result means the LOCAL save succeeded and the cloud copy is
-          // safely parked in the durable outbox (the global Sync badge shows the
-          // pending state). That is NOT a failure — don't raise the red "Save
-          // failed" alarm for it; only surface genuine, non-queued errors.
-          setSaveError(result.queued ? null : (result.error?.message || 'Cloud save failed'));
-        } else {
-          if (result && result.idChanged) {
-            packIdRef.current = result.idChanged.to;
-            replacePLMHash({ section: 'styles', packId: packIdRef.current, step });
-          }
-          setSaveError(null);
-          setSavedRecently(true);
-          if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
-          savedTimerRef.current = setTimeout(() => setSavedRecently(false), 2000);
-        }
-      } catch (err) {
-        console.error('Auto-save failed:', err);
-        setSaveError(err?.message || String(err));
-      }
-      setTimeout(() => setSaving(false), 300);
-    }, 600);
+    saveTimerRef.current = setTimeout(() => { persistNow(); }, 600);
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [data, images, library, pack.id, waitForUploads, readOnly]);
+  }, [persistNow, readOnly]);
+
+  // ⌘S / Ctrl-S → save now.
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        saveNow();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [saveNow]);
+
+  // Warn before tab close / refresh when the latest edits aren't safely persisted.
+  useEffect(() => {
+    const onBeforeUnload = (e) => {
+      if (dirtyRef.current || saveError) { e.preventDefault(); e.returnValue = ''; }
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [saveError]);
+
+  // Exit guard: flush a save before leaving the builder. Only interrupt the user
+  // with a confirm if that save genuinely failed (work kept on this device but
+  // not yet in the cloud).
+  const handleBack = useCallback(async () => {
+    if (dirtyRef.current || saving) {
+      const ok = await saveNow();
+      if (!ok) {
+        const leave = window.confirm(
+          'Your most recent changes could not be saved to the cloud yet (they are kept on this device). Leave this style anyway?'
+        );
+        if (!leave) return;
+      }
+    }
+    onBack();
+  }, [saveNow, saving, onBack]);
 
   const set = useCallback((k, v) => setData(p => ({ ...p, [k]: v })), []);
 
@@ -943,12 +1063,23 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
 
   return (
     <div style={{ background: FR.salt, fontFamily: "'Helvetica Neue','Inter',sans-serif", borderRadius: 8, overflow: 'hidden', border: `1px solid ${FR.sand}` }}>
+      <VersionHistoryPanel
+        table="tech_packs"
+        id={packIdRef.current}
+        open={showVersions}
+        onClose={() => setShowVersions(false)}
+        onRestore={(v) => { if (v?.data) setData(v.data); if (v && 'images' in v) setImages(v.images || []); }}
+      />
       {/* Header */}
       <div style={{ background: FR.slate, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={onBack}
+          <button onClick={handleBack}
             style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: FR.salt, padding: '5px 10px', borderRadius: 3, fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
             <ArrowLeft size={12} /> Back
+          </button>
+          <button onClick={() => setShowVersions(true)} title="Browse and restore past saved versions of this style"
+            style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: FR.salt, padding: '5px 10px', borderRadius: 3, fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <History size={12} /> Restore points
           </button>
           <div>
             <div style={{
@@ -978,15 +1109,31 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <SendToVendorButton vendorName={data.vendor || ''} styleId={pack.id} variant="header" />
+          <button
+            onClick={saveNow}
+            disabled={saving || (!dirty && !saveError)}
+            title="Save now (⌘S / Ctrl-S)"
+            style={{
+              background: (dirty || saveError) ? FR.salt : 'rgba(255,255,255,0.1)',
+              color: (dirty || saveError) ? FR.slate : FR.stone,
+              border: 'none', padding: '5px 12px', borderRadius: 3, fontSize: 10, fontWeight: 600,
+              letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: 4,
+              cursor: (saving || (!dirty && !saveError)) ? 'default' : 'pointer',
+              opacity: (saving || (!dirty && !saveError)) ? 0.55 : 1,
+            }}>
+            <Save size={12} /> Save
+          </button>
           {pendingUploads > 0
             ? <span style={{ fontSize: 10, color: FR.soil }}>Uploading {pendingUploads} image{pendingUploads === 1 ? '' : 's'}…</span>
             : saving
               ? <span style={{ fontSize: 10, color: FR.stone, fontStyle: 'italic' }}>Saving…</span>
               : saveError
-                ? <span title={saveError} style={{ fontSize: 10, color: '#A32D2D', maxWidth: 460, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>⚠︎ Save failed (kept locally): {saveError}</span>
-                : savedRecently
-                  ? <span style={{ fontSize: 10, color: '#a8d5a2', fontWeight: 600 }}>✓ Saved</span>
-                  : <span style={{ fontSize: 10, color: FR.stone, opacity: 0.5 }}>Auto-saving…</span>}
+                ? <span title={saveError} style={{ fontSize: 10, color: '#A32D2D', maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>⚠︎ Save failed (kept locally): {saveError}</span>
+                : dirty
+                  ? <span style={{ fontSize: 10, color: '#E0B45E', fontWeight: 600 }}>● Unsaved changes</span>
+                  : savedRecently
+                    ? <span style={{ fontSize: 10, color: '#a8d5a2', fontWeight: 600 }}>✓ Saved</span>
+                    : <span style={{ fontSize: 10, color: '#a8d5a2', fontWeight: 600 }}>✓ All changes saved</span>}
           {/* Cost roll-up — BOM + colorway (wash/dye) + vendor markup. */}
           <div style={{ textAlign: 'right' }} title={`BOM ${formatCost(bomCost)}  ·  Colorways ${formatCost(colorwayCost)}${vendorMarkupPct > 0 ? `  ·  Vendor +${vendorMarkupPct}% ${formatCost(vendorMarkupCost)}` : ''}${maxFOB > 0 ? `  ·  Max FOB ${formatCost(maxFOB)}` : ''}`}>
             <div style={{ fontSize: 9, color: FR.stone }}>Total Unit Cost</div>
@@ -1086,9 +1233,6 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
 
         {/* Main content */}
         <div style={{ flex: 1, minWidth: 0, padding: '20px 28px', maxHeight: '75vh', overflowY: 'auto' }}>
-          {readOnly && <RecordLockBanner holder={lock.holder} isSelf={lock.isSelf} noun="style" />}
-          {/* When read-only, the step editor + skip/revision actions are inert.
-              Sidebar nav, Previous/Next, and the live preview stay usable. */}
           <fieldset disabled={readOnly} style={{ border: 'none', padding: 0, margin: 0, minWidth: 0 }}>
           {/* Skip banner */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, padding: '9px 14px', background: isCurrentSkipped ? 'rgba(192,57,43,0.07)' : FR.salt, border: `1px solid ${isCurrentSkipped ? '#C0392B' : FR.sand}`, borderRadius: 6 }}>

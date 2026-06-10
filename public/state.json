@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-06-10T13:25:37.938Z",
+  "lastUpdated": "2026-06-10T13:53:51.528Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,9 +1044,14 @@
   ],
   "changelog": [
     {
-      "sha": "ea0401f",
-      "date": "2026-06-10T11:34:25+00:00",
-      "message": "revert: roll PLM back to pre-batch to restore service"
+      "sha": "e21490e",
+      "date": "2026-06-10T13:41:53+00:00",
+      "message": "feat(plm): manual Save + unsaved-changes guards in the Styles builder"
+    },
+    {
+      "sha": "ecd0295",
+      "date": "2026-06-10T11:44:27+00:00",
+      "message": "fix(plm): Styles + Trims lists can no longer hang on a slow cloud"
     },
     {
       "sha": "0189ebe",
@@ -1087,11 +1092,6 @@
       "sha": "00112fb",
       "date": "2026-06-09T11:45:30+00:00",
       "message": "perf(plm): cache image bytes locally (instant thumbnails, no re-download)"
-    },
-    {
-      "sha": "5e4747b",
-      "date": "2026-06-05T12:56:56+00:00",
-      "message": "fix: auto-recover from stale code-split chunks after a deploy"
     }
   ]
 }
