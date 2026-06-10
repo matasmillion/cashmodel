@@ -221,16 +221,21 @@ export default function ComponentPackList() {
 
   const refresh = async () => {
     setLoading(true);
-    const [rows, suppliers, people] = await Promise.all([
-      listComponentPacks(),
-      listAllSuppliers(),
-      listAllPeople(),
-    ]);
-    setPacks(rows || []);
-    setExistingSuppliers(suppliers);
-    setExistingPeople(people);
-    setExistingTrimTypes(listAllTrimTypes());
-    setLoading(false);
+    try {
+      const [rows, suppliers, people] = await Promise.all([
+        listComponentPacks(),
+        listAllSuppliers(),
+        listAllPeople(),
+      ]);
+      setPacks(rows || []);
+      setExistingSuppliers(suppliers);
+      setExistingPeople(people);
+      setExistingTrimTypes(listAllTrimTypes());
+    } catch (e) {
+      console.error('ComponentPackList refresh:', e);
+    } finally {
+      setLoading(false); // never leave the grid stuck on "Loading…"
+    }
   };
 
   useEffect(() => { refresh(); }, []);

@@ -223,14 +223,19 @@ export default function TechPackList() {
     // listComponentPacks still runs so the dual-write mirrors are warm, but
     // the supplier dropdown pulls from the unified PLM directory that merges
     // tech packs + trim packs + Supabase projections + manually-added entries.
-    const [rows, , suppliers] = await Promise.all([
-      listTechPacks(),
-      listComponentPacks(),
-      listAllSuppliers(),
-    ]);
-    setPacks(rows || []);
-    setExistingSuppliers(suppliers);
-    setLoading(false);
+    try {
+      const [rows, , suppliers] = await Promise.all([
+        listTechPacks(),
+        listComponentPacks(),
+        listAllSuppliers(),
+      ]);
+      setPacks(rows || []);
+      setExistingSuppliers(suppliers);
+    } catch (e) {
+      console.error('TechPackList refresh:', e);
+    } finally {
+      setLoading(false); // never leave the grid stuck on "Loading…"
+    }
   };
 
   useEffect(() => { refresh(); }, []);

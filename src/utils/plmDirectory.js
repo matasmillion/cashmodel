@@ -72,8 +72,12 @@ export async function listAllSuppliers() {
   // Cloud fallback: covers packs that exist in Supabase but haven't been
   // fetched in full on this device yet. Projections keep the payload small —
   // just the vendor/factory/supplier strings we need, not the whole JSONB blob.
+  // Cloud enrichment is best-effort and MUST NOT block the UI. The local-derived
+  // set above is already complete for packs on this device; the cloud fetch only
+  // adds names from cloud-only packs. Cap it with a timeout so a slow/cold Supabase
+  // project can never hang the list views that await this (Styles + Trims).
   if (IS_SUPABASE_ENABLED) {
-    try {
+    const enrich = (async () => {
       const [techRes, compRes] = await Promise.all([
         // Legacy JSONB key `data.factory` still contains the vendor name on
         // pre-rename records. Project both so neither set is missed.
@@ -82,9 +86,8 @@ export async function listAllSuppliers() {
       ]);
       (techRes.data || []).forEach(r => addNormalized(suppliers, r.vendor || r.factory));
       (compRes.data || []).forEach(r => addNormalized(suppliers, r.supplier));
-    } catch (err) {
-      console.error('listAllSuppliers supabase:', err);
-    }
+    })().catch(err => console.error('listAllSuppliers supabase:', err));
+    await Promise.race([enrich, new Promise(res => setTimeout(res, 6000))]);
   }
 
   return [...suppliers].sort((a, b) => a.localeCompare(b));
@@ -131,8 +134,10 @@ export async function listAllPeople() {
 
   readJSON(CUSTOM_PEOPLE_KEY, []).forEach(s => addNormalized(people, s));
 
+  // Best-effort cloud enrichment, timeout-capped so it can never hang the list
+  // views that await this (same rationale as listAllSuppliers).
   if (IS_SUPABASE_ENABLED) {
-    try {
+    const enrich = (async () => {
       const [techRes, compRes] = await Promise.all([
         supabase.from('tech_packs').select(
           'designedByName:data->designedBy->>name, approvedByName:data->approvedBy->>name, vendorConfirmedName:data->vendorConfirmed->>name, factoryConfirmedName:data->factoryConfirmed->>name'
@@ -150,9 +155,8 @@ export async function listAllPeople() {
         addNormalized(people, r.designedByName);
         addNormalized(people, r.approvedByName);
       });
-    } catch (err) {
-      console.error('listAllPeople supabase:', err);
-    }
+    })().catch(err => console.error('listAllPeople supabase:', err));
+    await Promise.race([enrich, new Promise(res => setTimeout(res, 6000))]);
   }
 
   return [...people].sort((a, b) => a.localeCompare(b));
