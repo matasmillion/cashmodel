@@ -1,6 +1,6 @@
 // Main Tech Pack builder — 14-step wizard + PLM features (revisions, cost, samples, variants)
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowLeft, History, Plus, CheckCircle, XCircle, Clock, Camera } from 'lucide-react';
+import { ArrowLeft, History, Plus, CheckCircle, XCircle, Clock, Camera, Save } from 'lucide-react';
 import VersionHistoryPanel from './VersionHistoryPanel';
 import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STEPS, IMG_STEPS, computeCompletion, isStepLocked, computeBOMCost, computeColorwayCost, SAMPLE_TYPES, SAMPLE_VERDICTS } from './techPackConstants';
 import SendToVendorButton from './SendToVendorButton';
@@ -394,6 +394,13 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   const [savedRecently, setSavedRecently] = useState(false);
   const savedTimerRef = useRef(null);
   const [saveError, setSaveError] = useState(null);
+  // Manual-save layer state (additive). `dirty` reflects edits not yet confirmed
+  // saved; dirtyRef mirrors it for synchronous reads in the unload / exit guards.
+  // hydratedRef skips the first edit-tracking pass so opening a style is not
+  // mis-read as "unsaved".
+  const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
+  const hydratedRef = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState(null);
   const saveTimerRef = useRef(null);
@@ -683,51 +690,119 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     : fobDelta / maxFOB <= 0.10 ? '#854F0B'
     : '#A32D2D';
 
-  // Debounced auto-save. Waits for any in-flight Storage uploads before
-  // persisting so we never save a placeholder image entry without a path.
+  // ── Manual-save layer (additive; the debounced auto-save below stays the
+  // backstop). Mark dirty on real edits. Skip the first effect pass so opening
+  // a style — which hydrates data/images/library asynchronously — doesn't read
+  // as "unsaved".
+  useEffect(() => {
+    if (!hydratedRef.current) { hydratedRef.current = true; return undefined; }
+    dirtyRef.current = true;
+    setDirty(true);
+    return undefined;
+  }, [data, images, library]);
+
+  // Single persistence path shared by the debounced auto-save AND the manual
+  // Save button / ⌘S / exit guard. Waits for in-flight Storage uploads first so
+  // we never persist a placeholder image entry without a path. Returns true when
+  // the work is safely persisted (cloud-saved, or saved locally + queued to the
+  // durable outbox); false only on a genuine failure.
+  const persistNow = useCallback(async () => {
+    if (readOnly) return true; // a read-only viewer never persists edits
+    setSaving(true);
+    const uploadsSettled = await waitForUploads();
+    if (!uploadsSettled) {
+      setSaveError('Image upload still pending — try again in a moment');
+      setSaving(false);
+      return false;
+    }
+    try {
+      const result = await saveTechPack(packIdRef.current, {
+        data, images, library,
+        style_name: data.styleNumber || data.styleName || '',
+        product_category: data.productCategory || '',
+        status: data.status || 'Design',
+        completion_pct: computeCompletion(data),
+      });
+      if (result && result.ok === false) {
+        // A queued result means the LOCAL save succeeded and the cloud copy is
+        // safely parked in the durable outbox (the global Sync badge shows the
+        // pending state). That is NOT a failure — don't raise the red "Save
+        // failed" alarm for it; only surface genuine, non-queued errors.
+        setSaveError(result.queued ? null : (result.error?.message || 'Cloud save failed'));
+        if (result.queued) { dirtyRef.current = false; setDirty(false); }
+        setTimeout(() => setSaving(false), 300);
+        return !!result.queued;
+      }
+      if (result && result.idChanged) {
+        packIdRef.current = result.idChanged.to;
+        replacePLMHash({ section: 'styles', packId: packIdRef.current, step });
+      }
+      setSaveError(null);
+      dirtyRef.current = false; setDirty(false);
+      setSavedRecently(true);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => setSavedRecently(false), 2000);
+      setTimeout(() => setSaving(false), 300);
+      return true;
+    } catch (err) {
+      console.error('Save failed:', err);
+      setSaveError(err?.message || String(err));
+      setTimeout(() => setSaving(false), 300);
+      return false;
+    }
+  }, [data, images, library, waitForUploads, readOnly]);
+
+  // Save immediately, cancelling any pending debounce so we never double-save.
+  const saveNow = useCallback(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    return persistNow();
+  }, [persistNow]);
+
+  // Debounced auto-save — unchanged 600ms cadence, now routed through persistNow
+  // so the manual Save button and auto-save share one persistence path.
   useEffect(() => {
     if (readOnly) return undefined; // a read-only viewer never persists edits
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(async () => {
-      setSaving(true);
-      const uploadsSettled = await waitForUploads();
-      if (!uploadsSettled) {
-        setSaveError('Image upload still pending — try again in a moment');
-        setSaving(false);
-        return;
-      }
-      try {
-        const result = await saveTechPack(packIdRef.current, {
-          data, images, library,
-          style_name: data.styleNumber || data.styleName || '',
-          product_category: data.productCategory || '',
-          status: data.status || 'Design',
-          completion_pct: computeCompletion(data),
-        });
-        if (result && result.ok === false) {
-          // A queued result means the LOCAL save succeeded and the cloud copy is
-          // safely parked in the durable outbox (the global Sync badge shows the
-          // pending state). That is NOT a failure — don't raise the red "Save
-          // failed" alarm for it; only surface genuine, non-queued errors.
-          setSaveError(result.queued ? null : (result.error?.message || 'Cloud save failed'));
-        } else {
-          if (result && result.idChanged) {
-            packIdRef.current = result.idChanged.to;
-            replacePLMHash({ section: 'styles', packId: packIdRef.current, step });
-          }
-          setSaveError(null);
-          setSavedRecently(true);
-          if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
-          savedTimerRef.current = setTimeout(() => setSavedRecently(false), 2000);
-        }
-      } catch (err) {
-        console.error('Auto-save failed:', err);
-        setSaveError(err?.message || String(err));
-      }
-      setTimeout(() => setSaving(false), 300);
-    }, 600);
+    saveTimerRef.current = setTimeout(() => { persistNow(); }, 600);
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [data, images, library, pack.id, waitForUploads, readOnly]);
+  }, [persistNow, readOnly]);
+
+  // ⌘S / Ctrl-S → save now.
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        saveNow();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [saveNow]);
+
+  // Warn before tab close / refresh when the latest edits aren't safely persisted.
+  useEffect(() => {
+    const onBeforeUnload = (e) => {
+      if (dirtyRef.current || saveError) { e.preventDefault(); e.returnValue = ''; }
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [saveError]);
+
+  // Exit guard: flush a save before leaving the builder. Only interrupt the user
+  // with a confirm if that save genuinely failed (work kept on this device but
+  // not yet in the cloud).
+  const handleBack = useCallback(async () => {
+    if (dirtyRef.current || saving) {
+      const ok = await saveNow();
+      if (!ok) {
+        const leave = window.confirm(
+          'Your most recent changes could not be saved to the cloud yet (they are kept on this device). Leave this style anyway?'
+        );
+        if (!leave) return;
+      }
+    }
+    onBack();
+  }, [saveNow, saving, onBack]);
 
   const set = useCallback((k, v) => setData(p => ({ ...p, [k]: v })), []);
 
@@ -998,7 +1073,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       {/* Header */}
       <div style={{ background: FR.slate, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={onBack}
+          <button onClick={handleBack}
             style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: FR.salt, padding: '5px 10px', borderRadius: 3, fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
             <ArrowLeft size={12} /> Back
           </button>
@@ -1034,15 +1109,31 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <SendToVendorButton vendorName={data.vendor || ''} styleId={pack.id} variant="header" />
+          <button
+            onClick={saveNow}
+            disabled={saving || (!dirty && !saveError)}
+            title="Save now (⌘S / Ctrl-S)"
+            style={{
+              background: (dirty || saveError) ? FR.salt : 'rgba(255,255,255,0.1)',
+              color: (dirty || saveError) ? FR.slate : FR.stone,
+              border: 'none', padding: '5px 12px', borderRadius: 3, fontSize: 10, fontWeight: 600,
+              letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: 4,
+              cursor: (saving || (!dirty && !saveError)) ? 'default' : 'pointer',
+              opacity: (saving || (!dirty && !saveError)) ? 0.55 : 1,
+            }}>
+            <Save size={12} /> Save
+          </button>
           {pendingUploads > 0
             ? <span style={{ fontSize: 10, color: FR.soil }}>Uploading {pendingUploads} image{pendingUploads === 1 ? '' : 's'}…</span>
             : saving
               ? <span style={{ fontSize: 10, color: FR.stone, fontStyle: 'italic' }}>Saving…</span>
               : saveError
-                ? <span title={saveError} style={{ fontSize: 10, color: '#A32D2D', maxWidth: 460, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>⚠︎ Save failed (kept locally): {saveError}</span>
-                : savedRecently
-                  ? <span style={{ fontSize: 10, color: '#a8d5a2', fontWeight: 600 }}>✓ Saved</span>
-                  : <span style={{ fontSize: 10, color: FR.stone, opacity: 0.5 }}>Auto-saving…</span>}
+                ? <span title={saveError} style={{ fontSize: 10, color: '#A32D2D', maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>⚠︎ Save failed (kept locally): {saveError}</span>
+                : dirty
+                  ? <span style={{ fontSize: 10, color: '#E0B45E', fontWeight: 600 }}>● Unsaved changes</span>
+                  : savedRecently
+                    ? <span style={{ fontSize: 10, color: '#a8d5a2', fontWeight: 600 }}>✓ Saved</span>
+                    : <span style={{ fontSize: 10, color: '#a8d5a2', fontWeight: 600 }}>✓ All changes saved</span>}
           {/* Cost roll-up — BOM + colorway (wash/dye) + vendor markup. */}
           <div style={{ textAlign: 'right' }} title={`BOM ${formatCost(bomCost)}  ·  Colorways ${formatCost(colorwayCost)}${vendorMarkupPct > 0 ? `  ·  Vendor +${vendorMarkupPct}% ${formatCost(vendorMarkupCost)}` : ''}${maxFOB > 0 ? `  ·  Max FOB ${formatCost(maxFOB)}` : ''}`}>
             <div style={{ fontSize: 9, color: FR.stone }}>Total Unit Cost</div>
