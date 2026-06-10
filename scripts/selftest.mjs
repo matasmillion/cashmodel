@@ -145,8 +145,32 @@ async function test6() {
   check('round-trips a 70 KB image with zero byte loss (chunking intact)', intact);
 }
 
+// ===== TEST 7 — version vault: silent snapshots + browse + restore =====
+async function test7() {
+  log.push('\nTEST 7 — Version vault: silent snapshots, de-dupe, cap, and restore (never lose work)');
+  const vh = await import('../src/utils/versionHistoryStore.js');
+  vh.__resetVersionHistoryForTests();
+  const T = 'tech_packs', ID = 'AP-TEST-001';
+  vh.snapshotVersion({ table: T, id: ID, data: { v: 1 }, reason: 'clash-backup' });
+  check('a snapshot is captured + listed', vh.listVersions(T, ID).length === 1);
+  vh.snapshotVersion({ table: T, id: ID, data: { v: 1 }, reason: 'clash-backup' });
+  check('an identical snapshot is de-duped (no spam)', vh.listVersions(T, ID).length === 1);
+  vh.snapshotVersion({ table: T, id: ID, data: { v: 2 }, reason: 'clash-backup' });
+  check('a distinct version is a new restore point', vh.listVersions(T, ID).length === 2);
+  check('newest version is first', vh.listVersions(T, ID)[0].data.v === 2);
+  for (let i = 0; i < 30; i++) vh.snapshotVersion({ table: T, id: ID, data: { v: 100 + i }, reason: 'clash-backup' });
+  check('per-record cap (20) is enforced', vh.listVersions(T, ID).length === 20);
+  const target = vh.listVersions(T, ID)[5];
+  check('any version is retrievable by ts for restore (data intact)', vh.getVersion(target.ts)?.data != null);
+  check('record appears in the global history index', vh.listRecordsWithHistory().some(r => r.id === ID));
+  let stable = true; const len = vh.listVersions(T, ID).length;
+  for (let i = 0; i < 10; i++) { if (vh.listVersions(T, ID).length !== len) stable = false; }
+  check('listing is stable across 10 reads', stable);
+  vh.__resetVersionHistoryForTests();
+}
+
 (async () => {
-  for (const [n, t] of [['1', test1], ['2', test2], ['3', test3], ['4', test4], ['5', test5], ['6', test6]]) {
+  for (const [n, t] of [['1', test1], ['2', test2], ['3', test3], ['4', test4], ['5', test5], ['6', test6], ['7', test7]]) {
     try { await t(); } catch (e) { fail++; log.push(`\nTEST ${n} — THREW: ${e?.message || e}`); }
   }
   console.log(log.join('\n'));

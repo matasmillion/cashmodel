@@ -1,6 +1,7 @@
 // Main Tech Pack builder — 14-step wizard + PLM features (revisions, cost, samples, variants)
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ArrowLeft, History, Plus, CheckCircle, XCircle, Clock, Camera } from 'lucide-react';
+import VersionHistoryPanel from './VersionHistoryPanel';
 import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STEPS, IMG_STEPS, computeCompletion, isStepLocked, computeBOMCost, computeColorwayCost, SAMPLE_TYPES, SAMPLE_VERDICTS } from './techPackConstants';
 import SendToVendorButton from './SendToVendorButton';
 import { useApp } from '../../context/AppContext';
@@ -384,6 +385,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   }, [fabricIdKey, refreshTick]);
 
   const [saving, setSaving] = useState(false);
+  const [showVersions, setShowVersions] = useState(false);
 
   // Single-writer locking removed (solo operator, two devices) — the editor is
   // always editable. `readOnly` is kept as a constant so the existing guards
@@ -986,12 +988,23 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
 
   return (
     <div style={{ background: FR.salt, fontFamily: "'Helvetica Neue','Inter',sans-serif", borderRadius: 8, overflow: 'hidden', border: `1px solid ${FR.sand}` }}>
+      <VersionHistoryPanel
+        table="tech_packs"
+        id={packIdRef.current}
+        open={showVersions}
+        onClose={() => setShowVersions(false)}
+        onRestore={(v) => { if (v?.data) setData(v.data); if (v && 'images' in v) setImages(v.images || []); }}
+      />
       {/* Header */}
       <div style={{ background: FR.slate, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button onClick={onBack}
             style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: FR.salt, padding: '5px 10px', borderRadius: 3, fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
             <ArrowLeft size={12} /> Back
+          </button>
+          <button onClick={() => setShowVersions(true)} title="Browse and restore past saved versions of this style"
+            style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: FR.salt, padding: '5px 10px', borderRadius: 3, fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <History size={12} /> Restore points
           </button>
           <div>
             <div style={{

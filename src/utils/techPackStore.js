@@ -6,6 +6,7 @@ import { getCurrentUserIdSync, getCurrentOrgIdSync, getJwtOrgId, describeAuthFai
 import { persistableImages, deleteAssets, copyAsset, scheduleOrphanDeletion, cancelOrphanDeletion } from './plmAssets';
 import { enqueue } from './syncQueue';
 import { getCollection, setCollection } from './localDb';
+import { snapshotVersion } from './versionHistoryStore';
 
 const LOCAL_KEY = 'cashmodel_techpacks';
 
@@ -274,6 +275,20 @@ export async function saveTechPack(id, updates) {
     packs.push({ id, ...corePatch });
   }
   writeLocal(packs);
+
+  // Version vault: throttled snapshot of the full current record so the operator
+  // can browse + restore past versions (the silent safety net that replaced the
+  // conflict popup). Best-effort — never blocks or fails the save.
+  try {
+    const stored = idx >= 0 ? packs[idx] : packs[packs.length - 1];
+    snapshotVersion({
+      table: 'tech_packs', id,
+      label: stored?.style_name || stored?.data?.styleNumber || '',
+      code: stored?.data?.styleNumber || '',
+      name: stored?.style_name || '',
+      data: stored?.data, images: stored?.images, reason: 'save',
+    });
+  } catch (e) { console.error('versionHistory snapshot (techpack):', e); }
 
   const clientOrgId = getCurrentOrgIdSync();
   if (!IS_SUPABASE_ENABLED || !clientOrgId) return { ok: true };
