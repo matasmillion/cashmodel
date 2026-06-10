@@ -84,7 +84,10 @@ export default function MultiImageSlot({
           const blob = dataUrlToBlob(dataUrl);
           if (!blob) continue;
           const ref = await uploadAsset({ scope: assetScope, ownerId: assetOwnerId, slot: `${assetSlot}-${Date.now()}-${additions.length}`, blob, skipCompress: false });
-          additions.push({ url: ref.path, label: '', hex: '' });
+          // ref.path when the upload reached Storage; ref.data (inline data URL) when
+          // the cloud was unavailable and the bytes were kept locally — either way the
+          // swatch renders and is never lost.
+          additions.push({ url: ref.path || ref.data, label: '', hex: '' });
         } else {
           additions.push({ url: dataUrl, label: '', hex: '' });
         }

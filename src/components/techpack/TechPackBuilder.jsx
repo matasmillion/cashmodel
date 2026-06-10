@@ -660,7 +660,11 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           completion_pct: computeCompletion(data),
         });
         if (result && result.ok === false) {
-          setSaveError(result.error?.message || 'Cloud save failed');
+          // A queued result means the LOCAL save succeeded and the cloud copy is
+          // safely parked in the durable outbox (the global Sync badge shows the
+          // pending state). That is NOT a failure — don't raise the red "Save
+          // failed" alarm for it; only surface genuine, non-queued errors.
+          setSaveError(result.queued ? null : (result.error?.message || 'Cloud save failed'));
         } else {
           if (result && result.idChanged) {
             packIdRef.current = result.idChanged.to;

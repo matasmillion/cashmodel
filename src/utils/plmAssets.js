@@ -22,6 +22,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getAuthedSupabase, refreshAuthedSupabase } from '../lib/supabase';
 import { getCurrentOrgIdSync } from '../lib/auth';
+import { blobToDataUrl } from './blobDataUrl';
 
 const BUCKET = 'plm-assets';
 
@@ -173,38 +174,58 @@ export async function uploadAsset({ scope, ownerId, slot, blob, skipCompress = f
   if (!slot) throw new Error('uploadAsset: slot is required');
   if (!(blob instanceof Blob)) throw new Error('uploadAsset: blob must be a Blob/File');
 
-  const orgId = getCurrentOrgIdSync();
-  if (!orgId) throw new Error('uploadAsset: no organization context (sign in required)');
-
-  const supabase = await getAuthedSupabase();
-  if (!supabase) throw new Error('uploadAsset: Supabase client not configured');
-
+  // Compress up front so the local-first fallback below also keeps the optimized
+  // bytes (not the full-size original).
   const compressed = skipCompress
     ? { blob, width: null, height: null, contentType: blob.type || 'application/octet-stream' }
     : await compressForUpload(blob, compressOpts);
 
-  const ext = (extOverride && String(extOverride).toLowerCase().replace(/[^a-z0-9]+/g, '')) || extFromContentType(compressed.contentType);
-  const uuid = (typeof crypto !== 'undefined' && crypto.randomUUID)
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2) + Date.now().toString(36);
-  const path = `${orgId}/${scope}/${ownerId}/${sanitizeSlot(slot)}-${uuid}.${ext}`;
-
-  const { error } = await supabase.storage
-    .from(BUCKET)
-    .upload(path, compressed.blob, {
-      contentType: compressed.contentType,
-      cacheControl: '31536000', // 1 year — paths are immutable (UUID-suffixed)
-      upsert: false,
-    });
-  if (error) {
-    const wrapped = new Error(`uploadAsset failed: ${error.message || error}`);
-    wrapped.cause = error;
-    throw wrapped;
+  // Cloud is best-effort, never on the critical path. With an org + a live Supabase
+  // client we try the Storage upload; if anything is missing or it errors (auth
+  // lapse, transient network/storage failure), we DON'T throw — we fall through to
+  // the local-first fallback so the user's image can never be lost on a blip.
+  const orgId = getCurrentOrgIdSync();
+  const supabase = orgId ? await getAuthedSupabase() : null;
+  if (orgId && supabase) {
+    const ext = (extOverride && String(extOverride).toLowerCase().replace(/[^a-z0-9]+/g, '')) || extFromContentType(compressed.contentType);
+    const uuid = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const path = `${orgId}/${scope}/${ownerId}/${sanitizeSlot(slot)}-${uuid}.${ext}`;
+    const { error } = await supabase.storage
+      .from(BUCKET)
+      .upload(path, compressed.blob, {
+        contentType: compressed.contentType,
+        cacheControl: '31536000', // 1 year — paths are immutable (UUID-suffixed)
+        upsert: false,
+      });
+    if (!error) {
+      return {
+        slot,
+        path,
+        size: compressed.blob.size,
+        content_type: compressed.contentType,
+        width: compressed.width,
+        height: compressed.height,
+        uploaded_at: new Date().toISOString(),
+      };
+    }
+    // Upload failed — keep the image locally instead of discarding the user's work.
+    console.warn('uploadAsset: cloud upload failed, keeping image on this device (will sync later):', error?.message || error);
   }
 
+  // LOCAL-FIRST FALLBACK — Storage/auth unavailable, or the upload errored. The
+  // image is NEVER lost: its bytes are kept inline as a data URL, which renders
+  // immediately, persists locally, and syncs to the cloud inside the row's JSONB.
+  // `_pendingUpload` lets a later sweep promote it to a Storage object + slim the
+  // row. This reuses the brand's pre-Storage base64 behaviour purely as a safety
+  // net, so a token blip can never drop a photo.
+  const dataUrl = await blobToDataUrl(compressed.blob);
   return {
     slot,
-    path,
+    path: null,
+    data: dataUrl,
+    _pendingUpload: { scope, ownerId, slot },
     size: compressed.blob.size,
     content_type: compressed.contentType,
     width: compressed.width,

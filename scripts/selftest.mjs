@@ -118,8 +118,35 @@ function test5() {
   check('a real change → different signature → re-renders', sig(rowsV1) !== sig(rowsV2));
 }
 
+// ===== TEST 6 — image-upload local fallback preserves bytes (never lose a photo) =====
+async function test6() {
+  log.push('\nTEST 6 — Upload fallback: a photo\'s bytes are captured into a durable data URL (never lost)');
+  const { blobToDataUrl } = await import('../src/utils/blobDataUrl.js');
+  // Known vector: bytes "HI" (72,73) → base64 "SEk="
+  const hi = await blobToDataUrl(new Blob([new Uint8Array([72, 73])], { type: 'image/webp' }));
+  check('encodes a known byte sequence correctly', hi === 'data:image/webp;base64,SEk=', hi);
+  check('defaults content-type to application/octet-stream when missing',
+    (await blobToDataUrl(new Blob([new Uint8Array([1])]))).startsWith('data:application/octet-stream;base64,'));
+  // Deterministic across 10 encodes (operator's "try it 10 times" rule); the >32 KB
+  // chunking path is exercised by a 70 KB array.
+  const big = new Uint8Array(70000);
+  for (let i = 0; i < big.length; i++) big[i] = (i * 31 + 7) & 0xff;
+  const blob = new Blob([big], { type: 'image/png' });
+  const first = await blobToDataUrl(blob);
+  let stable = true;
+  for (let i = 0; i < 10; i++) { if ((await blobToDataUrl(blob)) !== first) stable = false; }
+  check('deterministic across 10 encodes (same bytes → same URL)', stable);
+  // Round-trip: the data URL decodes back to the exact original bytes — proof the
+  // image is preserved with zero loss when kept locally instead of thrown away.
+  const b64 = first.split(',')[1];
+  const decoded = (typeof atob !== 'undefined') ? atob(b64) : Buffer.from(b64, 'base64').toString('binary');
+  let intact = decoded.length === big.length;
+  for (let i = 0; intact && i < big.length; i++) { if (decoded.charCodeAt(i) !== big[i]) intact = false; }
+  check('round-trips a 70 KB image with zero byte loss (chunking intact)', intact);
+}
+
 (async () => {
-  for (const [n, t] of [['1', test1], ['2', test2], ['3', test3], ['4', test4], ['5', test5]]) {
+  for (const [n, t] of [['1', test1], ['2', test2], ['3', test3], ['4', test4], ['5', test5], ['6', test6]]) {
     try { await t(); } catch (e) { fail++; log.push(`\nTEST ${n} — THREW: ${e?.message || e}`); }
   }
   console.log(log.join('\n'));
