@@ -261,17 +261,21 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       const prev = componentsByIdRef.current || {};
       const next = {};
       let changed = false;
-      for (const id of ids) {
+      // Resolve every picked component CONCURRENTLY. The old sequential for-loop
+      // serialized getComponentPack + 3–4 signed-URL fetches per item, so a cold
+      // URL cache made the whole BOM (trims + packaging) crawl in one at a time.
+      // Unchanged packs are still reused untouched (no re-signing on refocus).
+      await Promise.all(ids.map(async (id) => {
         const row = await getComponentPack(id);   // local-first → instant
         if (cancelled) return;
-        if (!row) { if (prev[id]) changed = true; continue; }
+        if (!row) { if (prev[id]) changed = true; return; }
         const v = row.updated_at;
         // Reuse the already-resolved entry (including its signed image URLs)
         // when this pack hasn't changed since we last resolved it. This is what
         // stops images from re-loading every time the tab refocuses, a sync
         // fires, or you click around — and it breaks the refresh→re-resolve loop.
         const existing = prev[id];
-        if (existing && existing._resolvedAt === v) { next[id] = existing; continue; }
+        if (existing && existing._resolvedAt === v) { next[id] = existing; return; }
         changed = true;
         // Pack changed (or first load) — re-sign its images. invalidate forces a
         // fresh signed URL since a changed cover can reuse the same path.
@@ -285,9 +289,6 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
             return url ? `${url}${url.includes('?') ? '&' : '?'}v=${encodeURIComponent(v || '')}` : null;
           } catch { return null; }
         };
-        const top    = await resolveCover(row.cover_image);
-        const nested = await resolveCover(row?.data?.cover_image);
-        // Cover priority: construction-diagram → design-sketch → cover_image
         const findImage = async (slot) => {
           const entry = (row.images || []).find(img => img.slot === slot);
           if (!entry) return null;
@@ -295,7 +296,14 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           if (entry.path) return await resolveCover(entry.path);
           return null;
         };
-        const diagramUrl = await findImage('construction-diagram') || await findImage('design-sketch');
+        // Cover priority: construction-diagram → design-sketch → cover_image.
+        // The three independent image lookups now run concurrently per item.
+        const [top, nested, diagramUrl] = await Promise.all([
+          resolveCover(row.cover_image),
+          resolveCover(row?.data?.cover_image),
+          (async () => (await findImage('construction-diagram')) || (await findImage('design-sketch')))(),
+        ]);
+        if (cancelled) return;
         next[id] = {
           ...row,
           cover_image: top || row.cover_image,
@@ -303,7 +311,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           _constructionDiagram: diagramUrl,
           _resolvedAt: v,
         };
-      }
+      }));
       if (cancelled) return;
       // Only commit when something actually changed — an unchanged refresh tick
       // must not setState, or it re-triggers the plm-store-updated loop.
