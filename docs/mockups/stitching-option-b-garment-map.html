@@ -64,13 +64,16 @@
   .cards{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:14px;min-height:0}
   .card{background:var(--white);border:0.5px solid var(--border);border-radius:5px;
     padding:9px;display:flex;gap:9px;min-height:0}
-  /* close-up photo on the left of each card */
-  .card .photo{flex:0 0 38%;border-radius:4px;position:relative;overflow:hidden;
-    background:linear-gradient(135deg,#DAD3C4,#C9C0AD);border:0.5px solid var(--border);
+  /* image column on the left of each card: main (3D render) over support (reference) */
+  .card .imgcol{flex:0 0 38%;display:flex;flex-direction:column;gap:5px;min-width:0}
+  .card .img{border-radius:4px;position:relative;overflow:hidden;border:0.5px solid var(--border);
     display:flex;align-items:center;justify-content:center}
-  .card .photo .cap{font-size:7px;letter-spacing:1px;text-transform:uppercase;color:rgba(58,58,58,0.45);text-align:center;padding:0 4px}
-  .card .photo .tag{position:absolute;top:4px;left:4px;font-size:6px;letter-spacing:0.8px;text-transform:uppercase;
+  .card .img .cap{font-size:6.5px;letter-spacing:0.7px;text-transform:uppercase;color:rgba(58,58,58,0.45);text-align:center;padding:0 4px}
+  .card .img .tag{position:absolute;top:3px;left:3px;font-size:6px;letter-spacing:0.6px;text-transform:uppercase;
     color:#fff;background:rgba(58,58,58,0.55);padding:1px 4px;border-radius:3px}
+  .card .img-main{flex:0 0 58%;background:linear-gradient(135deg,#DAD3C4,#C9C0AD)}
+  .card .img-main.full{flex:1 1 100%}
+  .card .img-support{flex:1 1 auto;background:linear-gradient(135deg,#E4DECF,#D7CFBC)}
   .card .body{flex:1;min-width:0;display:flex;flex-direction:column}
   .card .title-row{display:flex;align-items:center;gap:7px;margin-bottom:5px}
   .badge{width:17px;height:17px;border-radius:50%;background:var(--red);color:#fff;font-size:9px;font-weight:600;
@@ -148,7 +151,8 @@
     </p>
     <div class="legend">
       <span class="chip"><span class="swatch" style="background:var(--red)"></span> Numbered dot &amp; badge</span>
-      <span class="chip"><span class="swatch" style="background:linear-gradient(135deg,#DAD3C4,#C9C0AD)"></span> Stitch close-up</span>
+      <span class="chip"><span class="swatch" style="background:linear-gradient(135deg,#DAD3C4,#C9C0AD)"></span> Main image — 3D render</span>
+      <span class="chip"><span class="swatch" style="background:linear-gradient(135deg,#E4DECF,#D7CFBC)"></span> Supporting image — reference</span>
       <span class="chip"><span class="swatch" style="background:var(--salt);border:0.5px solid var(--border)"></span> Spec pill (one per field)</span>
     </div>
   </div>
@@ -194,7 +198,10 @@
       <div class="cards">
         <!-- Stitch 1 -->
         <div class="card">
-          <div class="photo"><span class="tag">Close-up</span><span class="cap">4-thread overlock</span></div>
+          <div class="imgcol">
+            <div class="img img-main"><span class="tag">3D render</span><span class="cap">closed CLO3D</span></div>
+            <div class="img img-support"><span class="tag">Ref</span><span class="cap">real garment</span></div>
+          </div>
           <div class="body">
             <div class="title-row"><span class="badge">1</span><span class="nm">4-Thread Overlock</span></div>
             <div class="op">Side seam · shoulder · sleeve set</div>
@@ -210,7 +217,10 @@
 
         <!-- Stitch 2 -->
         <div class="card">
-          <div class="photo"><span class="tag">Close-up</span><span class="cap">2-needle coverstitch</span></div>
+          <div class="imgcol">
+            <div class="img img-main"><span class="tag">3D render</span><span class="cap">closed CLO3D</span></div>
+            <div class="img img-support"><span class="tag">Ref</span><span class="cap">real garment</span></div>
+          </div>
           <div class="body">
             <div class="title-row"><span class="badge">2</span><span class="nm">2-Needle Coverstitch</span></div>
             <div class="op">Hem · cuff · neck rib</div>
@@ -226,7 +236,9 @@
 
         <!-- Stitch 3 -->
         <div class="card">
-          <div class="photo"><span class="tag">Close-up</span><span class="cap">bartack</span></div>
+          <div class="imgcol">
+            <div class="img img-main full"><span class="tag">3D render</span><span class="cap">closed CLO3D · no ref → main fills</span></div>
+          </div>
           <div class="body">
             <div class="title-row"><span class="badge">3</span><span class="nm">Bartack</span></div>
             <div class="op">Pocket corners · thumbholes · fly</div>
@@ -291,7 +303,10 @@
   <div class="anatomy">
     <div>
       <div class="card">
-        <div class="photo"><span class="tag">Close-up</span><span class="cap">the photo</span></div>
+        <div class="imgcol">
+          <div class="img img-main"><span class="tag">3D render</span><span class="cap">main</span></div>
+          <div class="img img-support"><span class="tag">Ref</span><span class="cap">support</span></div>
+        </div>
         <div class="body">
           <div class="title-row"><span class="badge">1</span><span class="nm">Stitch name</span></div>
           <div class="op">where it runs (Operation)</div>
@@ -308,14 +323,14 @@
     <div class="notes-col">
       <h3>What each card holds</h3>
       <div class="n"><span class="k">A</span><div><b>Garment map (left)</b> — the whole flat. A red dot per stitch shows the factory <b>where</b> on the garment that stitch runs, reusing the exact dot tool from 07/08.</div></div>
-      <div class="n"><span class="k">B</span><div><b>Close-up photo (left of card)</b> — the actual stitch, married right next to its specs.</div></div>
+      <div class="n"><span class="k">B</span><div><b>Two images (left of card)</b> — a <b>main</b> 3D render over a smaller <b>supporting/reference</b> photo, married right next to the specs. (Skip the reference and the main fills — see stitch&nbsp;3.) Note: B's column is the tightest of the three for two images, since the garment map already takes a column.</div></div>
       <div class="n"><span class="k">C</span><div><b>Spec pills</b> — Stitch&nbsp;Type, Machine, SPI/SPCM, and Thread (colour chip + type), with Operation as the subtitle. All eight fields are present; the pills keep them tight so the photo and the map breathe.</div></div>
       <div class="n"><span class="k">D</span><div><b>Notes line</b> — the per-factory translatable note at the foot of the card.</div></div>
     </div>
   </div>
 
   <div class="footer-note">
-    <b>Nothing lost:</b> all six photos, and all eight spec fields per stitch (Operation, Seam&nbsp;Type, Stitch&nbsp;Type, Machine, SPI/SPCM, Thread&nbsp;Color, Thread&nbsp;Type, Notes) live on the cards. The garment-block dropdown and the full Cut&nbsp;&amp;&nbsp;Sew calculator at the bottom — labor cost, Estimate&nbsp;with&nbsp;AI, AI estimate, CMT note, Cost&nbsp;Chat — are unchanged. &nbsp;·&nbsp;
+    <b>Nothing lost:</b> up to six stitches, each with <b>two image slots</b> (main 3D render + supporting reference photo) and all eight spec fields (Operation, Seam&nbsp;Type, Stitch&nbsp;Type, Machine, SPI/SPCM, Thread&nbsp;Color, Thread&nbsp;Type, Notes). The garment-block dropdown and the full Cut&nbsp;&amp;&nbsp;Sew calculator at the bottom — labor cost, Estimate&nbsp;with&nbsp;AI, AI estimate, CMT note, Cost&nbsp;Chat — are unchanged. &nbsp;·&nbsp;
     <b>Built on 07/08:</b> reuses the clickable garment + numbered dots and the white card / red badge system 1:1. &nbsp;·&nbsp;
     <b>Keep in sync when we build:</b> the Style editor (<span style="font-family:var(--mono)">TechPackSteps.jsx</span>), the live preview / PDF (<span style="font-family:var(--mono)">TechPackPagePreview.jsx</span>), the reusable library card (<span style="font-family:var(--mono)">CutSewBuilder.jsx</span>), and its schema (<span style="font-family:var(--mono)">cutSewLibrary.js</span>) all draw Stitching, so all four change together.
   </div>

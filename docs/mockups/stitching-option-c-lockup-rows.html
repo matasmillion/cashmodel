@@ -51,13 +51,16 @@
 
   .lock{background:var(--white);border:0.5px solid var(--border);border-radius:6px;
     display:flex;gap:14px;padding:12px;align-items:stretch}
-  /* photo on the left */
-  .lock .photo{flex:0 0 168px;border-radius:5px;position:relative;overflow:hidden;
-    background:linear-gradient(135deg,#DAD3C4,#C9C0AD);border:0.5px solid var(--border);
-    display:flex;align-items:center;justify-content:center}
-  .lock .photo .cap{font-size:8px;letter-spacing:1.2px;text-transform:uppercase;color:rgba(58,58,58,0.45);text-align:center;padding:0 8px}
-  .lock .photo .tag{position:absolute;top:6px;left:6px;font-size:7px;letter-spacing:1px;text-transform:uppercase;
+  /* image pair on the left: main (3D render) + supporting reference, side by side */
+  .lock .imgs{flex:0 0 auto;display:flex;gap:8px}
+  .lock .img{position:relative;border-radius:5px;overflow:hidden;border:0.5px solid var(--border);
+    display:flex;align-items:center;justify-content:center;min-height:122px}
+  .lock .img .cap{font-size:7.5px;letter-spacing:1px;text-transform:uppercase;color:rgba(58,58,58,0.45);text-align:center;padding:0 6px}
+  .lock .img .tag{position:absolute;top:6px;left:6px;font-size:7px;letter-spacing:0.8px;text-transform:uppercase;
     color:#fff;background:rgba(58,58,58,0.55);padding:1px 6px;border-radius:3px}
+  .lock .img-main{width:168px;background:linear-gradient(135deg,#DAD3C4,#C9C0AD)}
+  .lock .img-main.solo{width:220px}
+  .lock .img-support{width:112px;background:linear-gradient(135deg,#E4DECF,#D7CFBC)}
 
   .lock .body{flex:1;min-width:0;display:flex;flex-direction:column}
   .lock .head{display:flex;align-items:center;gap:9px;margin-bottom:10px}
@@ -145,7 +148,8 @@
     </p>
     <div class="legend">
       <span class="chip"><span class="swatch" style="background:var(--red)"></span> Numbered stitch badge</span>
-      <span class="chip"><span class="swatch" style="background:linear-gradient(135deg,#DAD3C4,#C9C0AD)"></span> Stitch close-up</span>
+      <span class="chip"><span class="swatch" style="background:linear-gradient(135deg,#DAD3C4,#C9C0AD)"></span> Main image — 3D render</span>
+      <span class="chip"><span class="swatch" style="background:linear-gradient(135deg,#E4DECF,#D7CFBC)"></span> Supporting image — reference</span>
       <span class="chip"><span class="swatch" style="background:#F0EDE6;border:0.5px solid var(--border)"></span> Thread-color chip</span>
     </div>
   </div>
@@ -169,7 +173,10 @@
     <div class="rows">
       <!-- Stitch 1 -->
       <div class="lock">
-        <div class="photo"><span class="tag">Stitch close-up</span><span class="cap">4-thread overlock · seam edge</span></div>
+        <div class="imgs">
+          <div class="img img-main"><span class="tag">3D render</span><span class="cap">closed CLO3D · 4-thread overlock</span></div>
+          <div class="img img-support"><span class="tag">Reference</span><span class="cap">real garment</span></div>
+        </div>
         <div class="body">
           <div class="head"><span class="badge">1</span><span class="nm">4-Thread Overlock</span><span class="code">504</span></div>
           <div class="grid">
@@ -187,7 +194,10 @@
 
       <!-- Stitch 2 -->
       <div class="lock">
-        <div class="photo"><span class="tag">Stitch close-up</span><span class="cap">2-needle coverstitch · hem</span></div>
+        <div class="imgs">
+          <div class="img img-main"><span class="tag">3D render</span><span class="cap">closed CLO3D · 2-needle coverstitch</span></div>
+          <div class="img img-support"><span class="tag">Reference</span><span class="cap">real garment</span></div>
+        </div>
         <div class="body">
           <div class="head"><span class="badge">2</span><span class="nm">2-Needle Coverstitch</span><span class="code">406</span></div>
           <div class="grid">
@@ -205,7 +215,9 @@
 
       <!-- Stitch 3 -->
       <div class="lock">
-        <div class="photo"><span class="tag">Stitch close-up</span><span class="cap">bartack · pocket corner</span></div>
+        <div class="imgs">
+          <div class="img img-main solo"><span class="tag">3D render</span><span class="cap">closed CLO3D · bartack — no reference added → main widens</span></div>
+        </div>
         <div class="body">
           <div class="head"><span class="badge">3</span><span class="nm">Bartack</span><span class="code">301</span></div>
           <div class="grid">
@@ -266,7 +278,10 @@
   <div class="anatomy">
     <h3>What each row holds</h3>
     <div class="lock">
-      <div class="photo"><span class="tag">Stitch close-up</span><span class="cap">the photo</span></div>
+      <div class="imgs">
+        <div class="img img-main"><span class="tag">3D render</span><span class="cap">main</span></div>
+        <div class="img img-support"><span class="tag">Reference</span><span class="cap">support</span></div>
+      </div>
       <div class="body">
         <div class="head"><span class="badge">1</span><span class="nm">Stitch name</span><span class="code">504</span></div>
         <div class="grid">
@@ -282,7 +297,7 @@
       </div>
     </div>
     <div class="notes-col">
-      <div class="n"><span class="k">A</span><div><b>Photo, left</b> — the stitch close-up, the same hero shape as a call-out image, sitting right beside its data.</div></div>
+      <div class="n"><span class="k">A</span><div><b>Two images, left</b> — a <b>main</b> 3D render beside a smaller <b>supporting/reference</b> photo, like a 07/08 card, sitting right next to the data. Skip the reference and the main widens to fill (see stitch&nbsp;3). The wide row gives both images room.</div></div>
       <div class="n"><span class="k">B</span><div><b>Badge + name + code</b> — red call-out badge, the stitch in plain words, and the Stitch&nbsp;Type code in monospace.</div></div>
       <div class="n"><span class="k">C</span><div><b>Eight labelled fields</b> — Operation, Seam&nbsp;Type, Stitch&nbsp;Type, Machine, SPI/SPCM, Thread&nbsp;Color (chip), Thread&nbsp;Type, and Notes (full width). Because the row is wide, each value shows in full with no clipping.</div></div>
       <div class="n"><span class="k">D</span><div><b>Up to six rows</b> stack down the page. If six is more than one printed sheet holds, the rows simply continue onto a second page — like a continuing table.</div></div>
@@ -290,7 +305,7 @@
   </div>
 
   <div class="footer-note">
-    <b>Nothing lost:</b> all six photos, and all eight spec fields per stitch (Operation, Seam&nbsp;Type, Stitch&nbsp;Type, Machine, SPI/SPCM, Thread&nbsp;Color, Thread&nbsp;Type, Notes) live on the rows. The garment-block dropdown and the full Cut&nbsp;&amp;&nbsp;Sew calculator at the bottom — labor cost, Estimate&nbsp;with&nbsp;AI, AI estimate, CMT note, Cost&nbsp;Chat — are unchanged. &nbsp;·&nbsp;
+    <b>Nothing lost:</b> up to six stitches, each with <b>two image slots</b> (main 3D render + supporting reference photo) and all eight spec fields (Operation, Seam&nbsp;Type, Stitch&nbsp;Type, Machine, SPI/SPCM, Thread&nbsp;Color, Thread&nbsp;Type, Notes). The garment-block dropdown and the full Cut&nbsp;&amp;&nbsp;Sew calculator at the bottom — labor cost, Estimate&nbsp;with&nbsp;AI, AI estimate, CMT note, Cost&nbsp;Chat — are unchanged. &nbsp;·&nbsp;
     <b>Built on 07/08:</b> same white card, 0.5px Sand border, red numbered badge, FR type and colours — laid out as wide rows. &nbsp;·&nbsp;
     <b>Keep in sync when we build:</b> the Style editor (<span style="font-family:var(--mono)">TechPackSteps.jsx</span>), the live preview / PDF (<span style="font-family:var(--mono)">TechPackPagePreview.jsx</span>), the reusable library card (<span style="font-family:var(--mono)">CutSewBuilder.jsx</span>), and its schema (<span style="font-family:var(--mono)">cutSewLibrary.js</span>) all draw Stitching, so all four change together.
   </div>
