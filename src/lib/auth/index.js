@@ -108,12 +108,16 @@ export function getCurrentUserIdSync() {
 // module. Re-exported here so every consumer keeps importing from
 // `src/lib/auth` (the module boundary) and never reaches for the internals.
 //   • getClerkToken / getJwtOrgId — the JWT fetch + org_id decode.
+//   • getClerkTokenDetailed       — same mint, but returns { token, failure }
+//                                   so a caller can report its own failure
+//                                   instead of the shared (raceable) last-error.
 //   • getLastClerkTokenError      — the classified reason the last fetch
 //                                   failed (for Storage Health diagnostics).
 //   • describeAuthFailure         — an actionable operator sentence that
 //                                   replaces the old misleading "Sign in first".
 export {
   getClerkToken,
+  getClerkTokenDetailed,
   getJwtOrgId,
   getLastClerkTokenError,
   describeAuthFailure,

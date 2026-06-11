@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-06-11T07:45:59.909Z",
+  "lastUpdated": "2026-06-11T10:30:25.852Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,21 @@
   ],
   "changelog": [
     {
+      "sha": "814babc",
+      "date": "2026-06-11T07:52:09+00:00",
+      "message": "Merge branch 'claude/wizardly-allen-d6bw1a'"
+    },
+    {
+      "sha": "380fdb1",
+      "date": "2026-06-11T07:49:54+00:00",
+      "message": "chore: update state.json build metadata"
+    },
+    {
+      "sha": "7fd5dca",
+      "date": "2026-06-11T07:48:12+00:00",
+      "message": "fix(sw): cure opaque-response cache poisoning that broke AI garment views"
+    },
+    {
       "sha": "2c725f3",
       "date": "2026-06-10T15:40:22+00:00",
       "message": "perf(plm): trims load concurrently instead of one-by-one"
@@ -1077,21 +1092,6 @@
       "sha": "ea0401f",
       "date": "2026-06-10T11:34:25+00:00",
       "message": "revert: roll PLM back to pre-batch to restore service"
-    },
-    {
-      "sha": "0189ebe",
-      "date": "2026-06-10T09:30:35+00:00",
-      "message": "feat(plm): version-history vault — silent backups + restore points"
-    },
-    {
-      "sha": "4a44e0f",
-      "date": "2026-06-10T09:25:53+00:00",
-      "message": "feat(plm): remove scary 'Restore mine/Keep theirs' conflict popup"
-    },
-    {
-      "sha": "4cdb1f6",
-      "date": "2026-06-10T09:24:00+00:00",
-      "message": "fix(plm): swatch-grid lag, fabric reload, and price-climb"
     }
   ]
 }
