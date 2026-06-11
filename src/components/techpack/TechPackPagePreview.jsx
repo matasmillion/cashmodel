@@ -913,12 +913,34 @@ function PageConstruction({ d, images }) {
   );
 }
 
+// Image cell without a caption bar — used by the enhanced Cut & Sew call-out
+// cards so the numbered title sits cleanly below the image (no overlap).
+function ImageCell({ x, y, w, h, image, placeholder }) {
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} fill={FR.white} stroke={FR.soil} strokeDasharray="5 4" />
+      {image ? (
+        <image href={image.data} x={x + 3} y={y + 3} width={w - 6} height={h - 6} preserveAspectRatio="xMidYMid meet" />
+      ) : (
+        <text x={x + w / 2} y={y + h / 2 + 4} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
+          {placeholder}
+        </text>
+      )}
+    </g>
+  );
+}
+
 // ─── Page 7 — Construction Notes ────────────────────────────────────────────
 // ─── Construction Details Pages (1 of 2) ────────────────────────────────────
 // Construction Details — page 1 or page 2 depending on `pageKey`. Layout:
-// 9:16 reference image on the left (designer adds red-dot callouts in
-// Photoshop), 2x2 grid of A4-landscape detail cards on the right. Each card
-// has a red-numbered circle at the top + translatable title + description.
+// 2:3 reference image on the left, 2x2 grid of detail cards on the right. Each
+// card has a red-numbered circle + translatable title + description.
+//
+// `enhanced` (Cut & Sew 07/08) fills the full page height, gives each call-out
+// a large main image plus an optional smaller supporting image (main expands
+// when there's no support), and renders the in-app placed numbered dots over
+// the garment. Without `enhanced` (Embellishments 16, Treatments 19) the
+// original compact layout is preserved exactly.
 function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey, enhanced }) {
   const imgs = images || [];
   const resolvedField = fieldName || (pageKey === 'page2' ? 'constructionDetailsPage2' : 'constructionDetailsPage1');
@@ -926,12 +948,102 @@ function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey, enhanc
   const entries = ((d?.[resolvedField]) || []).slice(0, 4);
   const callout = imgs.find(i => i.slot === resolvedSlot);
 
-  const topY    = 158;
-  const padX    = 40;
+  const topY = 158;
+  const padX = 40;
+  const refY = 170;
+
+  if (enhanced) {
+    // ── Big, page-filling layout (Cut & Sew pages 07 / 08) ──
+    const bottomY  = 762;                 // leave a band above the footer
+    const refLabel = 22;                  // PhotoSlot caption bar height
+    const refH     = bottomY - refY - refLabel;       // image area height
+    const refW     = Math.round(refH * (2 / 3));       // true 2:3 portrait
+    const colGap   = 24;
+    const rightX   = padX + refW + colGap;
+    const rightW   = PAGE_W - padX - rightX;
+    const rowGap   = 16;
+    const colGap2  = 16;
+    const cardW    = (rightW - colGap2) / 2;
+    const cardH    = (refH - rowGap) / 2;  // right grid bottom aligns to the ref
+    const pad      = 9;
+    const imageH   = 150;
+    const imgGap   = 8;
+    const dotR     = 11;
+
+    return (
+      <g>
+        <InfoStrip d={d} />
+
+        <text x={PAGE_W / 2} y={topY - 6} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
+          Numbered dots mark each call-out on the garment. Each card carries a large main close-up, an optional supporting image, a title, and a description.
+        </text>
+
+        {/* garment reference (left), full height */}
+        <PhotoSlot x={padX} y={refY} w={refW} h={refH} label="Reference" image={callout} />
+
+        {/* in-app placed numbered dots — coords are 0..1 over the image area
+            drawn inside the PhotoSlot (inset 4px) */}
+        {entries.map(entry => entry.dot ? (
+          <g key={`dot-${entry.num}`}>
+            <circle cx={padX + 4 + entry.dot.x * (refW - 8)} cy={refY + 4 + entry.dot.y * (refH - 8)}
+              r={dotR} fill="#A32D2D" stroke="#FFFFFF" strokeWidth={1.5} />
+            <text x={padX + 4 + entry.dot.x * (refW - 8)} y={refY + 4 + entry.dot.y * (refH - 8) + 4}
+              textAnchor="middle" fontSize="12" fontWeight="600" fill="#FFFFFF">
+              {entry.num}
+            </text>
+          </g>
+        ) : null)}
+
+        {/* 2x2 grid of large detail cards */}
+        {entries.map((entry, i) => {
+          const col = i % 2;
+          const row = Math.floor(i / 2);
+          const cx  = rightX + col * (cardW + colGap2);
+          const cy  = refY   + row * (cardH + rowGap);
+          const detailImg  = imgs.find(im => im.slot === `construction-detail-${entry.num}`);
+          const supportImg = imgs.find(im => im.slot === `construction-detail-${entry.num}-support`);
+          const bandX = cx + pad;
+          const bandY = cy + pad;
+          const bandW = cardW - pad * 2;
+          // Main close-up takes ~62% when a support image exists, else fills.
+          const mainW = supportImg ? (bandW - imgGap) * 0.62 : bandW;
+          const supW  = (bandW - imgGap) * 0.38;
+          const titleY = bandY + imageH + 24;
+          const numCx  = bandX + 11;
+          const descY  = titleY + 9;
+          return (
+            <g key={entry.num}>
+              <rect x={cx} y={cy} width={cardW} height={cardH}
+                fill={FR.white} stroke={FR.sand} strokeWidth={0.5} rx={6} />
+              <ImageCell x={bandX} y={bandY} w={mainW} h={imageH} image={detailImg} placeholder={`Detail ${entry.num}`} />
+              {supportImg && (
+                <ImageCell x={bandX + mainW + imgGap} y={bandY} w={supW} h={imageH} image={supportImg} placeholder="Ref" />
+              )}
+              {/* red numbered circle + title row, cleanly below the image */}
+              <circle cx={numCx} cy={titleY - 4} r={11} fill="#A32D2D" />
+              <text x={numCx} y={titleY} textAnchor="middle" fontSize="12" fontWeight="600" fill="#FFFFFF">
+                {entry.num}
+              </text>
+              <text x={bandX + 29} y={titleY} fontSize="13" fontWeight="600" fill={FR.slate}>
+                {entry.title || `Detail ${entry.num}`}
+              </text>
+              <foreignObject x={bandX} y={descY} width={bandW} height={cy + cardH - pad - descY}>
+                <div xmlns="http://www.w3.org/1999/xhtml"
+                  style={{ fontSize: 10.5, color: FR.slate, lineHeight: 1.45, fontFamily: "'Helvetica Neue', sans-serif", whiteSpace: 'pre-wrap' }}>
+                  {entry.description || ''}
+                </div>
+              </foreignObject>
+            </g>
+          );
+        })}
+      </g>
+    );
+  }
+
+  // ── Original compact layout (Embellishments 16 / Treatments 19) — unchanged ──
   const colGap  = 18;
   const refW    = 240;
   const refH    = refW * (3 / 2); // 2:3 vertical (taller than wide)
-  const refY    = 170;
 
   const rightX  = padX + refW + colGap;
   const rightW  = PAGE_W - padX - rightX;
@@ -940,8 +1052,6 @@ function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey, enhanc
   const cardCols = 2;
   const cardRows = 2;
   const cardW   = (rightW - colGap2 * (cardCols - 1)) / cardCols;
-  // Card height matches the reference image total height so the right
-  // column reads as a single block. Image fills ~55% of the card.
   const cardH   = (refH - rowGap) / cardRows;
   const imageH  = cardH * 0.55;
 
@@ -950,9 +1060,7 @@ function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey, enhanc
       <InfoStrip d={d} />
 
       <text x={PAGE_W / 2} y={topY - 6} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
-        {enhanced
-          ? 'Numbered dots mark each call-out on the garment. Each card carries a main close-up, an optional supporting image, a title, and a description.'
-          : 'Number each callout on the reference image (red dots). Each detail card carries its own close-up image, title, and description.'}
+        Number each callout on the reference image (red dots). Each detail card carries its own close-up image, title, and description.
       </text>
 
       {/* 2:3 reference image on the left */}
@@ -963,19 +1071,6 @@ function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey, enhanc
         image={callout}
       />
 
-      {/* in-app placed numbered dots (Cut & Sew only) — coords are 0..1 over
-          the image area drawn inside the PhotoSlot (inset 4px) */}
-      {enhanced && entries.map(entry => entry.dot ? (
-        <g key={`dot-${entry.num}`}>
-          <circle cx={padX + 4 + entry.dot.x * (refW - 8)} cy={refY + 4 + entry.dot.y * (refH - 8)}
-            r={9} fill="#A32D2D" stroke="#FFFFFF" strokeWidth={1.5} />
-          <text x={padX + 4 + entry.dot.x * (refW - 8)} y={refY + 4 + entry.dot.y * (refH - 8) + 3.5}
-            textAnchor="middle" fontSize="10" fontWeight="600" fill="#FFFFFF">
-            {entry.num}
-          </text>
-        </g>
-      ) : null)}
-
       {/* 2x2 grid of detail cards on the right; each card has its own image */}
       {entries.map((entry, i) => {
         const col = i % cardCols;
@@ -983,36 +1078,21 @@ function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey, enhanc
         const cx  = rightX + col * (cardW + colGap2);
         const cy  = refY   + row * (cardH + rowGap);
         const detailImg = imgs.find(im => im.slot === `construction-detail-${entry.num}`);
-        const supportImg = enhanced ? imgs.find(im => im.slot === `construction-detail-${entry.num}-support`) : null;
         const titleY = cy + imageH + 18;
         const descY  = titleY + 8;
         const numCx  = cx + 18;
-        // When a supporting image exists, the main close-up takes ~62% of the
-        // width and the support sits beside it; otherwise the main fills the
-        // band (identical to the original single-image layout).
-        const imgGap = 6;
-        const mainW  = supportImg ? (cardW - imgGap) * 0.62 : cardW;
-        const supW   = (cardW - imgGap) * 0.38;
         return (
           <g key={entry.num}>
             {/* card border */}
             <rect x={cx} y={cy} width={cardW} height={cardH}
               fill={FR.white} stroke={FR.sand} strokeWidth={0.5} rx={4} />
-            {/* image area at the top — main (+ optional support beside it) */}
+            {/* image area at the top */}
             <PhotoSlot
               x={cx} y={cy}
-              w={mainW} h={imageH}
+              w={cardW} h={imageH}
               label={`Detail ${entry.num}`}
               image={detailImg}
             />
-            {supportImg && (
-              <PhotoSlot
-                x={cx + mainW + imgGap} y={cy}
-                w={supW} h={imageH}
-                label="Ref"
-                image={supportImg}
-              />
-            )}
             {/* red numbered circle at the start of the title row */}
             <circle cx={numCx} cy={titleY - 4} r={9} fill="#A32D2D" />
             <text x={numCx} y={titleY} textAnchor="middle"
