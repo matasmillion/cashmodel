@@ -180,10 +180,10 @@ export async function generateTechPackPDF(pack) {
   function drawConstructionDetailsPage(title, stepIdx, entries) {
     newPage(title, null, stepIdx);
     const margin = 10;
-    const top = 26;
+    const top = 24;
     const colGap = 6;
-    const refW = 80;
-    const refH = refW * 1.5; // 2:3 vertical
+    const refH = 170;                          // fill the page height
+    const refW = Math.round(refH * (2 / 3));    // 2:3 vertical
     const callout = images.find(i => i.slot === `sketch-callout-${title.endsWith('Page 2') ? 'page2' : 'page1'}`);
     if (callout) {
       try { doc.addImage(callout.data, 'JPEG', margin, top, refW, refH, undefined, 'FAST'); }
@@ -217,10 +217,10 @@ export async function generateTechPackPDF(pack) {
 
     const rightX = margin + refW + colGap;
     const rightW = W - margin - rightX;
-    const rowGap = 4;
+    const rowGap = 5;
     const cellW = (rightW - colGap) / 2;
     const cellH = (refH - rowGap) / 2;
-    const imgH  = cellH * 0.55;
+    const imgH  = cellH * 0.56;
     (entries || []).slice(0, 4).forEach((entry, i) => {
       const cx = rightX + (i % 2) * (cellW + colGap);
       const cy = top    + Math.floor(i / 2) * (cellH + rowGap);
@@ -247,7 +247,7 @@ export async function generateTechPackPDF(pack) {
       // Title
       doc.setTextColor(...hex(FR.slate));
       doc.setFontSize(8);
-      doc.text(String(entry.title || `Detail ${entry.num}`).slice(0, 28), cx + 10, cy + imgH + 6.5);
+      doc.text(String(entry.title || `Detail ${entry.num}`).slice(0, 40), cx + 10, cy + imgH + 6.5);
       // Description
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7);
