@@ -291,9 +291,20 @@ async function _syncComponentPackFromCloud(id) {
         });
       }
     }
-    if (idx >= 0) rows[idx] = merged; else rows.push(merged);
-    writeLocal(rows);
-    window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'component_packs', id } }));
+    // Only re-write localStorage and announce a change when the cloud copy
+    // ACTUALLY differs from what we already hold locally. Without this guard,
+    // every background revalidate re-saved an identical row and fired
+    // plm-store-updated — which TechPackBuilder reacts to by re-resolving its
+    // picked trims, which calls getComponentPack again, which fires another
+    // plm-store-updated… an endless self-feeding loop that floods the network
+    // and starves image loading + unit-cost settling. A genuine library edit
+    // changes the row, so real edits still propagate.
+    const changed = !localRow || JSON.stringify(merged) !== JSON.stringify(localRow);
+    if (changed) {
+      if (idx >= 0) rows[idx] = merged; else rows.push(merged);
+      writeLocal(rows);
+      window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'component_packs', id } }));
+    }
     return migrateLegacyVendorKeys(merged);
   } catch { return null; }
 }
