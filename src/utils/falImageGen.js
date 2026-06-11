@@ -93,6 +93,16 @@ async function getFreshToken() {
 let _cachedToken = null;
 let _cachedTokenExp = 0;
 
+// Drop the cached JWT so the next buildHeaders() re-mints from Clerk. Called
+// when a token is rejected (401) or couldn't be minted, so a transient auth
+// blip during a long generation recovers instead of reusing a dead token.
+function invalidateTokenCache() {
+  _cachedToken = null;
+  _cachedTokenExp = 0;
+}
+
+const _sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 async function buildHeaders() {
   const now = Date.now();
   const MARGIN = 30_000; // 30 s safety margin before expiry
@@ -111,7 +121,14 @@ async function buildHeaders() {
   // view-gen calls last wrote the shared error state.
   let { token, failure } = await getClerkTokenDetailed('supabase');
   if (!token || jwtExpiringSoon(token)) ({ token, failure } = await getFreshToken());
-  if (!token) throw new Error(describeAuthFailure(failure));
+  if (!token) {
+    const err = new Error(describeAuthFailure(failure));
+    // Tag the failure so callProxy can decide whether a short wait + re-mint
+    // is worth it (transient blip) or hopeless (missing template / signed out).
+    err.authFailure = true;
+    err.authKind = failure?.kind || 'unknown';
+    throw err;
+  }
 
   // Cache with its JWT expiry so we don't refresh until necessary
   try {
@@ -130,12 +147,46 @@ async function buildHeaders() {
   };
 }
 
-async function callProxy(name, body) {
+// Transient auth recovery: a single token blip should not kill a 2-minute
+// generation. When the token can't be minted (or the proxy rejects it with
+// 401), drop the cached token, wait briefly, and re-mint — a few times. This
+// is what the operator was doing by hand ("regenerate a few times until it
+// works"). Permanent faults (missing template, signed out) are not retried.
+const AUTH_RETRIES = 3;
+const AUTH_RETRY_DELAY_MS = 1500;
+
+function isPermanentAuth(err) {
+  return err?.authKind === 'no_template' || err?.authKind === 'no_session';
+}
+
+async function callProxy(name, body, _authAttempt = 0) {
+  let headers;
+  try {
+    headers = await buildHeaders();
+  } catch (authErr) {
+    // Couldn't mint a token. Retry transient blips with a forced re-mint.
+    if (authErr?.authFailure && !isPermanentAuth(authErr) && _authAttempt < AUTH_RETRIES) {
+      invalidateTokenCache();
+      await _sleep(AUTH_RETRY_DELAY_MS);
+      return callProxy(name, body, _authAttempt + 1);
+    }
+    throw authErr;
+  }
+
   const res = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
     method: 'POST',
-    headers: await buildHeaders(),
+    headers,
     body: JSON.stringify(body),
   });
+
+  // 401 = the token we sent was rejected (expired in-flight, or not yet
+  // propagated to Supabase). Drop it, wait, and retry with a fresh mint.
+  if (res.status === 401 && _authAttempt < AUTH_RETRIES) {
+    invalidateTokenCache();
+    await _sleep(AUTH_RETRY_DELAY_MS);
+    return callProxy(name, body, _authAttempt + 1);
+  }
+
   const text = await res.text();
   let data;
   try { data = JSON.parse(text); } catch { data = { raw: text }; }

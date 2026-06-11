@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-06-11T11:27:26.446Z",
+  "lastUpdated": "2026-06-11T12:17:22.097Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,14 +1044,44 @@
   ],
   "changelog": [
     {
+      "sha": "4decab6",
+      "date": "2026-06-11T11:41:38+00:00",
+      "message": "Merge: narrow Cut & Sew Call Outs garment reference (bigger callout images)"
+    },
+    {
+      "sha": "0318436",
+      "date": "2026-06-11T11:41:25+00:00",
+      "message": "Cut & Sew Call Outs: narrow the garment reference for bigger callouts"
+    },
+    {
+      "sha": "fac8a79",
+      "date": "2026-06-11T11:28:58+00:00",
+      "message": "chore: update state.json build metadata"
+    },
+    {
+      "sha": "79e6d14",
+      "date": "2026-06-11T11:28:10+00:00",
+      "message": "Merge remote main (Call Outs page-fill) with auth self-healing fix"
+    },
+    {
       "sha": "5b7630e",
       "date": "2026-06-11T11:27:03+00:00",
       "message": "Merge remote main (Cut & Sew Call Outs 07/08) with auth self-healing fix"
     },
     {
+      "sha": "534c2ae",
+      "date": "2026-06-11T11:26:46+00:00",
+      "message": "Merge: Cut & Sew Call Outs 07/08 — fill the page, remove dead space"
+    },
+    {
       "sha": "0bb321e",
       "date": "2026-06-11T11:26:37+00:00",
       "message": "Merge branch 'claude/wizardly-allen-d6bw1a'"
+    },
+    {
+      "sha": "d4e5151",
+      "date": "2026-06-11T11:26:31+00:00",
+      "message": "Cut & Sew Call Outs 07/08: fill the page, kill dead space"
     },
     {
       "sha": "f76031b",
@@ -1062,36 +1092,6 @@
       "sha": "0aea1d5",
       "date": "2026-06-11T10:42:18+00:00",
       "message": "Cut & Sew Call Outs (07/08): supporting image + in-app numbered dots"
-    },
-    {
-      "sha": "790b4b5",
-      "date": "2026-06-11T10:31:38+00:00",
-      "message": "fix(auth): self-heal stale Clerk sessions; honest per-call auth errors"
-    },
-    {
-      "sha": "2c09418",
-      "date": "2026-06-11T13:21:34+03:00",
-      "message": "Update CLAUDE.md"
-    },
-    {
-      "sha": "59ed8b4",
-      "date": "2026-06-11T10:13:13+00:00",
-      "message": "Add Cut & Sew Call Outs v2 layout mockup (pages 07/08)"
-    },
-    {
-      "sha": "814babc",
-      "date": "2026-06-11T07:52:09+00:00",
-      "message": "Merge branch 'claude/wizardly-allen-d6bw1a'"
-    },
-    {
-      "sha": "380fdb1",
-      "date": "2026-06-11T07:49:54+00:00",
-      "message": "chore: update state.json build metadata"
-    },
-    {
-      "sha": "7fd5dca",
-      "date": "2026-06-11T07:48:12+00:00",
-      "message": "fix(sw): cure opaque-response cache poisoning that broke AI garment views"
     }
   ]
 }
