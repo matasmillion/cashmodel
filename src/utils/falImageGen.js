@@ -14,7 +14,7 @@
 //   - Re-supply original reference on every call (we don't iterate — each view
 //     is a fresh generation from the same source set).
 
-import { getClerkToken } from '../lib/auth';
+import { getClerkToken, describeAuthFailure } from '../lib/auth';
 import { IS_SUPABASE_ENABLED } from '../lib/supabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -110,7 +110,7 @@ async function buildHeaders() {
   // Slow path: fetch / refresh from Clerk
   let token = await getClerkToken('supabase');
   if (!token || jwtExpiringSoon(token)) token = await getFreshToken();
-  if (!token) throw new Error('Sign in first');
+  if (!token) throw new Error(describeAuthFailure());
 
   // Cache with its JWT expiry so we don't refresh until necessary
   try {

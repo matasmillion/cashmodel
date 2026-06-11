@@ -15,6 +15,7 @@
 // eslint-disable-next-line no-unused-vars
 import * as _atomTypes from '../../types/atoms';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePlmStoreRefresh } from '../../hooks/usePlmStoreRefresh';
 import { Plus, Search, MoreVertical, Copy, Archive, RotateCcw, LayoutGrid, Columns3, Scissors } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { getFRColor } from '../../utils/colorLibrary';
@@ -283,8 +284,7 @@ export default function TreatmentList() {
   };
 
   useEffect(() => { refresh(); }, []);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { window.addEventListener('plm-store-updated', refresh); return () => window.removeEventListener('plm-store-updated', refresh); }, []);
+  usePlmStoreRefresh(refresh);
 
   // Hash-driven open/close — a deep link to /library/treatments/<id>
   // mounts the builder; backing out of the builder clears the id.

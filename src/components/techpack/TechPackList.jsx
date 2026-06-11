@@ -3,7 +3,8 @@
 //   • Kanban: drag tech packs through lifecycle stages.
 // The grid is the default; the choice is persisted in localStorage so the
 // user lands on their preferred view next time.
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
+import { usePlmStoreRefresh } from '../../hooks/usePlmStoreRefresh';
 import { Plus, Shirt, Copy, Trash2, GitBranch, Search, LayoutGrid, Columns3 } from 'lucide-react';
 import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STATUSES } from './techPackConstants';
 import { CostPill } from './TechPackPrimitives';
@@ -222,29 +223,31 @@ export default function TechPackList() {
     // listComponentPacks still runs so the dual-write mirrors are warm, but
     // the supplier dropdown pulls from the unified PLM directory that merges
     // tech packs + trim packs + Supabase projections + manually-added entries.
-    const [rows, , suppliers] = await Promise.all([
-      listTechPacks(),
-      listComponentPacks(),
-      listAllSuppliers(),
-    ]);
-    setPacks(rows || []);
-    setExistingSuppliers(suppliers);
-    setLoading(false);
+    try {
+      const [rows, , suppliers] = await Promise.all([
+        listTechPacks(),
+        listComponentPacks(),
+        listAllSuppliers(),
+      ]);
+      setPacks(rows || []);
+      setExistingSuppliers(suppliers);
+    } catch (e) {
+      console.error('TechPackList refresh:', e);
+    } finally {
+      setLoading(false); // never leave the grid stuck on "Loading…"
+    }
   };
 
   useEffect(() => { refresh(); }, []);
   // Background cloud updates: refresh without showing the loading skeleton
   // (data is already visible; we just want the list to update quietly).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    const silentRefresh = async () => {
-      const [rows, , suppliers] = await Promise.all([listTechPacks(), listComponentPacks(), listAllSuppliers()]);
-      setPacks(rows || []);
-      setExistingSuppliers(suppliers);
-    };
-    window.addEventListener('plm-store-updated', silentRefresh);
-    return () => window.removeEventListener('plm-store-updated', silentRefresh);
-  }, []);
+  const silentRefresh = async () => {
+    const [rows, , suppliers] = await Promise.all([listTechPacks(), listComponentPacks(), listAllSuppliers()]);
+    const sig = (arr) => (arr || []).map(r => `${r.id}:${r.updated_at || ''}:${r.cover_image || ''}:${r.status || ''}`).join('|');
+    setPacks(prev => (sig(prev) === sig(rows) ? prev : (rows || [])));
+    setExistingSuppliers(suppliers);
+  };
+  usePlmStoreRefresh(silentRefresh);
 
   // If the URL points to a specific pack on mount or hashchange, open it.
   useEffect(() => {

@@ -6,6 +6,7 @@
 // tab remembers which view the user prefers.
 
 import { useEffect, useState } from 'react';
+import { usePlmStoreRefresh } from '../../hooks/usePlmStoreRefresh';
 import { Plus, Boxes, Copy, Trash2, Search, Package, LayoutGrid, Columns3 } from 'lucide-react';
 import PackTrashView from './PackTrashView';
 import { FR, DEFAULT_COMPONENT_DATA, STATUSES, LEGACY_STATUS_MIGRATION } from './componentPackConstants';
@@ -220,31 +221,38 @@ export default function ComponentPackList() {
 
   const refresh = async () => {
     setLoading(true);
-    const [rows, suppliers, people] = await Promise.all([
-      listComponentPacks(),
-      listAllSuppliers(),
-      listAllPeople(),
-    ]);
-    setPacks(rows || []);
-    setExistingSuppliers(suppliers);
-    setExistingPeople(people);
-    setExistingTrimTypes(listAllTrimTypes());
-    setLoading(false);
-  };
-
-  useEffect(() => { refresh(); }, []);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    const silentRefresh = async () => {
-      const [rows, suppliers, people] = await Promise.all([listComponentPacks(), listAllSuppliers(), listAllPeople()]);
+    try {
+      const [rows, suppliers, people] = await Promise.all([
+        listComponentPacks(),
+        listAllSuppliers(),
+        listAllPeople(),
+      ]);
       setPacks(rows || []);
       setExistingSuppliers(suppliers);
       setExistingPeople(people);
       setExistingTrimTypes(listAllTrimTypes());
-    };
-    window.addEventListener('plm-store-updated', silentRefresh);
-    return () => window.removeEventListener('plm-store-updated', silentRefresh);
-  }, []);
+    } catch (e) {
+      console.error('ComponentPackList refresh:', e);
+    } finally {
+      setLoading(false); // never leave the grid stuck on "Loading…"
+    }
+  };
+
+  useEffect(() => { refresh(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Debounced background refresh — coalesces bursts of plm-store-updated so the
+  // grid doesn't thrash (re-fetch / re-render / re-resolve thumbnails) on every
+  // sync tick. Only swaps state when the list actually changed, so an identical
+  // refresh never re-renders.
+  const silentRefresh = async () => {
+    const [rows, suppliers, people] = await Promise.all([listComponentPacks(), listAllSuppliers(), listAllPeople()]);
+    const sig = (arr) => (arr || []).map(r => `${r.id}:${r.updated_at || ''}:${r.cover_image || ''}:${r.status || ''}`).join('|');
+    setPacks(prev => (sig(prev) === sig(rows) ? prev : (rows || [])));
+    setExistingSuppliers(suppliers);
+    setExistingPeople(people);
+    setExistingTrimTypes(listAllTrimTypes());
+  };
+  usePlmStoreRefresh(silentRefresh);
 
   // Open the pack referenced by the URL on mount + when the hash changes.
   useEffect(() => {

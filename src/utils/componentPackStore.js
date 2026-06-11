@@ -2,7 +2,7 @@
 // Mirrors techPackStore.js but for the `component_packs` table
 
 import { IS_SUPABASE_ENABLED, getAuthedSupabase, refreshAuthedSupabase } from '../lib/supabase';
-import { getCurrentUserIdSync, getCurrentOrgIdSync, getJwtOrgId } from '../lib/auth';
+import { getCurrentUserIdSync, getCurrentOrgIdSync, getJwtOrgId, describeAuthFailure } from '../lib/auth';
 import { persistableImages, deleteAssets, copyAsset, scheduleOrphanDeletion, cancelOrphanDeletion } from './plmAssets';
 import { robustUpsertAtomBatch } from './atomCloudSync';
 import { enqueue } from './syncQueue';
@@ -400,7 +400,7 @@ export async function saveComponentPack(id, updates) {
   // structured error so the UI can surface a "diagnose" link instead of
   // spamming retries.
   if (!jwtOrgId) {
-    const jwtErr = Object.assign(new Error('JWT is missing the org_id claim — open Storage Health to diagnose'), { code: 'JWT_NO_ORG_ID' });
+    const jwtErr = Object.assign(new Error(describeAuthFailure()), { code: 'JWT_NO_ORG_ID' });
     console.error('saveComponentPack:', jwtErr);
     // Park it in the durable outbox so it flushes once the JWT/org loads.
     enqueue({ table: 'component_packs', id, op: 'upsert', payload: { id, ...corePatch }, onConflict: 'id', updated_at: now });

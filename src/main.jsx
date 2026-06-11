@@ -17,6 +17,11 @@ import './utils/startSync'
 // Side-effect: capture the PWA install prompt early (it can fire before React
 // mounts) so the in-app Install button can trigger one-click install.
 import './utils/pwaInstall'
+import { purgeLegacyImageCache } from './utils/purgeLegacyImageCache'
+
+// Purge the orphaned v1 image cache ('fr-plm-images') — opaque responses
+// cached there break every cors-mode fetch() of a Storage object. Idempotent.
+purgeLegacyImageCache();
 
 // Hydrate the local store (fast local-disk read, not network), then mount.
 // hydrate() never rejects — it falls back to localStorage internally — so the

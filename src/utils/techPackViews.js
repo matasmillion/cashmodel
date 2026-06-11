@@ -8,7 +8,8 @@
 // orchestration: reading the source image entry, running Claude Vision,
 // then dispatching a Flat Lay job per view.
 
-import { getAssetUrl } from './plmAssets';
+import { getAssetUrl, invalidateAssetUrl } from './plmAssets';
+import { blobToDataUrl } from './blobDataUrl';
 import { analyzeGarmentImage, generateFlatLay, generateGhostMannequin } from './falImageGen';
 
 export { analyzeGarmentImage };
@@ -43,12 +44,17 @@ export async function generateGarmentView(description, view, opts = {}) {
 /**
  * Convert an image entry from the tech pack images array to a base64 data URL.
  *
- * Image entries have three possible shapes depending on storage state:
+ * Image entries have four possible shapes depending on storage state:
  *   - Offline / Supabase disabled: { data: 'data:image/...;base64,...' }
- *   - During cloud upload (in-flight): { _blobUrl: 'blob:...' }
+ *   - During cloud upload (in-flight): { _blob: Blob, _blobUrl: 'blob:...' }
+ *   - After URL revocation (Blob still valid): { _blob: Blob }
  *   - After cloud upload: { path: 'org/scope/owner/slot-uuid.webp' }
  *
- * @param {{ data?: string, _blobUrl?: string, path?: string }} entry
+ * The `_blob` transient field is checked before `_blobUrl` because a Blob
+ * survives URL.revokeObjectURL — the modal captures entries in a mount-time
+ * closure and the blob URL may be revoked before the modal reads the entry.
+ *
+ * @param {{ data?: string, _blob?: Blob, _blobUrl?: string, path?: string }} entry
  * @returns {Promise<string|null>}
  */
 export async function imageEntryToDataUrl(entry) {
@@ -56,12 +62,28 @@ export async function imageEntryToDataUrl(entry) {
 
   if (entry.data?.startsWith('data:')) return entry.data;
 
+  // Prefer the raw Blob (survives URL.revokeObjectURL; the modal's mount-time
+  // closure can't go stale when the upload completes and revokes the blob URL).
+  if (entry._blob instanceof Blob) return blobToDataUrl(entry._blob);
+
   if (entry._blobUrl) return fetchToDataUrl(entry._blobUrl);
 
   if (entry.path) {
     const signedUrl = await getAssetUrl(entry.path);
     if (!signedUrl) return null;
-    return fetchToDataUrl(signedUrl);
+    // Wrap in try/catch — a cached signed URL can expire or be revoked after
+    // the page loaded (7-day TTL, re-signed on each page load). On failure:
+    // evict the stale URL from the in-memory cache, re-sign once, and retry.
+    // If the fresh URL is also unavailable, rethrow the original error so the
+    // caller can name the failing slot precisely.
+    try {
+      return await fetchToDataUrl(signedUrl);
+    } catch (originalErr) {
+      invalidateAssetUrl(entry.path);
+      const freshUrl = await getAssetUrl(entry.path);
+      if (!freshUrl) throw originalErr;
+      return fetchToDataUrl(freshUrl);
+    }
   }
 
   return null;

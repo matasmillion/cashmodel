@@ -1197,40 +1197,55 @@ function ComponentBOMPage({ title, singularNoun, roleLabel = 'Type', subtitle, f
   // to land in the slot card the moment the user comes back to this page.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      const ids = picked.map(p => p?.componentId || p?.id).filter(Boolean);
-      if (!ids.length) { setFullById({}); return; }
-      const next = {};
-      for (const id of ids) {
-        const row = await getComponentPack(id);
-        if (cancelled) return;
-        if (!row) continue;
-        const v = row.updated_at;
-        const resolvedTop    = await resolveCoverPath(row.cover_image, v);
-        const resolvedNested = await resolveCoverPath(row?.data?.cover_image, v);
-        // Cover image priority for the BOM card / live preview:
-        //   1. Construction → Measurement Diagram   (slot: construction-diagram)
-        //   2. Design → Sketch                       (slot: design-sketch)
-        //   3. Pack cover_image                      (fallback)
-        // The first two come from the pack's images[] array. We try them
-        // in order and the first non-null wins.
-        const findImage = async (slot) => {
-          const entry = (row.images || []).find(img => img.slot === slot);
-          if (!entry) return null;
-          if (entry.data?.startsWith?.('data:')) return entry.data;
-          if (entry.path) return await resolveCoverPath(entry.path, v);
-          return null;
-        };
-        const diagramUrl = await findImage('construction-diagram') || await findImage('design-sketch');
-        next[id] = {
+    const ids = picked.map(p => p?.componentId || p?.id).filter(Boolean);
+    // Drop cards for trims that are no longer picked so stale entries don't
+    // linger; keep the already-resolved ones (they re-resolve below) so revisiting
+    // the page doesn't flash every card back to "Loading…".
+    setFullById(prev => {
+      const keys = Object.keys(prev);
+      if (keys.length === ids.length && keys.every(k => ids.includes(k))) return prev;
+      const kept = {};
+      for (const id of ids) if (prev[id]) kept[id] = prev[id];
+      return kept;
+    });
+    if (!ids.length) return undefined;
+    // Resolve every picked trim CONCURRENTLY and stream each card into state the
+    // moment it lands. The old code awaited trims one-by-one — each with 3–4
+    // serial signed-URL fetches — and only set state after the WHOLE loop, so on
+    // a cold URL cache every card sat on "Loading…" until the slowest finished.
+    ids.forEach(async (id) => {
+      const row = await getComponentPack(id);
+      if (cancelled || !row) return;
+      const v = row.updated_at;
+      // Cover image priority for the BOM card / live preview:
+      //   1. Construction → Measurement Diagram   (slot: construction-diagram)
+      //   2. Design → Sketch                       (slot: design-sketch)
+      //   3. Pack cover_image                      (fallback)
+      const findImage = async (slot) => {
+        const entry = (row.images || []).find(img => img.slot === slot);
+        if (!entry) return null;
+        if (entry.data?.startsWith?.('data:')) return entry.data;
+        if (entry.path) return await resolveCoverPath(entry.path, v);
+        return null;
+      };
+      // The cover, nested cover, and diagram lookups are independent — resolve
+      // them concurrently instead of in series.
+      const [resolvedTop, resolvedNested, diagramUrl] = await Promise.all([
+        resolveCoverPath(row.cover_image, v),
+        resolveCoverPath(row?.data?.cover_image, v),
+        (async () => (await findImage('construction-diagram')) || (await findImage('design-sketch')))(),
+      ]);
+      if (cancelled) return;
+      setFullById(prev => (cancelled ? prev : {
+        ...prev,
+        [id]: {
           ...row,
           cover_image: resolvedTop || row.cover_image,
           data: { ...(row.data || {}), cover_image: resolvedNested || row?.data?.cover_image },
           _constructionDiagram: diagramUrl,
-        };
-      }
-      if (!cancelled) setFullById(next);
-    })();
+        },
+      }));
+    });
     return () => { cancelled = true; };
   }, [picked.map(p => p?.componentId || p?.id).join('|'), refreshTick]);
 

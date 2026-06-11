@@ -9,7 +9,9 @@
     "build": "vite build",
     "gen:state": "node scripts/generate-state.js",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "test": "node --test 'src/**/*.test.mjs'",
+    "preview": "vite preview",
+    "selftest": "node scripts/selftest.mjs"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.61.6",
@@ -35,6 +37,7 @@
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
+    "fake-indexeddb": "^6.2.5",
     "globals": "^17.4.0",
     "vite": "^8.0.1",
     "vite-plugin-pwa": "^1.3.0"

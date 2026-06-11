@@ -11,19 +11,45 @@
 // Storage and the entry's `url` is the path; otherwise we fall back to
 // in-memory data URLs. Mirrors the CoverImagePicker contract.
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus, X, Check } from 'lucide-react';
 import { FR } from './techPackConstants';
-import { uploadAsset, deleteAsset, getAssetUrl, dataUrlToBlob, isLegacyDataUrl } from '../../utils/plmAssets';
+import { uploadAsset, deleteAsset, getAssetUrl, invalidateAssetUrl, dataUrlToBlob, isLegacyDataUrl } from '../../utils/plmAssets';
 import { resizeImage } from './techPackConstants';
 
+// Resolve a swatch's storage path → signed URL exactly ONCE per `src`, inside an
+// effect. The old version called getAssetUrl() in the render body, so a path that
+// couldn't be signed (missing/expired file) re-fired a signed-URL request on every
+// re-render — a network storm that lagged the whole UI. The onError retry is bounded
+// (one re-sign attempt) so a genuinely broken image can never loop.
 function Thumb({ src }) {
-  const [resolved, setResolved] = useState(isLegacyDataUrl(src) || /^https?:\/\//i.test(src) ? src : '');
-  if (!resolved && src) {
-    getAssetUrl(src).then(u => { if (u) setResolved(u); });
-  }
+  const [resolved, setResolved] = useState(
+    isLegacyDataUrl(src) || /^https?:\/\//i.test(src) ? src : ''
+  );
+  const triedRef = useRef(false);
+  useEffect(() => {
+    triedRef.current = false;
+    if (!src) { setResolved(''); return undefined; }
+    if (isLegacyDataUrl(src) || /^https?:\/\//i.test(src)) { setResolved(src); return undefined; }
+    let cancelled = false;
+    setResolved(''); // clear any stale URL from a previous src
+    getAssetUrl(src).then(u => { if (!cancelled && u) setResolved(u); });
+    return () => { cancelled = true; };
+  }, [src]);
   if (!resolved) return null;
-  return <img src={resolved} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />;
+  return (
+    <img
+      src={resolved}
+      alt=""
+      onError={() => {
+        if (triedRef.current) { setResolved(''); return; } // give up after one retry
+        triedRef.current = true;
+        invalidateAssetUrl(src);
+        getAssetUrl(src).then(u => setResolved(u || ''));
+      }}
+      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+    />
+  );
 }
 
 export default function MultiImageSlot({
@@ -84,7 +110,10 @@ export default function MultiImageSlot({
           const blob = dataUrlToBlob(dataUrl);
           if (!blob) continue;
           const ref = await uploadAsset({ scope: assetScope, ownerId: assetOwnerId, slot: `${assetSlot}-${Date.now()}-${additions.length}`, blob, skipCompress: false });
-          additions.push({ url: ref.path, label: '', hex: '' });
+          // ref.path when the upload reached Storage; ref.data (inline data URL) when
+          // the cloud was unavailable and the bytes were kept locally — either way the
+          // swatch renders and is never lost.
+          additions.push({ url: ref.path || ref.data, label: '', hex: '' });
         } else {
           additions.push({ url: dataUrl, label: '', hex: '' });
         }
@@ -140,7 +169,7 @@ export default function MultiImageSlot({
         }}
       >
         {value.map((c, i) => (
-          <div key={i} style={{ position: 'relative', border: `0.5px solid ${selectMode && selected.has(i) ? FR.slate : FR.sand}`, borderRadius: 6, overflow: 'hidden', background: '#fff' }}>
+          <div key={c.url || i} style={{ position: 'relative', border: `0.5px solid ${selectMode && selected.has(i) ? FR.slate : FR.sand}`, borderRadius: 6, overflow: 'hidden', background: '#fff' }}>
             <div
               onClick={selectMode ? () => toggleOne(i) : undefined}
               style={{ width: '100%', aspectRatio: '1 / 1', background: c.hex || FR.salt, position: 'relative', cursor: selectMode ? 'pointer' : 'default' }}>

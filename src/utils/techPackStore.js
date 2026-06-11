@@ -2,10 +2,11 @@
 // Used by the TechPack list and builder views
 
 import { IS_SUPABASE_ENABLED, getAuthedSupabase, refreshAuthedSupabase } from '../lib/supabase';
-import { getCurrentUserIdSync, getCurrentOrgIdSync, getJwtOrgId } from '../lib/auth';
+import { getCurrentUserIdSync, getCurrentOrgIdSync, getJwtOrgId, describeAuthFailure } from '../lib/auth';
 import { persistableImages, deleteAssets, copyAsset, scheduleOrphanDeletion, cancelOrphanDeletion } from './plmAssets';
 import { enqueue } from './syncQueue';
 import { getCollection, setCollection } from './localDb';
+import { snapshotVersion } from './versionHistoryStore';
 
 const LOCAL_KEY = 'cashmodel_techpacks';
 
@@ -275,6 +276,20 @@ export async function saveTechPack(id, updates) {
   }
   writeLocal(packs);
 
+  // Version vault: throttled snapshot of the full current record so the operator
+  // can browse + restore past versions (the silent safety net that replaced the
+  // conflict popup). Best-effort — never blocks or fails the save.
+  try {
+    const stored = idx >= 0 ? packs[idx] : packs[packs.length - 1];
+    snapshotVersion({
+      table: 'tech_packs', id,
+      label: stored?.style_name || stored?.data?.styleNumber || '',
+      code: stored?.data?.styleNumber || '',
+      name: stored?.style_name || '',
+      data: stored?.data, images: stored?.images, reason: 'save',
+    });
+  } catch (e) { console.error('versionHistory snapshot (techpack):', e); }
+
   const clientOrgId = getCurrentOrgIdSync();
   if (!IS_SUPABASE_ENABLED || !clientOrgId) return { ok: true };
 
@@ -285,7 +300,7 @@ export async function saveTechPack(id, updates) {
     jwtOrgId = await getJwtOrgId({ skipCache: true });
   }
   if (!jwtOrgId) {
-    const jwtErr = Object.assign(new Error('JWT is missing the org_id claim — open Storage Health to diagnose'), { code: 'JWT_NO_ORG_ID' });
+    const jwtErr = Object.assign(new Error(describeAuthFailure()), { code: 'JWT_NO_ORG_ID' });
     console.error('saveTechPack:', jwtErr);
     // Park it in the durable outbox — when the JWT/org loads (or wifi returns)
     // the queue flushes it through the LWW-guarded writer. Edit is already

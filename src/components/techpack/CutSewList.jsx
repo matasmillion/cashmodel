@@ -14,6 +14,7 @@
 // eslint-disable-next-line no-unused-vars
 import * as _atomTypes from '../../types/atoms';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePlmStoreRefresh } from '../../hooks/usePlmStoreRefresh';
 import { Plus, Search, MoreVertical, Copy, Archive, RotateCcw, PenTool, LayoutGrid, Columns3 } from 'lucide-react';
 import { FR } from './techPackConstants';
 import { parsePLMHash, setPLMHash } from '../../utils/plmRouting';
@@ -263,8 +264,7 @@ export default function CutSewList() {
   };
 
   useEffect(() => { refresh(); }, []);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { window.addEventListener('plm-store-updated', refresh); return () => window.removeEventListener('plm-store-updated', refresh); }, []);
+  usePlmStoreRefresh(refresh);
 
   useEffect(() => {
     let cancelled = false;

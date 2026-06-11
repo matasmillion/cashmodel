@@ -395,6 +395,18 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
     return () => window.removeEventListener('beforeunload', handler);
   }, []);
 
+  // ⌘S / Ctrl-S → save now (parity with the Styles builder).
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        flushPendingSave();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [flushPendingSave]);
+
   // Lazy migration of legacy base64 image entries into Storage. Runs once
   // per pack mount, in the background. The user can keep editing while this
   // runs — base64 entries render fine via AssetImage's `data` passthrough.
@@ -702,11 +714,11 @@ export default function ComponentPackBuilder({ pack, onBack, existingSuppliers =
             : saving
               ? <span style={{ fontSize: 10, color: FR.sage }}>Saving…</span>
               : isDirty
-                ? <span style={{ fontSize: 10, color: '#854F0B' }}>Unsaved changes</span>
+                ? <span style={{ fontSize: 10, color: '#E0B45E', fontWeight: 600 }}>● Unsaved changes</span>
                 : saved && !saveError && <span style={{ fontSize: 10, color: '#4CAF7D' }}>Saved ✓</span>
           }
           <button onClick={() => flushPendingSave()} disabled={saving || pendingUploads > 0 || (!isDirty && !saveError)}
-            title={pendingUploads > 0 ? 'Waiting for image uploads to finish' : isDirty ? 'Save now' : 'No unsaved changes'}
+            title={pendingUploads > 0 ? 'Waiting for image uploads to finish' : isDirty ? 'Save now (⌘S / Ctrl-S)' : 'No unsaved changes'}
             style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', background: (isDirty || saveError) ? FR.salt : 'rgba(255,255,255,0.1)', color: (isDirty || saveError) ? FR.slate : FR.sand, border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 10, fontWeight: 600, cursor: (saving || pendingUploads > 0 || (!isDirty && !saveError)) ? 'default' : 'pointer' }}>
             <Save size={11} /> Save
           </button>

@@ -698,14 +698,22 @@ function GenerateViewsModal({ viewSources, sharedRefs, customContext, style, bgC
     try {
       setPhase('analyzing');
 
-      // Step 1: convert image entries to data URLs
+      // Step 1: convert image entries to data URLs — each load is labeled so
+      // an error names the failing slot (e.g. "front reference — Failed to fetch").
+      const SLOT_LABELS = {
+        'design-treatment-ref':     'treatment reference',
+        'design-embellishment-ref': 'embellishment reference',
+      };
+      const loadRef = (entry, name) =>
+        imageEntryToDataUrl(entry).catch(e => { throw new Error(`${name} — ${toMsg(e)}`); });
+
       let imageUrls;
       try {
         const [frontUrl, backUrl, sideUrl, ...sharedUrls] = await Promise.all([
-          viewSources?.front ? imageEntryToDataUrl(viewSources.front) : Promise.resolve(null),
-          viewSources?.back  ? imageEntryToDataUrl(viewSources.back)  : Promise.resolve(null),
-          viewSources?.side  ? imageEntryToDataUrl(viewSources.side)  : Promise.resolve(null),
-          ...(sharedRefs || []).map(imageEntryToDataUrl),
+          viewSources?.front ? loadRef(viewSources.front, 'front reference')  : Promise.resolve(null),
+          viewSources?.back  ? loadRef(viewSources.back,  'back reference')   : Promise.resolve(null),
+          viewSources?.side  ? loadRef(viewSources.side,  'side reference')   : Promise.resolve(null),
+          ...(sharedRefs || []).map(r => loadRef(r, SLOT_LABELS[r.slot] || 'shared reference')),
         ]);
         imageUrls = { frontUrl, backUrl, sideUrl, sharedClean: sharedUrls.filter(Boolean) };
       } catch (e) {
@@ -905,6 +913,11 @@ function GenerateViewsModal({ viewSources, sharedRefs, customContext, style, bgC
           <button onClick={onClose} disabled={accepting} style={{ padding: '8px 18px', background: 'none', border: `0.5px solid ${FR.sand}`, borderRadius: 6, cursor: accepting ? 'not-allowed' : 'pointer', fontSize: 12, color: FR.slate, opacity: accepting ? 0.5 : 1 }}>
             Cancel
           </button>
+          {phase === 'error' && (
+            <button onClick={() => { setErrMsg(''); startAll(); }} style={{ padding: '8px 22px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, letterSpacing: 0.3 }}>
+              Try Again
+            </button>
+          )}
           {allDone && (
             <button onClick={handleAccept} disabled={accepting} style={{ padding: '8px 22px', background: FR.slate, color: FR.salt, border: 'none', borderRadius: 6, cursor: accepting ? 'not-allowed' : 'pointer', fontSize: 12, letterSpacing: 0.3, opacity: accepting ? 0.7 : 1 }}>
               {accepting ? 'Saving…' : 'Use These Views'}

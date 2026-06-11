@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-06-04T14:24:38.258Z",
+  "lastUpdated": "2026-06-11T07:45:59.909Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,54 +1044,54 @@
   ],
   "changelog": [
     {
-      "sha": "33e21b3",
-      "date": "2026-06-04T13:49:22+00:00",
-      "message": "Scanner: add-box uses detected size; confirm overlap-safe crops"
+      "sha": "2c725f3",
+      "date": "2026-06-10T15:40:22+00:00",
+      "message": "perf(plm): trims load concurrently instead of one-by-one"
     },
     {
-      "sha": "eabe9e1",
-      "date": "2026-06-04T13:43:33+00:00",
-      "message": "Scanner: shift-click multi-select for group move / delete"
+      "sha": "037ce47",
+      "date": "2026-06-10T14:10:43+00:00",
+      "message": "deploy: ship tested PLM release to production"
     },
     {
-      "sha": "cb8943c",
-      "date": "2026-06-04T13:27:27+00:00",
-      "message": "Scanner: two-pass swatch flow — estimate boxes, crop, then read names"
+      "sha": "89fac49",
+      "date": "2026-06-10T13:54:13+00:00",
+      "message": "feat(plm): manual-save parity for the Trims builder"
     },
     {
-      "sha": "767eaf9",
-      "date": "2026-06-04T11:46:53+00:00",
-      "message": "Scanner: per-swatch adjustable crop boxes (replace single grid overlay)"
+      "sha": "e21490e",
+      "date": "2026-06-10T13:41:53+00:00",
+      "message": "feat(plm): manual Save + unsaved-changes guards in the Styles builder"
     },
     {
-      "sha": "82a8fd8",
-      "date": "2026-06-04T11:25:09+00:00",
-      "message": "chore: update public/state.json"
+      "sha": "787f7bf",
+      "date": "2026-06-10T13:29:35+00:00",
+      "message": "fix(plm): Styles + Trims lists can no longer hang on a slow cloud"
     },
     {
-      "sha": "ad71612",
-      "date": "2026-06-04T11:24:22+00:00",
-      "message": "Merge remote-tracking branch 'origin/main' into claude/eager-lamport-2MgVV"
+      "sha": "ecd0295",
+      "date": "2026-06-10T11:44:27+00:00",
+      "message": "fix(plm): Styles + Trims lists can no longer hang on a slow cloud"
     },
     {
-      "sha": "220335c",
-      "date": "2026-06-04T11:08:46+00:00",
-      "message": "chore: update public/state.json"
+      "sha": "ea0401f",
+      "date": "2026-06-10T11:34:25+00:00",
+      "message": "revert: roll PLM back to pre-batch to restore service"
     },
     {
-      "sha": "6b9f304",
-      "date": "2026-06-04T11:08:16+00:00",
-      "message": "Fabric spec: capture pre & post as printed (drop auto-derive)"
+      "sha": "0189ebe",
+      "date": "2026-06-10T09:30:35+00:00",
+      "message": "feat(plm): version-history vault — silent backups + restore points"
     },
     {
-      "sha": "5fe9524",
-      "date": "2026-06-04T11:04:03+00:00",
-      "message": "chore: update public/state.json"
+      "sha": "4a44e0f",
+      "date": "2026-06-10T09:25:53+00:00",
+      "message": "feat(plm): remove scary 'Restore mine/Keep theirs' conflict popup"
     },
     {
-      "sha": "c2a103d",
-      "date": "2026-06-04T11:03:20+00:00",
-      "message": "Fabric spec: pre/post-shrink GSM + width and directional (warp/weft) shrinkage"
+      "sha": "4cdb1f6",
+      "date": "2026-06-10T09:24:00+00:00",
+      "message": "fix(plm): swatch-grid lag, fabric reload, and price-climb"
     }
   ]
 }
