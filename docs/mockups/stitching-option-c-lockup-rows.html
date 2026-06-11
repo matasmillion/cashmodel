@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stitching · Option C — Stitch Lockup Rows (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ───────── FR design tokens (shared with cutsew-callouts-v2.html) ───────── */
+  :root{
+    --salt:#F5F0E8; --slate:#3A3A3A; --sand:#EBE5D5; --soil:#854F0B;
+    --stone:#9A9A9A; --white:#fff;
+    --good:#3B6D11; --warn:#854F0B; --bad:#A32D2D; --red:#A32D2D;
+    --border:rgba(58,58,58,0.15);
+    --serif:'Cormorant Garamond','Georgia',serif;
+    --sans:'Inter','General Sans','Helvetica Neue',system-ui,sans-serif;
+    --mono:ui-monospace,'SF Mono',Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--salt);color:var(--slate);font-family:var(--sans);font-size:13px}
+  h1,h2,h3,h4{font-family:var(--serif);font-weight:400;margin:0}
+
+  .wrap{max-width:1120px;margin:0 auto;padding:28px 24px 80px}
+  .mock-head{margin-bottom:18px}
+  .mock-eyebrow{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--soil);font-weight:600}
+  .mock-title{font-size:30px;margin-top:4px}
+  .mock-sub{font-size:13px;color:var(--stone);margin-top:4px;max-width:790px;line-height:1.5}
+  .mock-sub b{color:var(--slate)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:14px}
+  .legend .chip{display:inline-flex;align-items:center;gap:7px;background:var(--white);border:0.5px solid var(--border);
+    border-radius:6px;padding:6px 11px;font-size:11px;color:var(--slate)}
+  .swatch{width:13px;height:13px;border-radius:3px;flex:none}
+
+  /* ───────── The "paper" page (A4 landscape live-preview, grows with rows) ───────── */
+  .page{width:1040px;max-width:100%;background:var(--white);
+    border:0.5px solid var(--border);border-radius:6px;box-shadow:0 6px 28px rgba(58,58,58,0.10);
+    margin:6px auto 0;display:flex;flex-direction:column;overflow:hidden}
+  .page-head{display:flex;justify-content:space-between;align-items:flex-start;
+    padding:16px 26px 12px;border-bottom:0.5px solid var(--border)}
+  .ph-brand .co{font-size:11px;letter-spacing:2px;font-weight:600}
+  .ph-brand .sub{font-size:8px;letter-spacing:2px;color:var(--stone);margin-top:2px}
+  .ph-title{font-family:var(--serif);font-size:18px;text-align:center;flex:1}
+  .ph-id{font-family:var(--mono);font-size:9px;color:var(--stone);text-align:right;line-height:1.5}
+  .meta-row{display:flex;gap:30px;padding:8px 26px 0;font-size:8px}
+  .meta-row .m label{display:block;letter-spacing:1.5px;text-transform:uppercase;color:var(--stone)}
+  .meta-row .m span{font-family:var(--mono);font-size:10px;color:var(--slate)}
+  .instruction{font-size:10px;font-style:italic;color:var(--stone);text-align:center;padding:8px 26px 2px}
+
+  /* ───────── Option C — full-width horizontal lockup rows ───────── */
+  .rows{display:flex;flex-direction:column;gap:14px;padding:10px 26px 24px}
+
+  .lock{background:var(--white);border:0.5px solid var(--border);border-radius:6px;
+    display:flex;gap:14px;padding:12px;align-items:stretch}
+  /* photo on the left */
+  .lock .photo{flex:0 0 168px;border-radius:5px;position:relative;overflow:hidden;
+    background:linear-gradient(135deg,#DAD3C4,#C9C0AD);border:0.5px solid var(--border);
+    display:flex;align-items:center;justify-content:center}
+  .lock .photo .cap{font-size:8px;letter-spacing:1.2px;text-transform:uppercase;color:rgba(58,58,58,0.45);text-align:center;padding:0 8px}
+  .lock .photo .tag{position:absolute;top:6px;left:6px;font-size:7px;letter-spacing:1px;text-transform:uppercase;
+    color:#fff;background:rgba(58,58,58,0.55);padding:1px 6px;border-radius:3px}
+
+  .lock .body{flex:1;min-width:0;display:flex;flex-direction:column}
+  .lock .head{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+  .badge{width:20px;height:20px;border-radius:50%;background:var(--red);color:#fff;font-size:10px;font-weight:600;
+    display:flex;align-items:center;justify-content:center;flex:none}
+  .lock .nm{font-family:var(--serif);font-size:19px;color:var(--slate);line-height:1}
+  .lock .code{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--soil);
+    background:var(--salt);border:0.5px solid var(--border);border-radius:4px;padding:2px 7px}
+
+  /* the eight fields as a clean labelled grid — nothing truncated */
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px 16px}
+  .f label{display:block;font-size:8px;letter-spacing:1.2px;text-transform:uppercase;color:var(--stone);font-weight:600;margin-bottom:2px}
+  .f .val{font-size:11.5px;color:var(--slate);line-height:1.35}
+  .f .val.mono{font-family:var(--mono);font-size:11px}
+  .f.notes{grid-column:1 / -1}
+  .f.notes .val{font-style:italic}
+  .thread{display:inline-flex;align-items:center;gap:6px}
+  .tchip{width:11px;height:11px;border-radius:3px;border:0.5px solid var(--border);flex:none}
+
+  .add-row{border:0.5px dashed var(--border);border-radius:6px;background:rgba(245,240,232,0.5);
+    display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;color:var(--stone)}
+  .add-row .plus{font-size:18px;color:var(--soil);line-height:1}
+  .add-row .lbl{font-size:9px;letter-spacing:1.4px;text-transform:uppercase}
+
+  /* ───────── Editor controls carried over (incl. calculator) ───────── */
+  .carry{margin-top:40px}
+  .carry h3{font-size:19px;margin-bottom:3px}
+  .carry .note{font-size:11px;color:var(--stone);margin-bottom:14px;max-width:780px;line-height:1.5}
+  .carry .note b{color:var(--slate)}
+  .dropbar{background:var(--white);border:0.5px solid var(--border);border-radius:6px;display:flex;align-items:center;
+    gap:10px;padding:9px 13px;margin-bottom:14px;max-width:560px}
+  .dropbar .lab{font-size:10px;letter-spacing:0.4px;text-transform:uppercase;color:var(--soil);font-weight:600}
+  .dropbar .sel{margin-left:auto;border:1px solid var(--sand);background:var(--salt);border-radius:4px;
+    padding:6px 9px;font-size:11px;color:var(--slate);min-width:230px;display:flex;justify-content:space-between;gap:10px}
+  .labor{background:var(--salt);border:0.5px solid var(--border);border-radius:6px;padding:14px 16px;max-width:560px}
+  .labor .lab{font-size:10px;letter-spacing:0.4px;text-transform:uppercase;color:var(--soil);font-weight:600;margin-bottom:9px}
+  .labor .row{display:flex;align-items:center;gap:8px;margin-bottom:11px}
+  .labor .dollar{font-family:var(--mono);color:var(--stone)}
+  .labor .amt{flex:1;background:var(--white);border:1px solid var(--sand);border-radius:4px;padding:8px 10px;
+    font-family:var(--mono);font-size:13px;color:var(--slate)}
+  .labor .ai{background:var(--slate);color:var(--salt);border-radius:4px;padding:8px 14px;font-size:12px;font-weight:600;white-space:nowrap}
+  .est{background:var(--white);border:0.5px solid var(--border);border-radius:4px;padding:10px 12px}
+  .est .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+  .est .top .l{font-size:9px;letter-spacing:0.5px;text-transform:uppercase;color:var(--soil);font-weight:600}
+  .est .top .r{font-size:9px;letter-spacing:0.4px;text-transform:uppercase;color:var(--warn);font-weight:600;font-family:var(--mono)}
+  .est .big{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--slate)}
+  .est .big .rng{font-size:10px;font-weight:400;color:var(--stone);margin-left:10px}
+  .est .why{font-size:11px;color:var(--stone);font-style:italic;margin-top:5px;line-height:1.5}
+  .est .gen{font-size:9px;color:var(--stone);margin-top:7px}
+  .cmt-note{font-size:11px;color:var(--stone);line-height:1.5;margin-top:10px}
+  .cmt-note b{color:var(--slate)}
+  .chat{background:var(--white);border:0.5px solid var(--border);border-radius:6px;padding:14px 16px;max-width:560px;margin-top:14px}
+  .chat .lab{font-size:10px;letter-spacing:0.4px;text-transform:uppercase;color:var(--soil);font-weight:600;margin-bottom:8px}
+  .chat .blurb{font-size:11px;color:var(--stone);line-height:1.5;margin-bottom:10px}
+  .chat .blurb b{color:var(--slate)}
+  .chat .ask{display:flex;gap:8px;align-items:flex-end}
+  .chat .field{flex:1;background:var(--salt);border:1px solid var(--sand);border-radius:4px;padding:9px 11px;
+    font-size:11px;color:var(--stone);min-height:46px}
+  .chat .send{background:var(--white);border:1px solid var(--sand);border-radius:4px;padding:8px 14px;
+    font-size:11px;color:var(--slate);white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+
+  /* ───────── Anatomy + notes ───────── */
+  .anatomy{margin-top:46px}
+  .anatomy h3{font-size:20px;margin-bottom:10px}
+  .notes-col{font-size:12.5px;line-height:1.7;color:var(--slate);margin-top:14px;max-width:860px}
+  .notes-col b{color:var(--soil)}
+  .notes-col .n{display:flex;gap:10px;margin-bottom:9px}
+  .notes-col .n .k{flex:none;width:20px;height:20px;border-radius:50%;background:var(--slate);color:var(--salt);
+    font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:600}
+  .footer-note{margin-top:38px;font-size:11px;color:var(--stone);border-top:0.5px solid var(--border);padding-top:14px;line-height:1.6}
+  .footer-note b{color:var(--slate)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="mock-head">
+    <div class="mock-eyebrow">Cut &amp; Sew · Stitching · page 09 · proposed · Option C</div>
+    <h1 class="mock-title">Stitch Lockup Rows</h1>
+    <p class="mock-sub">
+      One stitch = one full-width row, read top to bottom like a checklist the factory follows. The close-up photo
+      sits on the left, welded to its specs on the right; because each row spans the whole page, <b>all eight fields
+      show in full, plainly labelled, nothing truncated</b>. Same white card + red numbered badge as 07/08 — just
+      laid sideways. Best when completeness matters most.
+    </p>
+    <div class="legend">
+      <span class="chip"><span class="swatch" style="background:var(--red)"></span> Numbered stitch badge</span>
+      <span class="chip"><span class="swatch" style="background:linear-gradient(135deg,#DAD3C4,#C9C0AD)"></span> Stitch close-up</span>
+      <span class="chip"><span class="swatch" style="background:#F0EDE6;border:0.5px solid var(--border)"></span> Thread-color chip</span>
+    </div>
+  </div>
+
+  <!-- ───────── PAPER PAGE ───────── -->
+  <div class="page">
+    <div class="page-head">
+      <div class="ph-brand"><div class="co">FOREIGN RESOURCE CO.</div><div class="sub">CUT &amp; SEW</div></div>
+      <div class="ph-title">Stitching</div>
+      <div class="ph-id">FW26-BB-ZH-0001<br>PAGE 09 / 24</div>
+    </div>
+    <div class="meta-row">
+      <div class="m"><label>Style #</label><span>FW26-BB-ZH-0001</span></div>
+      <div class="m"><label>Collection</label><span>Borderless Basics</span></div>
+      <div class="m"><label>Season</label><span>FW26</span></div>
+      <div class="m"><label>Version</label><span>V1.0</span></div>
+      <div class="m"><label>Colorway</label><span>Slate</span></div>
+    </div>
+    <div class="instruction">Each stitch is one complete row: the close-up photo on the left, every spec field labelled on the right. Numbered in the order the factory runs them.</div>
+
+    <div class="rows">
+      <!-- Stitch 1 -->
+      <div class="lock">
+        <div class="photo"><span class="tag">Stitch close-up</span><span class="cap">4-thread overlock · seam edge</span></div>
+        <div class="body">
+          <div class="head"><span class="badge">1</span><span class="nm">4-Thread Overlock</span><span class="code">504</span></div>
+          <div class="grid">
+            <div class="f"><label>Operation</label><div class="val">Side seam · shoulder · sleeve set</div></div>
+            <div class="f"><label>Seam type</label><div class="val">4 Thread Overlock</div></div>
+            <div class="f"><label>Stitch type</label><div class="val mono">504</div></div>
+            <div class="f"><label>Machine</label><div class="val mono">Juki MO-6814</div></div>
+            <div class="f"><label>SPI / SPCM</label><div class="val mono">12 SPI</div></div>
+            <div class="f"><label>Thread color</label><div class="val"><span class="thread"><span class="tchip" style="background:#F0EDE6"></span>PFD</span></div></div>
+            <div class="f"><label>Thread type</label><div class="val">Tex 40</div></div>
+            <div class="f notes"><label>Notes</label><div class="val">1 cm seam allowance, balanced tension, no skipped stitches.</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stitch 2 -->
+      <div class="lock">
+        <div class="photo"><span class="tag">Stitch close-up</span><span class="cap">2-needle coverstitch · hem</span></div>
+        <div class="body">
+          <div class="head"><span class="badge">2</span><span class="nm">2-Needle Coverstitch</span><span class="code">406</span></div>
+          <div class="grid">
+            <div class="f"><label>Operation</label><div class="val">Hem · cuff · neck rib</div></div>
+            <div class="f"><label>Seam type</label><div class="val">2 Needle Coverstitch</div></div>
+            <div class="f"><label>Stitch type</label><div class="val mono">406</div></div>
+            <div class="f"><label>Machine</label><div class="val mono">Juki MF-7523</div></div>
+            <div class="f"><label>SPI / SPCM</label><div class="val mono">12 SPI</div></div>
+            <div class="f"><label>Thread color</label><div class="val"><span class="thread"><span class="tchip" style="background:#F0EDE6"></span>PFD</span></div></div>
+            <div class="f"><label>Thread type</label><div class="val">Tex 40 / Polyester</div></div>
+            <div class="f notes"><label>Notes</label><div class="val">Clean twin-needle face; looper flat on the inside, no roping.</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stitch 3 -->
+      <div class="lock">
+        <div class="photo"><span class="tag">Stitch close-up</span><span class="cap">bartack · pocket corner</span></div>
+        <div class="body">
+          <div class="head"><span class="badge">3</span><span class="nm">Bartack</span><span class="code">301</span></div>
+          <div class="grid">
+            <div class="f"><label>Operation</label><div class="val">Pocket corners · thumbholes · fly</div></div>
+            <div class="f"><label>Seam type</label><div class="val">Lockstitch reinforce</div></div>
+            <div class="f"><label>Stitch type</label><div class="val mono">301</div></div>
+            <div class="f"><label>Machine</label><div class="val mono">Juki LK-1900</div></div>
+            <div class="f"><label>SPI / SPCM</label><div class="val mono">42 sts / tack</div></div>
+            <div class="f"><label>Thread color</label><div class="val"><span class="thread"><span class="tchip" style="background:#3A3A3A"></span>Slate</span></div></div>
+            <div class="f"><label>Thread type</label><div class="val">Tex 40 / Polyester</div></div>
+            <div class="f notes"><label>Notes</label><div class="val">1.5 cm bartack at every stress point; backstitch ends locked.</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- add stub -->
+      <div class="add-row"><span class="plus">+</span><span class="lbl">Add stitch 4 — up to six rows</span></div>
+    </div>
+  </div>
+
+  <!-- ───────── EDITOR CONTROLS CARRIED OVER ───────── -->
+  <div class="carry">
+    <h3>Carried over, unchanged — incl. the Cut &amp; Sew calculator at the bottom</h3>
+    <p class="note">The garment-block dropdown sits on top, and the <b>full Cut &amp; Sew labor calculator</b> — labor cost field, Estimate with AI, the AI estimate detail, the CMT-only note, and the Cost Chat — stays pinned at the <b>bottom</b> of the page, exactly as today. (Editor tools; they don't print on the paper page above.)</p>
+
+    <div class="dropbar">
+      <span class="lab">Garment Block</span>
+      <span class="sel"><span>— Select garment block to auto-populate —</span><span>▾</span></span>
+    </div>
+
+    <div class="labor">
+      <div class="lab">Cut &amp; Sew Labor Cost (per garment)</div>
+      <div class="row">
+        <span class="dollar">$</span>
+        <span class="amt">5.00</span>
+        <span class="ai">Estimate with AI</span>
+      </div>
+      <div class="est">
+        <div class="top"><span class="l">AI Estimate</span><span class="r">via regional CMT benchmark</span></div>
+        <div class="big">$5.00 <span class="rng">range $5.00–$6.00</span></div>
+        <div class="why">Dongguan Shengde Clothing Ltd. is based in Humen Town, Guangdong — a mature mid-tier knitwear / cut-and-sew hub with competitive coastal-China CMT pricing. With only 3 seam operations and a normal BOM, no complexity uplift applies, so I anchor at the low end at $5.00.</div>
+        <div class="gen">Generated 5/19/2026, 10:03 AM · Dongguan Shengde Clothing Ltd. (Humen Town, China)</div>
+      </div>
+      <div class="cmt-note"><b>CMT-only — conversion labor.</b> Cutting, sewing, finishing, packing, factory overhead. <b>Excludes</b> fabric, trims, packaging, treatments, embellishments, and vendor markup % — those live on their own steps and roll up separately.</div>
+    </div>
+
+    <div class="chat">
+      <div class="lab">Cost Chat · refine the estimate</div>
+      <div class="blurb">Argue with the estimate, paste a factory quote for a sanity-check, or ask the AI to break down the SAM math. Grounded in your stitch operations &amp; pattern pieces. Fabric, trim, embellishment, treatment, and vendor markup are <b>excluded</b>.</div>
+      <div class="ask">
+        <span class="field">e.g. "My vendor quoted $4.20 — is that fair for this spec?" or "Break down the SAM minutes for this hoodie."</span>
+        <span class="send">➤ Send</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────── ANATOMY ───────── -->
+  <div class="anatomy">
+    <h3>What each row holds</h3>
+    <div class="lock">
+      <div class="photo"><span class="tag">Stitch close-up</span><span class="cap">the photo</span></div>
+      <div class="body">
+        <div class="head"><span class="badge">1</span><span class="nm">Stitch name</span><span class="code">504</span></div>
+        <div class="grid">
+          <div class="f"><label>Operation</label><div class="val">where it runs</div></div>
+          <div class="f"><label>Seam type</label><div class="val">…</div></div>
+          <div class="f"><label>Stitch type</label><div class="val mono">…</div></div>
+          <div class="f"><label>Machine</label><div class="val mono">…</div></div>
+          <div class="f"><label>SPI / SPCM</label><div class="val mono">…</div></div>
+          <div class="f"><label>Thread color</label><div class="val"><span class="thread"><span class="tchip" style="background:#F0EDE6"></span>colour</span></div></div>
+          <div class="f"><label>Thread type</label><div class="val">type</div></div>
+          <div class="f notes"><label>Notes</label><div class="val">free text, per-factory translatable</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="notes-col">
+      <div class="n"><span class="k">A</span><div><b>Photo, left</b> — the stitch close-up, the same hero shape as a call-out image, sitting right beside its data.</div></div>
+      <div class="n"><span class="k">B</span><div><b>Badge + name + code</b> — red call-out badge, the stitch in plain words, and the Stitch&nbsp;Type code in monospace.</div></div>
+      <div class="n"><span class="k">C</span><div><b>Eight labelled fields</b> — Operation, Seam&nbsp;Type, Stitch&nbsp;Type, Machine, SPI/SPCM, Thread&nbsp;Color (chip), Thread&nbsp;Type, and Notes (full width). Because the row is wide, each value shows in full with no clipping.</div></div>
+      <div class="n"><span class="k">D</span><div><b>Up to six rows</b> stack down the page. If six is more than one printed sheet holds, the rows simply continue onto a second page — like a continuing table.</div></div>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    <b>Nothing lost:</b> all six photos, and all eight spec fields per stitch (Operation, Seam&nbsp;Type, Stitch&nbsp;Type, Machine, SPI/SPCM, Thread&nbsp;Color, Thread&nbsp;Type, Notes) live on the rows. The garment-block dropdown and the full Cut&nbsp;&amp;&nbsp;Sew calculator at the bottom — labor cost, Estimate&nbsp;with&nbsp;AI, AI estimate, CMT note, Cost&nbsp;Chat — are unchanged. &nbsp;·&nbsp;
+    <b>Built on 07/08:</b> same white card, 0.5px Sand border, red numbered badge, FR type and colours — laid out as wide rows. &nbsp;·&nbsp;
+    <b>Keep in sync when we build:</b> the Style editor (<span style="font-family:var(--mono)">TechPackSteps.jsx</span>), the live preview / PDF (<span style="font-family:var(--mono)">TechPackPagePreview.jsx</span>), the reusable library card (<span style="font-family:var(--mono)">CutSewBuilder.jsx</span>), and its schema (<span style="font-family:var(--mono)">cutSewLibrary.js</span>) all draw Stitching, so all four change together.
+  </div>
+
+</div>
+</body>
+</html>
