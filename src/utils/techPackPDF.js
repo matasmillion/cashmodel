@@ -198,6 +198,18 @@ export async function generateTechPackPDF(pack) {
       doc.setTextColor(...hex(FR.stone));
       doc.text('(reference)', margin + refW / 2, top + refH / 2, { align: 'center' });
     }
+    // In-app placed numbered dots over the garment reference (0..1 coords).
+    (entries || []).forEach((entry) => {
+      if (!entry || !entry.dot) return;
+      const dx = margin + entry.dot.x * refW;
+      const dy = top + entry.dot.y * refH;
+      doc.setFillColor(163, 45, 45);
+      doc.circle(dx, dy, 2.4, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6);
+      doc.text(String(entry.num), dx, dy + 0.9, { align: 'center' });
+    });
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
     doc.setTextColor(...hex(FR.soil));
@@ -215,7 +227,16 @@ export async function generateTechPackPDF(pack) {
       doc.setDrawColor(...hex(FR.sand));
       doc.setLineWidth(0.2);
       doc.roundedRect(cx, cy, cellW, cellH, 1, 1);
-      addImage(`construction-detail-${entry.num}`, cx + 1, cy + 1, cellW - 2, imgH - 1);
+      // Main close-up (+ optional supporting image beside it). With no support
+      // image the main fills the band, identical to the original layout.
+      const support = images.find(i => i.slot === `construction-detail-${entry.num}-support`);
+      const imgGap = 1.5;
+      const mainW = support ? (cellW - 2 - imgGap) * 0.62 : (cellW - 2);
+      addImage(`construction-detail-${entry.num}`, cx + 1, cy + 1, mainW, imgH - 1);
+      if (support) {
+        const supW = (cellW - 2 - imgGap) * 0.38;
+        addImage(`construction-detail-${entry.num}-support`, cx + 1 + mainW + imgGap, cy + 1, supW, imgH - 1);
+      }
       // Red number circle
       doc.setFillColor(163, 45, 45);
       doc.circle(cx + 5, cy + imgH + 5, 3, 'F');
