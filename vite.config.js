@@ -55,10 +55,20 @@ export default defineConfig({
             urlPattern: ({ url }) => url.pathname.includes('/storage/v1/object/'),
             handler: 'CacheFirst',
             options: {
-              cacheName: 'fr-plm-images',
+              // v2: the v1 cache ('fr-plm-images') accepted opaque (status 0)
+              // responses, which <img> tags (no-cors) seeded on first render.
+              // Serving an opaque entry to a cors-mode fetch() is a network
+              // error per the fetch spec ("Failed to fetch") — it broke AI
+              // garment views, PDF export, and every byte-level image read in
+              // the installed PWA. v2 never caches opaque responses and
+              // normalizes every cache-fill request to CORS, so one cached
+              // response legally serves both <img> and fetch() consumers.
+              // (main.jsx purges the orphaned v1 cache at boot.)
+              cacheName: 'fr-plm-images-v2',
               matchOptions: { ignoreSearch: true },
+              fetchOptions: { mode: 'cors', credentials: 'omit' },
               expiration: { maxEntries: 600, maxAgeSeconds: 60 * 60 * 24 * 30, purgeOnQuotaError: true },
-              cacheableResponse: { statuses: [0, 200] },
+              cacheableResponse: { statuses: [200] },
             },
           },
         ],

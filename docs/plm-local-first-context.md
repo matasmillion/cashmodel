@@ -80,10 +80,31 @@ The defining principle, learned the hard way this session:
 
 ### Images — `src/utils/plmAssets.js`
 - Stored in Supabase Storage; resolved via **signed URLs** (now **7-day TTL**).
-- **Image BYTES are cached locally** by a service-worker CacheFirst rule scoped to
-  `/storage/v1/object/` (see `vite.config.js`), matched with `ignoreSearch` so a
-  re-signed URL (same object, new `?token`) hits the same cached bytes. → photos
-  load instantly after first view, work offline, never re-download.
+- **Image BYTES are cached locally** by a service-worker CacheFirst rule (cache name
+  `fr-plm-images-v2`) scoped to `/storage/v1/object/` (see `vite.config.js`),
+  matched with `ignoreSearch` so a re-signed URL (same object, new `?token`) hits
+  the same cached bytes. → photos load instantly after first view, work offline,
+  never re-download.
+- **Only HTTP 200 responses are cacheable** (`statuses: [200]`). The v1 rule
+  (`fr-plm-images`) accepted status 0 (opaque) responses, which `<img>` tags
+  (no-cors) seeded on first render. Serving an opaque entry to a `cors`-mode
+  `fetch()` is a network error per the fetch spec — it broke AI garment views, PDF
+  export, and every byte-level image consumer in the installed PWA.
+  **`statuses: [0, ...]` must never return.**
+- **SW cache-fill requests are normalized to `mode: 'cors', credentials: 'omit'`**
+  (`fetchOptions` in `vite.config.js`) so every entry stored in the cache is a
+  well-typed CORS response — legally served to both `<img>` tags and `fetch()`
+  consumers without a network error.
+- **`main.jsx` purges the orphaned v1 cache at boot** (`purgeLegacyImageCache()` in
+  `src/utils/purgeLegacyImageCache.js`). Workbox's `cleanupOutdatedCaches` only
+  removes precache caches (names containing `-precache-`); old runtime caches must
+  be deleted explicitly. The purge is idempotent — `caches.delete()` is a no-op
+  once the cache is gone.
+- **Lesson learned:** caching opaque (status 0) responses under an `ignoreSearch`
+  CacheFirst rule poisons every later `cors`-mode `fetch()` of the same object
+  ("Failed to fetch"). The architecture makes this easy to introduce because `<img>`
+  always renders before the user can trigger a byte-level fetch — the poisoning is
+  deterministic in the installed PWA, silent in dev (no SW in dev).
 
 ### Locking (single-writer check-out) — hard lock, auto-expire only
 - DB: `supabase/migrations/20260603000000_record_locks.sql` — `record_locks` table

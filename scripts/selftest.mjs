@@ -88,13 +88,18 @@ async function test2() {
 
 // ===== TEST 3 — image cache shipped in the built service worker =====
 function test3() {
-  log.push('\nTEST 3 — Image-byte cache is wired into the built service worker');
+  log.push('\nTEST 3 — Image-byte cache: v2 name, CORS-normalized, no opaque caching');
   let sw = '';
   try { sw = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8'); } catch { /* no build */ }
   check('a build exists (dist/sw.js)', sw.length > 0, 'run `npm run build` first');
-  check('PLM images are cached (named cache present)', sw.includes('fr-plm-images'));
+  check('PLM images use the v2 cache (poisoned v1 name retired)', sw.includes('fr-plm-images-v2'));
   check('cache is scoped to Supabase Storage only', sw.includes('/storage/v1/object/'));
   check('CacheFirst strategy is used for images', /CacheFirst/i.test(sw));
+  check('opaque responses are never cacheable (no status 0)', !/statuses\s*:\s*\[\s*0\s*[,\]]/.test(sw));
+  check('only HTTP 200 responses are cacheable', /statuses\s*:\s*\[\s*200\s*\]/.test(sw));
+  check('SW cache-fill requests are CORS-normalized',
+    /fetchOptions\s*:\s*\{\s*["']?mode["']?\s*:\s*["']cors["']/.test(sw) &&
+    /["']?credentials["']?\s*:\s*["']omit["']/.test(sw));
 }
 
 // ===== TEST 4 — stale-chunk crash auto-recovery logic =====

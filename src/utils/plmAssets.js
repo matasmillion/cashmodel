@@ -714,7 +714,7 @@ export function useResolvedImageEntries(images = []) {
  */
 export function persistableImage(img) {
   if (!img) return null;
-  const { _blobUrl, _uploading, _uploadError, _tempId, ...rest } = img;
+  const { _blobUrl, _blob, _uploading, _uploadError, _tempId, ...rest } = img;
   if (!rest.path && !rest.data) return null;
   return rest;
 }

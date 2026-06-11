@@ -828,7 +828,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       return;
     }
     const blobUrl = URL.createObjectURL(blob);
-    setImages(p => [...p, { slot, name, _tempId: tempId, _blobUrl: blobUrl, _uploading: true }]);
+    setImages(p => [...p, { slot, name, _tempId: tempId, _blobUrl: blobUrl, _blob: blob, _uploading: true }]);
     bumpPending(+1);
     try {
       const ref = await uploadAsset({
