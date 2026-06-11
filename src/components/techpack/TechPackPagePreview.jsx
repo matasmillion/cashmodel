@@ -9,7 +9,7 @@ import { AnnotationSvg } from './ImageAnnotator';
 
 const PAGE_W = 1123;
 const PAGE_H = 794;
-const TOTAL_PAGES = 24;
+const TOTAL_PAGES = 25;
 
 function esc(s) { return String(s ?? ''); }
 function clampLine(s, maxW, charW = 6.5) {
@@ -843,73 +843,109 @@ function PageArtwork({ d, images }) {
   );
 }
 
-// ─── Page 6 — Seam & Stitch Specifications ──────────────────────────────────
-function PageConstruction({ d, images }) {
-  const imgs = images || [];
-  const seams = (d.seams || []).filter(r => r.operation || r.seamType || r.stitchType || r.threadColor || r.machine);
-  const allBlocks = (d.seamStitchBlocks && d.seamStitchBlocks.length)
-    ? d.seamStitchBlocks
-    : [1, 2, 3, 4, 5, 6].map(num => ({ num, label: '', hidden: false }));
-  const stitchBlocks = allBlocks.filter(b => !b.hidden).slice(0, 6);
+// ─── Stitching — two pages (09 = stitches 1–4, 10 = 5–8) ────────────────────
+// Mirrors the Call Outs pages: a tall garment callout reference (left) with
+// placed numbered dots + a 2×2 grid of stitch cards (each = main 3D render +
+// optional supporting reference image + number + name), then the shared-header
+// Seam & Stitch spec table below for that page's four stitches.
+function PageConstruction({ d, images, pageKey = 'page1' }) {
+  const imgs   = images || [];
+  const nums   = pageKey === 'page2' ? [5, 6, 7, 8] : [1, 2, 3, 4];
+  const rowStart = pageKey === 'page2' ? 4 : 0;
+  const refSlot  = `seam-stitch-callout-${pageKey}`;
+  const callout  = imgs.find(i => i.slot === refSlot);
+  const allBlocks = (d.seamStitchBlocks && d.seamStitchBlocks.length) ? d.seamStitchBlocks : [];
+  const blockFor = (n) => allBlocks.find(b => b.num === n) || { num: n, label: '', dot: null };
+  const seams = d.seams || [];
 
+  const padX   = 40;
+  const refY   = 170;
+  const refH   = 392;                 // top region height (cards bottom-align)
+  const refLabel = 22;
+  const refW   = Math.round(refH * CALLOUT_REF_RATIO);
+  const colGap = 24;
+  const rightX = padX + refW + colGap;
+  const rightW = PAGE_W - padX - rightX;
+  const rowGap = 16;
+  const colGap2 = 16;
+  const cardW  = (rightW - colGap2) / 2;
+  const cardH  = (refH - rowGap) / 2;
+  const pad    = 9;
+  const imgGap = 8;
+  const dotR   = 11;
+  const bandW  = cardW - pad * 2;
+  const imageH = Math.round((bandW - imgGap) / (CALLOUT_MAIN_RATIO + CALLOUT_SUPPORT_RATIO));
+
+  // Spec table below, one fixed row per stitch on this page (# = stitch number).
+  const tableY   = refY + refH + refLabel + 26;
   const seamCols = [
-    { key: 'operation',   label: 'Operation',     w: 150 },
-    { key: 'seamType',    label: 'Seam Type',     w: 130 },
-    { key: 'stitchType',  label: 'Stitch Type',   w: 100 },
-    { key: 'machine',     label: 'Machine',       w: 170 },
-    { key: 'spiSpcm',     label: 'SPI/SPCM',      w: 90  },
-    { key: 'threadColor', label: 'Thread Color',  w: 110 },
-    { key: 'threadType',  label: 'Thread Type',   w: 130 },
-    { key: 'notes',       label: 'Notes',         w: 163 },
+    { key: 'num',        label: '#',           w: 28  },
+    { key: 'operation',  label: 'Operation',   w: 150 },
+    { key: 'seamType',   label: 'Seam Type',   w: 120 },
+    { key: 'stitchType', label: 'Stitch Type', w: 90  },
+    { key: 'machine',    label: 'Machine',     w: 158 },
+    { key: 'spiSpcm',    label: 'SPI/SPCM',    w: 80  },
+    { key: 'threadColor',label: 'Thread Color',w: 100 },
+    { key: 'threadType', label: 'Thread Type', w: 120 },
+    { key: 'notes',      label: 'Notes',       w: 153 },
   ];
-
-  // Strip layout: visible cells span the full content width (1043px).
-  // Each cell is 2:3 vertical; the height grows with cell width but is
-  // capped so a single cell doesn't blow up the page. Table sits
-  // immediately below the strip + label row.
-  const stripY    = 170;
-  const stripGap  = 12;
-  const labelH    = 24;
-  const N         = stitchBlocks.length;
-  const contentW  = PAGE_W - 80;
-  const cellW     = N > 0 ? (contentW - stripGap * Math.max(N - 1, 0)) / N : 0;
-  const imgHCap   = 380; // ~half the page height
-  const imgH      = N > 0 ? Math.min(cellW * 1.5, imgHCap) : 0;
-  const stripBottom = N > 0 ? (stripY + imgH + labelH) : stripY;
-
-  // Body rows derived from remaining vertical space below the table header.
-  const tableY        = stripBottom + 30;
-  const footerReserve = 60;
-  const headerH       = 22;
-  const rowH          = 22;
-  const bodyRows      = Math.max(4, Math.floor((PAGE_H - footerReserve - tableY - headerH) / rowH));
+  const pageRows = nums.map((n, i) => ({ num: n, ...(seams[rowStart + i] || {}) }));
 
   return (
     <g>
       <InfoStrip d={d} />
 
-      <SectionHeading x={40} y={158}>Stitch Reference</SectionHeading>
-      {N === 0 && (
-        <text x={PAGE_W / 2} y={stripY + 30} textAnchor="middle" fontSize={11} fill={FR.stone} fontStyle="italic">
-          All stitch reference blocks hidden — restore one in the editor to populate this strip.
-        </text>
-      )}
-      {stitchBlocks.map((b, i) => {
-        const cx = 40 + i * (cellW + stripGap);
-        const img = imgs.find(im => im.slot === `seam-stitch-${b.num}`);
+      <text x={PAGE_W / 2} y={158} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
+        Numbered dots mark where each stitch runs. Each card carries the closed 3D render, an optional reference photo, and its number; specs are in the table below.
+      </text>
+
+      {/* garment callout reference (left) */}
+      <PhotoSlot x={padX} y={refY} w={refW} h={refH} label="Stitch Map" image={callout} />
+      {nums.map(n => { const b = blockFor(n); return b.dot ? (
+        <g key={`dot-${n}`}>
+          <circle cx={padX + 4 + b.dot.x * (refW - 8)} cy={refY + 4 + b.dot.y * (refH - 8)} r={dotR} fill="#A32D2D" stroke="#FFFFFF" strokeWidth={1.5} />
+          <text x={padX + 4 + b.dot.x * (refW - 8)} y={refY + 4 + b.dot.y * (refH - 8) + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill="#FFFFFF">{n}</text>
+        </g>
+      ) : null; })}
+      <AnnotationSvg annos={d?.calloutAnnotations?.[refSlot]} x={padX + 4} y={refY + 4} w={refW - 8} h={refH - 8} keyPrefix={`sg-${pageKey}`} />
+
+      {/* 2×2 grid of stitch cards */}
+      {nums.map((n, i) => {
+        const b = blockFor(n);
+        const col = i % 2;
+        const row = Math.floor(i / 2);
+        const cx = rightX + col * (cardW + colGap2);
+        const cy = refY + row * (cardH + rowGap);
+        const mainImg = imgs.find(im => im.slot === `seam-stitch-${n}`);
+        const suppImg = imgs.find(im => im.slot === `seam-stitch-${n}-support`);
+        const bandX = cx + pad;
+        const bandY = cy + pad;
+        const mainW = suppImg ? CALLOUT_MAIN_RATIO * imageH : bandW;
+        const supW  = CALLOUT_SUPPORT_RATIO * imageH;
+        const titleY = bandY + imageH + 24;
+        const numCx  = bandX + 11;
+        const code   = (seams[n - 1] || {}).stitchType;
         return (
-          <g key={b.num}>
-            <PhotoSlot x={cx} y={stripY} w={cellW} h={imgH} label={`Stitch ${b.num}`} image={img} />
-            <text x={cx + cellW / 2} y={stripY + imgH + 16} textAnchor="middle"
-              fontSize={11} fontWeight={600} fill={FR.slate} fontFamily="ui-monospace, Menlo, monospace">
-              {(b.label || '—').slice(0, 24)}
+          <g key={n}>
+            <rect x={cx} y={cy} width={cardW} height={cardH} fill={FR.white} stroke={FR.sand} strokeWidth={0.5} rx={6} />
+            <ImageCell x={bandX} y={bandY} w={mainW} h={imageH} image={mainImg} placeholder={`Stitch ${n} — 3D render`} />
+            <AnnotationSvg annos={d?.calloutAnnotations?.[`seam-stitch-${n}`]} x={bandX} y={bandY} w={mainW} h={imageH} keyPrefix={`sm-${n}`} />
+            {suppImg && <ImageCell x={bandX + mainW + imgGap} y={bandY} w={supW} h={imageH} image={suppImg} placeholder="Ref" />}
+            {suppImg && <AnnotationSvg annos={d?.calloutAnnotations?.[`seam-stitch-${n}-support`]} x={bandX + mainW + imgGap} y={bandY} w={supW} h={imageH} keyPrefix={`ss-${n}`} />}
+            <circle cx={numCx} cy={titleY - 4} r={11} fill="#A32D2D" />
+            <text x={numCx} y={titleY} textAnchor="middle" fontSize="12" fontWeight="600" fill="#FFFFFF">{n}</text>
+            <text x={bandX + 29} y={titleY} fontSize="13" fontWeight="600" fill={FR.slate}>
+              {esc((b.label || `Stitch ${n}`).slice(0, 34))}
             </text>
+            {code ? (
+              <text x={bandX + bandW} y={titleY} textAnchor="end" fontSize="10" fontWeight="600" fill={FR.soil} fontFamily="ui-monospace, Menlo, monospace">{esc(String(code).slice(0, 14))}</text>
+            ) : null}
           </g>
         );
       })}
 
-      <SectionHeading x={40} y={stripBottom + 18}>Seam &amp; Stitch Specification</SectionHeading>
-      <GridTable x={40} y={tableY} cols={seamCols} rows={seams} bodyRows={bodyRows} />
+      <SectionHeading x={40} y={tableY - 12}>Seam &amp; Stitch Specification</SectionHeading>
+      <GridTable x={40} y={tableY} cols={seamCols} rows={pageRows} bodyRows={nums.length} />
     </g>
   );
 }
@@ -1744,7 +1780,8 @@ const PAGE_FNS = [
   { title: 'Flat Lay',                          phase: 'Cut & Sew',         body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
   { title: 'Call Outs',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page1" enhanced /> },
   { title: 'Call Outs',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page2" enhanced /> },
-  { title: 'Stitching',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageConstruction d={d} images={images} /> },
+  { title: 'Stitching',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageConstruction d={d} images={images} pageKey="page1" /> },
+  { title: 'Stitching',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageConstruction d={d} images={images} pageKey="page2" /> },
   { title: 'Pattern & Cutting',                 phase: 'Cut & Sew',         body: ({ d, images }) => <PagePattern d={d} images={images} /> },
   { title: 'POM',                               phase: 'Cut & Sew',         body: ({ d, images }) => <PagePom d={d} images={images} /> },
   { title: 'Size Grading',                      phase: 'Cut & Sew',         body: ({ d }) => <PageSizeMatrix d={d} /> },

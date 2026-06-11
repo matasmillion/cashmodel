@@ -259,6 +259,99 @@ export async function generateTechPackPDF(pack) {
     });
   }
 
+  // Stitching page (09 / 10) — garment callout reference + 2×2 stitch cards
+  // (main 3D render + optional supporting reference) + the shared Seam & Stitch
+  // spec table for this page's four stitches. `nums` are the stitch numbers,
+  // `rowStart` the first seams[] index, `pageKey` the reference image slot.
+  function drawStitchingPage(title, stepIdx, nums, rowStart, pageKey) {
+    newPage(title, null, stepIdx);
+    const margin = 10;
+    const top = 24;
+    const colGap = 6;
+    const refH = 105;
+    const refW = Math.round(refH * 0.44);
+    const blocks = d.seamStitchBlocks || [];
+    const blockFor = (n) => blocks.find(b => b.num === n) || { num: n, label: '', dot: null };
+    const callout = images.find(i => i.slot === `seam-stitch-callout-${pageKey}`);
+    if (callout) {
+      try { doc.addImage(callout.data, 'JPEG', margin, top, refW, refH, undefined, 'FAST'); }
+      catch (err) { console.error('stitch ref embed:', err); }
+    } else {
+      doc.setDrawColor(...hex(FR.sand));
+      doc.setLineDashPattern([1, 1], 0);
+      doc.rect(margin, top, refW, refH);
+      doc.setLineDashPattern([], 0);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(...hex(FR.stone));
+      doc.text('(stitch map)', margin + refW / 2, top + refH / 2, { align: 'center' });
+    }
+    nums.forEach((n) => {
+      const b = blockFor(n);
+      if (!b.dot) return;
+      const dx = margin + b.dot.x * refW;
+      const dy = top + b.dot.y * refH;
+      doc.setFillColor(163, 45, 45);
+      doc.circle(dx, dy, 2.4, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6);
+      doc.text(String(n), dx, dy + 0.9, { align: 'center' });
+    });
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(...hex(FR.soil));
+    doc.text('STITCH MAP', margin, top + refH + 4);
+
+    const rightX = margin + refW + colGap;
+    const rightW = W - margin - rightX;
+    const rowGap = 5;
+    const cellW = (rightW - colGap) / 2;
+    const cellH = (refH - rowGap) / 2;
+    const imgGap = 1.5;
+    const imgH = (cellW - 2 - imgGap) / (1.5 + 1.0);
+    nums.forEach((n, i) => {
+      const b = blockFor(n);
+      const cx = rightX + (i % 2) * (cellW + colGap);
+      const cy = top + Math.floor(i / 2) * (cellH + rowGap);
+      doc.setDrawColor(...hex(FR.sand));
+      doc.setLineWidth(0.2);
+      doc.roundedRect(cx, cy, cellW, cellH, 1, 1);
+      const support = images.find(im => im.slot === `seam-stitch-${n}-support`);
+      const mainW = support ? 1.5 * imgH : (cellW - 2);
+      addImage(`seam-stitch-${n}`, cx + 1, cy + 1, mainW, imgH);
+      if (support) {
+        const supW = 1.0 * imgH;
+        addImage(`seam-stitch-${n}-support`, cx + 1 + mainW + imgGap, cy + 1, supW, imgH);
+      }
+      doc.setFillColor(163, 45, 45);
+      doc.circle(cx + 5, cy + imgH + 5, 3, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.text(String(n), cx + 5, cy + imgH + 6.5, { align: 'center' });
+      doc.setTextColor(...hex(FR.slate));
+      doc.setFontSize(8);
+      doc.text(String(b.label || `Stitch ${n}`).slice(0, 40), cx + 10, cy + imgH + 6.5);
+      const code = ((d.seams || [])[n - 1] || {}).stitchType;
+      if (code) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(...hex(FR.soil));
+        doc.text(String(code).slice(0, 14), cx + cellW - 2, cy + imgH + 6.5, { align: 'right' });
+      }
+    });
+
+    let ty = top + refH + 12;
+    sectionHeading('Seam & Stitch Specification', ty); ty += 6;
+    const rows = nums.map((n, i) => {
+      const s = (d.seams || [])[rowStart + i] || {};
+      return [String(n), s.operation, s.seamType, s.stitchType, s.machine, s.spiSpcm, s.threadColor, s.notes];
+    });
+    table(['#', 'Operation', 'Seam Type', 'Stitch', 'Machine', 'SPI', 'Thread', 'Notes'],
+      rows, 10, ty, [10, 38, 33, 22, 46, 16, 30, 82]);
+  }
+
   // ─── Page 000: Competitor Landscape (Merchandising) ───
   newPage('Competitor Landscape', null, 0);
   let y = 28;
@@ -566,47 +659,12 @@ export async function generateTechPackPDF(pack) {
   // ─── Cut & Sew → Construction Details Page 2 (stepIdx 6) ───
   drawConstructionDetailsPage('Construction Details — Page 2', 9, d.constructionDetailsPage2);
 
-  // ─── Cut & Sew → Seam & Stitch (now stepIdx 7) ───
-  newPage('Seam & Stitch Specifications', null, 10);
-  {
-    // Stitch reference strip — visible cells span the printable width.
-    // Each cell is 2:3 vertical; height capped so a single cell doesn't
-    // blow up the page. Table sits immediately below the strip.
-    const margin   = 10;
-    const stripTop = 24;
-    const gap      = 3;
-    const labelH   = 8;
-    const allBlocks = (d.seamStitchBlocks && d.seamStitchBlocks.length)
-      ? d.seamStitchBlocks
-      : [1, 2, 3, 4, 5, 6].map(num => ({ num, label: '', hidden: false }));
-    const stitchBlocks = allBlocks.filter(b => !b.hidden).slice(0, 6);
-    const N = stitchBlocks.length;
-    const contentW = W - margin * 2;
-    const cellW = N > 0 ? (contentW - gap * Math.max(N - 1, 0)) / N : 0;
-    const imgHCap = 100; // mm — leaves ~70mm for the table + label below
-    const imgH = N > 0 ? Math.min(cellW * 1.5, imgHCap) : 0;
-    stitchBlocks.forEach((b, i) => {
-      const cx = margin + i * (cellW + gap);
-      addImage(`seam-stitch-${b.num}`, cx, stripTop, cellW, imgH);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6);
-      doc.setTextColor(...hex(FR.soil));
-      doc.text(`STITCH ${b.num}`, cx, stripTop + imgH + 4);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(...hex(FR.slate));
-      doc.text(String(b.label || '—').slice(0, 28), cx, stripTop + imgH + 8);
-    });
-    y = stripTop + imgH + labelH + 8;
-    sectionHeading('Seam Specifications', y); y += 6;
-    const seamRows = (d.seams || []).filter(s => s.operation).map(s =>
-      [s.operation, s.seamType, s.stitchType, s.machine, s.spiSpcm, s.threadColor, s.notes]);
-    table(['Operation', 'Seam Type', 'Stitch', 'Machine', 'SPI', 'Thread', 'Notes'],
-      seamRows, 10, y, [40, 35, 25, 50, 18, 35, 74]);
-  }
+  // ─── Cut & Sew → Stitching, two pages (stepIdx 10, 11) ───
+  drawStitchingPage('Stitching — Page 1', 10, [1, 2, 3, 4], 0, 'page1');
+  drawStitchingPage('Stitching — Page 2', 11, [5, 6, 7, 8], 4, 'page2');
 
   // ─── Cut & Sew → Pattern & Cutting ───
-  newPage('Pattern Pieces & Cutting', null, 11);
+  newPage('Pattern Pieces & Cutting', null, 12);
   y = 28;
   const ppRows = (d.patternPieces || []).filter(p => p.name || p.pieceName).map(p =>
     [p.pieceName || p.name, p.quantity || p.qty, p.fabric, p.grain, p.fusing, p.notes]);
@@ -629,7 +687,7 @@ export async function generateTechPackPDF(pack) {
   field('Cutting Notes', d.cuttingNotes || d.cuttingInstructions, 10, y);
 
   // ─── Cut & Sew → Points of Measure ───
-  newPage('Points of Measure (cm)', null, 12);
+  newPage('Points of Measure (cm)', null, 13);
   y = 28;
   field('Size Type', d.sizeType, 10, y); y += 14;
   const sz = d.sizeType === 'waist' ? ['W30', 'W32', 'W34', 'W36'] : ['S', 'M', 'L', 'XL'];
@@ -638,7 +696,7 @@ export async function generateTechPackPDF(pack) {
   table(['Measurement', 'Tol ±', ...sz], pomRows, 10, y, [70, 25, 30, 30, 30, 30]);
 
   // ─── Cut & Sew → Graded Size Matrix ───
-  newPage('Graded Size Matrix (cm)', null, 13);
+  newPage('Graded Size Matrix (cm)', null, 14);
   y = 28;
   const matrix = d.gradedSizeMatrix || { baseSize: 'M', grading: [] };
   const rawMSizes = Array.isArray(d.sizeRange)
@@ -660,7 +718,7 @@ export async function generateTechPackPDF(pack) {
   table(['Measurement', ...matrixSizes], matrixRows, 10, y, [70, ...matrixSizes.map(() => sizeColW)]);
 
   // ─── Embellishments → Colorways ───
-  newPage('Colorways', null, 14);
+  newPage('Colorways', null, 15);
   y = 28;
   sectionHeading('Colorway Specification', y); y += 8;
   const cwRows = (d.colorways || []).filter(c => c.name).map(c =>
@@ -668,7 +726,7 @@ export async function generateTechPackPDF(pack) {
   table(['Name', 'FR Color', 'Pantone', 'Hex', 'Fabric Swatch', 'Approval'], cwRows, 10, y, [55, 45, 50, 40, 60, 27]);
 
   // ─── Embellishments → Artwork & Placement ───
-  newPage('Artwork & Placement', null, 15);
+  newPage('Artwork & Placement', null, 16);
   y = 28;
   sectionHeading('Logo & Method', y); y += 8;
   field('Front Logo', d.logoFront, 10, y);
@@ -680,7 +738,7 @@ export async function generateTechPackPDF(pack) {
   table(['Placement', 'Artwork File', 'Method', 'Size (cm)', 'Position From', 'Color', 'Notes'], apRows, 10, y, [40, 45, 40, 25, 40, 30, 57]);
 
   // ─── Treatments → Garment Treatments ───
-  newPage('Garment Treatments', null, 16);
+  newPage('Garment Treatments', null, 17);
   y = 28;
   sectionHeading('Wash & Dye', y); y += 8;
   const trtRows = (d.treatments || []).filter(t => t.treatment).map(t =>
@@ -693,7 +751,7 @@ export async function generateTechPackPDF(pack) {
   table(['Area', 'Technique', 'Intensity', 'Notes'], distRows, 10, y, [50, 50, 30, 147]);
 
   // ─── QC → Compliance & Testing ───
-  newPage('Compliance & Testing', null, 17);
+  newPage('Compliance & Testing', null, 18);
   y = 28;
   sectionHeading('Shipping Requirements', y); y += 8;
   const shipRows = (d.shippingReqs || []).filter(r => r.requirement || r.specification).map(r =>
@@ -706,7 +764,7 @@ export async function generateTechPackPDF(pack) {
   table(['Test', 'Standard', 'Requirement', 'Test Method', 'Pass-Fail'], testRows, 10, y, [55, 55, 55, 60, 52]);
 
   // ─── QC → Quality Inspection (AQL) ───
-  newPage('Quality Inspection (AQL)', null, 18);
+  newPage('Quality Inspection (AQL)', null, 19);
   y = 28;
   const qi = d.qualityInspection || { aqlMajor: '2.5', aqlMinor: '4.0', inspectionStage: 'During Production', checklist: [], photoRequirements: '' };
   sectionHeading('AQL Standard', y); y += 8;
@@ -725,7 +783,7 @@ export async function generateTechPackPDF(pack) {
   (qi.photoRequirements || '—').split('\n').forEach((line, i) => doc.text(line, 10, y + i * 5, { maxWidth: W - 20 }));
 
   // ─── Packaging → Labels & Packaging ───
-  newPage('Labels & Packaging', null, 19);
+  newPage('Labels & Packaging', null, 20);
   y = 28;
   field('Packaging', d.packaging, 10, y); y += 14;
   field('Packaging Notes', d.packagingNotes, 10, y); y += 14;
@@ -737,7 +795,7 @@ export async function generateTechPackPDF(pack) {
   careLines.forEach((line, i) => doc.text(line, 10, y + i * 5));
 
   // ─── Logistics → Order & Delivery ───
-  newPage('Order & Delivery', null, 20);
+  newPage('Order & Delivery', null, 21);
   y = 28;
   sectionHeading('Quantity Per Size', y); y += 8;
   const qRows = (d.quantities || []).filter(q => q.colorway).map(q =>
@@ -753,14 +811,14 @@ export async function generateTechPackPDF(pack) {
   field('Target Arrival', d.targetArrivalDate, 200, y);
 
   // ─── Logistics → Packing List ───
-  newPage('Packing List', null, 20);
+  newPage('Packing List', null, 21);
   y = 28;
   const pkRows = (d.cartons || []).filter(c => c.cartonNum).map(c =>
     [c.cartonNum, c.colorway, c.sizeBreakdown, c.qtyPerCarton, c.dims, c.grossWeight, c.netWeight]);
   table(['#', 'Colorway', 'Size Breakdown', 'Qty', 'Dims (cm)', 'Gross kg', 'Net kg'], pkRows, 10, y, [15, 40, 60, 25, 40, 30, 67]);
 
   // ─── Sign-off → Review & Revision ───
-  newPage('Review & Revision', null, 21);
+  newPage('Review & Revision', null, 22);
   y = 40;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);

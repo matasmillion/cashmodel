@@ -1778,7 +1778,163 @@ export function CutSewLaborCostBlock({ data, set, sectionLabel }) {
   );
 }
 
-export function StepConstruction({ data, set, images, onUpload, onRemove }) {
+const STITCH_SECTION_LABEL = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
+
+// Blank seam-spec row, shared by the table seeding helpers.
+const blankSeamRow = () => ({ operation: '', seamType: '', stitchType: '', machine: '', spiSpcm: '', threadColor: '', threadType: '', notes: '' });
+
+// One Stitching callout card — mirrors the Cut & Sew call-out card (07/08):
+// a large main image (the closed 3D render) + an optional smaller supporting
+// reference image, a red number, an editable stitch-name, and the stitch-type
+// code (read from the matching spec row below). The card pairs positionally
+// with row `num` of the seams[] table.
+function StitchCalloutCard({ num, label, code, images, onUpload, onRemove, onRename, annotations, onAnnotate }) {
+  const mainSlot = `seam-stitch-${num}`;
+  const suppSlot = `seam-stitch-${num}-support`;
+  return (
+    <div style={{ background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 6, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+        <div style={{ flex: `${CALLOUT_MAIN_RATIO} 1 0`, minWidth: 0 }}>
+          <AspectPhoto slotKey={mainSlot} aspect={CALLOUT_MAIN_ASPECT} images={images} onUpload={onUpload} onRemove={onRemove} label={`Stitch ${num} — 3D render`} />
+          <AnnotateButton slot={mainSlot} images={images} annotations={annotations} onAnnotate={onAnnotate} title={`Stitch ${num} — main image`} />
+        </div>
+        <div style={{ flex: `${CALLOUT_SUPPORT_RATIO} 1 0`, minWidth: 0 }}>
+          <AspectPhoto slotKey={suppSlot} aspect={CALLOUT_SUPPORT_ASPECT} images={images} onUpload={onUpload} onRemove={onRemove} label="Reference (optional)" />
+          <AnnotateButton slot={suppSlot} images={images} annotations={annotations} onAnnotate={onAnnotate} title={`Stitch ${num} — supporting image`} />
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <RedNumberCircle n={num} />
+        <input
+          value={label || ''}
+          onChange={e => onRename(e.target.value)}
+          placeholder="Stitch name (e.g. 4-Thread Overlock)"
+          style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: 13, fontWeight: 600, color: FR.slate, fontFamily: "'Helvetica Neue', sans-serif" }}
+        />
+        {code ? (
+          <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11, fontWeight: 600, color: FR.soil, background: FR.salt, border: `0.5px solid ${FR.sand}`, borderRadius: 4, padding: '2px 6px' }}>{code}</span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+// Shared-header spec table for one Stitching page — labels written once, one
+// fixed row per callout card, with a leading # that ties the row to its card
+// and its placed dot. No add/remove: the eight cards (4 per page) are fixed,
+// mirroring the Call Outs pages.
+function StitchSpecTableC({ seams, rowStart, count, onUpdateAt }) {
+  const th = { textAlign: 'left', padding: '5px 6px', background: FR.slate, color: FR.salt, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', whiteSpace: 'nowrap' };
+  const td = { padding: '3px 4px', borderBottom: `1px solid ${FR.sand}`, verticalAlign: 'middle' };
+  const inp = { width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue', sans-serif", boxSizing: 'border-box' };
+  const cols = [
+    { key: 'operation',  label: 'Operation',   ph: 'Side seam / Hem / Collar' },
+    { key: 'seamType',   label: 'Seam Type',   ph: 'Flatlock / French seam' },
+    { key: 'stitchType', label: 'Stitch Type', ph: '301 / 401 / 504' },
+    { key: 'machine',    label: 'Machine',     ph: 'e.g. Juki MO-6814 overlock' },
+    { key: 'spiSpcm',    label: 'SPI / SPCM',  ph: '10 SPI' },
+    { key: 'threadColor',label: 'Thread Color',color: true },
+    { key: 'threadType', label: 'Thread Type', ph: 'Tex 40 / Polyester' },
+    { key: 'notes',      label: 'Notes',       ph: '' },
+  ];
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+        <thead>
+          <tr>
+            <th style={{ ...th, width: 28, textAlign: 'center' }}>#</th>
+            {cols.map(c => <th key={c.key} style={th}>{c.label}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: count }).map((_, i) => {
+            const gi = rowStart + i;
+            const row = seams[gi] || {};
+            return (
+              <tr key={gi} style={{ background: i % 2 === 0 ? FR.salt : FR.white }}>
+                <td style={{ ...td, textAlign: 'center', fontFamily: 'ui-monospace, Menlo, monospace', color: FR.stone }}>{gi + 1}</td>
+                {cols.map(c => (
+                  <td key={c.key} style={td}>
+                    {c.color
+                      ? <FRColorCell value={row[c.key]} onChange={v => onUpdateAt(gi, c.key, v)} />
+                      : <input value={row[c.key] || ''} onChange={e => onUpdateAt(gi, c.key, e.target.value)} placeholder={c.ph} style={inp} />}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Shared body for both Stitching pages: garment callout reference (left) +
+// 2×2 grid of stitch cards (right) + the shared-header spec table below.
+function StitchingPageBody({ refSlot, nums, rowStart, tableCount, data, set, images, onUpload, onRemove, annotations, onAnnotate }) {
+  const base = (data.seamStitchBlocks && data.seamStitchBlocks.length) ? data.seamStitchBlocks : DEFAULT_DATA.seamStitchBlocks;
+  const entries = nums.map(n => base.find(b => b.num === n) || { num: n, label: '', dot: null });
+  const seams = data.seams || [];
+
+  const setBlock = (n, patch) => {
+    const map = new Map((data.seamStitchBlocks && data.seamStitchBlocks.length ? data.seamStitchBlocks : DEFAULT_DATA.seamStitchBlocks).map(b => [b.num, b]));
+    nums.forEach(x => { if (!map.has(x)) map.set(x, { num: x, label: '', dot: null }); });
+    const next = Array.from(map.values()).sort((a, b) => a.num - b.num).map(b => (b.num === n ? { ...b, ...patch } : b));
+    set('seamStitchBlocks', next);
+  };
+  const setDot = (n, dot) => setBlock(n, { dot });
+  const onUpdateSeamAt = (gi, key, value) => {
+    const arr = (data.seams || []).slice();
+    while (arr.length <= gi) arr.push(blankSeamRow());
+    arr[gi] = { ...arr[gi], [key]: value };
+    set('seams', arr);
+  };
+
+  return (
+    <>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 0.55fr) 1.45fr', gap: 18, alignItems: 'stretch', marginBottom: 18 }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <CalloutGarmentRef
+            label="Stitch Map · Callout Reference"
+            slotKey={refSlot}
+            images={images}
+            onUpload={onUpload}
+            onRemove={onRemove}
+            entries={entries}
+            onSetDot={setDot}
+            annotations={(annotations && annotations[refSlot]) || []}
+            onAnnotate={onAnnotate}
+          />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignContent: 'start' }}>
+          {entries.map(e => (
+            <StitchCalloutCard
+              key={e.num}
+              num={e.num}
+              label={e.label}
+              code={(seams[e.num - 1] || {}).stitchType}
+              images={images}
+              onUpload={onUpload}
+              onRemove={onRemove}
+              onRename={v => setBlock(e.num, { label: v })}
+              annotations={annotations}
+              onAnnotate={onAnnotate}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 10 }}>
+        <label style={STITCH_SECTION_LABEL}>Seam &amp; Stitch Specification</label>
+        <StitchSpecTableC seams={seams} rowStart={rowStart} count={tableCount} onUpdateAt={onUpdateSeamAt} />
+      </div>
+    </>
+  );
+}
+
+// Stitching — page 1 (stitches 1–4). Carries the garment-block auto-populate
+// dropdown on top and the full Cut & Sew labor calculator at the bottom.
+export function StepConstruction({ data, set, images, onUpload, onRemove, annotations, onAnnotate }) {
   const [cutSewBlocks, setCutSewBlocks] = useState(null);
 
   useEffect(() => {
@@ -1786,30 +1942,6 @@ export function StepConstruction({ data, set, images, onUpload, onRemove }) {
       listCutSew({ includeArchived: false }).then(rows => setCutSewBlocks(rows || []))
     );
   }, []);
-
-  const seams = data.seams && data.seams.length ? data.seams : [{ operation: '', seamType: '', stitchType: '', machine: '', spiSpcm: '', threadColor: '', threadType: '', notes: '' }];
-  const updS = (i, k, v) => set('seams', seams.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
-  const addS = () => set('seams', [...seams, { operation: '', seamType: '', stitchType: '', machine: '', spiSpcm: '', threadColor: '', threadType: '', notes: '' }]);
-  const rmS  = (i) => set('seams', seams.filter((_, idx) => idx !== i));
-
-  const stitchBlocks = (data.seamStitchBlocks && data.seamStitchBlocks.length)
-    ? data.seamStitchBlocks
-    : [1, 2, 3, 4, 5, 6].map(num => ({ num, label: '', hidden: false }));
-  const visibleBlocks = stitchBlocks.filter(b => !b.hidden);
-  const hiddenBlocks  = stitchBlocks.filter(b =>  b.hidden);
-  const updateBlockLabel = (num, label) => {
-    set('seamStitchBlocks', stitchBlocks.map(b => (b.num === num ? { ...b, label } : b)));
-  };
-  const hideBlock = (num) => {
-    set('seamStitchBlocks', stitchBlocks.map(b => (b.num === num ? { ...b, hidden: true } : b)));
-  };
-  const restoreNextBlock = () => {
-    const next = stitchBlocks.find(b => b.hidden);
-    if (next) set('seamStitchBlocks', stitchBlocks.map(b => (b.num === next.num ? { ...b, hidden: false } : b)));
-  };
-
-  const threadColorRender = (v, onChange) => <FRColorCell value={v} onChange={onChange} />;
-  const sectionLabel = { display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' };
 
   const linkedBlockName = data.pickedCutSewBlockId && cutSewBlocks
     ? (cutSewBlocks.find(b => b.id === data.pickedCutSewBlockId)?.name || data.pickedCutSewBlockId)
@@ -1828,78 +1960,46 @@ export function StepConstruction({ data, set, images, onUpload, onRemove }) {
         placeholder="— Select garment block to auto-populate —"
       />
 
-      {/* Stitch reference image blocks — up to six modular 2:3 vertical cells,
-          one per stitch the factory will run. Labels (e.g. "401 Coverstitch")
-          cross-reference the Stitch Type column in the table below. Each card
-          can be hidden via × and restored via "+ Add stitch". */}
-      <div style={{ marginBottom: 18 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
-          <label style={{ ...sectionLabel, marginBottom: 0 }}>Stitch Reference Images</label>
-          {hiddenBlocks.length > 0 && (
-            <button
-              onClick={restoreNextBlock}
-              style={{ background: 'none', border: `0.5px dashed ${FR.soil}`, borderRadius: 4, padding: '4px 10px', fontSize: 10, color: FR.soil, cursor: 'pointer', fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase' }}
-            >
-              + Add stitch ({hiddenBlocks.length} hidden)
-            </button>
-          )}
-        </div>
-        <p style={{ fontSize: 11, color: FR.stone, marginBottom: 12, fontStyle: 'italic' }}>
-          Up to six modular 2:3 stitch image blocks. Each shows the actual stitch the factory will run; labels cross-reference the Stitch Type column below. Hide a block with × if you don't need it.
-        </p>
-        {visibleBlocks.length === 0 ? (
-          <div style={{ padding: '32px 16px', textAlign: 'center', border: `0.5px dashed ${FR.sand}`, borderRadius: 6, color: FR.stone, fontStyle: 'italic', fontSize: 11, background: FR.salt }}>
-            All stitch reference blocks hidden. Click <strong>+ Add stitch</strong> above to bring one back.
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${visibleBlocks.length}, minmax(0, 1fr))`, gap: 12 }}>
-            {visibleBlocks.map(b => (
-              <div key={b.num} style={{ background: FR.white, border: `0.5px solid ${FR.sand}`, borderRadius: 6, padding: 10, display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
-                <button
-                  onClick={() => hideBlock(b.num)}
-                  title="Hide this stitch reference"
-                  style={{ position: 'absolute', top: 6, right: 6, zIndex: 5, width: 22, height: 22, borderRadius: 11, background: FR.slate, color: FR.salt, border: 'none', fontSize: 14, cursor: 'pointer', lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  ×
-                </button>
-                <AspectPhoto
-                  slotKey={`seam-stitch-${b.num}`}
-                  aspect={ASPECTS.TWO_THIRDS}
-                  images={images}
-                  onUpload={onUpload}
-                  onRemove={onRemove}
-                  label={`Stitch ${b.num}`}
-                />
-                <input
-                  value={b.label}
-                  onChange={e => updateBlockLabel(b.num, e.target.value)}
-                  placeholder={`e.g. 401 Coverstitch`}
-                  style={{ width: '100%', border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '6px 8px', fontSize: 11, color: FR.slate, background: FR.salt, outline: 'none', boxSizing: 'border-box', fontFamily: "'Helvetica Neue', sans-serif" }}
-                />
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, fontStyle: 'italic' }}>
+        Click the garment to drop a numbered dot for each stitch, then add its closed 3D render (main) and an optional real-garment reference. The number ties the card to its row in the spec table. Stitches 1–4 here; 5–8 on the next page.
+      </p>
 
-      <div style={{ marginBottom: 10 }}>
-        <label style={sectionLabel}>Seam &amp; Stitch Specification</label>
-        <ArrayTable
-          headers={[
-            { key: 'operation',   label: 'Operation',    placeholder: 'Side seam / Hem / Collar' },
-            { key: 'seamType',    label: 'Seam Type',    placeholder: 'Flatlock / French seam' },
-            { key: 'stitchType',  label: 'Stitch Type',  placeholder: '301 / 401 / 504' },
-            { key: 'machine',     label: 'Machine',      placeholder: 'e.g. Juki MO-6814 overlock' },
-            { key: 'spiSpcm',     label: 'SPI / SPCM',   placeholder: '10 SPI' },
-            { key: 'threadColor', label: 'Thread Color', render: threadColorRender },
-            { key: 'threadType',  label: 'Thread Type',  placeholder: 'Tex 40 / Polyester' },
-            { key: 'notes',       label: 'Notes' },
-          ]}
-          rows={seams} onUpdate={updS} onAdd={addS} onRemove={rmS} />
-      </div>
+      <StitchingPageBody
+        refSlot="seam-stitch-callout-page1"
+        nums={[1, 2, 3, 4]}
+        rowStart={0}
+        tableCount={4}
+        data={data} set={set} images={images} onUpload={onUpload} onRemove={onRemove}
+        annotations={annotations} onAnnotate={onAnnotate}
+      />
 
-      <CutSewLaborCostBlock data={data} set={set} sectionLabel={sectionLabel} />
-      <CutSewCostChat data={data} set={set} sectionLabel={sectionLabel} />
+      <CutSewLaborCostBlock data={data} set={set} sectionLabel={STITCH_SECTION_LABEL} />
+      <CutSewCostChat data={data} set={set} sectionLabel={STITCH_SECTION_LABEL} />
+    </div>
+  );
+}
+
+// Stitching — page 2 (stitches 5–8). Continuation page: garment reference,
+// 2×2 grid of cards, and the spec table for rows 5 onward. The labor
+// calculator lives on page 1 only (one labor cost per garment).
+export function StepConstruction2({ data, set, images, onUpload, onRemove, annotations, onAnnotate }) {
+  const totalSeams = (data.seams || []).length;
+  const tableCount = Math.max(4, totalSeams - 4);
+  return (
+    <div>
+      <SectionTitle>Stitching</SectionTitle>
+      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, fontStyle: 'italic' }}>
+        Continuation — stitches 5–8. Click the garment to place dots 5–8; each pairs with its callout card (3D render + reference) and its row in the spec table below.
+      </p>
+
+      <StitchingPageBody
+        refSlot="seam-stitch-callout-page2"
+        nums={[5, 6, 7, 8]}
+        rowStart={4}
+        tableCount={tableCount}
+        data={data} set={set} images={images} onUpload={onUpload} onRemove={onRemove}
+        annotations={annotations} onAnnotate={onAnnotate}
+      />
     </div>
   );
 }
@@ -3599,22 +3699,23 @@ export const STEP_FNS = [
   StepFlatlays,            // 07 Cut & Sew — Flat Lay
   StepSketches,            // 08 Cut & Sew — Call Outs (page 1)
   StepSketches2,           // 09 Cut & Sew — Call Outs (page 2)
-  StepConstruction,        // 10 Cut & Sew — Stitching
-  StepPattern,             // 11 Cut & Sew — Pattern & Cutting
-  StepPom,                 // 12 Cut & Sew — POM
-  StepSizeMatrix,          // 13 Cut & Sew — Size Grading (skippable)
-  StepColor,               // 14 Embellishments — Colorways
-  StepArtwork,             // 15 Embellishments — Artwork & Placement
-  StepEmbFlatlay,          // 16 Embellishments — Flat Lay
-  StepEmbCallouts,         // 17 Embellishments — Call Outs
-  StepEmbSizing,           // 18 Embellishments — Sizing & Colors
-  StepTreatments,          // 19 Treatments — Render
-  StepTreatmentCallouts,   // 20 Treatments — Call Outs
-  StepCompliance,          // 21 QC — Compliance & Testing (locked)
-  StepQuality,             // 22 QC — Quality Inspection (locked)
-  StepLabels,              // 23 Packaging — Labels & Packaging (locked)
-  StepOrder,               // 24 Logistics (locked)
-  StepRevision,            // 25 Sign-off
+  StepConstruction,        // 10 Cut & Sew — Stitching (page 1, stitches 1–4)
+  StepConstruction2,       // 11 Cut & Sew — Stitching (page 2, stitches 5–8)
+  StepPattern,             // 12 Cut & Sew — Pattern & Cutting
+  StepPom,                 // 13 Cut & Sew — POM
+  StepSizeMatrix,          // 14 Cut & Sew — Size Grading (skippable)
+  StepColor,               // 15 Embellishments — Colorways
+  StepArtwork,             // 16 Embellishments — Artwork & Placement
+  StepEmbFlatlay,          // 17 Embellishments — Flat Lay
+  StepEmbCallouts,         // 18 Embellishments — Call Outs
+  StepEmbSizing,           // 19 Embellishments — Sizing & Colors
+  StepTreatments,          // 20 Treatments — Render
+  StepTreatmentCallouts,   // 21 Treatments — Call Outs
+  StepCompliance,          // 22 QC — Compliance & Testing (locked)
+  StepQuality,             // 23 QC — Quality Inspection (locked)
+  StepLabels,              // 24 Packaging — Labels & Packaging (locked)
+  StepOrder,               // 25 Logistics (locked)
+  StepRevision,            // 26 Sign-off
 ];
 
 // Backwards-compat aliases so older references keep resolving during the
