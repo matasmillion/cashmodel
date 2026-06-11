@@ -11,7 +11,8 @@ import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSE
 // the live preview + PDF reference box so placed dots line up everywhere.
 const CALLOUT_REF_ASPECT = { ratio: CALLOUT_REF_RATIO, label: 'Tall garment reference', shortLabel: 'garment reference' };
 import { listFRColors } from '../../utils/colorLibrary';
-import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, AspectPhoto, ASPECTS, AssetImage, ArrayTable, EditableSelect, FRColorCell, FilesPanel } from './TechPackPrimitives';
+import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, AspectPhoto, ASPECTS, AssetImage, entryToDataUrl, ArrayTable, EditableSelect, FRColorCell, FilesPanel } from './TechPackPrimitives';
+import CropModal from './CropModal';
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
 import { addSupplier } from '../../utils/plmDirectory';
 import { getFRColor } from '../../utils/colorLibrary';
@@ -2010,7 +2011,21 @@ export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, 
   const boxRef = useRef(null);
   const draggingRef = useRef(false);
   const [armed, setArmed] = useState(null);
+  const [cropSrc, setCropSrc] = useState(null);
   const img = (images || []).find(i => i.slot === slotKey);
+
+  // Re-open the crop modal on the already-uploaded reference so the operator
+  // can reposition / zoom / crop it to the reference shape. Dots live on the
+  // call-out entries (not the image), so re-cropping keeps every placed dot.
+  const recrop = async () => {
+    const dataUrl = await entryToDataUrl(img);
+    if (dataUrl) setCropSrc(dataUrl);
+  };
+  const saveCropped = (dataUrl) => {
+    onRemove(slotKey, 0);
+    onUpload(slotKey, dataUrl, img?.name || 'reference.jpg');
+    setCropSrc(null);
+  };
 
   const clamp = (v) => Math.min(1, Math.max(0, v));
   const coordsFrom = (clientX, clientY) => {
@@ -2072,10 +2087,18 @@ export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, 
                 {e.num}
               </div>
             ) : null)}
-            <button
-              onClick={ev => { ev.stopPropagation(); onRemove(slotKey, 0); }}
-              title="Remove garment image (keeps the dots)"
-              style={{ position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: 12, background: FR.slate, color: FR.salt, border: 'none', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+            <div style={{ position: 'absolute', top: 6, right: 6, display: 'flex', gap: 6 }}>
+              <button
+                onClick={ev => { ev.stopPropagation(); recrop(); }}
+                title="Reposition / zoom / crop the reference"
+                style={{ padding: '4px 10px', borderRadius: 12, background: FR.soil, color: FR.salt, border: 'none', fontSize: 10, cursor: 'pointer', fontWeight: 600, letterSpacing: 0.3 }}>
+                Recrop
+              </button>
+              <button
+                onClick={ev => { ev.stopPropagation(); onRemove(slotKey, 0); }}
+                title="Remove garment image (keeps the dots)"
+                style={{ width: 24, height: 24, borderRadius: 12, background: FR.slate, color: FR.salt, border: 'none', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+            </div>
           </div>
           {/* number chips: click to arm which dot the next click places */}
           <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
@@ -2117,6 +2140,15 @@ export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, 
           onUpload={onUpload}
           onRemove={onRemove}
           label={undefined}
+        />
+      )}
+      {cropSrc && (
+        <CropModal
+          src={cropSrc}
+          aspect={CALLOUT_REF_RATIO}
+          label="Drag to reposition · scroll or slider to zoom · rotate if needed"
+          onCancel={() => setCropSrc(null)}
+          onConfirm={saveCropped}
         />
       )}
     </div>
