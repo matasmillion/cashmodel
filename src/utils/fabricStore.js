@@ -178,9 +178,18 @@ async function _syncFabricFromCloud(id) {
     const localRow = idx >= 0 ? local[idx] : null;
     if (localRow && (localRow.updated_at || '') > (data.updated_at || '')) return localRow;
     const merged = localRow ? { ...localRow, ...data } : data;
-    if (idx >= 0) local[idx] = merged; else local.push(merged);
-    writeLocal(local);
-    window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'fabrics', id } }));
+    // Only re-write localStorage and announce a change when the cloud copy
+    // ACTUALLY differs from the local one. An unconditional write + dispatch
+    // here fed the same endless loop the component-pack store had: every
+    // background revalidate fired plm-store-updated → TechPackBuilder re-resolved
+    // its picked fabrics → called getFabric again → another dispatch. A real
+    // library edit changes the row, so genuine edits still propagate.
+    const changed = !localRow || JSON.stringify(merged) !== JSON.stringify(localRow);
+    if (changed) {
+      if (idx >= 0) local[idx] = merged; else local.push(merged);
+      writeLocal(local);
+      window.dispatchEvent(new CustomEvent('plm-store-updated', { detail: { table: 'fabrics', id } }));
+    }
     return merged;
   } catch { return null; }
 }
