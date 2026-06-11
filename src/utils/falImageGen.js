@@ -14,7 +14,7 @@
 //   - Re-supply original reference on every call (we don't iterate — each view
 //     is a fresh generation from the same source set).
 
-import { getClerkToken, describeAuthFailure } from '../lib/auth';
+import { getClerkTokenDetailed, describeAuthFailure } from '../lib/auth';
 import { IS_SUPABASE_ENABLED } from '../lib/supabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -77,8 +77,7 @@ async function getFreshToken() {
   if (_tokenRefreshPromise) return _tokenRefreshPromise;
   _tokenRefreshPromise = (async () => {
     try {
-      const t = await getClerkToken('supabase', { skipCache: true });
-      return t;
+      return await getClerkTokenDetailed('supabase', { skipCache: true });
     } finally {
       _tokenRefreshPromise = null;
     }
@@ -107,10 +106,12 @@ async function buildHeaders() {
     };
   }
 
-  // Slow path: fetch / refresh from Clerk
-  let token = await getClerkToken('supabase');
-  if (!token || jwtExpiringSoon(token)) token = await getFreshToken();
-  if (!token) throw new Error(describeAuthFailure());
+  // Slow path: fetch / refresh from Clerk. Track this call's own failure so
+  // the thrown message reports OUR reason, not whichever of three parallel
+  // view-gen calls last wrote the shared error state.
+  let { token, failure } = await getClerkTokenDetailed('supabase');
+  if (!token || jwtExpiringSoon(token)) ({ token, failure } = await getFreshToken());
+  if (!token) throw new Error(describeAuthFailure(failure));
 
   // Cache with its JWT expiry so we don't refresh until necessary
   try {

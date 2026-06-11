@@ -77,10 +77,6 @@ function classifyTokenError(err) {
   return 'unknown';
 }
 
-function record(kind, message, template) {
-  _lastError = { kind, message: String(message), at: Date.now(), template };
-}
-
 /**
  * Bounded wait for Clerk to finish hydrating. A signed-in user always ends
  * up with `.session`; `.loaded` flips true once Clerk is ready either way.
@@ -112,8 +108,35 @@ async function waitForClerk() {
  * @param {{ skipCache?: boolean }} [opts]
  * @returns {Promise<string | null>}
  */
-export async function getClerkToken(template = 'supabase', { skipCache = false } = {}) {
-  if (typeof globalThis === 'undefined' || typeof (/** @type {any} */ (globalThis).window) === 'undefined') return null;
+export async function getClerkToken(template = 'supabase', opts = {}) {
+  const { token } = await mintToken(template, opts);
+  return token;
+}
+
+/**
+ * Like getClerkToken, but also returns THIS call's failure (or null on
+ * success). `_lastError` is shared module state that concurrent mints
+ * overwrite — callers that surface an error message to the operator should
+ * use this so they report their own failure, not whichever parallel call
+ * recorded last.
+ *
+ * @param {string} [template]
+ * @param {{ skipCache?: boolean }} [opts]
+ * @returns {Promise<{ token: string | null, failure: AuthFailure | null }>}
+ */
+export async function getClerkTokenDetailed(template = 'supabase', opts = {}) {
+  return mintToken(template, opts);
+}
+
+/**
+ * @param {string} template
+ * @param {{ skipCache?: boolean }} opts
+ * @returns {Promise<{ token: string | null, failure: AuthFailure | null }>}
+ */
+async function mintToken(template, { skipCache = false } = {}) {
+  if (typeof globalThis === 'undefined' || typeof (/** @type {any} */ (globalThis).window) === 'undefined') {
+    return { token: null, failure: null };
+  }
 
   let clerk = getClerk();
   // Boot race: the Clerk <script> is present but the instance hasn't hydrated
@@ -121,8 +144,28 @@ export async function getClerkToken(template = 'supabase', { skipCache = false }
   if (!clerk || (!clerk.session && !clerk.loaded)) {
     clerk = await waitForClerk();
   }
-  if (!clerk) { record('no_clerk', 'Clerk has not loaded yet'); return null; }
-  if (!clerk.session) { record('no_session', 'No active Clerk session (signed out)'); return null; }
+
+  /** @type {AuthFailure | null} */
+  let failure = null;
+  const fail = (kind, message) => {
+    failure = { kind, message: String(message), at: Date.now(), template };
+    _lastError = failure;
+  };
+
+  if (!clerk) { fail('no_clerk', 'Clerk has not loaded yet'); return { token: null, failure }; }
+  if (!clerk.session) { fail('no_session', 'No active Clerk session (signed out)'); return { token: null, failure }; }
+
+  // A signed-in session that mints null (or reports itself expired) is usually
+  // stale — a slept laptop or a long-lived PWA tab whose background refresh
+  // stopped. touch()/reload() forces Clerk to refresh the session so the next
+  // attempt can mint. At most once per call; a revival failure just falls
+  // through to the normal retry/backoff.
+  let revived = false;
+  const reviveSession = async () => {
+    if (revived) return;
+    revived = true;
+    try { await (clerk.session.touch?.() ?? clerk.session.reload?.()); } catch { /* retry continues */ }
+  };
 
   const attempts = _retryDelaysMs.length + 1;
   for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -130,24 +173,33 @@ export async function getClerkToken(template = 'supabase', { skipCache = false }
       // Force a fresh mint on every retry — a stale cache is a common cause
       // of a token that exists but lacks the just-activated org's org_id.
       const token = await clerk.session.getToken({ template, skipCache: skipCache || attempt > 1 });
-      if (token) { _lastError = null; return token; }
+      if (token) { _lastError = null; return { token, failure: null }; }
 
-      // getToken resolved null without throwing. Most often: an org-scoped
-      // template ({{org.id}}) with no active organization on the session.
-      record('null_token', `Clerk issued no token for template "${template}" (no active organization?)`, template);
-      if (attempt <= _retryDelaysMs.length) { await sleep(_retryDelaysMs[attempt - 1]); continue; }
-      return null;
+      // getToken resolved null without throwing. Either an org-scoped
+      // template ({{org.id}}) with no active organization on the session,
+      // or a stale session that needs a revival before it can mint.
+      fail('null_token', `Clerk issued no token for template "${template}" (stale session or no active organization?)`);
+      if (attempt <= _retryDelaysMs.length) {
+        await reviveSession();
+        await sleep(_retryDelaysMs[attempt - 1]);
+        continue;
+      }
+      return { token: null, failure };
     } catch (err) {
       const kind = classifyTokenError(err);
-      record(kind, /** @type {any} */ (err)?.message || err, template);
+      fail(kind, /** @type {any} */ (err)?.message || err);
       console.warn(`[auth] getClerkToken("${template}") failed [${kind}]:`, /** @type {any} */ (err)?.message || err);
       // A missing template is a configuration fault — retrying cannot fix it.
-      if (kind === 'no_template') return null;
-      if (attempt <= _retryDelaysMs.length) { await sleep(_retryDelaysMs[attempt - 1]); continue; }
-      return null;
+      if (kind === 'no_template') return { token: null, failure };
+      if (attempt <= _retryDelaysMs.length) {
+        if (kind === 'session') await reviveSession();
+        await sleep(_retryDelaysMs[attempt - 1]);
+        continue;
+      }
+      return { token: null, failure };
     }
   }
-  return null;
+  return { token: null, failure };
 }
 
 /** Decode a JWT payload without verifying the signature. */
@@ -191,20 +243,32 @@ export function getLastClerkTokenError() { return _lastError; }
  * Turn the current auth state + last failure into a single actionable
  * sentence for operators. This is what replaces the misleading "Sign in
  * first" at every call site.
+ *
+ * Pass the failure returned by getClerkTokenDetailed() to report THIS call's
+ * reason; without an argument it falls back to the shared last-error, which
+ * concurrent mints may have overwritten.
+ *
+ * @param {AuthFailure | null} [failure]
  * @returns {string}
  */
-export function describeAuthFailure() {
+export function describeAuthFailure(failure) {
   const clerk = getClerk();
   if (!clerk) return 'Authentication is still loading — wait a moment and try again.';
   if (!clerk.session) return 'You appear to be signed out. Sign in again, then retry.';
 
-  const e = _lastError;
+  const e = failure || _lastError;
   switch (e?.kind) {
     case 'no_template':
       return 'Auth misconfigured: the Clerk “supabase” JWT template is missing. An admin must create it in the Clerk dashboard (JWT Templates → “supabase”, with the claim { "org_id": "{{org.id}}" }), then sign out and back in.';
     case 'no_org':
     case 'null_token':
-      return 'No active organization on your session. Pick an organization in the switcher (top-right), then retry. If one is already selected, sign out and back in to refresh the token.';
+      if (!clerk.organization) {
+        return 'No active organization on your session. Pick an organization in the switcher (top-right), then retry. If one is already selected, sign out and back in to refresh the token.';
+      }
+      // An org IS active, yet Clerk minted nothing — a stale session, not an
+      // org problem. Telling the operator to "pick an organization" here is
+      // exactly the kind of misleading message this module exists to kill.
+      return 'Clerk issued no cloud token even though you are signed in — this usually clears on retry. Click Try Again; if it keeps happening, sign out and back in.';
     case 'session':
       return 'Your session expired. Sign out and back in, then retry.';
     case 'transient':
@@ -213,6 +277,6 @@ export function describeAuthFailure() {
       if (!clerk.organization) {
         return 'No active organization on your session. Pick an organization in the switcher (top-right), then retry.';
       }
-      return 'Authentication is temporarily unavailable. Open Storage Health → Sync diagnostics for details, then retry.';
+      return `Authentication is temporarily unavailable${e?.message ? ` (detail: ${e.message})` : ''}. Click Try Again; if it persists, open Storage Health → Sync diagnostics.`;
   }
 }

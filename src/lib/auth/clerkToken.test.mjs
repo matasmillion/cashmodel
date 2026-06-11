@@ -14,6 +14,7 @@ import assert from 'node:assert/strict';
 
 import {
   getClerkToken,
+  getClerkTokenDetailed,
   getJwtOrgId,
   getLastClerkTokenError,
   describeAuthFailure,
@@ -171,4 +172,112 @@ test('returns null safely when there is no window', async () => {
   } finally {
     globalThis.window = savedWindow;
   }
+});
+
+// ── stale session: silent null self-heals via session revival ───────────────
+
+test('revives a stale session (touch) when getToken silently mints null', async () => {
+  let n = 0;
+  const getToken = spy(async () => {
+    n += 1;
+    return n === 1 ? null : 'tok_after_revival';
+  });
+  const touch = spy(async () => {});
+  installClerk({ session: { getToken, touch } });
+  const t = await getClerkToken('supabase');
+  assert.equal(t, 'tok_after_revival');
+  assert.equal(touch.calls, 1, 'revival runs once, before the retry');
+  assert.equal(getLastClerkTokenError(), null, 'recovery clears the error');
+});
+
+test('falls back to session.reload() when touch() is unavailable', async () => {
+  let n = 0;
+  const getToken = spy(async () => {
+    n += 1;
+    return n === 1 ? null : 'tok_after_reload';
+  });
+  const reload = spy(async () => {});
+  installClerk({ session: { getToken, reload } });
+  const t = await getClerkToken('supabase');
+  assert.equal(t, 'tok_after_reload');
+  assert.equal(reload.calls, 1);
+});
+
+test('revives once (not per attempt) and survives a revival that throws', async () => {
+  const getToken = spy(async () => null);
+  const touch = spy(async () => { throw new Error('touch failed'); });
+  installClerk({ session: { getToken, touch } });
+  const t = await getClerkToken('supabase');
+  assert.equal(t, null, 'still null when every attempt mints null');
+  assert.equal(touch.calls, 1, 'revival is attempted at most once per call');
+  assert.equal(getLastClerkTokenError().kind, 'null_token');
+});
+
+test('revives the session on an expired-session error, then recovers', async () => {
+  let n = 0;
+  const getToken = spy(async () => {
+    n += 1;
+    if (n === 1) throw new Error('JWT is expired');
+    return 'tok_after_session_revival';
+  });
+  const touch = spy(async () => {});
+  installClerk({ session: { getToken, touch } });
+  const t = await getClerkToken('supabase');
+  assert.equal(t, 'tok_after_session_revival');
+  assert.equal(touch.calls, 1);
+});
+
+// ── honest messages: null token with an org ACTIVE is not an org problem ────
+
+test('null token with an active org does not say "pick an organization"', async () => {
+  const getToken = spy(async () => null);
+  installClerk({ session: { getToken }, organization: { id: 'org_1' } });
+  const t = await getClerkToken('supabase');
+  assert.equal(t, null);
+  const msg = describeAuthFailure();
+  assert.doesNotMatch(msg, /pick an organization/i);
+  assert.match(msg, /try again|sign out/i, 'tells the operator the actionable next step');
+});
+
+test('the generic fallback message includes the recorded failure detail', async () => {
+  const getToken = spy(async () => { throw new Error('Something exotic broke'); });
+  installClerk({ session: { getToken } });
+  await getClerkToken('supabase');
+  assert.equal(getLastClerkTokenError().kind, 'unknown');
+  assert.match(describeAuthFailure(), /Something exotic broke/);
+});
+
+// ── per-call failure: getClerkTokenDetailed beats the shared-state race ─────
+
+test('getClerkTokenDetailed returns this call’s own failure', async () => {
+  const getToken = spy(async () => null);
+  installClerk({ session: { getToken } });
+  const { token, failure } = await getClerkTokenDetailed('supabase');
+  assert.equal(token, null);
+  assert.equal(failure?.kind, 'null_token');
+  assert.equal(failure?.template, 'supabase');
+});
+
+test('getClerkTokenDetailed returns a null failure on success', async () => {
+  installClerk({ session: { getToken: spy(async () => 'tok_ok') } });
+  const { token, failure } = await getClerkTokenDetailed('supabase');
+  assert.equal(token, 'tok_ok');
+  assert.equal(failure, null);
+});
+
+test('describeAuthFailure(failure) reports the passed failure, not shared state', async () => {
+  // Simulate the race: this call failed with null_token, but a concurrent
+  // call then overwrote the shared last-error with a transient failure.
+  const getToken = spy(async () => null);
+  installClerk({ session: { getToken }, organization: { id: 'org_1' } });
+  const { failure } = await getClerkTokenDetailed('supabase');
+  installClerk({
+    session: { getToken: spy(async () => { throw new Error('Failed to fetch'); }) },
+    organization: { id: 'org_1' },
+  });
+  await getClerkToken('supabase'); // overwrites _lastError with 'transient'
+  assert.equal(getLastClerkTokenError().kind, 'transient');
+  const msg = describeAuthFailure(failure);
+  assert.doesNotMatch(msg, /network blip/i, 'must not report the other call’s failure');
+  assert.match(msg, /try again|sign out/i);
 });
