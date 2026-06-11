@@ -26,8 +26,9 @@ export const STATUSES = ['Merchandising', 'Design', 'Sampling', 'Testing', 'Pre-
 
 // Steps locked until Pre-Production: Compliance, Quality, Labels, Order.
 // After inserting 3 embellishments pages + 1 treatments call-outs page these
-// shift from {17,18,19,20} → {21,22,23,24}.
-export const LOCKED_STEPS = new Set([21, 22, 23, 24]);
+// shifted {17,18,19,20} → {21,22,23,24}; adding the second Stitching page
+// (construction-2) shifts them once more → {22,23,24,25}.
+export const LOCKED_STEPS = new Set([22, 23, 24, 25]);
 export function isStepLocked(stepIndex, status) {
   if (!LOCKED_STEPS.has(stepIndex)) return false;
   const unlockAt = STATUSES.indexOf('Pre-Production');
@@ -67,21 +68,22 @@ export const STEPS = [
   { id: 'sketches',      title: 'Call Outs',                        icon: '07', phase: 'Cut & Sew' },
   { id: 'sketches-2',    title: 'Call Outs',                        icon: '08', phase: 'Cut & Sew' },
   { id: 'construction',  title: 'Stitching',                        icon: '09', phase: 'Cut & Sew' },
-  { id: 'pattern',       title: 'Pattern & Cutting',                icon: '10', phase: 'Cut & Sew' },
-  { id: 'pom',           title: 'POM',                              icon: '11', phase: 'Cut & Sew' },
-  { id: 'size-matrix',   title: 'Size Grading',                     icon: '12', phase: 'Cut & Sew', skippable: true },
-  { id: 'color',         title: 'Colorways',                        icon: '13', phase: 'Embellishments' },
-  { id: 'artwork',       title: 'Artwork & Placement',              icon: '14', phase: 'Embellishments' },
-  { id: 'emb-flatlay',   title: 'Flat Lay',                         icon: '15', phase: 'Embellishments' },
-  { id: 'emb-callouts',  title: 'Call Outs',                        icon: '16', phase: 'Embellishments' },
-  { id: 'emb-sizing',    title: 'Sizing & Colors',                  icon: '17', phase: 'Embellishments' },
-  { id: 'treatments',    title: 'Render',                           icon: '18', phase: 'Treatments' },
-  { id: 'treat-callouts',title: 'Call Outs',                        icon: '19', phase: 'Treatments' },
-  { id: 'compliance',    title: 'Compliance & Testing',             icon: '20', phase: 'QC' },
-  { id: 'quality',       title: 'Quality Inspection (AQL)',         icon: '21', phase: 'QC' },
-  { id: 'labels',        title: 'Labels & Packaging',               icon: '22', phase: 'Packaging' },
-  { id: 'order',         title: 'Order & Delivery',                 icon: '23', phase: 'Logistics' },
-  { id: 'revision',      title: 'Revision History & Approval',      icon: '24', phase: 'Sign-off' },
+  { id: 'construction-2',title: 'Stitching',                        icon: '10', phase: 'Cut & Sew' },
+  { id: 'pattern',       title: 'Pattern & Cutting',                icon: '11', phase: 'Cut & Sew' },
+  { id: 'pom',           title: 'POM',                              icon: '12', phase: 'Cut & Sew' },
+  { id: 'size-matrix',   title: 'Size Grading',                     icon: '13', phase: 'Cut & Sew', skippable: true },
+  { id: 'color',         title: 'Colorways',                        icon: '14', phase: 'Embellishments' },
+  { id: 'artwork',       title: 'Artwork & Placement',              icon: '15', phase: 'Embellishments' },
+  { id: 'emb-flatlay',   title: 'Flat Lay',                         icon: '16', phase: 'Embellishments' },
+  { id: 'emb-callouts',  title: 'Call Outs',                        icon: '17', phase: 'Embellishments' },
+  { id: 'emb-sizing',    title: 'Sizing & Colors',                  icon: '18', phase: 'Embellishments' },
+  { id: 'treatments',    title: 'Render',                           icon: '19', phase: 'Treatments' },
+  { id: 'treat-callouts',title: 'Call Outs',                        icon: '20', phase: 'Treatments' },
+  { id: 'compliance',    title: 'Compliance & Testing',             icon: '21', phase: 'QC' },
+  { id: 'quality',       title: 'Quality Inspection (AQL)',         icon: '22', phase: 'QC' },
+  { id: 'labels',        title: 'Labels & Packaging',               icon: '23', phase: 'Packaging' },
+  { id: 'order',         title: 'Order & Delivery',                 icon: '24', phase: 'Logistics' },
+  { id: 'revision',      title: 'Revision History & Approval',      icon: '25', phase: 'Sign-off' },
 ];
 
 // Width-to-height ratio of the Cut & Sew call-out garment reference (a narrow
@@ -148,16 +150,22 @@ export const DEFAULT_DATA = {
   artworkPlacements: [{ placement: '', artworkFile: '', method: '', sizeCm: '', positionFrom: '', color: '', notes: '' }],
   logoFront: '', logoBack: '', logoMethod: '',
   seams: [{ operation: '', seamType: '', stitchType: '', machine: '', spiSpcm: '', threadColor: '', threadType: '', notes: '' }],
-  // Up to 6 stitch reference image blocks shown above the seam table on the
-  // Seam & Stitch page. Each block carries a freeform label (e.g. "401
-  // Coverstitch") and an image uploaded against slot `seam-stitch-{num}`.
+  // Eight stitch callout cards across two Stitching pages (page 09 = 1–4,
+  // page 10 = 5–8), mirroring the Call Outs pages. Each card carries a
+  // freeform name label (e.g. "4-Thread Overlock"), a main image
+  // (slot `seam-stitch-{num}`), an optional supporting reference image
+  // (slot `seam-stitch-{num}-support`), and a placed callout `dot` (normalized
+  // { x, y } over the page's garment reference, or null). Each card pairs
+  // positionally with row `num` of the seams[] spec table below.
   seamStitchBlocks: [
-    { num: 1, label: '' },
-    { num: 2, label: '' },
-    { num: 3, label: '' },
-    { num: 4, label: '' },
-    { num: 5, label: '' },
-    { num: 6, label: '' },
+    { num: 1, label: '', dot: null },
+    { num: 2, label: '', dot: null },
+    { num: 3, label: '', dot: null },
+    { num: 4, label: '', dot: null },
+    { num: 5, label: '', dot: null },
+    { num: 6, label: '', dot: null },
+    { num: 7, label: '', dot: null },
+    { num: 8, label: '', dot: null },
   ],
   // AI-generated labor cost metadata. The cutSewLaborCost field above is
   // the value that flows into the cost roll-up; this captures the model's
@@ -254,10 +262,10 @@ export const DEFAULT_DATA = {
   },
 };
 
-// Same indexes as before, plus the new Embellishments (15, 16) and
-// Treatments call-outs (19) image-heavy pages. Treatments Render (18)
-// already inherited from old index 16.
-export const IMG_STEPS = new Set([3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 18, 19]);
+// Image-heavy step indices. Adding the second Stitching page (construction-2)
+// at index 11 shifts every later image step +1 and registers the new page:
+// old {3,4,5,6,7,8,9,10,12,13,14,15,16,18,19} → add 11, then 12→13 … 19→20.
+export const IMG_STEPS = new Set([3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 19, 20]);
 
 // Initial-load compression. Loads a File at high quality + caps to a
 // generous max dimension (2400px) so the crop modal has detail to work

@@ -18,7 +18,7 @@ import * as _atomTypes from '../types/atoms';
 /**
  * @typedef {{ num: number, title: string, description: string, image_url: string, dot: ({ x: number, y: number }|null) }} CalloutDetail
  * @typedef {{ id: string, type: 'box'|'text', x: number, y: number, w?: number, h?: number, text?: string }} Annotation
- * @typedef {{ num: number, label: string, hidden: boolean, image_url: string }} StitchBlock
+ * @typedef {{ num: number, label: string, hidden: boolean, image_url: string, dot: ({ x: number, y: number }|null) }} StitchBlock
  * @typedef {{ piece_num: string, piece_name: string, quantity: string, fabric: string, grain: string, fusing: string, notes: string }} PatternPiece
  * @typedef {{ name: string, tol: string, s: string, m: string, l: string, xl: string, method: string }} PomRow
  * @typedef {{ operation: string, seam_type: string, stitch_type: string, machine: string, spi_spcm: string, thread_color: string, thread_type: string, notes: string }} SeamSpec
@@ -137,8 +137,8 @@ export function emptyCutSew(overrides = {}) {
       { num: 8, title: '', description: '', image_url: '', dot: null },
     ],
 
-    // ── Stitching (page 10) ───────────────────────────────────────
-    seam_stitch_blocks: [1, 2, 3, 4, 5, 6].map(num => ({ num, label: '', hidden: false, image_url: '' })),
+    // ── Stitching (pages 09 + 10 — eight callout cards, 1–4 / 5–8) ──
+    seam_stitch_blocks: [1, 2, 3, 4, 5, 6, 7, 8].map(num => ({ num, label: '', hidden: false, image_url: '', dot: null })),
     seams: [],
     labor_cost_usd: 0,
     labor_cost_notes: '',
