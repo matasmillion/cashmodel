@@ -4,6 +4,16 @@ This file is the operating manual for any AI agent (Claude Code, Cursor, Copilot
 
 ---
 
+## Operator context (read first)
+
+This repo is an internal ERP for Foreign Resource, run by a single **non-technical operator** who directs all work through Claude Code and cannot read code. This is a permanent fact about how the repo is built, not a temporary state.
+
+**Explain everything like you're explaining it to a dumb 8 year old.** Every change, every diagnosis, every plan — no jargon, no code-speak, short words and plain analogies. When you reference a file or function, say in one plain sentence what it does and why it matters. Never assume the operator can read the code on the screen.
+
+Always explain in plain English what you're about to do and why, and wait for approval, before writing code.
+
+---
+
 ## Folder structure (strict)
 
 Every feature lives in its own folder. New features create new folders. Never put feature code into an unrelated folder because "it was nearby."
@@ -61,6 +71,55 @@ Never create a parallel store for the same data. If a store needs more capabilit
 2. Check if the type is already defined in `src/types/atoms.js`. Don't redefine.
 3. If replacing old behavior, DELETE the old code in the same commit. Never leave parallel implementations "just in case."
 4. If a task seems to require deleting or refactoring `TechPackBuilder.jsx`, `ComponentPackBuilder.jsx`, or `TreatmentBuilder.jsx` — stop and flag. These are carefully architected workflows. Only additive changes are allowed unless explicitly approved.
+
+---
+
+## Scope discipline (hard rule)
+
+One coherent change per session. Stay inside the area the task names.
+
+- Do not edit adjacent code that already works, even if it looks improvable. Note it separately and move on.
+- If finishing the task seems to require touching a file or module outside its scope, STOP and flag it before proceeding.
+- Never bundle a bug fix and a new feature in the same change. They are separate sessions.
+- Smaller, well-scoped changes are always preferred. When a change starts touching many files, stop and ask whether it should be split.
+
+---
+
+## UI work — mockup first (hard rule)
+
+Any work that creates or changes UI or layout produces an HTML mockup in `docs/mockups/` FIRST, and the operator approves the look, before any JSX is written. No exceptions.
+
+- The mockup is a pixel-level spec: real proportions, real spacing, the actual brand colors and type, on a Salt background.
+- Show the operator the mockup and STOP. Do not touch the real app until the look is approved.
+- Once approved, the mockup is the locked spec — build to match it. If the build has to deviate, flag it and say why.
+- Existing locked specs live in `docs/mockups/` (e.g. `creative-engine-v5.html`, `inventory-portal.html`). New UI work adds a new mockup file there.
+
+---
+
+## Debugging protocol (follow in order)
+
+When something is broken, never jump straight to a fix. Work in this order, and do not write code until step 4 is approved:
+
+1. **Reproduce** — restate, in plain English, exactly what the operator did, what they expected, and what happened instead.
+2. **Isolate** — find the file(s) actually responsible. Read them. Don't guess.
+3. **Diagnose the root cause** — explain WHY it happens, not just what's visibly wrong. Fix the cause, not the symptom, so the bug can't reappear elsewhere.
+4. **Show and wait** — show the operator the diagnosis in plain English and wait for approval before changing anything.
+5. **Fix at the root**, then say exactly how to test that it's actually fixed.
+
+A bug that gets patched at the surface and comes back later is a failure. Find the real cause.
+
+---
+
+## Commands (verify your own work)
+
+Before claiming a change is done, build it and run the self-test. Don't rely on reading the code alone. (Confirm these match the scripts in `package.json`.)
+
+- Build: `npm run build`
+- Dev server: `npm run dev`
+- Preview a production build: `npm run preview`
+- Self-test: `node scripts/selftest.mjs` — must pass green before a change is considered done.
+
+If a change touches money, vendor data, or production state, run the self-test and report the result.
 
 ---
 
@@ -164,6 +223,19 @@ If a prompt is more than 30 days old, re-read the current codebase first and fla
 
 ---
 
+## Module conventions live in subtree files
+
+This file holds the **universal** rules only. Deep, module-specific conventions live in a `CLAUDE.md` inside that module's own folder, which Claude Code loads automatically when working in that area:
+
+- `src/components/inventory/CLAUDE.md` — inventory module conventions
+- `src/components/creative/CLAUDE.md` — creative engine conventions
+
+When you establish a new convention, put universal rules here and module-specific rules in the matching subtree file. Keep this top-level file lean.
+
+> Migration note: the two module sections below (Creative, Inventory) are kept inline for now so this file stays self-contained. They are candidates to move into the subtree files named above. Do that as a doc-only change when convenient — do not delete the content, move it.
+
+---
+
 ## Creative Module Conventions
 
 All Creative Engine code lives in `src/components/creative/`. Stores in `src/utils/` (one file per data type, mirroring `treatmentStore.js`). Types in `src/types/creative.js` (JSDoc, no TypeScript). Hash routing via `src/utils/creativeRouting.js` mirroring `plmRouting.js`.
@@ -237,3 +309,4 @@ Routing helper: `src/utils/inventoryRouting.js` (mirrors `plmRouting.js`). `migr
 - 2026-05-09 — Type system: General Sans is the brand sans for body / UI labels (Cormorant Garamond stays as the heading face).
 - 2026-05-09 — Brand operating principle: never discount. Inventory module phase 0 (variant mapping store + Today/SKU mockups locked).
 - 2026-05-09 — Inventory module phases 1–7 shipped: cockpit, SKU master ledger, SKU detail, sell-through, POs, Open-to-Buy, forecast bridge + assumptions strip + top-20 calendar, read-only Claude agent. Legacy standalone `#sell-through`, `#po-schedule`, `#pos` routes retired (redirects preserved). KPI hero numbers switched from Cormorant to General Sans.
+- 2026-06-11 — Working-process rules added: operator context (non-technical operator + explain-like-an-8-year-old rule), scope discipline (one change per session, no bundling bugs with features), mockup-first hard rule (HTML mockup approved before any JSX), debugging protocol (reproduce → isolate → diagnose root cause → show → fix at root), commands/self-test section. Subtree-CLAUDE.md convention introduced; Creative + Inventory module sections flagged for future migration into their folders.
