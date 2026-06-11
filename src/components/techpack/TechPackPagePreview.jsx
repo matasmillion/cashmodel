@@ -5,6 +5,7 @@
 
 import { FR, STEPS, CALLOUT_REF_RATIO, CALLOUT_MAIN_RATIO, CALLOUT_SUPPORT_RATIO } from './techPackConstants';
 import { FabricBOMPreviewBody } from './FabricBOMPreview';
+import { AnnotationSvg } from './ImageAnnotator';
 
 const PAGE_W = 1123;
 const PAGE_H = 794;
@@ -1000,6 +1001,10 @@ function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey, enhanc
           </g>
         ) : null)}
 
+        {/* red box / text annotations drawn on the garment reference (inset 4px,
+            exactly where the dots are placed) */}
+        <AnnotationSvg annos={d?.calloutAnnotations?.[resolvedSlot]} x={padX + 4} y={refY + 4} w={refW - 8} h={refH - 8} keyPrefix={`ga-${pageKey}`} />
+
         {/* 2x2 grid of large detail cards */}
         {entries.map((entry, i) => {
           const col = i % 2;
@@ -1022,9 +1027,11 @@ function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey, enhanc
               <rect x={cx} y={cy} width={cardW} height={cardH}
                 fill={FR.white} stroke={FR.sand} strokeWidth={0.5} rx={6} />
               <ImageCell x={bandX} y={bandY} w={mainW} h={imageH} image={detailImg} placeholder={`Detail ${entry.num}`} />
+              <AnnotationSvg annos={d?.calloutAnnotations?.[`construction-detail-${entry.num}`]} x={bandX} y={bandY} w={mainW} h={imageH} keyPrefix={`dm-${entry.num}`} />
               {supportImg && (
                 <ImageCell x={bandX + mainW + imgGap} y={bandY} w={supW} h={imageH} image={supportImg} placeholder="Ref" />
               )}
+              {supportImg && <AnnotationSvg annos={d?.calloutAnnotations?.[`construction-detail-${entry.num}-support`]} x={bandX + mainW + imgGap} y={bandY} w={supW} h={imageH} keyPrefix={`ds-${entry.num}`} />}
               {/* red numbered circle + title row, cleanly below the image */}
               <circle cx={numCx} cy={titleY - 4} r={11} fill="#A32D2D" />
               <text x={numCx} y={titleY} textAnchor="middle" fontSize="12" fontWeight="600" fill="#FFFFFF">

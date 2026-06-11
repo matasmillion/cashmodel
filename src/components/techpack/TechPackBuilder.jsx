@@ -7,6 +7,8 @@ import SendToVendorButton from './SendToVendorButton';
 import { useApp } from '../../context/AppContext';
 import { STEP_FNS } from './TechPackSteps';
 import TechPackPagePreview from './TechPackPagePreview';
+import ImageAnnotator from './ImageAnnotator';
+import { loadBlockAnnotations, saveBlockSlotAnnotations, slotAnnotations, withSlotAnnotations, describeSlot } from '../../utils/cutSewAnnotations';
 import { saveTechPack } from '../../utils/techPackStore';
 import { generateTechPackPDF } from '../../utils/techPackPDF';
 import { generateTechPackSVGAsync, svgToBlob } from '../../utils/techPackSVG';
@@ -188,6 +190,11 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   const [data, setData] = useState(pack.data || DEFAULT_DATA);
   const [images, setImages] = useState(pack.images || []);
   const [library, setLibrary] = useState(pack.library || DEFAULT_LIBRARY);
+  // Call-out image annotations (red box/text). Single source of truth = the
+  // LINKED Cut & Sew block, so they always match the library card and any other
+  // Style on that block. Loaded by id; unlinked styles fall back to data.calloutAnnotations.
+  const [blockAnnotations, setBlockAnnotations] = useState({});
+  const [annoTarget, setAnnoTarget] = useState(null); // { slot, title } photo being annotated
   // Treatment library cache, keyed by id, for resolving fabric.treatment_id
   // selections into name/code/process on the live preview without forcing
   // PageTreatments to do async work mid-render.
@@ -243,6 +250,16 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
       window.removeEventListener('plm-store-updated', bump);
     };
   }, []);
+  // Load the linked Cut & Sew block's annotations, and re-load on focus / any
+  // cut_sew store update (refreshTick bumps for both) so a mark drawn in the
+  // library card — or another Style on the same block — appears here live.
+  useEffect(() => {
+    const blockId = data.pickedCutSewBlockId;
+    if (!blockId) { setBlockAnnotations({}); return undefined; }
+    let cancelled = false;
+    loadBlockAnnotations(blockId).then(map => { if (!cancelled) setBlockAnnotations(map || {}); });
+    return () => { cancelled = true; };
+  }, [data.pickedCutSewBlockId, refreshTick]);
   const componentIdKey = [
     ...(data.pickedTrims || []).map(p => p?.componentId || p?.id || ''),
     ...(data.pickedPackaging || []).map(p => p?.componentId || p?.id || ''),
@@ -1058,9 +1075,18 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   // Resolved view for the SVG live preview — path-only entries get a
   // signed URL so <image href> renders. Legacy/blob entries pass through.
   const previewImages = useResolvedImageEntries(images);
+  const pickedBlockId = data.pickedCutSewBlockId || null;
+  // Single source of truth = the linked block; unlinked styles fall back to their own data.
+  const effectiveAnnotations = pickedBlockId ? blockAnnotations : (data.calloutAnnotations || {});
+  const openAnnotate = (slot, title) => setAnnoTarget({ slot, title });
+  const onAnnotationsChange = (slot, next) => {
+    if (pickedBlockId) saveBlockSlotAnnotations(pickedBlockId, slot, next).then(map => setBlockAnnotations(map)).catch(() => {});
+    else set('calloutAnnotations', withSlotAnnotations(data.calloutAnnotations, slot, next));
+  };
   const stepProps = {
     data, set, images, onUpload: handleImgUpload, onRemove: handleImgRemove,
     onSeedImages: handleSeedImages,
+    annotations: effectiveAnnotations, onAnnotate: openAnnotate,
     library, saveToLibrary,
     onSubmit: handleSubmit, submitting, submitResult,
     bomCost, costVariance,
@@ -1280,9 +1306,21 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
             <div style={{ fontSize: 9, color: FR.stone, letterSpacing: 2, fontWeight: 600, textTransform: 'uppercase' }}>Live Preview</div>
             <div style={{ fontSize: 9, color: FR.stone }}>Page {step + 1} / {STEPS.length}</div>
           </div>
-          <TechPackPagePreview data={data} images={previewImages} step={step} skippedSteps={skippedSteps} treatmentsById={treatmentsById} componentsById={componentsById} fabricsById={fabricsById} fabricPageIdx={fabricPageIdx} />
+          <TechPackPagePreview data={{ ...data, calloutAnnotations: effectiveAnnotations }} images={previewImages} step={step} skippedSteps={skippedSteps} treatmentsById={treatmentsById} componentsById={componentsById} fabricsById={fabricsById} fabricPageIdx={fabricPageIdx} />
         </div>
       </div>
+
+      {annoTarget && (
+        <ImageAnnotator
+          image={images.find(i => i.slot === annoTarget.slot)}
+          annos={slotAnnotations(effectiveAnnotations, annoTarget.slot)}
+          onChange={next => onAnnotationsChange(annoTarget.slot, next)}
+          onClose={() => setAnnoTarget(null)}
+          title={annoTarget.title || describeSlot(annoTarget.slot).title}
+          aspect={describeSlot(annoTarget.slot).aspect}
+          fit={describeSlot(annoTarget.slot).fit}
+        />
+      )}
     </div>
   );
 }

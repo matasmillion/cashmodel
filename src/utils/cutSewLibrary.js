@@ -17,6 +17,7 @@ import * as _atomTypes from '../types/atoms';
 
 /**
  * @typedef {{ num: number, title: string, description: string, image_url: string, dot: ({ x: number, y: number }|null) }} CalloutDetail
+ * @typedef {{ id: string, type: 'box'|'text', x: number, y: number, w?: number, h?: number, text?: string }} Annotation
  * @typedef {{ num: number, label: string, hidden: boolean, image_url: string }} StitchBlock
  * @typedef {{ piece_num: string, piece_name: string, quantity: string, fabric: string, grain: string, fusing: string, notes: string }} PatternPiece
  * @typedef {{ name: string, tol: string, s: string, m: string, l: string, xl: string, method: string }} PomRow
@@ -51,7 +52,8 @@ import * as _atomTypes from '../types/atoms';
  *   pom_rows: PomRow[],
  *   pom_size_type: 'apparel'|'waist'|'one-size',
  *   pom_measurement_method: string,
- *   graded_size_matrix: { baseSize: string, sizes: string[], grading: Array<{ pomName: string, perSizeDelta: Record<string,number|null> }> }
+ *   graded_size_matrix: { baseSize: string, sizes: string[], grading: Array<{ pomName: string, perSizeDelta: Record<string,number|null> }> },
+ *   annotations: Record<string, Annotation[]>
  * }} CutSew
  */
 
@@ -154,6 +156,9 @@ export function emptyCutSew(overrides = {}) {
 
     // ── Size Grading (page 13) ───────────────────────────────────
     graded_size_matrix: { baseSize: 'M', sizes: [], grading: [] },
+
+    // ── Call-out image annotations (red box/text overlays, keyed by image slot) ──
+    annotations: {},
 
     ...overrides,
   };

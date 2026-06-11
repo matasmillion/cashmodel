@@ -18,6 +18,21 @@ export const CALLOUT_MAIN_ASPECT    = { ratio: CALLOUT_MAIN_RATIO,    label: 'Ma
 export const CALLOUT_SUPPORT_ASPECT = { ratio: CALLOUT_SUPPORT_RATIO, label: 'Support',        shortLabel: 'support 1:1' };
 import { listFRColors } from '../../utils/colorLibrary';
 import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, AspectPhoto, ASPECTS, AssetImage, entryToDataUrl, ArrayTable, EditableSelect, FRColorCell, FilesPanel } from './TechPackPrimitives';
+import { AnnotationOverlay } from './ImageAnnotator';
+
+// Small "Annotate (N)" pill shown under any call-out photo that has an image, so
+// the operator can open the red box / red text editor for that exact photo.
+const ANNOTATE_BTN = { display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, padding: '3px 8px', borderRadius: 4, border: '0.5px solid rgba(58,58,58,0.15)', background: FR.salt, color: FR.slate, fontSize: 10, fontWeight: 600, letterSpacing: 0.3, cursor: 'pointer' };
+export function AnnotateButton({ slot, images, annotations, onAnnotate, title }) {
+  if (!onAnnotate) return null;
+  if (!(images || []).some(i => i.slot === slot)) return null; // only when a photo exists
+  const n = (annotations && annotations[slot] && annotations[slot].length) || 0;
+  return (
+    <button onClick={() => onAnnotate(slot, title)} style={ANNOTATE_BTN} title="Draw red box / text on this photo">
+      <span style={{ color: '#A32D2D', fontWeight: 700 }}>+</span> Annotate{n ? ` (${n})` : ''}
+    </button>
+  );
+}
 import CropModal from './CropModal';
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
 import { addSupplier } from '../../utils/plmDirectory';
@@ -1918,7 +1933,7 @@ function RedNumberCircle({ n, size = 22 }) {
 // When `enhanced` (Cut & Sew pages 07/08), the card also carries a smaller
 // optional supporting image beside the large main image. Leaving the support
 // slot empty lets the live preview / PDF expand the main image to fill.
-function ConstructionDetailCard({ entry, onChange, images, onUpload, onRemove, enhanced }) {
+function ConstructionDetailCard({ entry, onChange, images, onUpload, onRemove, enhanced, annotations, onAnnotate }) {
   const slotKey = `construction-detail-${entry.num}`;
   return (
     <div style={{
@@ -1943,6 +1958,7 @@ function ConstructionDetailCard({ entry, onChange, images, onUpload, onRemove, e
               onRemove={onRemove}
               label={`Detail ${entry.num} — main image`}
             />
+            <AnnotateButton slot={slotKey} images={images} annotations={annotations} onAnnotate={onAnnotate} title={`Detail ${entry.num} — main image`} />
           </div>
           <div style={{ flex: `${CALLOUT_SUPPORT_RATIO} 1 0`, minWidth: 0 }}>
             <AspectPhoto
@@ -1953,6 +1969,7 @@ function ConstructionDetailCard({ entry, onChange, images, onUpload, onRemove, e
               onRemove={onRemove}
               label="Support (optional)"
             />
+            <AnnotateButton slot={`${slotKey}-support`} images={images} annotations={annotations} onAnnotate={onAnnotate} title={`Detail ${entry.num} — supporting image`} />
           </div>
         </div>
       ) : (
@@ -2013,7 +2030,7 @@ function ConstructionDetailCard({ entry, onChange, images, onUpload, onRemove, e
 // Each dot's position is stored as normalized { x, y } (0..1) on the matching
 // call-out entry so the live preview and PDF render the same dots. Exported so
 // the Cut & Sew library builder can reuse the exact same control.
-export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, entries, onSetDot }) {
+export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, entries, onSetDot, annotations, onAnnotate }) {
   const boxRef = useRef(null);
   const draggingRef = useRef(false);
   const [armed, setArmed] = useState(null);
@@ -2076,6 +2093,15 @@ export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, 
               overflow: 'hidden', cursor: 'crosshair', userSelect: 'none',
             }}>
             <AssetImage image={img} alt="garment reference" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', pointerEvents: 'none' }} />
+            <AnnotationOverlay annos={annotations} />
+            {onAnnotate && (
+              <button
+                onClick={ev => { ev.stopPropagation(); onAnnotate(slotKey, 'Garment reference'); }}
+                title="Draw red box / text on the garment reference"
+                style={{ position: 'absolute', top: 6, left: 6, padding: '4px 10px', borderRadius: 12, background: FR.salt, color: FR.slate, border: '0.5px solid rgba(58,58,58,0.2)', fontSize: 10, fontWeight: 600, cursor: 'pointer', letterSpacing: 0.3, zIndex: 4 }}>
+                <span style={{ color: '#A32D2D', fontWeight: 700 }}>+</span> Annotate{(annotations && annotations.length) ? ` (${annotations.length})` : ''}
+              </button>
+            )}
             {entries.map(e => e.dot ? (
               <div
                 key={e.num}
@@ -2166,7 +2192,7 @@ export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, 
 // the clickable in-app dot-placement garment image, and each card carries an
 // optional supporting image beside its main image. Without `enhanced`
 // (Embellishments 16, Treatments 19) the original layout is preserved exactly.
-function ConstructionDetailsPage({ pageKey, dataKey, fieldName, data, set, images, onUpload, onRemove, enhanced }) {
+function ConstructionDetailsPage({ pageKey, dataKey, fieldName, data, set, images, onUpload, onRemove, enhanced, annotations, onAnnotate }) {
   const entries = (data?.[fieldName] || DEFAULT_DATA[fieldName]).slice(0, 4);
   const update = (idx, next) => {
     const copy = [...(data?.[fieldName] || DEFAULT_DATA[fieldName])];
@@ -2201,6 +2227,8 @@ function ConstructionDetailsPage({ pageKey, dataKey, fieldName, data, set, image
               onRemove={onRemove}
               entries={entries}
               onSetDot={setDot}
+              annotations={(annotations && annotations[`sketch-callout-${pageKey}`]) || []}
+              onAnnotate={onAnnotate}
             />
           ) : (
             <>
@@ -2229,6 +2257,8 @@ function ConstructionDetailsPage({ pageKey, dataKey, fieldName, data, set, image
               onUpload={onUpload}
               onRemove={onRemove}
               enhanced={enhanced}
+              annotations={annotations}
+              onAnnotate={onAnnotate}
             />
           ))}
         </div>
@@ -2237,7 +2267,7 @@ function ConstructionDetailsPage({ pageKey, dataKey, fieldName, data, set, image
   );
 }
 
-export function StepSketches({ data, set, images, onUpload, onRemove }) {
+export function StepSketches({ data, set, images, onUpload, onRemove, annotations, onAnnotate }) {
   return (
     <ConstructionDetailsPage
       pageKey="page1"
@@ -2248,11 +2278,13 @@ export function StepSketches({ data, set, images, onUpload, onRemove }) {
       onUpload={onUpload}
       onRemove={onRemove}
       enhanced
+      annotations={annotations}
+      onAnnotate={onAnnotate}
     />
   );
 }
 
-export function StepSketches2({ data, set, images, onUpload, onRemove }) {
+export function StepSketches2({ data, set, images, onUpload, onRemove, annotations, onAnnotate }) {
   return (
     <ConstructionDetailsPage
       pageKey="page2"
@@ -2263,6 +2295,8 @@ export function StepSketches2({ data, set, images, onUpload, onRemove }) {
       onUpload={onUpload}
       onRemove={onRemove}
       enhanced
+      annotations={annotations}
+      onAnnotate={onAnnotate}
     />
   );
 }

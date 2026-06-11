@@ -7,7 +7,9 @@ import { FR, STEPS } from './techPackConstants';
 import { saveCutSew, archiveCutSew, restoreCutSew } from '../../utils/cutSewStore';
 import { CUT_SEW_CATEGORIES, CUT_SEW_CATEGORY_LABEL, CUT_SEW_STATUSES, STANDARD_SIZE_SETS } from '../../utils/cutSewLibrary';
 import { PhotoUpload, AspectPhoto, ASPECTS, ArrayTable, FRColorCell } from './TechPackPrimitives';
-import { CutSewLaborCostBlock, CalloutGarmentRef, CALLOUT_MAIN_ASPECT, CALLOUT_SUPPORT_ASPECT } from './TechPackSteps';
+import { CutSewLaborCostBlock, CalloutGarmentRef, AnnotateButton, CALLOUT_MAIN_ASPECT, CALLOUT_SUPPORT_ASPECT } from './TechPackSteps';
+import ImageAnnotator from './ImageAnnotator';
+import { slotAnnotations, withSlotAnnotations, describeSlot } from '../../utils/cutSewAnnotations';
 import CutSewCostChat from './CutSewCostChat';
 import FileSlot from './FileSlot';
 import { migrateLegacyCoverIfNeeded, isLegacyDataUrl, useResolvedImageEntries } from '../../utils/plmAssets';
@@ -136,7 +138,7 @@ function RedNumberCircle({ n, size = 22 }) {
 // Callout detail card — matches ConstructionDetailCard in TechPackSteps exactly.
 // Carries a large main image plus a smaller optional supporting image; leaving
 // the support slot empty lets the preview/PDF expand the main image to fill.
-function CalloutDetailCard({ entry, onChange, images, onUpload, onRemove }) {
+function CalloutDetailCard({ entry, onChange, images, onUpload, onRemove, annotations, onAnnotate }) {
   const slotKey = `construction-detail-${entry.num}`;
   return (
     <div style={{
@@ -153,6 +155,7 @@ function CalloutDetailCard({ entry, onChange, images, onUpload, onRemove }) {
             onRemove={onRemove}
             label={`Detail ${entry.num} — main image`}
           />
+          <AnnotateButton slot={slotKey} images={images} annotations={annotations} onAnnotate={onAnnotate} title={`Detail ${entry.num} — main image`} />
         </div>
         <div style={{ flex: `${CALLOUT_SUPPORT_ASPECT.ratio} 1 0`, minWidth: 0 }}>
           <AspectPhoto
@@ -163,6 +166,7 @@ function CalloutDetailCard({ entry, onChange, images, onUpload, onRemove }) {
             onRemove={onRemove}
             label="Support (optional)"
           />
+          <AnnotateButton slot={`${slotKey}-support`} images={images} annotations={annotations} onAnnotate={onAnnotate} title={`Detail ${entry.num} — supporting image`} />
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -221,6 +225,7 @@ export default function CutSewBuilder({ block, onBack }) {
   const [savedSnapshot, setSavedSnapshot] = useState(block);
   const [saving, setSaving]             = useState(false);
   const [pageIdx, setPageIdx]           = useState(0);
+  const [annoTarget, setAnnoTarget]     = useState(null); // { slot, title } photo being annotated
 
   const draftRef         = useRef(draft);
   const savingRef        = useRef(false);
@@ -293,6 +298,13 @@ export default function CutSewBuilder({ block, onBack }) {
 
   const handleImgRemove = useCallback((slot) => {
     setDraft(d => ({ ...d, images: (d.images || []).filter(i => i.slot !== slot) }));
+  }, []);
+
+  // Red box / red text annotations on call-out photos, keyed by image slot. They
+  // live right on the block (single source of truth) and autosave with it.
+  const openAnnotate = useCallback((slot, title) => setAnnoTarget({ slot, title }), []);
+  const setSlotAnnos = useCallback((slot, next) => {
+    setDraft(d => ({ ...d, annotations: withSlotAnnotations(d.annotations, slot, next) }));
   }, []);
 
   const images = draft.images || [];
@@ -411,6 +423,8 @@ export default function CutSewBuilder({ block, onBack }) {
     // its 4-card default (identical to the Styles preview).
     constructionDetailsPage1: (draft.callout_details_page1 && draft.callout_details_page1.length) ? draft.callout_details_page1 : undefined,
     constructionDetailsPage2: (draft.callout_details_page2 && draft.callout_details_page2.length) ? draft.callout_details_page2 : undefined,
+    // Red box / text annotations on the call-out photos (keyed by image slot).
+    calloutAnnotations: draft.annotations || {},
     // Stitching
     seams: (draft.seams || []).map(s => ({
       operation: s.operation,
@@ -595,6 +609,8 @@ export default function CutSewBuilder({ block, onBack }) {
               onRemove={handleImgRemove}
               entries={entries1}
               onSetDot={(num, dot) => setCalloutDot(1, num, dot)}
+              annotations={slotAnnotations(draft.annotations, 'sketch-callout-page1')}
+              onAnnotate={openAnnotate}
             />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignContent: 'start' }}>
               {entries1.map((entry, i) => (
@@ -605,6 +621,8 @@ export default function CutSewBuilder({ block, onBack }) {
                   images={images}
                   onUpload={handleImgUpload}
                   onRemove={handleImgRemove}
+                  annotations={draft.annotations}
+                  onAnnotate={openAnnotate}
                 />
               ))}
             </div>
@@ -630,6 +648,8 @@ export default function CutSewBuilder({ block, onBack }) {
               onRemove={handleImgRemove}
               entries={entries2}
               onSetDot={(num, dot) => setCalloutDot(2, num, dot)}
+              annotations={slotAnnotations(draft.annotations, 'sketch-callout-page2')}
+              onAnnotate={openAnnotate}
             />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignContent: 'start' }}>
               {entries2.map((entry, i) => (
@@ -640,6 +660,8 @@ export default function CutSewBuilder({ block, onBack }) {
                   images={images}
                   onUpload={handleImgUpload}
                   onRemove={handleImgRemove}
+                  annotations={draft.annotations}
+                  onAnnotate={openAnnotate}
                 />
               ))}
             </div>
@@ -952,6 +974,18 @@ export default function CutSewBuilder({ block, onBack }) {
           <TechPackPagePreview data={previewData} images={previewImages} step={previewStep} />
         )}
       </div>
+
+      {annoTarget && (
+        <ImageAnnotator
+          image={images.find(i => i.slot === annoTarget.slot)}
+          annos={slotAnnotations(draft.annotations, annoTarget.slot)}
+          onChange={next => setSlotAnnos(annoTarget.slot, next)}
+          onClose={() => setAnnoTarget(null)}
+          title={annoTarget.title || describeSlot(annoTarget.slot).title}
+          aspect={describeSlot(annoTarget.slot).aspect}
+          fit={describeSlot(annoTarget.slot).fit}
+        />
+      )}
     </div>
   );
 }
