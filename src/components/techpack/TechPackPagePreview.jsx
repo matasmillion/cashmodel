@@ -3,7 +3,7 @@
 // numbered tech pack pages. The denominator stays 19 — merchandising pages
 // are pre-pack strategy and aren't counted toward the numbered total.
 
-import { FR, STEPS } from './techPackConstants';
+import { FR, STEPS, CALLOUT_REF_RATIO } from './techPackConstants';
 import { FabricBOMPreviewBody } from './FabricBOMPreview';
 
 const PAGE_W = 1123;
@@ -957,7 +957,7 @@ function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey, enhanc
     const bottomY  = 762;                 // leave a band above the footer
     const refLabel = 22;                  // PhotoSlot caption bar height
     const refH     = bottomY - refY - refLabel;       // image area height
-    const refW     = Math.round(refH * (2 / 3));       // true 2:3 portrait
+    const refW     = Math.round(refH * CALLOUT_REF_RATIO); // narrow portrait → wider cards
     const colGap   = 24;
     const rightX   = padX + refW + colGap;
     const rightW   = PAGE_W - padX - rightX;

@@ -590,7 +590,7 @@ export default function CutSewBuilder({ block, onBack }) {
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 0.55fr) 1.45fr', gap: 18, alignItems: 'stretch' }}>
             <CalloutGarmentRef
-              label="Garment Reference (2 : 3)"
+              label="Garment Reference"
               slotKey="sketch-callout-page1"
               images={images}
               onUpload={handleImgUpload}
@@ -625,7 +625,7 @@ export default function CutSewBuilder({ block, onBack }) {
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 0.55fr) 1.45fr', gap: 18, alignItems: 'stretch' }}>
             <CalloutGarmentRef
-              label="Garment Reference (2 : 3)"
+              label="Garment Reference"
               slotKey="sketch-callout-page2"
               images={images}
               onUpload={handleImgUpload}

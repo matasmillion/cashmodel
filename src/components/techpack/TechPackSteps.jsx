@@ -5,7 +5,11 @@
 // that will be replaced in subsequent prompts.
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, isStepLocked, isMerchLocked, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
+import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, CALLOUT_REF_RATIO, isStepLocked, isMerchLocked, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
+
+// Aspect used by the Cut & Sew call-out garment reference upload/crop, matching
+// the live preview + PDF reference box so placed dots line up everywhere.
+const CALLOUT_REF_ASPECT = { ratio: CALLOUT_REF_RATIO, label: 'Tall garment reference', shortLabel: 'garment reference' };
 import { listFRColors } from '../../utils/colorLibrary';
 import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, AspectPhoto, ASPECTS, AssetImage, ArrayTable, EditableSelect, FRColorCell, FilesPanel } from './TechPackPrimitives';
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
@@ -2046,7 +2050,7 @@ export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, 
             ref={boxRef}
             onClick={placeAt}
             style={{
-              position: 'relative', width: '100%', aspectRatio: '2 / 3',
+              position: 'relative', width: '100%', aspectRatio: `${CALLOUT_REF_RATIO}`,
               background: FR.salt, border: `0.5px solid ${FR.sand}`, borderRadius: 6,
               overflow: 'hidden', cursor: 'crosshair', userSelect: 'none',
             }}>
@@ -2108,7 +2112,7 @@ export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, 
       ) : (
         <AspectPhoto
           slotKey={slotKey}
-          aspect={ASPECTS.TWO_THIRDS}
+          aspect={CALLOUT_REF_ASPECT}
           images={images}
           onUpload={onUpload}
           onRemove={onRemove}
@@ -2152,7 +2156,7 @@ function ConstructionDetailsPage({ pageKey, dataKey, fieldName, data, set, image
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           {enhanced ? (
             <CalloutGarmentRef
-              label="Garment Reference (2 : 3)"
+              label="Garment Reference"
               slotKey={`sketch-callout-${pageKey}`}
               images={images}
               onUpload={onUpload}

@@ -183,7 +183,7 @@ export async function generateTechPackPDF(pack) {
     const top = 24;
     const colGap = 6;
     const refH = 170;                          // fill the page height
-    const refW = Math.round(refH * (2 / 3));    // 2:3 vertical
+    const refW = Math.round(refH * 0.44);       // CALLOUT_REF_RATIO — narrow portrait
     const callout = images.find(i => i.slot === `sketch-callout-${title.endsWith('Page 2') ? 'page2' : 'page1'}`);
     if (callout) {
       try { doc.addImage(callout.data, 'JPEG', margin, top, refW, refH, undefined, 'FAST'); }
@@ -213,7 +213,7 @@ export async function generateTechPackPDF(pack) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
     doc.setTextColor(...hex(FR.soil));
-    doc.text('REFERENCE (2:3)', margin, top + refH + 4);
+    doc.text('REFERENCE', margin, top + refH + 4);
 
     const rightX = margin + refW + colGap;
     const rightW = W - margin - rightX;

@@ -84,6 +84,12 @@ export const STEPS = [
   { id: 'revision',      title: 'Revision History & Approval',      icon: '24', phase: 'Sign-off' },
 ];
 
+// Width-to-height ratio of the Cut & Sew call-out garment reference (a narrow
+// portrait, narrower than 2:3, so the four call-out cards get more width for
+// their images). Shared by the editor dot-placement box, the live preview, and
+// the PDF so a dot placed in the editor lands in the same spot everywhere.
+export const CALLOUT_REF_RATIO = 0.44;
+
 const todayISO = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
