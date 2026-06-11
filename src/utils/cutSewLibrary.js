@@ -16,7 +16,7 @@
 import * as _atomTypes from '../types/atoms';
 
 /**
- * @typedef {{ num: number, title: string, description: string, image_url: string }} CalloutDetail
+ * @typedef {{ num: number, title: string, description: string, image_url: string, dot: ({ x: number, y: number }|null) }} CalloutDetail
  * @typedef {{ num: number, label: string, hidden: boolean, image_url: string }} StitchBlock
  * @typedef {{ piece_num: string, piece_name: string, quantity: string, fabric: string, grain: string, fusing: string, notes: string }} PatternPiece
  * @typedef {{ name: string, tol: string, s: string, m: string, l: string, xl: string, method: string }} PomRow
@@ -120,19 +120,19 @@ export function emptyCutSew(overrides = {}) {
     // ── Call Outs page 1 (page 08) ────────────────────────────────
     callout_ref_page1_url: '',
     callout_details_page1: [
-      { num: 1, title: '', description: '', image_url: '' },
-      { num: 2, title: '', description: '', image_url: '' },
-      { num: 3, title: '', description: '', image_url: '' },
-      { num: 4, title: '', description: '', image_url: '' },
+      { num: 1, title: '', description: '', image_url: '', dot: null },
+      { num: 2, title: '', description: '', image_url: '', dot: null },
+      { num: 3, title: '', description: '', image_url: '', dot: null },
+      { num: 4, title: '', description: '', image_url: '', dot: null },
     ],
 
     // ── Call Outs page 2 (page 09) ────────────────────────────────
     callout_ref_page2_url: '',
     callout_details_page2: [
-      { num: 5, title: '', description: '', image_url: '' },
-      { num: 6, title: '', description: '', image_url: '' },
-      { num: 7, title: '', description: '', image_url: '' },
-      { num: 8, title: '', description: '', image_url: '' },
+      { num: 5, title: '', description: '', image_url: '', dot: null },
+      { num: 6, title: '', description: '', image_url: '', dot: null },
+      { num: 7, title: '', description: '', image_url: '', dot: null },
+      { num: 8, title: '', description: '', image_url: '', dot: null },
     ],
 
     // ── Stitching (page 10) ───────────────────────────────────────

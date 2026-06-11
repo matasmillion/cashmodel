@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cut &amp; Sew — Call Outs · proposed layout (v2 mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ───────── FR design tokens ───────── */
+  :root{
+    --salt:#F5F0E8; --slate:#3A3A3A; --sand:#EBE5D5; --soil:#854F0B;
+    --stone:#9A9A9A; --white:#fff;
+    --good:#3B6D11; --warn:#854F0B; --bad:#A32D2D; --red:#A32D2D;
+    --border:rgba(58,58,58,0.15);
+    --serif:'Cormorant Garamond','Georgia',serif;
+    --sans:'Inter','General Sans','Helvetica Neue',system-ui,sans-serif;
+    --mono:ui-monospace,'SF Mono',Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--salt);color:var(--slate);font-family:var(--sans);font-size:13px}
+  h1,h2,h3,h4{font-family:var(--serif);font-weight:400;margin:0}
+
+  /* ───────── Mockup chrome ───────── */
+  .wrap{max-width:1120px;margin:0 auto;padding:28px 24px 80px}
+  .mock-head{margin-bottom:18px}
+  .mock-eyebrow{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--soil);font-weight:600}
+  .mock-title{font-size:30px;margin-top:4px}
+  .mock-sub{font-size:13px;color:var(--stone);margin-top:4px;max-width:760px;line-height:1.5}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:14px}
+  .legend .chip{display:inline-flex;align-items:center;gap:7px;background:var(--white);border:0.5px solid var(--border);
+    border-radius:6px;padding:6px 11px;font-size:11px;color:var(--slate)}
+  .swatch{width:13px;height:13px;border-radius:3px;flex:none}
+
+  /* ───────── The "paper" page (A4 landscape live-preview) ───────── */
+  .page{width:1040px;max-width:100%;aspect-ratio:1040/735;background:var(--white);
+    border:0.5px solid var(--border);border-radius:6px;box-shadow:0 6px 28px rgba(58,58,58,0.10);
+    margin:6px auto 0;display:flex;flex-direction:column;overflow:hidden}
+  .page-head{display:flex;justify-content:space-between;align-items:flex-start;
+    padding:16px 26px 12px;border-bottom:0.5px solid var(--border)}
+  .ph-brand .co{font-size:11px;letter-spacing:2px;font-weight:600}
+  .ph-brand .sub{font-size:8px;letter-spacing:2px;color:var(--stone);margin-top:2px}
+  .ph-title{font-family:var(--serif);font-size:18px;text-align:center;flex:1}
+  .ph-id{font-family:var(--mono);font-size:9px;color:var(--stone);text-align:right;line-height:1.5}
+  .meta-row{display:flex;gap:30px;padding:8px 26px 0;font-size:8px}
+  .meta-row .m label{display:block;letter-spacing:1.5px;text-transform:uppercase;color:var(--stone)}
+  .meta-row .m span{font-family:var(--mono);font-size:10px;color:var(--slate)}
+  .instruction{font-size:10px;font-style:italic;color:var(--stone);text-align:center;padding:8px 26px 2px}
+
+  .layout{flex:1;display:grid;grid-template-columns:208px 1fr;gap:18px;padding:6px 26px 22px;min-height:0}
+
+  /* Left — clickable garment reference with numbered dots */
+  .garment{position:relative;background:linear-gradient(160deg,#F3EFE7,#E9E3D6);
+    border:0.5px solid var(--border);border-radius:5px;overflow:hidden;display:flex;flex-direction:column}
+  .garment .gar-label{position:absolute;top:8px;left:0;right:0;text-align:center;
+    font-size:8px;letter-spacing:1.6px;text-transform:uppercase;color:var(--stone)}
+  .silhouette{flex:1;display:flex;align-items:center;justify-content:center}
+  .silhouette svg{width:78%;height:auto;opacity:0.5}
+  .gar-foot{font-size:8px;color:var(--stone);text-align:center;padding:6px 4px 8px;border-top:0.5px solid var(--border);background:rgba(255,255,255,0.4)}
+  .gar-foot b{color:var(--soil);font-weight:600}
+
+  .dot{position:absolute;width:21px;height:21px;border-radius:50%;background:var(--red);color:#fff;
+    font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 1px 4px rgba(0,0,0,0.28);border:1.5px solid #fff;font-family:var(--sans)}
+  .cursor-hint{position:absolute;display:flex;align-items:center;gap:5px;
+    background:var(--slate);color:var(--salt);font-size:8px;padding:3px 6px;border-radius:4px;white-space:nowrap;
+    box-shadow:0 2px 8px rgba(0,0,0,0.25)}
+  .crosshair{position:absolute;width:14px;height:14px;pointer-events:none}
+  .crosshair::before,.crosshair::after{content:"";position:absolute;background:var(--red);opacity:0.85}
+  .crosshair::before{left:6px;top:0;width:1.5px;height:14px}
+  .crosshair::after{top:6px;left:0;height:1.5px;width:14px}
+
+  /* Right — 2x2 callout cards */
+  .cards{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:14px;min-height:0}
+  .card{background:var(--white);border:0.5px solid var(--border);border-radius:5px;
+    padding:9px;display:flex;flex-direction:column;gap:7px;min-height:0}
+  .imgband{display:flex;gap:7px;flex:0 0 52%;min-height:0}
+  .img{border-radius:4px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;
+    border:0.5px solid var(--border)}
+  .img .ilbl{font-size:8px;letter-spacing:1.4px;text-transform:uppercase;color:var(--stone);z-index:2}
+  .img.filled{background:linear-gradient(135deg,#DAD3C4,#C9C0AD)}
+  .img.filled .ilbl{color:rgba(58,58,58,0.45)}
+  .img-main{flex:0 0 62%}
+  .img-main.full{flex:1 1 100%}
+  .img-support{flex:1 1 auto;background:linear-gradient(135deg,#E4DECF,#D7CFBC)}
+  .img-support .tag,.img-main .tag{position:absolute;top:5px;left:5px;font-size:7px;letter-spacing:1px;
+    text-transform:uppercase;color:#fff;background:rgba(58,58,58,0.55);padding:1px 5px;border-radius:3px}
+  .title-row{display:flex;align-items:center;gap:8px}
+  .badge{width:17px;height:17px;border-radius:50%;background:var(--red);color:#fff;font-size:9px;font-weight:600;
+    display:flex;align-items:center;justify-content:center;flex:none}
+  .title-row .t{font-size:11px;font-weight:600;color:var(--slate)}
+  .desc{font-size:9px;line-height:1.45;color:var(--slate);overflow:hidden}
+  .no-support-flag{font-size:7px;color:var(--soil);letter-spacing:0.6px;text-transform:uppercase;font-weight:600;
+    align-self:flex-start;background:rgba(133,79,11,0.10);padding:1px 5px;border-radius:3px;margin-top:-2px}
+
+  /* ───────── Anatomy diagram ───────── */
+  .anatomy{display:grid;grid-template-columns:300px 1fr;gap:30px;margin-top:46px;align-items:center}
+  .anatomy h3{font-size:20px;margin-bottom:4px}
+  .anatomy .a-card{background:var(--white);border:0.5px solid var(--border);border-radius:6px;padding:11px;
+    display:flex;flex-direction:column;gap:9px;box-shadow:0 4px 16px rgba(58,58,58,0.08)}
+  .anatomy .imgband{flex:none;height:120px}
+  .anatomy .desc{font-size:10px}
+  .notes{font-size:12.5px;line-height:1.7;color:var(--slate)}
+  .notes b{color:var(--soil)}
+  .notes .n{display:flex;gap:10px;margin-bottom:9px}
+  .notes .n .k{flex:none;width:20px;height:20px;border-radius:50%;background:var(--slate);color:var(--salt);
+    font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:600}
+
+  .footer-note{margin-top:38px;font-size:11px;color:var(--stone);border-top:0.5px solid var(--border);padding-top:14px}
+  .footer-note b{color:var(--slate)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="mock-head">
+    <div class="mock-eyebrow">Cut &amp; Sew · Call Outs · pages 07 &amp; 08 · proposed v2</div>
+    <h1 class="mock-title">Roomier call-outs, in-app numbered dots</h1>
+    <p class="mock-sub">
+      Same two-column idea as today — one whole-garment image on the left, four call-outs on the right —
+      but each call-out now carries a <b>large main image</b> plus a <b>smaller supporting image</b>, and the
+      garment image on the left is <b>clickable</b>: you drop a numbered red dot where each call-out lives on
+      the garment (no more Photoshop). This is page 07 (numbers 1–4); page 08 is identical with 5–8.
+    </p>
+    <div class="legend">
+      <span class="chip"><span class="swatch" style="background:var(--red)"></span> Numbered dot &amp; badge</span>
+      <span class="chip"><span class="swatch" style="background:linear-gradient(135deg,#DAD3C4,#C9C0AD)"></span> Main image (large)</span>
+      <span class="chip"><span class="swatch" style="background:linear-gradient(135deg,#E4DECF,#D7CFBC)"></span> Supporting image (smaller)</span>
+      <span class="chip"><span class="swatch" style="background:rgba(133,79,11,0.10);border:0.5px solid var(--soil)"></span> Call-out 4 = no support → main fills</span>
+    </div>
+  </div>
+
+  <!-- ───────── PAPER PAGE ───────── -->
+  <div class="page">
+    <div class="page-head">
+      <div class="ph-brand"><div class="co">FOREIGN RESOURCE CO.</div><div class="sub">CUT &amp; SEW</div></div>
+      <div class="ph-title">Call Outs</div>
+      <div class="ph-id">FW26-BB-ZH-0001<br>PAGE 07 / 24</div>
+    </div>
+    <div class="meta-row">
+      <div class="m"><label>Style #</label><span>FW26-BB-ZH-0001</span></div>
+      <div class="m"><label>Collection</label><span>Borderless Basics</span></div>
+      <div class="m"><label>Season</label><span>FW26</span></div>
+      <div class="m"><label>Version</label><span>V1.0</span></div>
+      <div class="m"><label>Colorway</label><span>Slate</span></div>
+    </div>
+    <div class="instruction">Click the garment to drop each numbered dot. Each call-out card carries its own large main image, a smaller supporting image, a title, and a description.</div>
+
+    <div class="layout">
+      <!-- LEFT: clickable garment reference -->
+      <div class="garment">
+        <div class="gar-label">Garment Reference</div>
+        <div class="silhouette">
+          <!-- abstract hoodie silhouette -->
+          <svg viewBox="0 0 200 300" fill="none" stroke="#7c7468" stroke-width="2.4">
+            <path d="M70 38 q30 26 60 0" />
+            <path d="M70 38 L40 60 L18 120 L40 132 L46 110" />
+            <path d="M130 38 L160 60 L182 120 L160 132 L154 110" />
+            <path d="M70 38 L46 110 L46 250 q54 16 108 0 L154 110 L130 38" />
+            <path d="M100 40 L100 250" stroke-dasharray="3 5" stroke-width="1.4" />
+            <path d="M84 44 q16 14 32 0" />
+          </svg>
+        </div>
+        <!-- numbered dots placed on the garment -->
+        <div class="dot" style="top:21%;left:50%">1</div>
+        <div class="dot" style="top:40%;left:30%">2</div>
+        <div class="dot" style="top:42%;left:69%">3</div>
+        <div class="dot" style="top:72%;left:36%">4</div>
+        <!-- click affordance -->
+        <div class="crosshair" style="top:71%;left:35%"></div>
+        <div class="cursor-hint" style="top:78%;left:24%">＋ click to place</div>
+        <div class="gar-foot"><b>Click</b> to place · <b>drag</b> to move · numbers match the cards →</div>
+      </div>
+
+      <!-- RIGHT: 2x2 callout cards -->
+      <div class="cards">
+        <!-- Card 1 -->
+        <div class="card">
+          <div class="imgband">
+            <div class="img img-main filled"><span class="tag">Main</span><span class="ilbl">Welt pocket — exterior</span></div>
+            <div class="img img-support"><span class="tag">Support</span><span class="ilbl">ref</span></div>
+          </div>
+          <div class="title-row"><span class="badge">1</span><span class="t">Welt Pocket — Exterior</span></div>
+          <div class="desc">The pockets on the garment are welt pockets with bar tacks on the top and bottom. Keep the opening clean and even on both sides.</div>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="card">
+          <div class="imgband">
+            <div class="img img-main filled"><span class="tag">Main</span><span class="ilbl">Welt pocket — interior</span></div>
+            <div class="img img-support"><span class="tag">Support</span><span class="ilbl">ref</span></div>
+          </div>
+          <div class="title-row"><span class="badge">2</span><span class="t">Welt Pocket — Interior</span></div>
+          <div class="desc">Turn the pocket fabric inside out so the soft side touches the body. Sew onto the zipper lining; leave the top open as shown.</div>
+        </div>
+
+        <!-- Card 3 -->
+        <div class="card">
+          <div class="imgband">
+            <div class="img img-main filled"><span class="tag">Main</span><span class="ilbl">Zipper — cover the tape</span></div>
+            <div class="img img-support"><span class="tag">Support</span><span class="ilbl">ref</span></div>
+          </div>
+          <div class="title-row"><span class="badge">3</span><span class="t">Zipper — Cover the Tape</span></div>
+          <div class="desc">Cover the zipper tape with base hoodie fabric but keep the full zipper teeth showing. Calculate the right fold so nothing puckers.</div>
+        </div>
+
+        <!-- Card 4 — NO supporting image → main fills -->
+        <div class="card">
+          <div class="imgband">
+            <div class="img img-main full filled"><span class="tag">Main</span><span class="ilbl">Thumb holes — full width</span></div>
+          </div>
+          <span class="no-support-flag">No supporting image · main filled the space</span>
+          <div class="title-row"><span class="badge">4</span><span class="t">Thumb Holes</span></div>
+          <div class="desc">Bar tacks on the top and bottom of each thumbhole. With no second image added, the main close-up stretches to use the whole card.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────── ANATOMY OF ONE CARD ───────── -->
+  <div class="anatomy">
+    <div>
+      <div class="a-card">
+        <div class="imgband">
+          <div class="img img-main filled"><span class="tag">Main</span><span class="ilbl">Big close-up</span></div>
+          <div class="img img-support"><span class="tag">Support</span><span class="ilbl">smaller</span></div>
+        </div>
+        <div class="title-row"><span class="badge">1</span><span class="t">Title (e.g. Hood Construction)</span></div>
+        <div class="desc">Description — translatable per factory.</div>
+      </div>
+    </div>
+    <div class="notes">
+      <h3>What each card holds</h3>
+      <div class="n"><span class="k">A</span><div><b>Large main image</b> — the hero close-up, as big as the card allows (about ⅔ of the image strip).</div></div>
+      <div class="n"><span class="k">B</span><div><b>Smaller supporting image</b> — a second reference (a different angle, a detail, a "do/don't"). Clearly visible but smaller than the main.</div></div>
+      <div class="n"><span class="k">C</span><div><b>Auto-fill</b> — if you don't add a supporting image, the main image grows to fill the whole strip (see call-out 4 above).</div></div>
+      <div class="n"><span class="k">D</span><div><b>Numbered badge + title + description</b> — the badge number is the same number as the dot you placed on the garment, so the factory can find it instantly.</div></div>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    <b>How the dots work now:</b> the left image is a plain photo of the whole garment. You click where a detail
+    is and the app drops that call-out's red number there; click again (or drag) to move it. One dot per call-out
+    — 1–4 on page 07, 5–8 on page 08. No Photoshop step. &nbsp;·&nbsp;
+    <b>Stays in sync:</b> the exact same layout appears in the editor, the live preview, the exported PDF, and the
+    reusable Cut &amp; Sew library card. &nbsp;·&nbsp;
+    <b>Untouched:</b> the Embellishments (16) and Treatments (19) call-out pages keep their current look.
+  </div>
+
+</div>
+</body>
+</html>
