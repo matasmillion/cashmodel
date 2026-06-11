@@ -919,7 +919,7 @@ function PageConstruction({ d, images }) {
 // 9:16 reference image on the left (designer adds red-dot callouts in
 // Photoshop), 2x2 grid of A4-landscape detail cards on the right. Each card
 // has a red-numbered circle at the top + translatable title + description.
-function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey }) {
+function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey, enhanced }) {
   const imgs = images || [];
   const resolvedField = fieldName || (pageKey === 'page2' ? 'constructionDetailsPage2' : 'constructionDetailsPage1');
   const resolvedSlot  = slotKey  || `sketch-callout-${pageKey}`;
@@ -950,7 +950,9 @@ function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey }) {
       <InfoStrip d={d} />
 
       <text x={PAGE_W / 2} y={topY - 6} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
-        Number each callout on the reference image (red dots). Each detail card carries its own close-up image, title, and description.
+        {enhanced
+          ? 'Numbered dots mark each call-out on the garment. Each card carries a main close-up, an optional supporting image, a title, and a description.'
+          : 'Number each callout on the reference image (red dots). Each detail card carries its own close-up image, title, and description.'}
       </text>
 
       {/* 2:3 reference image on the left */}
@@ -961,6 +963,19 @@ function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey }) {
         image={callout}
       />
 
+      {/* in-app placed numbered dots (Cut & Sew only) — coords are 0..1 over
+          the image area drawn inside the PhotoSlot (inset 4px) */}
+      {enhanced && entries.map(entry => entry.dot ? (
+        <g key={`dot-${entry.num}`}>
+          <circle cx={padX + 4 + entry.dot.x * (refW - 8)} cy={refY + 4 + entry.dot.y * (refH - 8)}
+            r={9} fill="#A32D2D" stroke="#FFFFFF" strokeWidth={1.5} />
+          <text x={padX + 4 + entry.dot.x * (refW - 8)} y={refY + 4 + entry.dot.y * (refH - 8) + 3.5}
+            textAnchor="middle" fontSize="10" fontWeight="600" fill="#FFFFFF">
+            {entry.num}
+          </text>
+        </g>
+      ) : null)}
+
       {/* 2x2 grid of detail cards on the right; each card has its own image */}
       {entries.map((entry, i) => {
         const col = i % cardCols;
@@ -968,21 +983,36 @@ function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey }) {
         const cx  = rightX + col * (cardW + colGap2);
         const cy  = refY   + row * (cardH + rowGap);
         const detailImg = imgs.find(im => im.slot === `construction-detail-${entry.num}`);
+        const supportImg = enhanced ? imgs.find(im => im.slot === `construction-detail-${entry.num}-support`) : null;
         const titleY = cy + imageH + 18;
         const descY  = titleY + 8;
         const numCx  = cx + 18;
+        // When a supporting image exists, the main close-up takes ~62% of the
+        // width and the support sits beside it; otherwise the main fills the
+        // band (identical to the original single-image layout).
+        const imgGap = 6;
+        const mainW  = supportImg ? (cardW - imgGap) * 0.62 : cardW;
+        const supW   = (cardW - imgGap) * 0.38;
         return (
           <g key={entry.num}>
             {/* card border */}
             <rect x={cx} y={cy} width={cardW} height={cardH}
               fill={FR.white} stroke={FR.sand} strokeWidth={0.5} rx={4} />
-            {/* image area at the top */}
+            {/* image area at the top — main (+ optional support beside it) */}
             <PhotoSlot
               x={cx} y={cy}
-              w={cardW} h={imageH}
+              w={mainW} h={imageH}
               label={`Detail ${entry.num}`}
               image={detailImg}
             />
+            {supportImg && (
+              <PhotoSlot
+                x={cx + mainW + imgGap} y={cy}
+                w={supW} h={imageH}
+                label="Ref"
+                image={supportImg}
+              />
+            )}
             {/* red numbered circle at the start of the title row */}
             <circle cx={numCx} cy={titleY - 4} r={9} fill="#A32D2D" />
             <text x={numCx} y={titleY} textAnchor="middle"
@@ -1619,8 +1649,8 @@ const PAGE_FNS = [
   { title: 'Packaging',                         phase: 'Bill of Materials', body: ({ d, componentsById }) => <PagePackaging d={d} componentsById={componentsById} /> },
   // 07–13 — Cut & Sew
   { title: 'Flat Lay',                          phase: 'Cut & Sew',         body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
-  { title: 'Call Outs',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page1" /> },
-  { title: 'Call Outs',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page2" /> },
+  { title: 'Call Outs',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page1" enhanced /> },
+  { title: 'Call Outs',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page2" enhanced /> },
   { title: 'Stitching',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageConstruction d={d} images={images} /> },
   { title: 'Pattern & Cutting',                 phase: 'Cut & Sew',         body: ({ d, images }) => <PagePattern d={d} images={images} /> },
   { title: 'POM',                               phase: 'Cut & Sew',         body: ({ d, images }) => <PagePom d={d} images={images} /> },

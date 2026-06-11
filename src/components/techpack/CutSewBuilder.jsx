@@ -7,7 +7,7 @@ import { FR, STEPS } from './techPackConstants';
 import { saveCutSew, archiveCutSew, restoreCutSew } from '../../utils/cutSewStore';
 import { CUT_SEW_CATEGORIES, CUT_SEW_CATEGORY_LABEL, CUT_SEW_STATUSES, STANDARD_SIZE_SETS } from '../../utils/cutSewLibrary';
 import { PhotoUpload, AspectPhoto, ASPECTS, ArrayTable, FRColorCell } from './TechPackPrimitives';
-import { CutSewLaborCostBlock } from './TechPackSteps';
+import { CutSewLaborCostBlock, CalloutGarmentRef } from './TechPackSteps';
 import CutSewCostChat from './CutSewCostChat';
 import FileSlot from './FileSlot';
 import { migrateLegacyCoverIfNeeded, isLegacyDataUrl, useResolvedImageEntries } from '../../utils/plmAssets';
@@ -134,6 +134,8 @@ function RedNumberCircle({ n, size = 22 }) {
 }
 
 // Callout detail card — matches ConstructionDetailCard in TechPackSteps exactly.
+// Carries a large main image plus a smaller optional supporting image; leaving
+// the support slot empty lets the preview/PDF expand the main image to fill.
 function CalloutDetailCard({ entry, onChange, images, onUpload, onRemove }) {
   const slotKey = `construction-detail-${entry.num}`;
   return (
@@ -141,15 +143,30 @@ function CalloutDetailCard({ entry, onChange, images, onUpload, onRemove }) {
       background: '#fff', border: `0.5px solid ${FR.sand}`,
       borderRadius: 6, padding: 10, display: 'flex', flexDirection: 'column', gap: 8,
     }}>
-      <PhotoUpload
-        single
-        slotKey={slotKey}
-        images={images}
-        onUpload={onUpload}
-        onRemove={onRemove}
-        aspect="4 / 3"
-        label={`Detail ${entry.num} image`}
-      />
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+        <div style={{ flex: '1.7 1 0', minWidth: 0 }}>
+          <PhotoUpload
+            single
+            slotKey={slotKey}
+            images={images}
+            onUpload={onUpload}
+            onRemove={onRemove}
+            aspect="4 / 3"
+            label={`Detail ${entry.num} — main image`}
+          />
+        </div>
+        <div style={{ flex: '1 1 0', minWidth: 0 }}>
+          <PhotoUpload
+            single
+            slotKey={`${slotKey}-support`}
+            images={images}
+            onUpload={onUpload}
+            onRemove={onRemove}
+            aspect="4 / 3"
+            label="Support (optional)"
+          />
+        </div>
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <RedNumberCircle n={entry.num} />
         <input
@@ -323,6 +340,15 @@ export default function CutSewBuilder({ block, onBack }) {
       ? draft[field]
       : (page === 1 ? DEFAULT_CALLOUTS_PAGE1 : DEFAULT_CALLOUTS_PAGE2);
     set({ [field]: base.map((e, idx) => idx === i ? next : e) });
+  };
+
+  // Set/clear a call-out's placed dot (normalized { x, y } in 0..1, or null).
+  const setCalloutDot = (page, num, dot) => {
+    const field = page === 1 ? 'callout_details_page1' : 'callout_details_page2';
+    const base = (draft[field] && draft[field].length)
+      ? draft[field]
+      : (page === 1 ? DEFAULT_CALLOUTS_PAGE1 : DEFAULT_CALLOUTS_PAGE2);
+    set({ [field]: base.map(e => e.num === num ? { ...e, dot } : e) });
   };
 
   // Stitch block helpers
@@ -554,27 +580,26 @@ export default function CutSewBuilder({ block, onBack }) {
         </div>
       );
 
-      case 'callouts1': return (
+      case 'callouts1': {
+        const entries1 = ((draft.callout_details_page1 && draft.callout_details_page1.length) ? draft.callout_details_page1 : DEFAULT_CALLOUTS_PAGE1).slice(0, 4);
+        return (
         <div style={CARD}>
           <h4 style={SECTION_HEAD}>Call Outs — Page 1</h4>
           <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, fontStyle: 'italic' }}>
-            Number each callout on the left reference image (red dots) and describe the matching detail in the box.
+            Click the garment image on the left to drop a numbered dot for each call-out, then add a main close-up, an optional supporting image, and the description.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 0.55fr) 1.45fr', gap: 18, alignItems: 'stretch' }}>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <label style={{ ...SECTION_LABEL, marginBottom: 8 }}>Reference Image (2 : 3)</label>
-              <PhotoUpload
-                single
-                label="Drop the callout reference (numbered red dots overlaid in Photoshop)"
-                slotKey="sketch-callout-page1"
-                images={images}
-                onUpload={handleImgUpload}
-                onRemove={handleImgRemove}
-                aspect="2 / 3"
-              />
-            </div>
+            <CalloutGarmentRef
+              label="Garment Reference (2 : 3)"
+              slotKey="sketch-callout-page1"
+              images={images}
+              onUpload={handleImgUpload}
+              onRemove={handleImgRemove}
+              entries={entries1}
+              onSetDot={(num, dot) => setCalloutDot(1, num, dot)}
+            />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignContent: 'start' }}>
-              {((draft.callout_details_page1 && draft.callout_details_page1.length) ? draft.callout_details_page1 : DEFAULT_CALLOUTS_PAGE1).slice(0, 4).map((entry, i) => (
+              {entries1.map((entry, i) => (
                 <CalloutDetailCard
                   key={entry.num}
                   entry={entry}
@@ -588,28 +613,28 @@ export default function CutSewBuilder({ block, onBack }) {
           </div>
         </div>
       );
+      }
 
-      case 'callouts2': return (
+      case 'callouts2': {
+        const entries2 = ((draft.callout_details_page2 && draft.callout_details_page2.length) ? draft.callout_details_page2 : DEFAULT_CALLOUTS_PAGE2).slice(0, 4);
+        return (
         <div style={CARD}>
           <h4 style={SECTION_HEAD}>Call Outs — Page 2</h4>
           <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, fontStyle: 'italic' }}>
-            Continue callout details for a second page of construction references.
+            Continue callout details for a second page of construction references. Click the garment to place dots 5–8.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 0.55fr) 1.45fr', gap: 18, alignItems: 'stretch' }}>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <label style={{ ...SECTION_LABEL, marginBottom: 8 }}>Reference Image (2 : 3)</label>
-              <PhotoUpload
-                single
-                label="Drop the callout reference page 2"
-                slotKey="sketch-callout-page2"
-                images={images}
-                onUpload={handleImgUpload}
-                onRemove={handleImgRemove}
-                aspect="2 / 3"
-              />
-            </div>
+            <CalloutGarmentRef
+              label="Garment Reference (2 : 3)"
+              slotKey="sketch-callout-page2"
+              images={images}
+              onUpload={handleImgUpload}
+              onRemove={handleImgRemove}
+              entries={entries2}
+              onSetDot={(num, dot) => setCalloutDot(2, num, dot)}
+            />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignContent: 'start' }}>
-              {((draft.callout_details_page2 && draft.callout_details_page2.length) ? draft.callout_details_page2 : DEFAULT_CALLOUTS_PAGE2).slice(0, 4).map((entry, i) => (
+              {entries2.map((entry, i) => (
                 <CalloutDetailCard
                   key={entry.num}
                   entry={entry}
@@ -623,6 +648,7 @@ export default function CutSewBuilder({ block, onBack }) {
           </div>
         </div>
       );
+      }
 
       case 'stitching': return (
         <div style={CARD}>

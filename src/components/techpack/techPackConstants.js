@@ -158,18 +158,19 @@ export const DEFAULT_DATA = {
   // Construction Details — two pages, four entries each. Each entry maps to a
   // red-numbered detail callout on the page's reference image. Title and
   // description are dedicated fields so they can be translated independently
-  // per factory.
+  // per factory. `dot` is the in-app placed marker (normalized { x, y } in
+  // 0..1 over the garment reference image, or null when not yet placed).
   constructionDetailsPage1: [
-    { num: 1, title: '', description: '' },
-    { num: 2, title: '', description: '' },
-    { num: 3, title: '', description: '' },
-    { num: 4, title: '', description: '' },
+    { num: 1, title: '', description: '', dot: null },
+    { num: 2, title: '', description: '', dot: null },
+    { num: 3, title: '', description: '', dot: null },
+    { num: 4, title: '', description: '', dot: null },
   ],
   constructionDetailsPage2: [
-    { num: 5, title: '', description: '' },
-    { num: 6, title: '', description: '' },
-    { num: 7, title: '', description: '' },
-    { num: 8, title: '', description: '' },
+    { num: 5, title: '', description: '', dot: null },
+    { num: 6, title: '', description: '', dot: null },
+    { num: 7, title: '', description: '', dot: null },
+    { num: 8, title: '', description: '', dot: null },
   ],
   // Embellishments — Flat Lay (two sketches with print type + process details)
   embFlatLayNotes: '',

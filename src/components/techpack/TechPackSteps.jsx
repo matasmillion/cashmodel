@@ -4,10 +4,10 @@
 // Page 1 (Cover & Identity) is fully built. All other pages are placeholders
 // that will be replaced in subsequent prompts.
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, isStepLocked, isMerchLocked, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
 import { listFRColors } from '../../utils/colorLibrary';
-import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, AspectPhoto, ASPECTS, ArrayTable, EditableSelect, FRColorCell, FilesPanel } from './TechPackPrimitives';
+import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, AspectPhoto, ASPECTS, AssetImage, ArrayTable, EditableSelect, FRColorCell, FilesPanel } from './TechPackPrimitives';
 import { generatePackingList, getStoredKey, saveKey } from '../../utils/aiPackingList';
 import { addSupplier } from '../../utils/plmDirectory';
 import { getFRColor } from '../../utils/colorLibrary';
@@ -1904,7 +1904,10 @@ function RedNumberCircle({ n, size = 22 }) {
 // Single detail card — image (top) + red number + translatable title + description.
 // The card stretches vertically; the image area is a fixed 4:3 frame so each
 // detail can carry its own close-up shot of the construction in question.
-function ConstructionDetailCard({ entry, onChange, images, onUpload, onRemove }) {
+// When `enhanced` (Cut & Sew pages 07/08), the card also carries a smaller
+// optional supporting image beside the large main image. Leaving the support
+// slot empty lets the live preview / PDF expand the main image to fill.
+function ConstructionDetailCard({ entry, onChange, images, onUpload, onRemove, enhanced }) {
   const slotKey = `construction-detail-${entry.num}`;
   return (
     <div style={{
@@ -1916,15 +1919,42 @@ function ConstructionDetailCard({ entry, onChange, images, onUpload, onRemove })
       flexDirection: 'column',
       gap: 8,
     }}>
-      <PhotoUpload
-        single
-        slotKey={slotKey}
-        images={images}
-        onUpload={onUpload}
-        onRemove={onRemove}
-        aspect="4 / 3"
-        label={`Detail ${entry.num} image`}
-      />
+      {enhanced ? (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+          <div style={{ flex: '1.7 1 0', minWidth: 0 }}>
+            <PhotoUpload
+              single
+              slotKey={slotKey}
+              images={images}
+              onUpload={onUpload}
+              onRemove={onRemove}
+              aspect="4 / 3"
+              label={`Detail ${entry.num} — main image`}
+            />
+          </div>
+          <div style={{ flex: '1 1 0', minWidth: 0 }}>
+            <PhotoUpload
+              single
+              slotKey={`${slotKey}-support`}
+              images={images}
+              onUpload={onUpload}
+              onRemove={onRemove}
+              aspect="4 / 3"
+              label="Support (optional)"
+            />
+          </div>
+        </div>
+      ) : (
+        <PhotoUpload
+          single
+          slotKey={slotKey}
+          images={images}
+          onUpload={onUpload}
+          onRemove={onRemove}
+          aspect="4 / 3"
+          label={`Detail ${entry.num} image`}
+        />
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <RedNumberCircle n={entry.num} />
         <input
@@ -1966,36 +1996,184 @@ function ConstructionDetailCard({ entry, onChange, images, onUpload, onRemove })
   );
 }
 
-// Shared layout: 9:16 vertical reference (left) + 2x2 grid of detail boxes
-// on the right. The reference image carries red-dot callouts the designer
-// adds in Photoshop pre-upload.
-function ConstructionDetailsPage({ pageKey, dataKey, fieldName, data, set, images, onUpload, onRemove }) {
+// Clickable garment reference for the Cut & Sew call-out pages. Shows the whole
+// garment photo; the operator clicks to drop a numbered red dot for each
+// call-out (replacing the old "draw the dots in Photoshop first" workflow).
+// Each dot's position is stored as normalized { x, y } (0..1) on the matching
+// call-out entry so the live preview and PDF render the same dots. Exported so
+// the Cut & Sew library builder can reuse the exact same control.
+export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, entries, onSetDot }) {
+  const boxRef = useRef(null);
+  const draggingRef = useRef(false);
+  const [armed, setArmed] = useState(null);
+  const img = (images || []).find(i => i.slot === slotKey);
+
+  const clamp = (v) => Math.min(1, Math.max(0, v));
+  const coordsFrom = (clientX, clientY) => {
+    const r = boxRef.current.getBoundingClientRect();
+    return { x: clamp((clientX - r.left) / r.width), y: clamp((clientY - r.top) / r.height) };
+  };
+
+  // Which call-out number a click will place: the explicitly armed one, else
+  // the first call-out that has no dot yet, else the first call-out.
+  const firstUnplaced = entries.find(e => !e.dot);
+  const armedNum = armed != null ? armed : (firstUnplaced ? firstUnplaced.num : entries[0]?.num);
+
+  const placeAt = (e) => {
+    if (draggingRef.current) { draggingRef.current = false; return; }
+    if (armedNum == null) return;
+    onSetDot(armedNum, coordsFrom(e.clientX, e.clientY));
+    const next = entries.find(en => en.num !== armedNum && !en.dot);
+    if (next) setArmed(next.num);
+  };
+
+  const startDrag = (num, e) => {
+    e.stopPropagation();
+    setArmed(num);
+    draggingRef.current = false;
+    const move = (ev) => { draggingRef.current = true; onSetDot(num, coordsFrom(ev.clientX, ev.clientY)); };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>{label}</label>
+      {img ? (
+        <>
+          <div
+            ref={boxRef}
+            onClick={placeAt}
+            style={{
+              position: 'relative', width: '100%', aspectRatio: '2 / 3',
+              background: FR.salt, border: `0.5px solid ${FR.sand}`, borderRadius: 6,
+              overflow: 'hidden', cursor: 'crosshair', userSelect: 'none',
+            }}>
+            <AssetImage image={img} alt="garment reference" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', pointerEvents: 'none' }} />
+            {entries.map(e => e.dot ? (
+              <div
+                key={e.num}
+                onPointerDown={ev => startDrag(e.num, ev)}
+                title={`Call-out ${e.num} — drag to move`}
+                style={{
+                  position: 'absolute', left: `${e.dot.x * 100}%`, top: `${e.dot.y * 100}%`,
+                  transform: 'translate(-50%, -50%)', width: 21, height: 21, borderRadius: '50%',
+                  background: '#A32D2D', color: '#fff', border: '1.5px solid #fff',
+                  fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'grab', boxShadow: '0 1px 4px rgba(0,0,0,0.28)',
+                  fontFamily: "'Helvetica Neue', sans-serif",
+                  outline: armedNum === e.num ? '2px solid rgba(163,45,45,0.35)' : 'none', outlineOffset: 1,
+                }}>
+                {e.num}
+              </div>
+            ) : null)}
+            <button
+              onClick={ev => { ev.stopPropagation(); onRemove(slotKey, 0); }}
+              title="Remove garment image (keeps the dots)"
+              style={{ position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: 12, background: FR.slate, color: FR.salt, border: 'none', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+          </div>
+          {/* number chips: click to arm which dot the next click places */}
+          <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+            {entries.map(e => {
+              const active = armedNum === e.num;
+              const placed = !!e.dot;
+              return (
+                <button
+                  key={e.num}
+                  onClick={() => setArmed(e.num)}
+                  title={placed ? `Call-out ${e.num} placed — click to re-arm` : `Click, then click the garment to place ${e.num}`}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 12,
+                    border: `1px solid ${active ? '#A32D2D' : FR.sand}`,
+                    background: active ? 'rgba(163,45,45,0.08)' : FR.white,
+                    color: FR.slate, fontSize: 11, cursor: 'pointer', fontFamily: "'Helvetica Neue', sans-serif",
+                  }}>
+                  <span style={{ width: 14, height: 14, borderRadius: 7, background: placed ? '#A32D2D' : 'transparent', border: placed ? 'none' : `1.5px solid ${FR.stone}`, color: '#fff', fontSize: 9, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{placed ? e.num : ''}</span>
+                  {!placed ? `Place ${e.num}` : `#${e.num}`}
+                  {placed && (
+                    <span
+                      onClick={ev => { ev.stopPropagation(); onSetDot(e.num, null); }}
+                      title="Clear this dot"
+                      style={{ marginLeft: 2, color: FR.stone, fontSize: 13, lineHeight: 1 }}>×</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <p style={{ fontSize: 10, color: FR.stone, marginTop: 6, fontStyle: 'italic' }}>
+            Click a number, then click the garment to drop its dot. Drag a dot to fine-tune; × clears it.
+          </p>
+        </>
+      ) : (
+        <AspectPhoto
+          slotKey={slotKey}
+          aspect={ASPECTS.TWO_THIRDS}
+          images={images}
+          onUpload={onUpload}
+          onRemove={onRemove}
+          label={undefined}
+        />
+      )}
+    </div>
+  );
+}
+
+// Shared layout: 2:3 vertical reference (left) + 2x2 grid of detail boxes on
+// the right. When `enhanced` (Cut & Sew pages 07/08) the left reference becomes
+// the clickable in-app dot-placement garment image, and each card carries an
+// optional supporting image beside its main image. Without `enhanced`
+// (Embellishments 16, Treatments 19) the original layout is preserved exactly.
+function ConstructionDetailsPage({ pageKey, dataKey, fieldName, data, set, images, onUpload, onRemove, enhanced }) {
   const entries = (data?.[fieldName] || DEFAULT_DATA[fieldName]).slice(0, 4);
   const update = (idx, next) => {
     const copy = [...(data?.[fieldName] || DEFAULT_DATA[fieldName])];
     copy[idx] = next;
     set(fieldName, copy);
   };
+  const setDot = (num, dot) => {
+    const copy = [...(data?.[fieldName] || DEFAULT_DATA[fieldName])];
+    const idx = copy.findIndex(e => e.num === num);
+    if (idx === -1) return;
+    copy[idx] = { ...copy[idx], dot };
+    set(fieldName, copy);
+  };
   return (
     <div>
       <SectionTitle>Call Outs</SectionTitle>
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, fontStyle: 'italic' }}>
-        Number each callout on the left reference image (red dots) and describe the matching detail in the box. All text is dedicated per-field so it can be translated per factory.
+        {enhanced
+          ? 'Click the garment image on the left to drop a numbered dot for each call-out, then add a main close-up, an optional supporting image, and the description. All text is per-field so it can be translated per factory.'
+          : 'Number each callout on the left reference image (red dots) and describe the matching detail in the box. All text is dedicated per-field so it can be translated per factory.'}
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 0.55fr) 1.45fr', gap: 18, alignItems: 'stretch' }}>
-        {/* 2:3 vertical reference image with red-dot callouts */}
+        {/* left reference column */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>Reference Image (2 : 3)</label>
-          <PhotoUpload
-            single
-            label="Drop the callout reference (numbered red dots overlaid in Photoshop)"
-            slotKey={`sketch-callout-${pageKey}`}
-            images={images}
-            onUpload={onUpload}
-            onRemove={onRemove}
-            aspect="2 / 3"
-          />
+          {enhanced ? (
+            <CalloutGarmentRef
+              label="Garment Reference (2 : 3)"
+              slotKey={`sketch-callout-${pageKey}`}
+              images={images}
+              onUpload={onUpload}
+              onRemove={onRemove}
+              entries={entries}
+              onSetDot={setDot}
+            />
+          ) : (
+            <>
+              <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>Reference Image (2 : 3)</label>
+              <PhotoUpload
+                single
+                label="Drop the callout reference (numbered red dots overlaid in Photoshop)"
+                slotKey={`sketch-callout-${pageKey}`}
+                images={images}
+                onUpload={onUpload}
+                onRemove={onRemove}
+                aspect="2 / 3"
+              />
+            </>
+          )}
         </div>
 
         {/* 2x2 grid of detail cards — each carries its own close-up image */}
@@ -2008,6 +2186,7 @@ function ConstructionDetailsPage({ pageKey, dataKey, fieldName, data, set, image
               images={images}
               onUpload={onUpload}
               onRemove={onRemove}
+              enhanced={enhanced}
             />
           ))}
         </div>
@@ -2026,6 +2205,7 @@ export function StepSketches({ data, set, images, onUpload, onRemove }) {
       images={images}
       onUpload={onUpload}
       onRemove={onRemove}
+      enhanced
     />
   );
 }
@@ -2040,6 +2220,7 @@ export function StepSketches2({ data, set, images, onUpload, onRemove }) {
       images={images}
       onUpload={onUpload}
       onRemove={onRemove}
+      enhanced
     />
   );
 }
