@@ -3,7 +3,7 @@
 // numbered tech pack pages. The denominator stays 19 — merchandising pages
 // are pre-pack strategy and aren't counted toward the numbered total.
 
-import { FR, STEPS, CALLOUT_REF_RATIO } from './techPackConstants';
+import { FR, STEPS, CALLOUT_REF_RATIO, CALLOUT_MAIN_RATIO, CALLOUT_SUPPORT_RATIO } from './techPackConstants';
 import { FabricBOMPreviewBody } from './FabricBOMPreview';
 
 const PAGE_W = 1123;
@@ -920,7 +920,9 @@ function ImageCell({ x, y, w, h, image, placeholder }) {
     <g>
       <rect x={x} y={y} width={w} height={h} fill={FR.white} stroke={FR.soil} strokeDasharray="5 4" />
       {image ? (
-        <image href={image.data} x={x + 3} y={y + 3} width={w - 6} height={h - 6} preserveAspectRatio="xMidYMid meet" />
+        // slice = cover: the image is pre-cropped to the slot shape, so it fills
+        // edge-to-edge with no letterboxing (and cover-fills if the slot widened).
+        <image href={image.data} x={x} y={y} width={w} height={h} preserveAspectRatio="xMidYMid slice" />
       ) : (
         <text x={x + w / 2} y={y + h / 2 + 4} textAnchor="middle" fontSize="11" fill={FR.stone} fontStyle="italic">
           {placeholder}
@@ -966,9 +968,13 @@ function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey, enhanc
     const cardW    = (rightW - colGap2) / 2;
     const cardH    = (refH - rowGap) / 2;  // right grid bottom aligns to the ref
     const pad      = 9;
-    const imageH   = 150;
     const imgGap   = 8;
     const dotR     = 11;
+    const bandW    = cardW - pad * 2;
+    // Image-band height derived so a 3:2 main + 1:1 support tile the band width
+    // exactly (mainW + gap + supW == bandW). Same shapes the editor crops to, so
+    // every image fills its slot with no letterboxing.
+    const imageH   = Math.round((bandW - imgGap) / (CALLOUT_MAIN_RATIO + CALLOUT_SUPPORT_RATIO));
 
     return (
       <g>
@@ -1004,10 +1010,10 @@ function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey, enhanc
           const supportImg = imgs.find(im => im.slot === `construction-detail-${entry.num}-support`);
           const bandX = cx + pad;
           const bandY = cy + pad;
-          const bandW = cardW - pad * 2;
-          // Main close-up takes ~62% when a support image exists, else fills.
-          const mainW = supportImg ? (bandW - imgGap) * 0.62 : bandW;
-          const supW  = (bandW - imgGap) * 0.38;
+          // With a support image: main = 3:2, support = 1:1, both height imageH,
+          // tiling the band. Without support: main expands to the full band.
+          const mainW = supportImg ? CALLOUT_MAIN_RATIO * imageH : bandW;
+          const supW  = CALLOUT_SUPPORT_RATIO * imageH;
           const titleY = bandY + imageH + 24;
           const numCx  = bandX + 11;
           const descY  = titleY + 9;

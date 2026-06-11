@@ -220,7 +220,10 @@ export async function generateTechPackPDF(pack) {
     const rowGap = 5;
     const cellW = (rightW - colGap) / 2;
     const cellH = (refH - rowGap) / 2;
-    const imgH  = cellH * 0.56;
+    const imgGap = 1.5;
+    // Image band derived so a 3:2 main + 1:1 support tile the cell width — the
+    // same shapes the editor crops to (CALLOUT_MAIN_RATIO / CALLOUT_SUPPORT_RATIO).
+    const imgH  = (cellW - 2 - imgGap) / (1.5 + 1.0);
     (entries || []).slice(0, 4).forEach((entry, i) => {
       const cx = rightX + (i % 2) * (cellW + colGap);
       const cy = top    + Math.floor(i / 2) * (cellH + rowGap);
@@ -230,12 +233,11 @@ export async function generateTechPackPDF(pack) {
       // Main close-up (+ optional supporting image beside it). With no support
       // image the main fills the band, identical to the original layout.
       const support = images.find(i => i.slot === `construction-detail-${entry.num}-support`);
-      const imgGap = 1.5;
-      const mainW = support ? (cellW - 2 - imgGap) * 0.62 : (cellW - 2);
-      addImage(`construction-detail-${entry.num}`, cx + 1, cy + 1, mainW, imgH - 1);
+      const mainW = support ? 1.5 * imgH : (cellW - 2);
+      addImage(`construction-detail-${entry.num}`, cx + 1, cy + 1, mainW, imgH);
       if (support) {
-        const supW = (cellW - 2 - imgGap) * 0.38;
-        addImage(`construction-detail-${entry.num}-support`, cx + 1 + mainW + imgGap, cy + 1, supW, imgH - 1);
+        const supW = 1.0 * imgH;
+        addImage(`construction-detail-${entry.num}-support`, cx + 1 + mainW + imgGap, cy + 1, supW, imgH);
       }
       // Red number circle
       doc.setFillColor(163, 45, 45);

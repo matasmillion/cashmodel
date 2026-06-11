@@ -5,11 +5,17 @@
 // that will be replaced in subsequent prompts.
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, CALLOUT_REF_RATIO, isStepLocked, isMerchLocked, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
+import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, CALLOUT_REF_RATIO, CALLOUT_MAIN_RATIO, CALLOUT_SUPPORT_RATIO, isStepLocked, isMerchLocked, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
 
 // Aspect used by the Cut & Sew call-out garment reference upload/crop, matching
 // the live preview + PDF reference box so placed dots line up everywhere.
 const CALLOUT_REF_ASPECT = { ratio: CALLOUT_REF_RATIO, label: 'Tall garment reference', shortLabel: 'garment reference' };
+
+// Aspects for the call-out card images. Cropping uploads to these exact shapes
+// (the same shapes the preview + PDF draw) means each image fills its card slot
+// with no letterboxing. Exported so the Cut & Sew library card reuses them.
+export const CALLOUT_MAIN_ASPECT    = { ratio: CALLOUT_MAIN_RATIO,    label: 'Main close-up', shortLabel: 'main 3:2' };
+export const CALLOUT_SUPPORT_ASPECT = { ratio: CALLOUT_SUPPORT_RATIO, label: 'Support',        shortLabel: 'support 1:1' };
 import { listFRColors } from '../../utils/colorLibrary';
 import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, AspectPhoto, ASPECTS, AssetImage, entryToDataUrl, ArrayTable, EditableSelect, FRColorCell, FilesPanel } from './TechPackPrimitives';
 import CropModal from './CropModal';
@@ -1925,26 +1931,26 @@ function ConstructionDetailCard({ entry, onChange, images, onUpload, onRemove, e
       gap: 8,
     }}>
       {enhanced ? (
+        // Flex weights mirror the slot ratios so the two crop frames line up at
+        // equal height and look exactly like the printed card.
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-          <div style={{ flex: '1.7 1 0', minWidth: 0 }}>
-            <PhotoUpload
-              single
+          <div style={{ flex: `${CALLOUT_MAIN_RATIO} 1 0`, minWidth: 0 }}>
+            <AspectPhoto
               slotKey={slotKey}
+              aspect={CALLOUT_MAIN_ASPECT}
               images={images}
               onUpload={onUpload}
               onRemove={onRemove}
-              aspect="4 / 3"
               label={`Detail ${entry.num} — main image`}
             />
           </div>
-          <div style={{ flex: '1 1 0', minWidth: 0 }}>
-            <PhotoUpload
-              single
+          <div style={{ flex: `${CALLOUT_SUPPORT_RATIO} 1 0`, minWidth: 0 }}>
+            <AspectPhoto
               slotKey={`${slotKey}-support`}
+              aspect={CALLOUT_SUPPORT_ASPECT}
               images={images}
               onUpload={onUpload}
               onRemove={onRemove}
-              aspect="4 / 3"
               label="Support (optional)"
             />
           </div>
