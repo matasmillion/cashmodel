@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-06-10T13:53:51.528Z",
+  "lastUpdated": "2026-06-11T07:45:59.909Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,14 +1044,39 @@
   ],
   "changelog": [
     {
+      "sha": "2c725f3",
+      "date": "2026-06-10T15:40:22+00:00",
+      "message": "perf(plm): trims load concurrently instead of one-by-one"
+    },
+    {
+      "sha": "037ce47",
+      "date": "2026-06-10T14:10:43+00:00",
+      "message": "deploy: ship tested PLM release to production"
+    },
+    {
+      "sha": "89fac49",
+      "date": "2026-06-10T13:54:13+00:00",
+      "message": "feat(plm): manual-save parity for the Trims builder"
+    },
+    {
       "sha": "e21490e",
       "date": "2026-06-10T13:41:53+00:00",
       "message": "feat(plm): manual Save + unsaved-changes guards in the Styles builder"
     },
     {
+      "sha": "787f7bf",
+      "date": "2026-06-10T13:29:35+00:00",
+      "message": "fix(plm): Styles + Trims lists can no longer hang on a slow cloud"
+    },
+    {
       "sha": "ecd0295",
       "date": "2026-06-10T11:44:27+00:00",
       "message": "fix(plm): Styles + Trims lists can no longer hang on a slow cloud"
+    },
+    {
+      "sha": "ea0401f",
+      "date": "2026-06-10T11:34:25+00:00",
+      "message": "revert: roll PLM back to pre-batch to restore service"
     },
     {
       "sha": "0189ebe",
@@ -1067,31 +1092,6 @@
       "sha": "4cdb1f6",
       "date": "2026-06-10T09:24:00+00:00",
       "message": "fix(plm): swatch-grid lag, fabric reload, and price-climb"
-    },
-    {
-      "sha": "d1c9a32",
-      "date": "2026-06-10T09:12:52+00:00",
-      "message": "feat(plm): delete single-writer locking — solo operator is always editable"
-    },
-    {
-      "sha": "91f6f7d",
-      "date": "2026-06-10T09:04:00+00:00",
-      "message": "fix(plm): images survive a login blip; calm the false 'Save failed' alarm"
-    },
-    {
-      "sha": "b57bf9d",
-      "date": "2026-06-10T08:44:55+00:00",
-      "message": "chore: port selftest harness + local-first context doc to working branch"
-    },
-    {
-      "sha": "393e209",
-      "date": "2026-06-09T14:45:59+03:00",
-      "message": "Merge #165: PLM local image-byte cache + stale-chunk crash recovery"
-    },
-    {
-      "sha": "00112fb",
-      "date": "2026-06-09T11:45:30+00:00",
-      "message": "perf(plm): cache image bytes locally (instant thumbnails, no re-download)"
     }
   ]
 }
