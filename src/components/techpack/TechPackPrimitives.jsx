@@ -86,7 +86,7 @@ export function AssetImage({ image, alt, style, onLoad, onError }) {
 
 // Resolve a persisted/transient image entry to a usable data URL — used by
 // the auto-crop / re-crop flows that need to load the image into a canvas.
-async function entryToDataUrl(image) {
+export async function entryToDataUrl(image) {
   if (!image) return null;
   if (image.data && image.data.startsWith('data:')) return image.data;
   const src = image.data || image._blobUrl || (image.path ? await getAssetUrl(image.path) : null);
