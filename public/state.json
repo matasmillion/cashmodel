@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-06-11T10:30:25.852Z",
+  "lastUpdated": "2026-06-11T11:27:26.446Z",
   "liveUrl": "https://matasmillion.github.io/cashmodel/",
   "repoUrl": "https://github.com/matasmillion/cashmodel",
   "branch": "claude/build-cash-model-app-11msn",
@@ -1044,6 +1044,41 @@
   ],
   "changelog": [
     {
+      "sha": "5b7630e",
+      "date": "2026-06-11T11:27:03+00:00",
+      "message": "Merge remote main (Cut & Sew Call Outs 07/08) with auth self-healing fix"
+    },
+    {
+      "sha": "0bb321e",
+      "date": "2026-06-11T11:26:37+00:00",
+      "message": "Merge branch 'claude/wizardly-allen-d6bw1a'"
+    },
+    {
+      "sha": "f76031b",
+      "date": "2026-06-11T10:43:04+00:00",
+      "message": "Merge: Cut & Sew Call Outs 07/08 — supporting image + in-app numbered dots"
+    },
+    {
+      "sha": "0aea1d5",
+      "date": "2026-06-11T10:42:18+00:00",
+      "message": "Cut & Sew Call Outs (07/08): supporting image + in-app numbered dots"
+    },
+    {
+      "sha": "790b4b5",
+      "date": "2026-06-11T10:31:38+00:00",
+      "message": "fix(auth): self-heal stale Clerk sessions; honest per-call auth errors"
+    },
+    {
+      "sha": "2c09418",
+      "date": "2026-06-11T13:21:34+03:00",
+      "message": "Update CLAUDE.md"
+    },
+    {
+      "sha": "59ed8b4",
+      "date": "2026-06-11T10:13:13+00:00",
+      "message": "Add Cut & Sew Call Outs v2 layout mockup (pages 07/08)"
+    },
+    {
       "sha": "814babc",
       "date": "2026-06-11T07:52:09+00:00",
       "message": "Merge branch 'claude/wizardly-allen-d6bw1a'"
@@ -1057,41 +1092,6 @@
       "sha": "7fd5dca",
       "date": "2026-06-11T07:48:12+00:00",
       "message": "fix(sw): cure opaque-response cache poisoning that broke AI garment views"
-    },
-    {
-      "sha": "2c725f3",
-      "date": "2026-06-10T15:40:22+00:00",
-      "message": "perf(plm): trims load concurrently instead of one-by-one"
-    },
-    {
-      "sha": "037ce47",
-      "date": "2026-06-10T14:10:43+00:00",
-      "message": "deploy: ship tested PLM release to production"
-    },
-    {
-      "sha": "89fac49",
-      "date": "2026-06-10T13:54:13+00:00",
-      "message": "feat(plm): manual-save parity for the Trims builder"
-    },
-    {
-      "sha": "e21490e",
-      "date": "2026-06-10T13:41:53+00:00",
-      "message": "feat(plm): manual Save + unsaved-changes guards in the Styles builder"
-    },
-    {
-      "sha": "787f7bf",
-      "date": "2026-06-10T13:29:35+00:00",
-      "message": "fix(plm): Styles + Trims lists can no longer hang on a slow cloud"
-    },
-    {
-      "sha": "ecd0295",
-      "date": "2026-06-10T11:44:27+00:00",
-      "message": "fix(plm): Styles + Trims lists can no longer hang on a slow cloud"
-    },
-    {
-      "sha": "ea0401f",
-      "date": "2026-06-10T11:34:25+00:00",
-      "message": "revert: roll PLM back to pre-batch to restore service"
     }
   ]
 }
