@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cut &amp; Sew — Call Outs · image annotations (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ───────── FR design tokens (shared with cutsew-callouts-v2.html) ───────── */
+  :root{
+    --salt:#F5F0E8; --slate:#3A3A3A; --sand:#EBE5D5; --soil:#854F0B;
+    --stone:#9A9A9A; --white:#fff;
+    --good:#3B6D11; --warn:#854F0B; --bad:#A32D2D; --red:#A32D2D;
+    --border:rgba(58,58,58,0.15);
+    --serif:'Cormorant Garamond','Georgia',serif;
+    --sans:'Inter','General Sans','Helvetica Neue',system-ui,sans-serif;
+    --mono:ui-monospace,'SF Mono',Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--salt);color:var(--slate);font-family:var(--sans);font-size:13px}
+  h1,h2,h3,h4{font-family:var(--serif);font-weight:400;margin:0}
+
+  .wrap{max-width:1120px;margin:0 auto;padding:28px 24px 80px}
+  .mock-head{margin-bottom:22px}
+  .mock-eyebrow{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--soil);font-weight:600}
+  .mock-title{font-size:30px;margin-top:4px}
+  .mock-sub{font-size:13px;color:var(--stone);margin-top:4px;max-width:780px;line-height:1.5}
+  .mock-sub b{color:var(--slate)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:14px}
+  .legend .chip{display:inline-flex;align-items:center;gap:7px;background:var(--white);border:0.5px solid var(--border);
+    border-radius:6px;padding:6px 11px;font-size:11px;color:var(--slate)}
+  .swatch{width:13px;height:13px;border-radius:3px;flex:none}
+
+  .section-label{font-size:10px;letter-spacing:2.5px;text-transform:uppercase;color:var(--soil);font-weight:600;
+    margin:42px 0 12px}
+
+  /* ───────── A photo + its annotation toolbar ───────── */
+  .editor{background:var(--white);border:0.5px solid var(--border);border-radius:8px;padding:18px;
+    box-shadow:0 6px 24px rgba(58,58,58,0.09);max-width:640px}
+  .atoolbar{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .atoolbar .grp{display:flex;gap:8px}
+  .btn{font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:0.3px;padding:7px 13px;border-radius:6px;
+    cursor:pointer;border:1px solid var(--slate);background:transparent;color:var(--slate);display:inline-flex;align-items:center;gap:6px}
+  .btn .pl{color:var(--red);font-weight:700;font-size:13px;line-height:1}
+  .btn.done{background:var(--slate);color:var(--salt);border-color:var(--slate);margin-left:auto}
+  .btn.ghost{border-color:var(--sand);color:var(--stone)}
+
+  /* the photo itself */
+  .photo{position:relative;width:100%;aspect-ratio:3/2;border-radius:5px;overflow:hidden;border:0.5px solid var(--border);
+    background:linear-gradient(135deg,#DAD3C4,#C9C0AD);user-select:none}
+  .photo .ph-cap{position:absolute;top:7px;left:7px;font-size:8px;letter-spacing:1px;text-transform:uppercase;color:#fff;
+    background:rgba(58,58,58,0.55);padding:1px 6px;border-radius:3px}
+  .photo .ph-mid{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:rgba(58,58,58,0.40)}
+
+  /* ───────── The red annotation box ───────── */
+  .abox{position:absolute;border:2px solid var(--red);background:rgba(163,45,45,0.10);border-radius:2px;cursor:move}
+  .abox.unsel{background:transparent}
+  .handle{position:absolute;width:12px;height:12px;background:var(--salt);border:2px solid var(--red);border-radius:3px;
+    transform:translate(-50%,-50%)}
+  .handle.nw{left:0;top:0;cursor:nwse-resize}
+  .handle.ne{left:100%;top:0;cursor:nesw-resize}
+  .handle.sw{left:0;top:100%;cursor:nesw-resize}
+  .handle.se{left:100%;top:100%;cursor:nwse-resize}
+  .abox .del{position:absolute;top:-11px;right:-11px;width:20px;height:20px;border-radius:50%;background:var(--slate);
+    color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center;cursor:pointer;line-height:1;
+    box-shadow:0 1px 4px rgba(0,0,0,0.3)}
+
+  /* ───────── The red text control ───────── */
+  .atext{position:absolute;color:var(--red);font-weight:600;font-size:13px;font-family:var(--sans);cursor:move;
+    text-shadow:0 1px 2px rgba(255,255,255,0.7);white-space:nowrap}
+  .atext .thandle{position:absolute;left:-13px;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;
+    background:var(--red);opacity:0.55}
+  .atext.editing{outline:1.5px dashed var(--red);outline-offset:3px;border-radius:3px;padding:1px 2px;background:rgba(255,255,255,0.55)}
+  .atext.editing .caret{display:inline-block;width:1.5px;height:14px;background:var(--red);vertical-align:-2px;margin-left:1px;
+    animation:blink 1s steps(1) infinite}
+  .atext .tdel{position:absolute;top:-9px;right:-15px;width:16px;height:16px;border-radius:50%;background:var(--slate);
+    color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;line-height:1}
+  @keyframes blink{50%{opacity:0}}
+
+  /* ───────── Anatomy ───────── */
+  .anatomy{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:14px;align-items:start}
+  .notes{font-size:12.5px;line-height:1.7;color:var(--slate)}
+  .notes .n{display:flex;gap:11px;margin-bottom:11px}
+  .notes .n .k{flex:none;width:21px;height:21px;border-radius:50%;background:var(--slate);color:var(--salt);
+    font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:600}
+  .notes .n b{color:var(--soil)}
+
+  /* ───────── In-context call-out card ───────── */
+  .ctx{display:grid;grid-template-columns:330px 1fr;gap:28px;align-items:start}
+  .card{background:var(--white);border:0.5px solid var(--border);border-radius:6px;padding:11px;
+    display:flex;flex-direction:column;gap:8px;box-shadow:0 4px 16px rgba(58,58,58,0.08);position:relative}
+  .card .annotate-tab{position:absolute;top:14px;right:14px;z-index:6;font-size:9px;font-weight:600;letter-spacing:0.4px;
+    text-transform:uppercase;color:var(--slate);background:var(--salt);border:0.5px solid var(--border);border-radius:5px;
+    padding:3px 8px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;box-shadow:0 1px 3px rgba(58,58,58,0.12)}
+  .card .annotate-tab .pl{color:var(--red);font-weight:700}
+  .imgband{display:flex;gap:7px;height:150px}
+  .img{border-radius:4px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;
+    border:0.5px solid var(--border);background:linear-gradient(135deg,#DAD3C4,#C9C0AD)}
+  .img .tag{position:absolute;top:5px;left:5px;font-size:7px;letter-spacing:1px;text-transform:uppercase;color:#fff;
+    background:rgba(58,58,58,0.55);padding:1px 5px;border-radius:3px}
+  .img-main{flex:0 0 62%}
+  .img-support{flex:1 1 auto;background:linear-gradient(135deg,#E4DECF,#D7CFBC)}
+  .title-row{display:flex;align-items:center;gap:8px}
+  .badge{width:17px;height:17px;border-radius:50%;background:var(--red);color:#fff;font-size:9px;font-weight:600;
+    display:flex;align-items:center;justify-content:center;flex:none}
+  .title-row .t{font-size:11px;font-weight:600;color:var(--slate)}
+  .desc{font-size:9px;line-height:1.45;color:var(--slate)}
+  .count-badge{position:absolute;bottom:5px;right:5px;background:var(--red);color:#fff;font-size:8px;font-weight:700;
+    border-radius:9px;padding:1px 6px;letter-spacing:0.4px;box-shadow:0 1px 3px rgba(0,0,0,0.3)}
+
+  .footer-note{margin-top:46px;font-size:12px;color:var(--stone);border-top:0.5px solid var(--border);padding-top:16px;line-height:1.7}
+  .footer-note b{color:var(--slate)}
+  .footer-note .ok{color:var(--good)}
+  .footer-note .no{color:var(--bad)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="mock-head">
+    <div class="mock-eyebrow">Cut &amp; Sew · Call Outs · pages 07 &amp; 08 · image annotations</div>
+    <h1 class="mock-title">Draw on the photos — red box &amp; red text</h1>
+    <p class="mock-sub">
+      A small <b>Annotate</b> button on any call-out photo opens this editor. You can drop a
+      <b>red box</b> (move it, resize it from the corners) and <b>red text</b> (move it, click to type).
+      Marks are saved on the photo and show in the page 07/08 preview. The numbered-dot tool, the
+      card layout, the BOM and the PDF are all left exactly as they are.
+    </p>
+    <div class="legend">
+      <span class="chip"><span class="swatch" style="background:var(--red)"></span> Red box outline</span>
+      <span class="chip"><span class="swatch" style="background:var(--salt);border:2px solid var(--red)"></span> Corner handle (resize)</span>
+      <span class="chip"><span class="swatch" style="background:var(--red);border-radius:50%"></span> Red text</span>
+      <span class="chip"><span class="swatch" style="background:var(--slate)"></span> × delete</span>
+    </div>
+  </div>
+
+  <!-- ───────── 1. THE ANNOTATION EDITOR ───────── -->
+  <div class="section-label">1 · The annotation editor (opens over one photo)</div>
+  <div class="editor">
+    <div class="atoolbar">
+      <div class="grp">
+        <button class="btn"><span class="pl">＋</span> Box</button>
+        <button class="btn"><span class="pl">＋</span> Text</button>
+      </div>
+      <button class="btn done">Done</button>
+    </div>
+
+    <div class="photo">
+      <span class="ph-cap">Detail 1 · Main</span>
+      <span class="ph-mid">construction close-up</span>
+
+      <!-- a selected red box with handles + delete -->
+      <div class="abox" style="left:12%;top:20%;width:40%;height:46%">
+        <span class="del">×</span>
+        <span class="handle nw"></span>
+        <span class="handle ne"></span>
+        <span class="handle sw"></span>
+        <span class="handle se"></span>
+      </div>
+
+      <!-- a placed red text -->
+      <div class="atext" style="left:58%;top:30%">
+        <span class="thandle"></span>watch the bar tack
+      </div>
+
+      <!-- a second red text being edited -->
+      <div class="atext editing" style="left:55%;top:68%">
+        <span class="tdel">×</span>keep seam even<span class="caret"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────── 2. ANATOMY ───────── -->
+  <div class="section-label">2 · What each control does</div>
+  <div class="anatomy">
+    <div class="editor" style="box-shadow:none">
+      <div class="photo" style="aspect-ratio:4/3">
+        <span class="ph-mid">photo</span>
+        <div class="abox" style="left:18%;top:22%;width:46%;height:50%">
+          <span class="del">×</span>
+          <span class="handle nw"></span><span class="handle ne"></span>
+          <span class="handle sw"></span><span class="handle se"></span>
+        </div>
+        <div class="atext" style="left:60%;top:74%"><span class="thandle"></span>red note</div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="n"><span class="k">A</span><div><b>Red box</b> — a 2px red outline, see-through inside so it just frames the area. Drag the middle to <b>move</b> it.</div></div>
+      <div class="n"><span class="k">B</span><div><b>Corner handles</b> — the four little squares. Drag any one to <b>resize</b> the box freely.</div></div>
+      <div class="n"><span class="k">C</span><div><b>× on the box</b> — removes that box.</div></div>
+      <div class="n"><span class="k">D</span><div><b>Red text</b> — click <b>＋ Text</b>, type your note. Drag it anywhere; click it again to edit; its own × removes it.</div></div>
+      <div class="n"><span class="k">E</span><div><b>Done</b> — closes the editor. Your marks stay on the photo and show in the live page 07/08 preview.</div></div>
+    </div>
+  </div>
+
+  <!-- ───────── 3. IN CONTEXT ───────── -->
+  <div class="section-label">3 · On a real call-out card</div>
+  <div class="ctx">
+    <div class="card">
+      <span class="annotate-tab"><span class="pl">＋</span> Annotate</span>
+      <div class="imgband">
+        <div class="img img-main">
+          <span class="tag">Main</span>
+          <!-- saved marks shown right on the card thumbnail -->
+          <div class="abox unsel" style="left:16%;top:24%;width:46%;height:44%"></div>
+          <div class="atext" style="left:30%;top:74%;font-size:10px">bar tack</div>
+          <span class="count-badge">2 marks</span>
+        </div>
+        <div class="img img-support"><span class="tag">Support</span></div>
+      </div>
+      <div class="title-row"><span class="badge">1</span><span class="t">Welt Pocket — Exterior</span></div>
+      <div class="desc">The pockets are welt pockets with bar tacks top and bottom. Marks drawn here ride on the photo.</div>
+    </div>
+    <div class="notes">
+      <h3 style="font-size:19px;margin-bottom:8px">How it looks once saved</h3>
+      <p style="line-height:1.7;margin:0 0 10px">
+        Each call-out photo gets a small <b style="color:var(--soil)">Annotate</b> tab. After you draw and hit
+        <b>Done</b>, the red box and text show <b>right on the card</b> and a small count badge appears. The very
+        same marks show on the big <b>page 07/08 live preview</b>.
+      </p>
+      <p style="line-height:1.7;margin:0">
+        This works on <b>every</b> call-out photo on pages 07 &amp; 08 — the big garment reference and all the
+        detail close-ups (main and supporting).
+      </p>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    <b>Stays put when you come back:</b> every mark is saved as a position <i>on the photo</i> (e.g. “starts 16% from the left”),
+    filed under that photo's slot on the Cut &amp; Sew block — so it lands in the same spot no matter the screen size. &nbsp;·&nbsp;
+    <b>Always matches:</b> because the marks live on the one shared block, the same red box/text appear in the
+    library card <b>and</b> in every Style tech pack that borrowed that block; edit it in either place and both update. &nbsp;·&nbsp;
+    <b class="ok">Added:</b> only this overlay. &nbsp;
+    <b class="no">Untouched:</b> the numbered-dot tool, the call-out layout, the BOM, and the PDF.
+  </div>
+
+</div>
+</body>
+</html>
