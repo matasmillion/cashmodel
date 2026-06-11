@@ -90,6 +90,14 @@ export const STEPS = [
 // the PDF so a dot placed in the editor lands in the same spot everywhere.
 export const CALLOUT_REF_RATIO = 0.44;
 
+// Cut & Sew call-out card image slots (width / height). The main close-up is a
+// 3:2 landscape; the supporting image is a smaller 1:1 square. These shapes are
+// the single source of truth: the editor crops uploads to exactly these shapes
+// and the live preview + PDF draw the slots at the same shapes, so each image
+// fills its slot in the printed card with no letterboxing or wasted space.
+export const CALLOUT_MAIN_RATIO = 1.5;     // 3 : 2 landscape
+export const CALLOUT_SUPPORT_RATIO = 1.0;  // 1 : 1 square
+
 const todayISO = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

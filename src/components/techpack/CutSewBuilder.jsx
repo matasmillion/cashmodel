@@ -7,7 +7,7 @@ import { FR, STEPS } from './techPackConstants';
 import { saveCutSew, archiveCutSew, restoreCutSew } from '../../utils/cutSewStore';
 import { CUT_SEW_CATEGORIES, CUT_SEW_CATEGORY_LABEL, CUT_SEW_STATUSES, STANDARD_SIZE_SETS } from '../../utils/cutSewLibrary';
 import { PhotoUpload, AspectPhoto, ASPECTS, ArrayTable, FRColorCell } from './TechPackPrimitives';
-import { CutSewLaborCostBlock, CalloutGarmentRef } from './TechPackSteps';
+import { CutSewLaborCostBlock, CalloutGarmentRef, CALLOUT_MAIN_ASPECT, CALLOUT_SUPPORT_ASPECT } from './TechPackSteps';
 import CutSewCostChat from './CutSewCostChat';
 import FileSlot from './FileSlot';
 import { migrateLegacyCoverIfNeeded, isLegacyDataUrl, useResolvedImageEntries } from '../../utils/plmAssets';
@@ -144,25 +144,23 @@ function CalloutDetailCard({ entry, onChange, images, onUpload, onRemove }) {
       borderRadius: 6, padding: 10, display: 'flex', flexDirection: 'column', gap: 8,
     }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-        <div style={{ flex: '1.7 1 0', minWidth: 0 }}>
-          <PhotoUpload
-            single
+        <div style={{ flex: `${CALLOUT_MAIN_ASPECT.ratio} 1 0`, minWidth: 0 }}>
+          <AspectPhoto
             slotKey={slotKey}
+            aspect={CALLOUT_MAIN_ASPECT}
             images={images}
             onUpload={onUpload}
             onRemove={onRemove}
-            aspect="4 / 3"
             label={`Detail ${entry.num} — main image`}
           />
         </div>
-        <div style={{ flex: '1 1 0', minWidth: 0 }}>
-          <PhotoUpload
-            single
+        <div style={{ flex: `${CALLOUT_SUPPORT_ASPECT.ratio} 1 0`, minWidth: 0 }}>
+          <AspectPhoto
             slotKey={`${slotKey}-support`}
+            aspect={CALLOUT_SUPPORT_ASPECT}
             images={images}
             onUpload={onUpload}
             onRemove={onRemove}
-            aspect="4 / 3"
             label="Support (optional)"
           />
         </div>
