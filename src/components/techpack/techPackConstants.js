@@ -64,13 +64,14 @@ export const STEPS = [
   { id: 'fabrics',       title: 'Fabrics',                          icon: '03', phase: 'Bill of Materials' },
   { id: 'trims',         title: 'Trims',                            icon: '04', phase: 'Bill of Materials' },
   { id: 'packaging',     title: 'Packaging',                        icon: '05', phase: 'Bill of Materials', skippable: true },
-  { id: 'flatlays',      title: 'Flat Lay',                         icon: '06', phase: 'Cut & Sew' },
-  { id: 'sketches',      title: 'Call Outs',                        icon: '07', phase: 'Cut & Sew' },
-  { id: 'sketches-2',    title: 'Call Outs',                        icon: '08', phase: 'Cut & Sew' },
-  { id: 'construction',  title: 'Stitching',                        icon: '09', phase: 'Cut & Sew' },
-  { id: 'construction-2',title: 'Stitching',                        icon: '10', phase: 'Cut & Sew' },
-  { id: 'pattern',       title: 'Pattern & Cutting',                icon: '11', phase: 'Cut & Sew' },
-  { id: 'pom',           title: 'POM',                              icon: '12', phase: 'Cut & Sew' },
+  { id: 'flatlays',      title: 'Pattern',                          icon: '06', phase: 'Cut & Sew' },
+  { id: 'sketches',      title: 'Construction (1)',                 icon: '07', phase: 'Cut & Sew' },
+  { id: 'sketches-2',    title: 'Construction (2)',                 icon: '08', phase: 'Cut & Sew' },
+  { id: 'construction',  title: 'Sewing (1)',                       icon: '09', phase: 'Cut & Sew' },
+  { id: 'construction-2',title: 'Sewing (2)',                       icon: '10', phase: 'Cut & Sew' },
+  { id: 'cutsew-cost',   title: 'Cut & Sew Cost',                   icon: '$',  phase: 'Cut & Sew', internal: true },
+  { id: 'pattern',       title: 'Cutting',                          icon: '11', phase: 'Cut & Sew' },
+  { id: 'pom',           title: 'Points of Measure',                icon: '12', phase: 'Cut & Sew' },
   { id: 'size-matrix',   title: 'Size Grading',                     icon: '13', phase: 'Cut & Sew', skippable: true },
   { id: 'color',         title: 'Colorways',                        icon: '14', phase: 'Embellishments' },
   { id: 'artwork',       title: 'Artwork & Placement',              icon: '15', phase: 'Embellishments' },
@@ -179,6 +180,10 @@ export const DEFAULT_DATA = {
   cutSewLaborCost: '',
   // Construction Details — two pages, four entries each. Each entry maps to a
   // red-numbered detail callout on the page's reference image. Title and
+  // Reference-column layout per base slot. Truthy = split into two stacked 2:3
+  // reference images (slots `${base}` + `${base}-b`); falsy/absent = one narrow
+  // image. Used on the Construction + Sewing pages.
+  referenceLayout: {},
   // description are dedicated fields so they can be translated independently
   // per factory. `dot` is the in-app placed marker (normalized { x, y } in
   // 0..1 over the garment reference image, or null when not yet placed).

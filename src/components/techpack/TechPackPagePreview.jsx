@@ -18,7 +18,8 @@ function clampLine(s, maxW, charW = 6.5) {
   return s.slice(0, Math.max(1, max - 1)) + '…';
 }
 
-function PageFrame({ title, phase, pageNum, styleInfo, styleNumber, children }) {
+function PageFrame({ title, phase, pageNum, styleInfo, styleNumber, children, internal }) {
+  const headerTag = internal ? 'INTERNAL · NOT EXPORTED' : `PAGE ${pageNum} / ${TOTAL_PAGES}`;
   return (
     <g>
       <rect x="0" y="0" width={PAGE_W} height={PAGE_H} fill={FR.white} />
@@ -31,10 +32,10 @@ function PageFrame({ title, phase, pageNum, styleInfo, styleNumber, children }) 
       {styleNumber && (
         <text x={PAGE_W - 40} y="28" textAnchor="end" fontSize="10" fontWeight="bold" fill={FR.salt} letterSpacing="2" fontFamily="ui-monospace,Menlo,monospace">{esc(styleNumber)}</text>
       )}
-      <text x={PAGE_W - 40} y="50" textAnchor="end" fontSize="8" fill={FR.sand} letterSpacing="2">PAGE {pageNum} / {TOTAL_PAGES}</text>
+      <text x={PAGE_W - 40} y="50" textAnchor="end" fontSize="8" fill={FR.sand} letterSpacing="2">{headerTag}</text>
       <rect x="0" y="70" width={PAGE_W} height={2} fill={FR.soil} />
       <text x="40" y="775" fontSize="9" fill={FR.stone}>{styleInfo}</text>
-      <text x={PAGE_W - 40} y="775" textAnchor="end" fontSize="9" fill={FR.stone}>PAGE {pageNum} / {TOTAL_PAGES}</text>
+      <text x={PAGE_W - 40} y="775" textAnchor="end" fontSize="9" fill={internal ? '#854F0B' : FR.stone} fontWeight={internal ? 'bold' : 'normal'}>{internal ? 'INTERNAL — NOT EXPORTED' : `PAGE ${pageNum} / ${TOTAL_PAGES}`}</text>
       {children}
     </g>
   );
@@ -870,17 +871,24 @@ function PageConstruction({ d, images, pageKey = 'page1' }) {
   const colGap2 = 16;
   const cardW  = (rightW - colGap2) / 2;
   const cardH  = (refH - rowGap) / 2;
-  const pad    = 9;
-  const imgGap = 8;
-  const dotR   = 11;
+  const pad      = 9;
+  const imgGap   = 8;
+  const dotR     = 11;
+  const labelGap = 14;   // room for the small RENDER / REFERENCE label above the image
   const bandW  = cardW - pad * 2;
-  const imageH = Math.round((bandW - imgGap) / (CALLOUT_MAIN_RATIO + CALLOUT_SUPPORT_RATIO));
+  // Height-cap so the small label above + the numbered title row below both fit
+  // inside the (shorter) stitch card — the spec table beneath leaves less
+  // vertical room than the Call Outs page. Main then fills the leftover width.
+  const imageH = Math.min(
+    Math.round((bandW - imgGap) / (CALLOUT_MAIN_RATIO + CALLOUT_SUPPORT_RATIO)),
+    cardH - 48 - labelGap,
+  );
 
   // Spec table below, one fixed row per stitch on this page (# = stitch number).
-  const tableY   = refY + refH + refLabel + 26;
-  const seamCols = [
+  const tableY   = refY + refH + refLabel + 40;
+  const seamColsRaw = [
     { key: 'num',        label: '#',           w: 28  },
-    { key: 'operation',  label: 'Operation',   w: 150 },
+    { key: 'seam',       label: 'Seam',        w: 150 },
     { key: 'seamType',   label: 'Seam Type',   w: 120 },
     { key: 'stitchType', label: 'Stitch Type', w: 90  },
     { key: 'machine',    label: 'Machine',     w: 158 },
@@ -889,7 +897,13 @@ function PageConstruction({ d, images, pageKey = 'page1' }) {
     { key: 'threadType', label: 'Thread Type', w: 120 },
     { key: 'notes',      label: 'Notes',       w: 153 },
   ];
-  const pageRows = nums.map((n, i) => ({ num: n, ...(seams[rowStart + i] || {}) }));
+  // Stretch the table so its right edge lines up with the cards and the header
+  // strip — left at padX, right at PAGE_W - padX, everything even.
+  const seamTableW = PAGE_W - padX * 2;
+  const seamRawSum = seamColsRaw.reduce((a, c) => a + c.w, 0);
+  const seamCols   = seamColsRaw.map(c => ({ ...c, w: c.w * seamTableW / seamRawSum }));
+  // The "Seam" column is the stitch's name — kept in sync with the card title.
+  const pageRows = nums.map((n, i) => ({ num: n, ...(seams[rowStart + i] || {}), seam: blockFor(n).label || '' }));
 
   return (
     <g>
@@ -899,15 +913,22 @@ function PageConstruction({ d, images, pageKey = 'page1' }) {
         Numbered dots mark where each stitch runs. Each card carries the closed 3D render, an optional reference photo, and its number; specs are in the table below.
       </text>
 
-      {/* garment callout reference (left) */}
-      <PhotoSlot x={padX} y={refY} w={refW} h={refH} label="Stitch Map" image={callout} />
-      {nums.map(n => { const b = blockFor(n); return b.dot ? (
-        <g key={`dot-${n}`}>
-          <circle cx={padX + 4 + b.dot.x * (refW - 8)} cy={refY + 4 + b.dot.y * (refH - 8)} r={dotR} fill="#A32D2D" stroke="#FFFFFF" strokeWidth={1.5} />
-          <text x={padX + 4 + b.dot.x * (refW - 8)} y={refY + 4 + b.dot.y * (refH - 8) + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill="#FFFFFF">{n}</text>
-        </g>
-      ) : null; })}
-      <AnnotationSvg annos={d?.calloutAnnotations?.[refSlot]} x={padX + 4} y={refY + 4} w={refW - 8} h={refH - 8} keyPrefix={`sg-${pageKey}`} />
+      {/* garment callout reference (left) — one narrow image, or two stacked 2:3 */}
+      {d?.referenceLayout?.[refSlot] ? (
+        <TwoStackedRefs imgs={imgs} baseSlot={refSlot} x={padX} y={refY} w={refW} h={refH} d={d} keyPrefix={`sg-${pageKey}`}
+          dots={nums.map(n => blockFor(n)).filter(b => b.dot).map(b => ({ num: b.num, x: b.dot.x, y: b.dot.y }))} />
+      ) : (
+        <>
+          <PhotoSlot x={padX} y={refY} w={refW} h={refH} label="Stitch Map" image={callout} />
+          {nums.map(n => { const b = blockFor(n); return b.dot ? (
+            <g key={`dot-${n}`}>
+              <circle cx={padX + 4 + b.dot.x * (refW - 8)} cy={refY + 4 + b.dot.y * (refH - 8)} r={dotR} fill="#A32D2D" stroke="#FFFFFF" strokeWidth={1.5} />
+              <text x={padX + 4 + b.dot.x * (refW - 8)} y={refY + 4 + b.dot.y * (refH - 8) + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill="#FFFFFF">{n}</text>
+            </g>
+          ) : null; })}
+          <AnnotationSvg annos={d?.calloutAnnotations?.[refSlot]} x={padX + 4} y={refY + 4} w={refW - 8} h={refH - 8} keyPrefix={`sg-${pageKey}`} />
+        </>
+      )}
 
       {/* 2×2 grid of stitch cards */}
       {nums.map((n, i) => {
@@ -919,15 +940,21 @@ function PageConstruction({ d, images, pageKey = 'page1' }) {
         const mainImg = imgs.find(im => im.slot === `seam-stitch-${n}`);
         const suppImg = imgs.find(im => im.slot === `seam-stitch-${n}-support`);
         const bandX = cx + pad;
-        const bandY = cy + pad;
-        const mainW = suppImg ? CALLOUT_MAIN_RATIO * imageH : bandW;
+        const bandY = cy + pad + labelGap;
         const supW  = CALLOUT_SUPPORT_RATIO * imageH;
+        const mainW = suppImg ? (bandW - imgGap - supW) : bandW;
         const titleY = bandY + imageH + 24;
+        const labelY = cy + pad + 9;
         const numCx  = bandX + 11;
         const code   = (seams[n - 1] || {}).stitchType;
         return (
           <g key={n}>
             <rect x={cx} y={cy} width={cardW} height={cardH} fill={FR.white} stroke={FR.sand} strokeWidth={0.5} rx={6} />
+            {/* small labels above each image */}
+            <text x={bandX} y={labelY} fontSize="7.5" fontWeight="bold" fill={FR.soil} letterSpacing="0.8">RENDER</text>
+            {suppImg && (
+              <text x={bandX + mainW + imgGap} y={labelY} fontSize="7.5" fontWeight="bold" fill={FR.soil} letterSpacing="0.8">REFERENCE</text>
+            )}
             <ImageCell x={bandX} y={bandY} w={mainW} h={imageH} image={mainImg} placeholder={`Stitch ${n} — 3D render`} />
             <AnnotationSvg annos={d?.calloutAnnotations?.[`seam-stitch-${n}`]} x={bandX} y={bandY} w={mainW} h={imageH} keyPrefix={`sm-${n}`} />
             {suppImg && <ImageCell x={bandX + mainW + imgGap} y={bandY} w={supW} h={imageH} image={suppImg} placeholder="Ref" />}
@@ -945,7 +972,20 @@ function PageConstruction({ d, images, pageKey = 'page1' }) {
       })}
 
       <SectionHeading x={40} y={tableY - 12}>Seam &amp; Stitch Specification</SectionHeading>
-      <GridTable x={40} y={tableY} cols={seamCols} rows={pageRows} bodyRows={nums.length} />
+      <GridTable
+        x={40} y={tableY} cols={seamCols} rows={pageRows} bodyRows={nums.length}
+        renderCell={(key, row, cellX, ry) => {
+          if (key !== 'num') return null;
+          const ccx = cellX + 13;
+          const ccy = ry + 11;
+          return (
+            <>
+              <circle cx={ccx} cy={ccy} r={8} fill="#A32D2D" />
+              <text x={ccx} y={ccy + 3} textAnchor="middle" fontSize="9" fontWeight="600" fill="#FFFFFF">{row.num}</text>
+            </>
+          );
+        }}
+      />
     </g>
   );
 }
@@ -965,6 +1005,46 @@ function ImageCell({ x, y, w, h, image, placeholder }) {
           {placeholder}
         </text>
       )}
+    </g>
+  );
+}
+
+// Two stacked strict-2:3 reference images centred in the reference column,
+// each with its own annotations. Used when the operator picks the 2-image
+// reference layout on the Construction / Sewing pages.
+function TwoStackedRefs({ imgs, baseSlot, x, y, w, h, d, keyPrefix, dots = [] }) {
+  const gap = 12;
+  const cellH = (h - gap) / 2;
+  const cellW = Math.round(cellH * (2 / 3));   // strict 2:3 portrait
+  const cx = x + (w - cellW) / 2;              // centred in the column
+  const slots = [baseSlot, `${baseSlot}-b`];
+  return (
+    <g>
+      {slots.map((slot, i) => {
+        const im = (imgs || []).find(g => g.slot === slot);
+        const cy = y + i * (cellH + gap);
+        return (
+          <g key={slot}>
+            <rect x={cx} y={cy} width={cellW} height={cellH} fill={FR.white} stroke={FR.soil} strokeDasharray="5 4" />
+            {im ? (
+              <image href={im.data} x={cx} y={cy} width={cellW} height={cellH} preserveAspectRatio="xMidYMid slice" />
+            ) : (
+              <text x={cx + cellW / 2} y={cy + cellH / 2 + 4} textAnchor="middle" fontSize="10" fill={FR.stone} fontStyle="italic">{`Reference ${i + 1}`}</text>
+            )}
+            <AnnotationSvg annos={d?.calloutAnnotations?.[slot]} x={cx} y={cy} w={cellW} h={cellH} keyPrefix={`${keyPrefix}-${i}`} />
+          </g>
+        );
+      })}
+      {/* numbered dots — coords are 0..1 over the whole stack (cellW × h), the
+          same box the editor normalises to, so they land on the same spot. */}
+      {(dots || []).map(dt => (
+        <g key={`dot-${dt.num}`}>
+          <circle cx={cx + dt.x * cellW} cy={y + dt.y * h} r={11} fill="#A32D2D" stroke="#FFFFFF" strokeWidth={1.5} />
+          <text x={cx + dt.x * cellW} y={y + dt.y * h + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill="#FFFFFF">{dt.num}</text>
+        </g>
+      ))}
+      <rect x={x} y={y + h} width={w} height={22} fill={FR.salt} stroke={FR.sand} />
+      <text x={x + w / 2} y={y + h + 15} textAnchor="middle" fontSize="9" fontWeight="bold" fill={FR.slate} letterSpacing="1.5">REFERENCE</text>
     </g>
   );
 }
@@ -1021,25 +1101,28 @@ function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey, enhanc
           Numbered dots mark each call-out on the garment. Each card carries a large main close-up, an optional supporting image, a title, and a description.
         </text>
 
-        {/* garment reference (left), full height */}
-        <PhotoSlot x={padX} y={refY} w={refW} h={refH} label="Reference" image={callout} />
-
-        {/* in-app placed numbered dots — coords are 0..1 over the image area
-            drawn inside the PhotoSlot (inset 4px) */}
-        {entries.map(entry => entry.dot ? (
-          <g key={`dot-${entry.num}`}>
-            <circle cx={padX + 4 + entry.dot.x * (refW - 8)} cy={refY + 4 + entry.dot.y * (refH - 8)}
-              r={dotR} fill="#A32D2D" stroke="#FFFFFF" strokeWidth={1.5} />
-            <text x={padX + 4 + entry.dot.x * (refW - 8)} y={refY + 4 + entry.dot.y * (refH - 8) + 4}
-              textAnchor="middle" fontSize="12" fontWeight="600" fill="#FFFFFF">
-              {entry.num}
-            </text>
-          </g>
-        ) : null)}
-
-        {/* red box / text annotations drawn on the garment reference (inset 4px,
-            exactly where the dots are placed) */}
-        <AnnotationSvg annos={d?.calloutAnnotations?.[resolvedSlot]} x={padX + 4} y={refY + 4} w={refW - 8} h={refH - 8} keyPrefix={`ga-${pageKey}`} />
+        {/* garment reference (left) — one narrow image, or two stacked 2:3 */}
+        {d?.referenceLayout?.[resolvedSlot] ? (
+          <TwoStackedRefs imgs={imgs} baseSlot={resolvedSlot} x={padX} y={refY} w={refW} h={refH} d={d} keyPrefix={`ga-${pageKey}`}
+            dots={entries.filter(e => e.dot).map(e => ({ num: e.num, x: e.dot.x, y: e.dot.y }))} />
+        ) : (
+          <>
+            <PhotoSlot x={padX} y={refY} w={refW} h={refH} label="Reference" image={callout} />
+            {/* in-app placed numbered dots — coords are 0..1 over the image area
+                drawn inside the PhotoSlot (inset 4px) */}
+            {entries.map(entry => entry.dot ? (
+              <g key={`dot-${entry.num}`}>
+                <circle cx={padX + 4 + entry.dot.x * (refW - 8)} cy={refY + 4 + entry.dot.y * (refH - 8)}
+                  r={dotR} fill="#A32D2D" stroke="#FFFFFF" strokeWidth={1.5} />
+                <text x={padX + 4 + entry.dot.x * (refW - 8)} y={refY + 4 + entry.dot.y * (refH - 8) + 4}
+                  textAnchor="middle" fontSize="12" fontWeight="600" fill="#FFFFFF">
+                  {entry.num}
+                </text>
+              </g>
+            ) : null)}
+            <AnnotationSvg annos={d?.calloutAnnotations?.[resolvedSlot]} x={padX + 4} y={refY + 4} w={refW - 8} h={refH - 8} keyPrefix={`ga-${pageKey}`} />
+          </>
+        )}
 
         {/* 2x2 grid of large detail cards */}
         {entries.map((entry, i) => {
@@ -1765,6 +1848,128 @@ function ComingSoon({ pageNum, title }) {
 // Index parity is required — TechPackPagePreview indexes into PAGE_FNS by
 // `step` directly, so a misaligned slot here means the wrong page renders
 // for the wrong sidebar entry (the bug from PR #83).
+// Cut & Sew Cost — internal-only page. Mirrors the AI labor estimate + the
+// specs it reads off the Construction (07–08) and Sewing (09–10) pages. Never
+// exported to the factory pack (PageFrame draws the INTERNAL tag).
+function PageCutSewCost({ d }) {
+  const meta = d.cutSewLaborCostMeta;
+  const costVal = meta?.value != null ? Number(meta.value)
+    : (d.cutSewLaborCost ? Number(d.cutSewLaborCost) : null);
+  const hasCost = costVal != null && !Number.isNaN(costVal);
+  const src = meta?.mode === 'sam_rate'
+    ? `via SAM × $${Number(meta.samRate || meta.vendorSamRate || 0).toFixed(2)}/min`
+    : 'via Regional CMT Benchmark';
+
+  // specs pulled off pages 07–10
+  const callouts = [...(d.constructionDetailsPage1 || []), ...(d.constructionDetailsPage2 || [])]
+    .filter(c => c && (c.title || c.description));
+  const blocks = d.seamStitchBlocks || [];
+  const seams = d.seams || [];
+  const stitches = [];
+  for (let i = 0; i < 8; i++) {
+    const label = (blocks.find(b => b.num === i + 1) || {}).label || '';
+    const s = seams[i] || {};
+    if (label || s.seamType || s.stitchType) stitches.push({ num: i + 1, label, stitchType: s.stitchType || '', spi: s.spiSpcm || '' });
+  }
+
+  const wrap = (str, max) => {
+    const words = String(str || '').split(/\s+/).filter(Boolean);
+    const lines = []; let cur = '';
+    for (const w of words) {
+      if ((cur ? cur + ' ' + w : w).length > max) { if (cur) lines.push(cur); cur = w; } else cur = cur ? cur + ' ' + w : w;
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  };
+
+  const x0 = 40, x1 = PAGE_W - 40, fullW = x1 - x0;
+  const heroY = 154, heroH = 190;
+  const splitX = x0 + 330;
+  const colY = heroY + heroH + 56, colGap = 16, colW = (fullW - colGap) / 2, colX2 = x0 + colW + colGap, colH = 300;
+
+  const ListCol = ({ x, name, pages, count, rows, render }) => (
+    <g>
+      <rect x={x} y={colY} width={colW} height={colH} fill={FR.white} stroke="rgba(58,58,58,0.15)" strokeWidth={0.5} rx={8} />
+      <text x={x + 16} y={colY + 22} fontSize="10" fontWeight="bold" fill={FR.soil} letterSpacing="0.8">{name}</text>
+      <text x={x + colW - 16} y={colY + 22} textAnchor="end" fontSize="9" fill={FR.stone} fontFamily="ui-monospace,Menlo,monospace">{pages}</text>
+      <text x={x + colW - 56} y={colY + 22} textAnchor="end" fontSize="13" fontWeight="600" fill={FR.slate}>{count}</text>
+      {rows.length === 0 && <text x={x + 16} y={colY + 48} fontSize="11" fill={FR.stone} fontStyle="italic">Nothing specified yet on these pages.</text>}
+      {rows.slice(0, 8).map((r, i) => {
+        const ry = colY + 40 + i * 30;
+        return (
+          <g key={i}>
+            <circle cx={x + 24} cy={ry + 4} r={8} fill="#A32D2D" />
+            <text x={x + 24} y={ry + 7} textAnchor="middle" fontSize="9" fontWeight="600" fill="#fff">{r.num}</text>
+            {render(r, x, ry)}
+            <line x1={x + 16} y1={ry + 18} x2={x + colW - 16} y2={ry + 18} stroke={FR.sand} />
+          </g>
+        );
+      })}
+      {rows.length > 8 && <text x={x + 16} y={colY + 40 + 8 * 30 + 6} fontSize="10" fill={FR.stone} fontStyle="italic">+{rows.length - 8} more</text>}
+    </g>
+  );
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      {/* internal banner */}
+      <rect x={x0} y={heroY - 40} width={fullW} height={28} rx={6} fill="rgba(133,79,11,0.06)" stroke="rgba(133,79,11,0.45)" strokeWidth={0.5} />
+      <circle cx={x0 + 16} cy={heroY - 26} r={4} fill="#854F0B" />
+      <text x={x0 + 28} y={heroY - 22} fontSize="11" fontWeight="600" fill="#854F0B">INTERNAL — Cut &amp; Sew labor cost. For your eyes only; left out of the exported factory pack.</text>
+
+      {/* hero cost card */}
+      <rect x={x0} y={heroY} width={fullW} height={heroH} rx={8} fill={FR.white} stroke="rgba(58,58,58,0.15)" strokeWidth={0.5} />
+      <line x1={splitX} y1={heroY} x2={splitX} y2={heroY + heroH} stroke="rgba(58,58,58,0.12)" />
+      {/* left — number */}
+      <text x={x0 + 26} y={heroY + 28} fontSize="9" fontWeight="600" fill={FR.stone} letterSpacing="1">ESTIMATED CUT &amp; SEW LABOR</text>
+      {hasCost ? (
+        <>
+          <text x={x0 + 24} y={heroY + 76} fontSize="42" fontWeight="500" fill={FR.slate} fontFamily="Helvetica, Arial, sans-serif">${costVal.toFixed(2)}</text>
+          <text x={x0 + 26} y={heroY + 98} fontSize="12" fill={FR.stone}>per garment{meta && (meta.low != null || meta.high != null) ? ` · range $${Number(meta.low ?? costVal).toFixed(2)}–$${Number(meta.high ?? costVal).toFixed(2)}` : ''}</text>
+          <text x={x0 + 26} y={heroY + 128} fontSize="9" fontWeight="600" fill={FR.soil} letterSpacing="1">{esc(src.toUpperCase())}</text>
+          <text x={x0 + 26} y={heroY + 150} fontSize="11" fill={FR.slate}>{esc((meta?.vendor || d.vendor || '—'))}</text>
+          {meta?.vendorCity && meta?.vendorCountry && <text x={x0 + 26} y={heroY + 165} fontSize="11" fill={FR.stone}>{esc(`${meta.vendorCity}, ${meta.vendorCountry}`)}</text>}
+          <text x={x0 + 26} y={heroY + 181} fontSize="9" fill={FR.stone} fontStyle="italic">{meta?.generatedAt ? `Generated ${new Date(meta.generatedAt).toLocaleString()}` : ''}</text>
+        </>
+      ) : (
+        <>
+          <text x={x0 + 24} y={heroY + 78} fontSize="34" fontWeight="500" fill={FR.sand} fontFamily="Helvetica, Arial, sans-serif">$—.——</text>
+          <text x={x0 + 26} y={heroY + 104} fontSize="11" fill={FR.stone} fontStyle="italic">Run “Estimate with AI” on the</text>
+          <text x={x0 + 26} y={heroY + 119} fontSize="11" fill={FR.stone} fontStyle="italic">left to populate this page.</text>
+        </>
+      )}
+      {/* right — reasoning */}
+      <text x={splitX + 26} y={heroY + 28} fontSize="9" fontWeight="600" fill={FR.stone} letterSpacing="1">HOW THE AI GOT HERE</text>
+      {hasCost ? (
+        <>
+          {wrap(meta?.reasoning || meta?.vendorContext || '', 92).slice(0, 5).map((ln, i) => (
+            <text key={i} x={splitX + 26} y={heroY + 50 + i * 18} fontSize="12.5" fill={FR.slate}>{esc(ln)}</text>
+          ))}
+        </>
+      ) : (
+        <text x={splitX + 26} y={heroY + 50} fontSize="12" fill={FR.stone} fontStyle="italic">The AI’s reasoning will show here once you run the estimate.</text>
+      )}
+      <text x={splitX + 26} y={heroY + heroH - 30} fontSize="10" fill={FR.stone}>CMT-only — conversion labor (cut, sew, finish, pack, overhead).</text>
+      <text x={splitX + 26} y={heroY + heroH - 16} fontSize="10" fill={FR.stone}>Excludes fabric, trims, treatments &amp; vendor markup — those roll up elsewhere.</text>
+
+      {/* what it reads */}
+      <text x={x0} y={colY - 26} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="17" fill={FR.slate}>What this estimate reads</text>
+      <text x={x0} y={colY - 10} fontSize="11" fill={FR.stone} fontStyle="italic">Pulled live off pages 07–10 — change a call-out or stitch row and re-run to update the number.</text>
+      <ListCol x={x0} name="CONSTRUCTION CALL-OUTS" pages="PAGES 07–08" count={callouts.length} rows={callouts}
+        render={(r, x, ry) => (<>
+          <text x={x + 40} y={ry + 7} fontSize="12" fontWeight="600" fill={FR.slate}>{esc((r.title || '(untitled)').slice(0, 32))}</text>
+          {r.description && <text x={x + colW - 16} y={ry + 7} textAnchor="end" fontSize="10" fill={FR.stone}>{esc(r.description.slice(0, 26))}</text>}
+        </>)} />
+      <ListCol x={colX2} name="STITCH OPERATIONS" pages="PAGES 09–10" count={stitches.length} rows={stitches}
+        render={(r, x, ry) => (<>
+          <text x={x + 40} y={ry + 7} fontSize="12" fontWeight="600" fill={FR.slate}>{esc((r.label || '(unnamed)').slice(0, 30))}</text>
+          <text x={x + colW - 16} y={ry + 7} textAnchor="end" fontSize="10" fill={FR.stone} fontFamily="ui-monospace,Menlo,monospace">{esc([r.stitchType, r.spi].filter(Boolean).join(' · '))}</text>
+        </>)} />
+    </g>
+  );
+}
+
 const PAGE_FNS = [
   // 00, 01 — Merchandising
   { title: 'Competitor Landscape',              phase: 'Merchandising',     body: ({ d }) => <PageCompetitorLandscape d={d} /> },
@@ -1777,13 +1982,14 @@ const PAGE_FNS = [
   { title: 'Trims',                             phase: 'Bill of Materials', body: ({ d, componentsById }) => <PageTrims d={d} componentsById={componentsById} /> },
   { title: 'Packaging',                         phase: 'Bill of Materials', body: ({ d, componentsById }) => <PagePackaging d={d} componentsById={componentsById} /> },
   // 07–13 — Cut & Sew
-  { title: 'Flat Lay',                          phase: 'Cut & Sew',         body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
-  { title: 'Call Outs',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page1" enhanced /> },
-  { title: 'Call Outs',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page2" enhanced /> },
-  { title: 'Stitching',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageConstruction d={d} images={images} pageKey="page1" /> },
-  { title: 'Stitching',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageConstruction d={d} images={images} pageKey="page2" /> },
-  { title: 'Pattern & Cutting',                 phase: 'Cut & Sew',         body: ({ d, images }) => <PagePattern d={d} images={images} /> },
-  { title: 'POM',                               phase: 'Cut & Sew',         body: ({ d, images }) => <PagePom d={d} images={images} /> },
+  { title: 'Pattern',                           phase: 'Cut & Sew',         body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
+  { title: 'Construction (1)',                  phase: 'Cut & Sew',         body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page1" enhanced /> },
+  { title: 'Construction (2)',                  phase: 'Cut & Sew',         body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page2" enhanced /> },
+  { title: 'Sewing (1)',                        phase: 'Cut & Sew',         body: ({ d, images }) => <PageConstruction d={d} images={images} pageKey="page1" /> },
+  { title: 'Sewing (2)',                        phase: 'Cut & Sew',         body: ({ d, images }) => <PageConstruction d={d} images={images} pageKey="page2" /> },
+  { title: 'Cut & Sew Cost',                    phase: 'Cut & Sew',         body: ({ d }) => <PageCutSewCost d={d} /> },
+  { title: 'Cutting',                           phase: 'Cut & Sew',         body: ({ d, images }) => <PagePattern d={d} images={images} /> },
+  { title: 'Points of Measure',                 phase: 'Cut & Sew',         body: ({ d, images }) => <PagePom d={d} images={images} /> },
   { title: 'Size Grading',                      phase: 'Cut & Sew',         body: ({ d }) => <PageSizeMatrix d={d} /> },
   // 14–18 — Embellishments
   { title: 'Colorways',                         phase: 'Embellishments',    body: ({ d }) => <PageColorways d={d} /> },
@@ -1836,7 +2042,7 @@ export default function TechPackPagePreview({ data, images, step, skippedSteps, 
       viewBox={`0 0 ${PAGE_W} ${PAGE_H}`}
       preserveAspectRatio="xMidYMin meet"
       style={{ width: '100%', height: 'auto', background: FR.white, boxShadow: '0 2px 14px rgba(0,0,0,0.12)', borderRadius: 6, fontFamily: 'Helvetica, Arial, sans-serif' }}>
-      <PageFrame title={current.title} phase={current.phase} pageNum={pageNum} styleInfo={styleInfo} styleNumber={d.styleNumber}>
+      <PageFrame title={current.title} phase={current.phase} pageNum={pageNum} styleInfo={styleInfo} styleNumber={d.styleNumber} internal={!!stepEntry.internal}>
         <Body d={d} images={images} treatmentsById={treatmentsById} componentsById={componentsById} fabricsById={fabricsById} fabricPageIdx={fabricPageIdx} />
       </PageFrame>
       {isSkipped && <SkipOverlay />}
