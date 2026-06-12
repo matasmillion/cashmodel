@@ -39,6 +39,7 @@ import { addSupplier } from '../../utils/plmDirectory';
 import { getFRColor } from '../../utils/colorLibrary';
 import { listTreatments, getTreatmentRollups, createTreatment } from '../../utils/treatmentStore';
 import { TREATMENT_TYPE_LABEL } from '../../utils/treatmentLibrary';
+import { deriveTumbleShrink, cutUpscalePct } from '../../utils/fabricLibrary';
 import { listVendors } from '../../utils/vendorLibrary';
 import { listEmbellishments, createEmbellishment } from '../../utils/embellishmentStore';
 import { computePackDiff } from '../../utils/techPackDiff';
@@ -2572,10 +2573,22 @@ export function StepSketches2({ data, set, images, onUpload, onRemove, annotatio
 const DYE_TREATMENT_TYPES = ['wash', 'garment_dye', 'piece_dye'];
 const SELVAGE_CM = 2; // default trim each side of the roll the marker can't use
 
-export function StepPattern({ data, set, packId }) {
+// Brand hex literals the cutting cards need beyond the muted FR.* palette.
+const CUT_SOIL = '#854F0B';   // brand Soil — the cutting accent
+const CUT_GOOD = '#3B6D11';   // model-valid / on-plan green
+const MONO = 'ui-monospace, Menlo, monospace';
+
+// Plain-English label for what happens to the roll at Stage 1 (before cutting).
+function preShrinkLabel(stage1) {
+  if (stage1 === 'hang') return 'Hang-dry the roll';
+  if (stage1 === 'tumble') return 'Tumble-dry the roll';
+  return 'No pre-shrink';
+}
+
+export function StepPattern({ data, set, packId, images, onUpload, onRemove }) {
   // Library specs resolved from the fabric store, keyed by fabricId. Holds the
-  // read-only "by reference" numbers (post-wash width, raw shrinkage, etc.).
-  const [fabRefs, setFabRefs] = useState({}); // fabricId -> { name, code, widthPost, widthPre, shrinkWarp, shrinkWeft, weave, composition, gsm }
+  // read-only "by reference" numbers (widths + GSM at each dry state, etc.).
+  const [fabRefs, setFabRefs] = useState({}); // fabricId -> resolved spec (see below)
   // The dye/wash treatment atom this style references, if any.
   const [dyeTreatment, setDyeTreatment] = useState(null); // { name, code, assumedPct } | null
 
@@ -2584,6 +2597,8 @@ export function StepPattern({ data, set, packId }) {
   const cuttingPlanFiles = Array.isArray(data.cuttingPlanFiles) ? data.cuttingPlanFiles : [];
 
   // ── Resolve fabric specs by reference (mirrors StepFabrics' async resolver) ──
+  // Now also pulls the tumble-dry + post-wash GSM so the GSM-area shrink model
+  // can run; we keep the previously-resolved fields too (additive).
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -2595,20 +2610,21 @@ export function StepPattern({ data, set, packId }) {
         const row = await getFabric(id);
         if (cancelled) return;
         if (!row) continue;
-        const widthPre  = parseFloat(row.width_cm) || null;
-        const widthPost = (row.width_cm_post != null && row.width_cm_post !== '')
-          ? parseFloat(row.width_cm_post)
-          : widthPre;
+        const num = (v) => (v != null && v !== '') ? parseFloat(v) : null;
+        const widthPre  = num(row.width_cm);
+        const widthPost = num(row.width_cm_post) != null ? num(row.width_cm_post) : widthPre;
         next[id] = {
           name:        row.name || row.mill_fabric_no || id,
           code:        row.code || row.mill_fabric_no || '',
           widthPost:   widthPost,
           widthPre:    widthPre,
-          shrinkWarp:  row.shrinkage_warp_pct != null ? parseFloat(row.shrinkage_warp_pct) : null,
-          shrinkWeft:  row.shrinkage_weft_pct != null ? parseFloat(row.shrinkage_weft_pct) : null,
+          shrinkWarp:  num(row.shrinkage_warp_pct),
+          shrinkWeft:  num(row.shrinkage_weft_pct),
           weave:       row.weave || '',
           composition: row.composition || '',
-          gsm:         row.weight_gsm != null ? parseFloat(row.weight_gsm) : null,
+          gsm:         num(row.weight_gsm),          // PRE-wash GSM
+          gsmHang:     num(row.weight_gsm_post),     // post-wash (hang-dry) GSM
+          gsmTumble:   num(row.weight_gsm_tumble),   // tumble-dry GSM
         };
       }
       if (!cancelled) setFabRefs(next);
@@ -2641,35 +2657,91 @@ export function StepPattern({ data, set, packId }) {
     return () => { cancelled = true; };
   }, [(data.treatmentWashTypes || []).map(r => r?.treatment_id).filter(Boolean).join('|')]);
 
-  // ── Denormalize fabric cutting refs onto each pickedFabrics entry ──
-  // Pure functions (PDF/SVG) read from data only, so cache the numbers there.
-  // Guarded: only write when a value actually changed, to avoid an update loop.
+  const pickedWithFabric = picked.filter(p => p?.fabricId);
+  const dyeOn = !!dyeTreatment;
+  const r1 = (n) => Math.round(n * 10) / 10;
+
+  // ── Per-fabric cutting model (pure derivation, used by cards + denormalize) ──
+  // Stage 1 sets the roll width: none → raw pre-wash width, hang → post-wash
+  // width, tumble → GSM-predicted tumble width. Stage 2 (effective) decides
+  // whether the sewn garment shrinks again during the wash; defaults on when
+  // the style uses a dye/wash treatment. The result drives every number printed.
+  const modelFor = (entry) => {
+    const ref = fabRefs[entry.fabricId];
+    if (!ref) return null;
+    const t = deriveTumbleShrink({
+      gsmPre:       ref.gsm,
+      widthPre:     ref.widthPre,
+      gsmHang:      ref.gsmHang,
+      widthHang:    ref.widthPost,
+      gsmTumble:    ref.gsmTumble,
+      statedWeftPct: ref.shrinkWeft,
+    });
+    const stage1 = entry.shrinkStage1 || 'none';
+    // Effective stage 2: stored value wins; otherwise tumble when a dye/wash
+    // treatment was found, else none.
+    const stage2 = (entry.shrinkStage2 === 'none' || entry.shrinkStage2 === 'tumble')
+      ? entry.shrinkStage2
+      : (dyeOn ? 'tumble' : 'none');
+    // Roll width to cut at, from stage 1.
+    let rollWidthCm = null;
+    if (stage1 === 'tumble') rollWidthCm = t.predWidthTumble;
+    else if (stage1 === 'hang') rollWidthCm = (ref.widthPost != null ? ref.widthPost : ref.widthPre);
+    else rollWidthCm = ref.widthPre;
+    // Residual the sewn garment loses during the wash: actual override wins.
+    const actRaw = entry.shrinkActualResidualPct;
+    const actual = (actRaw === '' || actRaw == null) ? null : parseFloat(actRaw);
+    const assumedResidual = t.residualWeft;
+    const residual = (actual != null && Number.isFinite(actual)) ? actual : assumedResidual;
+    const residualConfirmed = (actual != null && Number.isFinite(actual));
+    const cutBigger = (stage2 === 'tumble' && residual != null) ? cutUpscalePct(residual) : null;
+    return {
+      ref, tumble: t, stage1, stage2, rollWidthCm,
+      assumedResidual, residual, residualConfirmed, cutBigger,
+    };
+  };
+
+  // ── Denormalize the cutting refs onto each pickedFabrics entry ──
+  // Pure functions (PDF/SVG/preview) read from data only, so cache the numbers
+  // there. Guarded: only write when a value actually changed (no render loop).
+  // KEEPS the prior cuttingRef keys (postWidthCm / shrink* / name / code) and
+  // ADDS the two-stage cutting keys.
   useEffect(() => {
     if (!picked.length) return;
     let changed = false;
+    const treatmentName = dyeTreatment?.name || null;
     const arr = picked.map(entry => {
       if (!entry?.fabricId) return entry;
-      const ref = fabRefs[entry.fabricId];
-      if (!ref) return entry;
+      const m = modelFor(entry);
+      if (!m) return entry;
+      const { ref } = m;
       const nextRef = {
+        // — prior keys (unchanged) —
         postWidthCm:   ref.widthPost,
         shrinkWarpPct: ref.shrinkWarp,
         shrinkWeftPct: ref.shrinkWeft,
         name:          ref.name,
         code:          ref.code,
+        // — additive two-stage cutting keys —
+        stage1:        m.stage1,
+        stage2:        m.stage2,
+        rollWidthCm:   m.rollWidthCm,
+        preShrinkLabel: preShrinkLabel(m.stage1),
+        weftHangPct:   m.tumble.weftShrinkHang,
+        weftTumblePct: m.tumble.weftShrinkTumble,
+        residualPct:   m.residual,
+        cutBiggerPct:  m.cutBigger,
+        treatmentName: treatmentName,
       };
       const prev = entry.cuttingRef || {};
-      const same = prev.postWidthCm === nextRef.postWidthCm
-        && prev.shrinkWarpPct === nextRef.shrinkWarpPct
-        && prev.shrinkWeftPct === nextRef.shrinkWeftPct
-        && prev.name === nextRef.name
-        && prev.code === nextRef.code;
+      const keys = Object.keys(nextRef);
+      const same = keys.every(k => prev[k] === nextRef[k]);
       if (same) return entry;
       changed = true;
       return { ...entry, cuttingRef: nextRef };
     });
     if (changed) set('pickedFabrics', arr);
-  }, [fabRefs, fabricIdKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fabRefs, fabricIdKey, dyeOn, dyeTreatment, picked]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Denormalize the dye treatment ref onto data (additive) ──
   useEffect(() => {
@@ -2682,97 +2754,185 @@ export function StepPattern({ data, set, packId }) {
     if (!same) set('dyeCuttingRef', nextRef);
   }, [dyeTreatment]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const pickedWithFabric = picked.filter(p => p?.fabricId);
-  const dyeOn = !!dyeTreatment;
+  // Helper to patch a single picked-fabric entry by fabricId.
+  const patchEntry = (fabricId, patch) => {
+    const arr = [...(data.pickedFabrics || [])];
+    const idx = arr.findIndex(p => p?.fabricId === fabricId);
+    if (idx >= 0) { arr[idx] = { ...arr[idx], ...patch }; set('pickedFabrics', arr); }
+  };
 
-  // Body / first fabric drives the net-vs-cut upscale note.
-  const bodyEntry = pickedWithFabric.find(p => /body/i.test(p.role || '')) || pickedWithFabric[0] || null;
-  const bodyRef = bodyEntry ? fabRefs[bodyEntry.fabricId] : null;
-
-  // Dye residual comparison (actual vs assumed).
-  const assumedPct = dyeTreatment?.assumedPct;
-  const actualPctRaw = data.dyeResidualActualPct;
-  const actualPct = (actualPctRaw === '' || actualPctRaw == null) ? null : parseFloat(actualPctRaw);
-  const dyeHotter = (assumedPct != null && actualPct != null) ? (actualPct > assumedPct) : false;
-
-  const secLabel = { display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', margin: '16px 0 8px' };
+  // ── Shared style tokens ──
+  const secLabel = { display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, color: CUT_SOIL, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', margin: '16px 0 8px' };
   const lk = { fontSize: 9, color: FR.stone, fontWeight: 600, background: FR.white, border: `1px solid ${FR.sand}`, borderRadius: 3, padding: '2px 6px', textTransform: 'none', letterSpacing: 0.2 };
-  const pillProv = { display: 'inline-block', padding: '3px 8px', borderRadius: 5, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, background: 'rgba(133,79,11,0.12)', color: '#854F0B' };
-  const refBlkK = { fontSize: 8, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 };
-  const refBlkV = { fontSize: 12, fontFamily: 'ui-monospace, Menlo, monospace', color: FR.slate, marginTop: 2 };
-  const fldK = { fontSize: 8, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 };
-  const fldV = { fontSize: 14, fontFamily: 'ui-monospace, Menlo, monospace', color: FR.slate, marginTop: 2 };
+  const blkLab = { fontSize: 9, color: CUT_SOIL, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', margin: '12px 0 7px', display: 'flex', alignItems: 'center', gap: 8 };
+  const pillAssumed = { display: 'inline-block', padding: '3px 8px', borderRadius: 5, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, background: 'rgba(133,79,11,0.12)', color: CUT_SOIL };
+  const pillValid = { display: 'inline-block', padding: '3px 8px', borderRadius: 5, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, background: 'rgba(99,153,34,0.14)', color: CUT_GOOD };
+  const pillConfirmed = { ...pillValid };
 
   const fmtPct = (n) => (n != null && Number.isFinite(n)) ? `${n}%` : '—';
-  const cuttable = (postW, entry) => {
-    const sel = (entry && entry.selvageCm != null && entry.selvageCm !== '') ? parseFloat(entry.selvageCm) : SELVAGE_CM;
-    return (postW != null && Number.isFinite(postW)) ? Math.round((postW - sel) * 10) / 10 : null;
+  const fmtCm = (n) => (n != null && Number.isFinite(n)) ? `${r1(n)}` : '—';
+
+  // Segmented control button.
+  const segBtn = (active, soilWhenOn) => ({
+    padding: '4px 11px', border: 'none', borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+    background: active ? (soilWhenOn ? 'rgba(133,79,11,0.14)' : FR.slate) : 'transparent',
+    color: active ? (soilWhenOn ? CUT_SOIL : FR.salt) : FR.stone,
+  });
+  const segWrap = { display: 'inline-flex', background: FR.salt, borderRadius: 6, padding: 2, gap: 2, border: `1px solid ${FR.sand}` };
+
+  const roleColor = (entry) => {
+    const r = (entry.role || '').toLowerCase();
+    if (/body/.test(r)) return CUT_SOIL;
+    if (/pocket/.test(r)) return '#3a5a8c';
+    if (/rib/.test(r)) return CUT_GOOD;
+    return FR.soil;
   };
 
   return (
     <div>
       <SectionTitle>Cutting</SectionTitle>
+      <p style={{ fontSize: 11, color: FR.stone, lineHeight: 1.5, maxWidth: 640, margin: '0 0 6px' }}>
+        Shrink each fabric, settle the <b>roll width to cut at</b>, read the marker to get <b>fabric yield</b> — the number that
+        backs into the fabric price we negotiate. One card per fabric; holds three or more.
+      </p>
 
-      {/* ── Cutting plan (PDF) uploader ── */}
-      <div style={secLabel}>Cutting plan <span style={lk}>PDF or image</span></div>
-      <div style={{ fontSize: 11, color: FR.stone, marginBottom: 8, lineHeight: 1.5 }}>
-        Save the real cutting plan as a PDF (image still accepted). It rides along in the exported tech pack.
-      </div>
-      <FilesPanel
-        attachments={cuttingPlanFiles}
-        packId={packId}
-        onAdd={(ref) => set('cuttingPlanFiles', [...cuttingPlanFiles, ref])}
-        onRemove={(i) => set('cuttingPlanFiles', cuttingPlanFiles.filter((_, idx) => idx !== i))}
-      />
-
-      {/* ── Fabrics — reference + cutting ── */}
-      <div style={secLabel}>Fabrics — reference + cutting <span style={lk}>up to 3</span></div>
+      {/* ── Fabric cards — one per picked fabric ── */}
       {pickedWithFabric.length === 0 && (
         <p style={{ fontSize: 11, color: FR.stone, fontStyle: 'italic', padding: '10px 0' }}>
           No fabrics picked yet — choose them on the Fabrics step.
         </p>
       )}
       {pickedWithFabric.map((entry) => {
+        const m = modelFor(entry);
         const ref = fabRefs[entry.fabricId];
-        const isBody = /body/i.test(entry.role || '');
-        const postW = ref?.widthPost;
-        const cut = cuttable(postW, entry);
-        const desc = ref ? [ref.weave, ref.gsm ? `${ref.gsm} gsm` : ''].filter(Boolean).join(' · ') : '';
-        // Combined upscale = raw shrink + dye residual (actual if set, else assumed)
-        const dyeAdd = dyeOn ? (actualPct != null ? actualPct : assumedPct) : null;
+        const rc = roleColor(entry);
+        const desc = ref
+          ? [ref.weave, ref.gsm ? `${ref.gsm} gsm` : '', ref.widthPre ? `${ref.widthPre} cm raw` : ''].filter(Boolean).join(' · ')
+          : '';
+        const stage1 = m ? m.stage1 : (entry.shrinkStage1 || 'none');
+        const stage2 = m ? m.stage2 : (entry.shrinkStage2 === 'tumble' || entry.shrinkStage2 === 'none' ? entry.shrinkStage2 : (dyeOn ? 'tumble' : 'none'));
+        const rollW = m ? m.rollWidthCm : null;
+        const modelValid = m ? m.tumble.modelValid : null;
+        const tumbleMissing = !ref || ref.gsmTumble == null;
         const baseYield = parseFloat(entry.metersPerUnit);
-        const combinedYield = (dyeOn && dyeAdd != null && Number.isFinite(baseYield))
-          ? Math.round(baseYield * (1 + dyeAdd / 100) * 100) / 100
-          : null;
+        const actualSet = (entry.shrinkActualResidualPct != null && entry.shrinkActualResidualPct !== '');
+        const stage1Src = stage1 === 'tumble' ? 'Stage 1 = tumble dry → tumble width'
+          : stage1 === 'hang' ? 'Stage 1 = hang dry → post-hang width'
+          : 'Stage 1 = none → raw pre-wash width';
+
         return (
-          <div key={entry.fabricId} style={{ background: FR.white, border: `0.5px solid rgba(58,58,58,0.15)`, borderLeft: `3px solid ${isBody ? FR.soil : FR.sand}`, borderRadius: 10, marginBottom: 10, overflow: 'hidden' }}>
+          <div key={entry.fabricId} style={{ background: FR.white, border: `0.5px solid rgba(58,58,58,0.15)`, borderLeft: `3px solid ${rc}`, borderRadius: 10, marginBottom: 12, overflow: 'hidden' }}>
             {/* header */}
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 9, padding: '10px 14px 8px' }}>
-              <span style={{ fontSize: 9, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700, color: FR.soil }}>{entry.role || 'Fabric'}</span>
-              <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 15, color: FR.slate }}>{ref?.name || '—'}</span>
-              {desc && <span style={{ fontSize: 10, color: FR.stone }}>{desc}</span>}
-            </div>
-            {/* LOCKED reference strip (cream / read-only) */}
-            <div style={{ background: FR.salt, padding: '8px 14px', display: 'flex', gap: 24, borderTop: `1px solid ${FR.sand}`, borderBottom: `1px solid ${FR.sand}` }}>
-              <div><div style={refBlkK}>Post-wash width</div><div style={refBlkV}>{postW != null ? `${postW} cm` : '—'}</div></div>
-              <div><div style={refBlkK}>Raw shrinkage</div><div style={refBlkV}>{ref ? `${fmtPct(ref.shrinkWarp)} L · ${fmtPct(ref.shrinkWeft)} W` : '—'}</div></div>
-              <div><div style={refBlkK}>Composition</div><div style={refBlkV}>{ref?.composition || '—'}</div></div>
-              <div style={{ marginLeft: 'auto', alignSelf: 'center', fontSize: 9, color: FR.stone }}>🔒 by reference</div>
-            </div>
-            {/* EDITABLE worksheet row */}
-            <div style={{ padding: '11px 14px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-              <div style={{ border: `1px solid ${FR.sand}`, borderRadius: 5, padding: '7px 9px', background: FR.white }}>
-                <div style={fldK}>Cutting width</div>
-                <div style={fldV}>{postW != null ? postW : '—'} <small style={{ fontSize: 8.5, color: FR.stone }}>cm</small></div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px 9px' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
+                <span style={{ fontSize: 9, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700, color: rc }}>{entry.role || 'Fabric'}</span>
+                <span style={{ fontFamily: MONO, fontSize: 15, color: FR.slate }}>{ref?.name || ref?.code || '—'}</span>
+                {desc && <span style={{ fontSize: 10, color: FR.stone }}>{desc}</span>}
               </div>
-              <div style={{ border: `1px solid ${FR.sand}`, borderRadius: 5, padding: '7px 9px', background: FR.white }}>
-                <div style={fldK}>Cuttable width</div>
-                <div style={fldV}>{cut != null ? cut : '—'} <small style={{ fontSize: 8.5, color: FR.stone }}>cm · −{(entry.selvageCm != null && entry.selvageCm !== '') ? entry.selvageCm : SELVAGE_CM} selvage</small></div>
+              <span style={{ fontSize: 9, color: FR.stone }}>🔒 from fabric library</span>
+            </div>
+
+            {/* body: left = schedule + shrink, right = marker + yield */}
+            <div style={{ padding: '0 14px 13px', display: 'grid', gridTemplateColumns: '1fr 200px', gap: 16 }}>
+              {/* ── LEFT ── */}
+              <div>
+                <div style={blkLab}>Shrink schedule — when do we shrink it?</div>
+
+                {/* Stage 1 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 10, color: FR.slate, minWidth: 130 }}>
+                    <b style={{ display: 'block', fontSize: 8, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>Stage 1 · before cutting</b>
+                    sets the roll width
+                  </div>
+                  <div style={segWrap}>
+                    {[['none', 'None'], ['hang', 'Hang dry'], ['tumble', 'Tumble dry']].map(([val, lbl]) => (
+                      <button key={val} style={segBtn(stage1 === val, false)}
+                        onClick={() => patchEntry(entry.fabricId, { shrinkStage1: val })}>{lbl}</button>
+                    ))}
+                  </div>
+                  <span style={{ marginLeft: 'auto', fontSize: 10, color: FR.stone, fontFamily: MONO }}>→ {fmtCm(rollW)} cm</span>
+                </div>
+
+                {/* Stage 2 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 10, color: FR.slate, minWidth: 130 }}>
+                    <b style={{ display: 'block', fontSize: 8, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>Stage 2 · during wash</b>
+                    shrinks the sewn garment
+                  </div>
+                  <div style={segWrap}>
+                    {[['none', 'None'], ['tumble', 'Tumble dry']].map(([val, lbl]) => (
+                      <button key={val} style={segBtn(stage2 === val, val === 'tumble')}
+                        onClick={() => patchEntry(entry.fabricId, { shrinkStage2: val })}>{lbl}</button>
+                    ))}
+                  </div>
+                  {stage2 === 'tumble' && m?.residual != null && (
+                    <span style={{ marginLeft: 'auto', fontSize: 10, color: FR.stone, fontFamily: MONO }}>residual {fmtPct(r1(m.residual))}</span>
+                  )}
+                </div>
+
+                {/* auto-on hint */}
+                {dyeOn && (entry.shrinkStage2 !== 'none' && entry.shrinkStage2 !== 'tumble') && (
+                  <div style={{ fontSize: 9.5, color: CUT_SOIL, background: 'rgba(133,79,11,0.06)', borderRadius: 5, padding: '5px 9px', marginBottom: 8 }}>
+                    ↑ auto-on: style uses <b>{dyeTreatment.name}</b> → tumble during wash.
+                  </div>
+                )}
+
+                {/* Roll width hero */}
+                <div style={{ background: FR.slate, color: FR.salt, borderRadius: 8, padding: '11px 13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                  <div>
+                    <div style={{ fontSize: 9, letterSpacing: 0.5, textTransform: 'uppercase', color: FR.sand }}>Create the cutting plan at</div>
+                    <div style={{ fontSize: 24, fontFamily: MONO, fontWeight: 600 }}>{fmtCm(rollW)} cm</div>
+                  </div>
+                  <div style={{ fontSize: 9, color: FR.sand, opacity: 0.85, textAlign: 'right', maxWidth: 150 }}>{stage1Src}</div>
+                </div>
+
+                {/* Predicted shrinkage (ASSUMED) */}
+                <div style={blkLab}>
+                  Predicted shrinkage <span style={pillAssumed}>assumed</span>
+                  {modelValid === true && <span style={pillValid}>✓ model valid</span>}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7 }}>
+                  <div style={{ border: `1px solid ${FR.sand}`, borderRadius: 6, padding: '7px 9px', background: FR.salt }}>
+                    <div style={{ fontSize: 8, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 }}>Hang weft</div>
+                    <div style={{ fontSize: 14, fontFamily: MONO, marginTop: 2 }}>{m?.tumble.weftShrinkHang != null ? <>{m.tumble.weftShrinkHang}<small style={{ fontSize: 8.5, color: FR.stone }}>%</small></> : <span style={{ color: FR.stone }}>—</span>}</div>
+                  </div>
+                  <div style={{ border: `1px solid ${FR.sand}`, borderRadius: 6, padding: '7px 9px', background: FR.salt }}>
+                    <div style={{ fontSize: 8, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 }}>Tumble weft</div>
+                    {tumbleMissing ? (
+                      <>
+                        <div style={{ fontSize: 14, fontFamily: MONO, marginTop: 2, color: FR.stone }}>—</div>
+                        <div style={{ fontSize: 7, color: CUT_SOIL, marginTop: 1 }}>enter tumble GSM in library</div>
+                      </>
+                    ) : (
+                      <div style={{ fontSize: 14, fontFamily: MONO, marginTop: 2 }}>{m?.tumble.weftShrinkTumble != null ? <>{m.tumble.weftShrinkTumble}<small style={{ fontSize: 8.5, color: FR.stone }}>%</small></> : <span style={{ color: FR.stone }}>—</span>}</div>
+                    )}
+                  </div>
+                  <div style={{ border: `1px solid ${FR.sand}`, borderRadius: 6, padding: '7px 9px', background: FR.salt }}>
+                    <div style={{ fontSize: 8, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 }}>Residual h→t</div>
+                    <div style={{ fontSize: 14, fontFamily: MONO, marginTop: 2 }}>{m?.assumedResidual != null ? <>{m.assumedResidual}<small style={{ fontSize: 8.5, color: FR.stone }}>%</small></> : <span style={{ color: FR.stone }}>—</span>}</div>
+                  </div>
+                </div>
               </div>
-              <div style={{ border: `1px solid ${FR.sand}`, borderRadius: 5, padding: '7px 9px', background: 'rgba(133,79,11,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={fldK}>Cut yield</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+
+              {/* ── RIGHT: marker + yield ── */}
+              <div>
+                <div style={blkLab}>Marker · A4</div>
+                <AspectPhoto
+                  slotKey={`cutting-marker-${entry.fabricId}`}
+                  aspect={ASPECTS.A4_PORTRAIT}
+                  images={images}
+                  onUpload={onUpload}
+                  onRemove={onRemove}
+                  flush
+                />
+                <div style={{ fontSize: 9, color: FR.stone, marginTop: 6, textAlign: 'center', lineHeight: 1.4 }}>
+                  Drop the layout screenshot — A4 portrait, the export shape{rollW != null ? ` · @ ${fmtCm(rollW)} cm` : ''}.
+                </div>
+
+                {/* Fabric yield */}
+                <div style={{ marginTop: 9, border: `1px solid ${FR.sand}`, borderRadius: 8, padding: '9px 11px', background: 'rgba(133,79,11,0.04)' }}>
+                  <div style={{ fontSize: 8, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 }}>Fabric yield</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginTop: 3 }}>
                     <input
                       type="number"
                       step="0.01"
@@ -2782,104 +2942,69 @@ export function StepPattern({ data, set, packId }) {
                       placeholder="m/unit"
                       onChange={e => {
                         const v = parseFloat(e.target.value);
-                        const arr = [...(data.pickedFabrics || [])];
-                        const idx = arr.findIndex(p => p?.fabricId === entry.fabricId);
-                        if (idx >= 0) {
-                          arr[idx] = { ...arr[idx], metersPerUnit: Number.isFinite(v) ? v : null, yieldIsActual: Number.isFinite(v) };
-                          set('pickedFabrics', arr);
-                        }
+                        patchEntry(entry.fabricId, { metersPerUnit: Number.isFinite(v) ? v : null, yieldIsActual: Number.isFinite(v) });
                       }}
-                      style={{ width: 58, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '4px 6px', fontSize: 13, fontFamily: 'ui-monospace, Menlo, monospace', color: FR.slate, background: FR.white, outline: 'none' }}
+                      style={{ width: 56, padding: '4px 6px', border: `1px solid ${FR.sand}`, borderRadius: 4, fontSize: 16, fontFamily: MONO, color: FR.slate, background: FR.white, outline: 'none' }}
                     />
-                    <small style={{ fontSize: 8.5, color: FR.stone }}>m/unit</small>
+                    <small style={{ fontSize: 9, color: FR.stone }}>m/unit</small>
+                  </div>
+                  <div style={{ fontSize: 8.5, color: FR.stone, marginTop: 5, lineHeight: 1.4 }}>
+                    ↳ backs into the fabric price we negotiate{Number.isFinite(baseYield) ? '' : ' — enter the marker yield'}
                   </div>
                 </div>
-                <span style={pillProv}>prov</span>
               </div>
             </div>
-            {/* combined upscale line — dye on only */}
-            {dyeOn && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 9.5, color: FR.soil, background: 'rgba(133,79,11,0.06)', padding: '6px 14px' }}>
-                ↑ + dye residual {fmtPct(dyeAdd)}
-                {combinedYield != null ? ` → cut yield ${combinedYield} m/unit` : ''} · factory applies on the marker
+
+            {/* Net vs cut — only when stage 2 = tumble */}
+            {stage2 === 'tumble' && m?.cutBigger != null && (
+              <div style={{ background: FR.white, borderTop: `1px solid ${FR.sand}`, padding: '9px 14px', fontSize: 10, color: FR.stone, display: 'flex', alignItems: 'center', gap: 8 }}>
+                Net vs cut: tumbles in {dyeOn ? 'dye' : 'wash'} → cut bigger by <b style={{ color: FR.slate, fontFamily: MONO }}>1 ÷ (1 − {r1((m.residual || 0) / 100)})</b> = <span style={{ color: CUT_SOIL, fontWeight: 600 }}>+{m.cutBigger}%</span> · factory applies on the marker.
               </div>
             )}
-          </div>
-        );
-      })}
 
-      {/* ── Nap / grain & net-vs-cut ── */}
-      {pickedWithFabric.length > 0 && (
-        <>
-          <div style={{ marginTop: 6 }}>
-            <Input label="Nap / Grain Note" value={data.napGrain} onChange={v => set('napGrain', v)}
-              placeholder="e.g. Napped back (brushed) — one-way nap. All body pieces laid in the same direction." />
-          </div>
-          <div style={{ background: FR.white, border: `0.5px solid rgba(58,58,58,0.15)`, borderLeft: `3px solid ${FR.soil}`, borderRadius: 6, padding: '11px 13px', marginTop: 10 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 3 }}>Net vs cut — pieces are cut bigger than finished</div>
-            <p style={{ margin: 0, fontSize: 11, lineHeight: 1.5, color: FR.stone }}>
-              Pieces are cut bigger than finished. Upscale <b style={{ color: FR.slate }}>+{fmtPct(bodyRef?.shrinkWarp)} L / +{fmtPct(bodyRef?.shrinkWeft)} W</b>
-              {bodyRef?.name ? ` (from ${bodyRef.name}'s raw shrinkage)` : ''}. <span style={{ color: FR.soil, fontWeight: 600 }}>Applied by the factory</span> on the marker.
-            </p>
-          </div>
-        </>
-      )}
-
-      {/* ── Garment-dye layer — only when a wash/dye treatment is referenced ── */}
-      {dyeOn && (
-        <div style={{ background: FR.white, border: `0.5px solid rgba(58,58,58,0.15)`, borderTop: `3px solid ${FR.soil}`, borderRadius: 8, padding: 14, margin: '12px 0 14px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: FR.soil }} />
-            <div style={{ fontSize: 12, fontWeight: 600 }}>Garment dye — extra cutting allowance <span style={{ fontWeight: 400, color: FR.stone }}>· keyed to the treatment atom</span></div>
-          </div>
-          <p style={{ fontSize: 12, lineHeight: 1.5, margin: '0 0 12px' }}>
-            This style gets <b>{dyeTreatment.name}</b> <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 10, color: FR.stone }}>({dyeTreatment.code})</span>. Cut pieces bigger for extra shrinkage.
-          </p>
-          <div style={{ fontSize: 9, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 600, marginBottom: 6 }}>
-            Residual shrinkage from the dye (cut → finished) — separate from the fabric's pre→post-wash number
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-            <div style={{ border: `1px solid ${FR.sand}`, borderRadius: 6, padding: '9px 11px', background: FR.salt }}>
-              <div style={{ fontSize: 8.5, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 600, marginBottom: 4 }}>Assumed</div>
-              <div style={{ fontSize: 23, fontFamily: 'ui-monospace, Menlo, monospace', lineHeight: 1 }}>{fmtPct(assumedPct)}</div>
-              <div style={{ fontSize: 9, color: FR.stone, marginTop: 4 }}>default from treatment atom</div>
-            </div>
-            <div style={{ border: `1px solid ${FR.sand}`, borderRadius: 6, padding: '9px 11px', background: FR.white }}>
-              <div style={{ fontSize: 8.5, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 600, marginBottom: 4 }}>Actual</div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+            {/* Actual override (optional) */}
+            <div style={{ margin: '0 14px 12px', border: `1px dashed ${FR.sand}`, borderRadius: 7, padding: '8px 11px', fontSize: 10, color: FR.stone, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <span>Actual shrinkage from the factory's PP test — overrides assumed, flips the tag to <b style={{ color: FR.slate }}>confirmed</b>.</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <input
                   type="number"
                   step="0.1"
                   min="0"
                   max="30"
-                  value={data.dyeResidualActualPct ?? ''}
-                  placeholder="—"
-                  onChange={e => set('dyeResidualActualPct', e.target.value)}
-                  style={{ width: 64, border: `0.5px solid ${FR.sand}`, borderRadius: 4, padding: '4px 6px', fontSize: 20, fontFamily: 'ui-monospace, Menlo, monospace', color: FR.slate, background: FR.white, outline: 'none' }}
+                  value={entry.shrinkActualResidualPct ?? ''}
+                  placeholder="enter actual"
+                  onChange={e => patchEntry(entry.fabricId, { shrinkActualResidualPct: e.target.value })}
+                  style={{ width: 70, padding: '4px 6px', border: `1px solid ${FR.sand}`, borderRadius: 4, fontSize: 12, fontFamily: MONO, color: FR.slate, background: FR.white, outline: 'none' }}
                 />
-                <span style={{ fontSize: 16, fontFamily: 'ui-monospace, Menlo, monospace', color: FR.stone }}>%</span>
+                <span style={{ fontSize: 11, color: FR.stone, fontFamily: MONO }}>%</span>
+                {actualSet && <span style={pillConfirmed}>confirmed</span>}
               </div>
-              <div style={{ fontSize: 9, color: FR.stone, marginTop: 4 }}>measured on the PP test</div>
             </div>
           </div>
-          {actualPct != null && assumedPct != null && (
-            dyeHotter ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, background: 'rgba(133,79,11,0.07)', borderRadius: 6, padding: '8px 11px' }}>
-                <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: 5, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, background: 'rgba(133,79,11,0.14)', color: '#854F0B' }}>re-cut</span>
-                Actual runs <b style={{ margin: '0 3px' }}>{Math.round((actualPct - assumedPct) * 10) / 10} pt</b> hotter than assumed — bump the marker upscale before bulk.
-              </div>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, background: 'rgba(58,58,58,0.04)', borderRadius: 6, padding: '8px 11px', color: FR.stone }}>
-                <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: 5, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, background: 'rgba(99,153,34,0.14)', color: '#3B6D11' }}>on plan</span>
-                Actual is in line with assumed — the planned marker upscale holds.
-              </div>
-            )
-          )}
+        );
+      })}
+
+      {/* ── Whole-plan attachments (secondary) ── */}
+      {pickedWithFabric.length > 0 && (
+        <div style={{ marginTop: 6 }}>
+          <Input label="Nap / Grain Note" value={data.napGrain} onChange={v => set('napGrain', v)}
+            placeholder="e.g. Napped back (brushed) — one-way nap. All body pieces laid in the same direction." />
         </div>
       )}
 
       <Input label="Cutting Instructions" value={data.cuttingInstructions} onChange={v => set('cuttingInstructions', v)} multiline
         placeholder="Marker plan, nap direction, utilisation target, shrinkage allowance…" />
+
+      <div style={secLabel}>Cutting plan <span style={lk}>PDF or image</span></div>
+      <div style={{ fontSize: 11, color: FR.stone, marginBottom: 8, lineHeight: 1.5 }}>
+        Save the whole cutting plan as a PDF (image still accepted). It rides along in the exported tech pack, alongside the per-fabric markers above.
+      </div>
+      <FilesPanel
+        attachments={cuttingPlanFiles}
+        packId={packId}
+        onAdd={(ref) => set('cuttingPlanFiles', [...cuttingPlanFiles, ref])}
+        onRemove={(i) => set('cuttingPlanFiles', cuttingPlanFiles.filter((_, idx) => idx !== i))}
+      />
     </div>
   );
 }

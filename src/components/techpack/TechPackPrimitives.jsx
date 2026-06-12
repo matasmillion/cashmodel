@@ -110,6 +110,7 @@ export async function entryToDataUrl(image) {
 //   2:3 portrait → photos (product shots, swatches, references, renders).
 export const ASPECTS = {
   A4_LANDSCAPE:   { ratio: 297 / 210, label: 'A4 · 297 × 210 mm',      shortLabel: 'A4 landscape' },
+  A4_PORTRAIT:    { ratio: 210 / 297, label: 'A4 · 210×297 portrait',  shortLabel: 'A4 portrait' },
   TWO_THIRDS:     { ratio: 2 / 3,     label: '2:3 · portrait photo',    shortLabel: '2:3 portrait' },
   LANDSCAPE_3_2:  { ratio: 3 / 2,     label: '3:2 · landscape reference', shortLabel: '3:2 landscape' },
 };

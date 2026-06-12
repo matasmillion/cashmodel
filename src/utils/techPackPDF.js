@@ -732,83 +732,87 @@ export async function generateTechPackPDF(pack) {
   drawStitchingPage('Sewing (1)', 10, [1, 2, 3, 4], 0, 'page1');
   drawStitchingPage('Sewing (2)', 11, [5, 6, 7, 8], 4, 'page2');
 
-  // ─── Cut & Sew → Cutting (Variant B — cutting plan + fabrics & cutting) ───
+  // ─── Cut & Sew → Cutting (standard columns table + A4-portrait markers) ───
+  // Reads the denormalized entry.cuttingRef cached by the Cutting step — the
+  // two-stage cutting model: pre-shrink the roll, cut at the roll width, then
+  // what shrinks the sewn garment (and the marker upscale to compensate).
   newPage('Cutting', null, 13);
   y = 28;
 
-  // Cutting Plan — list the attached source documents (filename + type).
-  sectionHeading('Cutting Plan', y);
-  y += 8;
-  const cutPlanFiles = (d.cuttingPlanFiles || []).filter(f => f && f.name);
-  if (cutPlanFiles.length) {
-    cutPlanFiles.forEach((f) => {
-      const kind = (f.type || '').split('/').pop()?.toUpperCase() || 'FILE';
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(...hex(FR.slate));
-      doc.text(`• ${f.name}  (${kind})`, 12, y);
-      y += 6;
-    });
-  } else {
-    doc.setFont('helvetica', 'italic');
-    doc.setFontSize(9);
-    doc.setTextColor(...hex(FR.stone));
-    doc.text('— none attached', 12, y);
-    doc.setFont('helvetica', 'normal');
-    y += 6;
-  }
-  y += 6;
-
-  // Fabrics & Cutting — post-wash width, cuttable, raw shrink, yield (from
-  // the denormalized entry.cuttingRef cached by the Cutting step).
-  const SELVAGE = 2;
-  const cutRows = (d.pickedFabrics || [])
-    .filter(p => p?.fabricId)
-    .map(p => {
-      const ref = p.cuttingRef || {};
-      const postW = ref.postWidthCm;
-      const sel = (p.selvageCm != null && p.selvageCm !== '') ? parseFloat(p.selvageCm) : SELVAGE;
-      const cut = (postW != null && Number.isFinite(postW)) ? (Math.round((postW - sel) * 10) / 10) : null;
-      const shrink = (ref.shrinkWarpPct != null || ref.shrinkWeftPct != null)
-        ? `${ref.shrinkWarpPct != null ? ref.shrinkWarpPct + '%' : '—'} / ${ref.shrinkWeftPct != null ? ref.shrinkWeftPct + '%' : '—'}`
-        : '—';
-      const area = ref.name ? `${p.role || '—'} · ${ref.name}` : (p.role || '—');
-      return [
-        area,
-        postW != null ? `${postW} cm` : '—',
-        cut != null ? `${cut} cm` : '—',
-        shrink,
-        p.metersPerUnit != null ? `${p.metersPerUnit} m` : '— TBD',
-      ];
-    });
+  const cutPicked = (d.pickedFabrics || []).filter(p => p?.fabricId);
+  const cutRows = cutPicked.map(p => {
+    const ref = p.cuttingRef || {};
+    const roll = ref.rollWidthCm;
+    const before = ref.preShrinkLabel || (ref.stage1 === 'hang' ? 'Hang-dry the roll' : ref.stage1 === 'tumble' ? 'Tumble-dry the roll' : 'No pre-shrink');
+    const after = ref.stage2 === 'tumble'
+      ? (ref.treatmentName ? `Tumble-dried during ${ref.treatmentName} (after sewing)` : 'Tumble-dried during wash (after sewing)')
+      : 'None — size final at cut';
+    const bigger = (ref.stage2 === 'tumble' && ref.cutBiggerPct != null) ? `+${ref.cutBiggerPct}%` : '—';
+    const fab = ref.name ? `${p.role || '—'} · ${ref.name}` : (p.role || '—');
+    return [
+      fab,
+      before,
+      roll != null ? `${Math.round(roll * 10) / 10} cm` : '—',
+      after,
+      bigger,
+      p.metersPerUnit != null ? `${p.metersPerUnit} m` : '— TBD',
+    ];
+  });
   if (cutRows.length) {
     sectionHeading('Fabrics & Cutting', y);
     y += 8;
-    y = table(['Area', 'Post-wash W', 'Cuttable', 'Raw shrink', 'Yield'], cutRows, 10, y, [70, 35, 35, 50, 87]);
+    y = table(
+      ['Fabric', 'Before cut', 'Cut at', 'After cut', 'Cut bigger', 'Yield'],
+      cutRows, 10, y, [62, 42, 28, 78, 28, 39]
+    );
     y += 8;
-  }
-
-  // Garment dye — cut bigger (only when a dye treatment was detected).
-  if (d.dyeCuttingRef) {
-    const dr = d.dyeCuttingRef;
-    sectionHeading('Garment Dye — cut bigger', y);
+  } else {
+    sectionHeading('Fabrics & Cutting', y);
     y += 8;
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('helvetica', 'italic');
     doc.setFontSize(9);
-    doc.setTextColor(...hex(FR.slate));
-    const nameLine = `${dr.name || '—'}${dr.code ? ` (${dr.code})` : ''}`;
-    doc.text(nameLine, 12, y); y += 5;
-    const assumed = dr.assumedPct != null ? `${dr.assumedPct}%` : '—';
-    const actual = (d.dyeResidualActualPct === '' || d.dyeResidualActualPct == null) ? '—' : `${d.dyeResidualActualPct}%`;
-    doc.text(`residual shrink (cut→finished): assumed ${assumed} · actual ${actual}`, 12, y);
-    y += 9;
+    doc.setTextColor(...hex(FR.stone));
+    doc.text('— no fabrics picked', 12, y);
+    doc.setFont('helvetica', 'normal');
+    y += 10;
   }
 
-  // Cutting Notes (+ optional nap/grain).
-  field('Cutting Notes', d.cuttingNotes || d.cuttingInstructions, 10, y);
-  if (d.napGrain) {
-    field('Nap / Grain', d.napGrain, 10, y + 16);
+  // Pattern markers — per-fabric A4-portrait sheets, up to 3 across, captioned
+  // with role / fabric / roll width.
+  if (cutPicked.length) {
+    sectionHeading('Pattern Markers', y);
+    y += 6;
+    const mkTop = y;
+    const cols = 3;
+    const margin = 10;
+    const gap = 12;
+    // A4 portrait ratio 210/297; pick a height that fits the remaining page.
+    const availW = W - margin * 2;
+    const mkW = Math.min(48, (availW - gap * (cols - 1)) / cols);
+    const mkH = mkW * (297 / 210);
+    cutPicked.slice(0, 3).forEach((p, idx) => {
+      const ref = p.cuttingRef || {};
+      const x = margin + (idx % cols) * (mkW + gap);
+      const cy = mkTop + Math.floor(idx / cols) * (mkH + 16);
+      addImage(`cutting-marker-${p.fabricId}`, x, cy, mkW, mkH);
+      // caption
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(...hex(FR.soil));
+      doc.text((p.role || 'Fabric').toUpperCase(), x, cy + mkH + 4);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(...hex(FR.slate));
+      const roll = ref.rollWidthCm;
+      const cap = `${ref.name || ref.code || '—'}${roll != null ? `  @ ${Math.round(roll * 10) / 10} cm` : ''}`;
+      doc.text(cap, x, cy + mkH + 8);
+    });
+    y = mkTop + mkH + 14;
   }
+
+  // Short Cutting Notes line (nap/grain + free-text notes).
+  const cutNote = [d.napGrain, d.cuttingNotes || d.cuttingInstructions].filter(Boolean).join('  ·  ');
+  if (cutNote) field('Cutting Notes', cutNote, 10, Math.min(y, H - 16));
 
   // ─── Cut & Sew → Points of Measure ───
   newPage('Points of Measure (cm)', null, 14);
