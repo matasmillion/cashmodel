@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Cut &amp; Sew Cost — internal page (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --slate:#3A3A3A; --salt:#F5F0E8; --sand:#EBE5D5; --stone:#716F70;
+    --soil:#9A816B; --white:#fff; --amber:#854F0B; --green:#3B6D11;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:#cfc9bd;font-family:'Helvetica Neue',Arial,sans-serif;padding:28px;display:flex;flex-direction:column;align-items:center;gap:14px;}
+  .cap{font-size:12px;font-weight:600;letter-spacing:.4px;color:#5b574d;}
+  /* A4 landscape page, same proportions as the other tech-pack pages */
+  .page{width:1123px;height:794px;background:var(--salt);border-radius:6px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.18);position:relative;}
+  /* ── header bar ── */
+  .bar{height:64px;background:var(--slate);color:var(--salt);display:flex;align-items:center;justify-content:space-between;padding:0 26px;}
+  .bar .l b{font-size:11px;letter-spacing:1.5px;font-weight:600;display:block;}
+  .bar .l span{font-size:9px;letter-spacing:1.5px;color:#b9b3a6;}
+  .bar .c{font-family:'Cormorant Garamond',Georgia,serif;font-size:22px;letter-spacing:.5px;}
+  .bar .r{text-align:right;}
+  .bar .r b{font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:1px;display:block;}
+  .bar .r span{font-size:9px;letter-spacing:1.5px;color:#b9b3a6;}
+  /* ── info strip ── */
+  .strip{display:flex;background:var(--sand);border-bottom:.5px solid rgba(58,58,58,.15);}
+  .strip .cell{flex:1;padding:9px 18px;border-right:.5px solid rgba(58,58,58,.10);}
+  .strip .cell:last-child{border-right:none;}
+  .strip .k{font-size:8px;letter-spacing:1px;color:var(--soil);text-transform:uppercase;font-weight:600;}
+  .strip .v{font-size:12px;color:var(--slate);margin-top:3px;font-family:ui-monospace,Menlo,monospace;}
+  /* ── body ── */
+  .body{padding:20px 26px;}
+  .internal{display:flex;align-items:center;gap:9px;border:.5px solid rgba(133,79,11,.45);background:rgba(133,79,11,.06);border-radius:6px;padding:8px 14px;margin-bottom:18px;}
+  .internal .dot{width:8px;height:8px;border-radius:50%;background:var(--amber);}
+  .internal .t{font-size:11px;color:var(--amber);font-weight:600;letter-spacing:.3px;}
+  .internal .t span{font-weight:400;color:#7a6a4a;}
+  /* hero cost card */
+  .hero{display:flex;gap:0;background:var(--white);border:.5px solid rgba(58,58,58,.15);border-radius:8px;overflow:hidden;margin-bottom:18px;}
+  .hero .num{width:330px;padding:22px 26px;border-right:.5px solid rgba(58,58,58,.12);}
+  .hero .num .lab{font-size:9px;letter-spacing:1px;color:var(--stone);text-transform:uppercase;font-weight:600;}
+  .hero .num .big{font-size:46px;font-weight:500;color:var(--slate);line-height:1.05;margin-top:8px;letter-spacing:-1px;}
+  .hero .num .sub{font-size:12px;color:var(--stone);margin-top:2px;}
+  .hero .num .src{font-size:9px;letter-spacing:1px;color:var(--soil);text-transform:uppercase;font-weight:600;margin-top:16px;}
+  .hero .num .vend{font-size:11px;color:var(--slate);margin-top:5px;line-height:1.5;}
+  .hero .num .ts{font-size:10px;color:var(--stone);margin-top:6px;font-style:italic;}
+  .hero .reason{flex:1;padding:22px 26px;}
+  .hero .reason .lab{font-size:9px;letter-spacing:1px;color:var(--stone);text-transform:uppercase;font-weight:600;margin-bottom:9px;}
+  .hero .reason p{font-size:12.5px;line-height:1.65;color:var(--slate);margin:0 0 10px;}
+  .hero .reason p.ctx{color:var(--stone);font-size:11.5px;margin:0;}
+  /* "reads from 07-10" recap */
+  .recap-h{font-family:'Cormorant Garamond',Georgia,serif;font-size:17px;color:var(--slate);margin:0 0 4px;}
+  .recap-s{font-size:11px;color:var(--stone);font-style:italic;margin:0 0 12px;}
+  .recap{display:flex;gap:16px;}
+  .col{flex:1;background:var(--white);border:.5px solid rgba(58,58,58,.15);border-radius:8px;padding:14px 16px;}
+  .col .hd{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;}
+  .col .hd .name{font-size:10px;letter-spacing:.8px;font-weight:700;color:var(--soil);text-transform:uppercase;}
+  .col .hd .pages{font-size:9px;color:var(--stone);font-family:ui-monospace,Menlo,monospace;}
+  .col .hd .ct{font-size:12px;color:var(--slate);font-weight:600;}
+  .row{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:.5px solid var(--sand);font-size:11.5px;color:var(--slate);}
+  .row:last-child{border-bottom:none;}
+  .badge{width:16px;height:16px;border-radius:50%;background:#A32D2D;color:#fff;font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
+  .row .nm{flex:1;}
+  .row .meta{font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--stone);}
+  /* footer */
+  .foot{position:absolute;bottom:0;left:0;right:0;height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;border-top:.5px solid rgba(58,58,58,.12);font-size:9px;color:var(--stone);letter-spacing:.5px;}
+  .foot .ri{color:var(--amber);font-weight:600;}
+</style>
+</head>
+<body>
+  <div class="cap">MOCKUP · new page “Cut &amp; Sew Cost” — what the LIVE PREVIEW pane shows (internal-only, never exported)</div>
+  <div class="page">
+    <!-- header -->
+    <div class="bar">
+      <div class="l"><b>FOREIGN RESOURCE CO.</b><span>CUT &amp; SEW</span></div>
+      <div class="c">Cut &amp; Sew Cost</div>
+      <div class="r"><b>FW26-BB-ZH-0001</b><span>PAGE 11 / 25</span></div>
+    </div>
+    <!-- info strip -->
+    <div class="strip">
+      <div class="cell"><div class="k">Style #</div><div class="v">FW26-BB-ZH-0001</div></div>
+      <div class="cell"><div class="k">Collection</div><div class="v">Borderless Basics</div></div>
+      <div class="cell"><div class="k">Season</div><div class="v">FW26</div></div>
+      <div class="cell"><div class="k">Version</div><div class="v">V1.0</div></div>
+      <div class="cell"><div class="k">Colorway</div><div class="v">Slate</div></div>
+      <div class="cell"><div class="k">Size Range</div><div class="v">S / M / L / XL</div></div>
+    </div>
+
+    <div class="body">
+      <!-- internal marker -->
+      <div class="internal">
+        <span class="dot"></span>
+        <div class="t">INTERNAL — Cut &amp; Sew labor cost. <span>For your eyes only · left out of the exported factory tech pack.</span></div>
+      </div>
+
+      <!-- hero cost -->
+      <div class="hero">
+        <div class="num">
+          <div class="lab">Estimated Cut &amp; Sew labor</div>
+          <div class="big">$5.00</div>
+          <div class="sub">per garment · best-case range $5.00–$6.00</div>
+          <div class="src">via Regional CMT Benchmark</div>
+          <div class="vend">Dongguan Shengde Clothing Ltd.<br/>Humen Town, Guangdong, China</div>
+          <div class="ts">Generated 6/12/2026, 9:57 AM</div>
+        </div>
+        <div class="reason">
+          <div class="lab">How the AI got here</div>
+          <p>Coastal-Guangdong zip-up hoodie CMT benchmark is $5.00–$8.00. The construction is standard (welt pocket, neck tape, zipper, coverstitch hem) and the sewing is all 2-needle coverstitch / overlock at 12 SPI — no upward complexity adjustment is warranted, so this lands at the low end, ~$5.00.</p>
+          <p class="ctx">CMT-only — conversion labor (cutting, sewing, finishing, packing, factory overhead). Excludes fabric, trims, treatments, embellishments and vendor markup % — those roll up on their own pages so they aren’t double-counted here.</p>
+        </div>
+      </div>
+
+      <!-- reads from 07-10 -->
+      <p class="recap-h">What this estimate reads</p>
+      <p class="recap-s">The AI pulls the live specs off pages 07–10 — change a call-out or a stitch row and re-run to update the number.</p>
+      <div class="recap">
+        <div class="col">
+          <div class="hd"><div class="name">Construction call-outs</div><div class="pages">PAGES 07–08</div><div class="ct">8</div></div>
+          <div class="row"><span class="badge">1</span><span class="nm">Welt Pocket</span><span class="meta">bar tacks</span></div>
+          <div class="row"><span class="badge">2</span><span class="nm">Neck Tape</span><span class="meta">clean finish</span></div>
+          <div class="row"><span class="badge">3</span><span class="nm">Zipper</span><span class="meta">YKK #5</span></div>
+          <div class="row"><span class="badge">4</span><span class="nm">Coverstitch Hem</span><span class="meta">2-needle</span></div>
+          <div class="row"><span class="badge">5</span><span class="nm">Kangaroo Pocket</span><span class="meta">topstitch</span></div>
+          <div class="row"><span class="badge">6</span><span class="nm">Drawcord Eyelets</span><span class="meta">metal</span></div>
+        </div>
+        <div class="col">
+          <div class="hd"><div class="name">Stitch operations</div><div class="pages">PAGES 09–10</div><div class="ct">8</div></div>
+          <div class="row"><span class="badge">1</span><span class="nm">Neckline</span><span class="meta">406 · 12 SPI</span></div>
+          <div class="row"><span class="badge">2</span><span class="nm">Hoodie Seam</span><span class="meta">406 · 12 SPI</span></div>
+          <div class="row"><span class="badge">3</span><span class="nm">Shoulder Seam</span><span class="meta">504 · 12 SPI</span></div>
+          <div class="row"><span class="badge">4</span><span class="nm">Sleeve Hem</span><span class="meta">406 · 12 SPI</span></div>
+          <div class="row"><span class="badge">5</span><span class="nm">Side Seam</span><span class="meta">504 · 12 SPI</span></div>
+          <div class="row"><span class="badge">6</span><span class="nm">Pocket Attach</span><span class="meta">301 · 12 SPI</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="foot">
+      <div>© 2026 Foreign Resource Co. — Confidential Tech Pack</div>
+      <div class="ri">INTERNAL — NOT EXPORTED · PAGE 11 / 25</div>
+    </div>
+  </div>
+</body>
+</html>
