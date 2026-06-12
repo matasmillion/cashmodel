@@ -829,7 +829,48 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     onBack();
   }, [saveNow, saving, onBack]);
 
-  const set = useCallback((k, v) => setData(p => ({ ...p, [k]: v })), []);
+  // ── Undo / redo ────────────────────────────────────────────────────────────
+  // Every user edit on the pages flows through set() below, so we snapshot the
+  // prior `data` there. Cmd/Ctrl+Z steps back; Cmd/Ctrl+Shift+Z (or Ctrl+Y)
+  // steps forward. Purely additive — saving and all other state are unchanged.
+  const dataRef = useRef(data);
+  useEffect(() => { dataRef.current = data; }, [data]);
+  const historyRef = useRef({ past: [], future: [] });
+  const recordHistory = useCallback(() => {
+    const h = historyRef.current;
+    h.past.push(dataRef.current);
+    if (h.past.length > 100) h.past.shift();
+    h.future = [];
+  }, []);
+  const undo = useCallback(() => {
+    const h = historyRef.current;
+    if (!h.past.length) return;
+    h.future.push(dataRef.current);
+    setData(h.past.pop());
+  }, []);
+  const redo = useCallback(() => {
+    const h = historyRef.current;
+    if (!h.future.length) return;
+    h.past.push(dataRef.current);
+    setData(h.future.pop());
+  }, []);
+
+  const set = useCallback((k, v) => { recordHistory(); setData(p => ({ ...p, [k]: v })); }, [recordHistory]);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const t = e.target;
+      const tag = (t?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || t?.isContentEditable) return; // leave native text undo alone
+      if (annoTarget) return; // the photo annotator owns the key while it's open
+      const k = e.key.toLowerCase();
+      if (k === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
+      else if (k === 'y') { e.preventDefault(); redo(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo, annoTarget]);
 
   // Async upload: insert a transient blob: placeholder so the slot renders
   // immediately, upload to Storage in the background, then atomically

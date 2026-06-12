@@ -65,7 +65,37 @@ export default function ImageAnnotator({ image, annos, onChange, onClose, title 
   const [selected, setSelected] = useState(null);
   const [editingId, setEditingId] = useState(null);
 
-  const commit = useCallback((next) => { setItems(next); onChange(next); }, [onChange]);
+  // Local undo / redo. committedRef holds the last saved marks; itemsRef tracks
+  // the live (possibly mid-drag) marks so gesture-ends can commit them.
+  const itemsRef = useRef(items);
+  useEffect(() => { itemsRef.current = items; }, [items]);
+  const committedRef = useRef(items);
+  const histRef = useRef({ past: [], future: [] });
+
+  // One funnel for every committed change — records history (unless nothing
+  // actually changed) and saves.
+  const commitItems = useCallback((next) => {
+    if (JSON.stringify(next) === JSON.stringify(committedRef.current)) { itemsRef.current = next; setItems(next); return; }
+    histRef.current.past.push(committedRef.current);
+    histRef.current.future = [];
+    committedRef.current = next;
+    itemsRef.current = next;
+    setItems(next);
+    onChange(next);
+  }, [onChange]);
+
+  const undo = useCallback(() => {
+    const h = histRef.current; if (!h.past.length) return;
+    const prev = h.past.pop(); h.future.push(committedRef.current);
+    committedRef.current = prev; itemsRef.current = prev;
+    setItems(prev.map(a => ({ ...a }))); setSelected(null); setEditingId(null); onChange(prev);
+  }, [onChange]);
+  const redo = useCallback(() => {
+    const h = histRef.current; if (!h.future.length) return;
+    const next = h.future.pop(); h.past.push(committedRef.current);
+    committedRef.current = next; itemsRef.current = next;
+    setItems(next.map(a => ({ ...a }))); setSelected(null); setEditingId(null); onChange(next);
+  }, [onChange]);
 
   const point = useCallback((e) => {
     const r = wrapRef.current?.getBoundingClientRect();
@@ -95,6 +125,7 @@ export default function ImageAnnotator({ image, annos, onChange, onClose, title 
         if (d.mode.includes('s')) { h = clamp01(Math.max(p.y, y + MIN)) - y; }
         next[idx] = { ...b, x, y, w, h };
       }
+      itemsRef.current = next;
       return next;
     });
   }, [point]);
@@ -102,8 +133,8 @@ export default function ImageAnnotator({ image, annos, onChange, onClose, title 
   const endDrag = useCallback(() => {
     if (!dragRef.current) return;
     dragRef.current = null;
-    setItems(cur => { onChange(cur); return cur; }); // commit the finished gesture
-  }, [onChange]);
+    commitItems(itemsRef.current); // commit the finished gesture (records history)
+  }, [commitItems]);
 
   useEffect(() => {
     window.addEventListener('pointermove', onMove);
@@ -124,14 +155,31 @@ export default function ImageAnnotator({ image, annos, onChange, onClose, title 
     dragRef.current = { mode: cid, id: it.id, box: { ...it } };
   };
 
-  const addBox  = () => { const b = newBox();  commit([...items, b]); setSelected(b.id); setEditingId(null); };
-  const addText = () => { const t = newText(); commit([...items, t]); setSelected(t.id); setEditingId(t.id); };
-  const removeItem = (id) => { commit(items.filter(it => it.id !== id)); if (selected === id) setSelected(null); if (editingId === id) setEditingId(null); };
-  const editText = (id, text) => setItems(prev => prev.map(it => it.id === id ? { ...it, text } : it));
-  const commitText = () => { setEditingId(null); setItems(cur => { onChange(cur); return cur; }); };
+  const addBox  = () => { const b = newBox();  commitItems([...itemsRef.current, b]); setSelected(b.id); setEditingId(null); };
+  const addText = () => { const t = newText(); commitItems([...itemsRef.current, t]); setSelected(t.id); setEditingId(t.id); };
+  const removeItem = (id) => { commitItems(itemsRef.current.filter(it => it.id !== id)); if (selected === id) setSelected(null); if (editingId === id) setEditingId(null); };
+  const editText = (id, text) => setItems(prev => { const next = prev.map(it => it.id === id ? { ...it, text } : it); itemsRef.current = next; return next; });
+  const commitText = () => { setEditingId(null); commitItems(itemsRef.current); };
+
+  // Keyboard: Cmd/Ctrl+Z undo, Cmd/Ctrl+Shift+Z (or Ctrl+Y) redo, Delete/
+  // Backspace removes the selected mark. While editing text, leave the keys to
+  // the input (native text undo / character delete).
+  useEffect(() => {
+    const onKey = (e) => {
+      const meta = e.metaKey || e.ctrlKey;
+      const tag = (e.target?.tagName || '').toLowerCase();
+      const inText = editingId != null || tag === 'input' || tag === 'textarea';
+      const k = e.key.toLowerCase();
+      if (meta && k === 'z' && !inText) { e.preventDefault(); e.stopPropagation(); if (e.shiftKey) redo(); else undo(); return; }
+      if (meta && k === 'y' && !inText) { e.preventDefault(); e.stopPropagation(); redo(); return; }
+      if (!inText && (e.key === 'Delete' || e.key === 'Backspace') && selected != null) { e.preventDefault(); removeItem(selected); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected, editingId, undo, redo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div onPointerDown={onClose}
+    <div onPointerDown={onClose} data-annotator="open"
       style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(58,58,58,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div onPointerDown={e => e.stopPropagation()}
         style={{ background: FR.salt, borderRadius: 10, padding: 18, width: 'min(92vw, 720px)', maxHeight: '92vh', overflow: 'auto', boxShadow: '0 18px 60px rgba(0,0,0,0.35)' }}>
@@ -187,7 +235,7 @@ export default function ImageAnnotator({ image, annos, onChange, onClose, title 
         <p style={{ fontSize: 10.5, color: FR.stone, marginTop: 8, fontStyle: 'italic' }}>
           <b style={{ color: RED }}>+ Box</b> draws a red rectangle — drag it to move, drag a corner to resize.&nbsp;
           <b style={{ color: RED }}>+ Text</b> adds red writing — drag to move, double-click to edit.&nbsp;
-          Select something, then × deletes it. <b>Done</b> closes and saves.
+          Select something, then <b>×</b> or <b>Delete</b> removes it. <b>⌘Z</b> undo · <b>⌘⇧Z</b> redo. <b>Done</b> closes and saves.
         </p>
       </div>
     </div>

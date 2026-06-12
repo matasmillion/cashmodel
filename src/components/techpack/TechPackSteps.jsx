@@ -2208,6 +2208,23 @@ export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, 
   // 2:3 portrait used by the two stacked references (strict 2:3 per operator).
   const REF_2x3 = { ratio: 2 / 3, label: 'Reference (2 : 3)', shortLabel: '2:3 reference' };
 
+  // Delete / Backspace clears the currently-armed (selected) dot — same as the
+  // chip's × button. Ignored while typing in a field or while the photo
+  // annotator modal is open (that owns the key for its own marks).
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      if (armed == null) return;
+      const tag = (e.target?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || e.target?.isContentEditable) return;
+      if (document.querySelector('[data-annotator="open"]')) return;
+      const entry = (entries || []).find(en => en.num === armed);
+      if (entry && entry.dot) { e.preventDefault(); onSetDot(armed, null); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [armed, entries, onSetDot]);
+
   // Re-open the crop modal on the already-uploaded reference so the operator
   // can reposition / zoom / crop it to the reference shape. Dots live on the
   // call-out entries (not the image), so re-cropping keeps every placed dot.
