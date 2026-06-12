@@ -874,10 +874,16 @@ function PageConstruction({ d, images, pageKey = 'page1' }) {
   const imgGap = 8;
   const dotR   = 11;
   const bandW  = cardW - pad * 2;
-  const imageH = Math.round((bandW - imgGap) / (CALLOUT_MAIN_RATIO + CALLOUT_SUPPORT_RATIO));
+  // Height-cap so the numbered title row below the image always fits inside the
+  // (shorter) stitch card — the spec table beneath leaves less vertical room
+  // than the Call Outs page. The main image then fills the leftover band width.
+  const imageH = Math.min(
+    Math.round((bandW - imgGap) / (CALLOUT_MAIN_RATIO + CALLOUT_SUPPORT_RATIO)),
+    cardH - 48,
+  );
 
   // Spec table below, one fixed row per stitch on this page (# = stitch number).
-  const tableY   = refY + refH + refLabel + 26;
+  const tableY   = refY + refH + refLabel + 40;
   const seamCols = [
     { key: 'num',        label: '#',           w: 28  },
     { key: 'operation',  label: 'Operation',   w: 150 },
@@ -920,8 +926,8 @@ function PageConstruction({ d, images, pageKey = 'page1' }) {
         const suppImg = imgs.find(im => im.slot === `seam-stitch-${n}-support`);
         const bandX = cx + pad;
         const bandY = cy + pad;
-        const mainW = suppImg ? CALLOUT_MAIN_RATIO * imageH : bandW;
         const supW  = CALLOUT_SUPPORT_RATIO * imageH;
+        const mainW = suppImg ? (bandW - imgGap - supW) : bandW;
         const titleY = bandY + imageH + 24;
         const numCx  = bandX + 11;
         const code   = (seams[n - 1] || {}).stitchType;
