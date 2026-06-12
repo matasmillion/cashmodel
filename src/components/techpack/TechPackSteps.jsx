@@ -1823,12 +1823,13 @@ function StitchCalloutCard({ num, label, code, images, onUpload, onRemove, onRen
 // fixed row per callout card, with a leading # that ties the row to its card
 // and its placed dot. No add/remove: the eight cards (4 per page) are fixed,
 // mirroring the Call Outs pages.
-function StitchSpecTableC({ seams, rowStart, count, onUpdateAt }) {
+function StitchSpecTableC({ seams, rowStart, count, onUpdateAt, seamNames = [] }) {
   const th = { textAlign: 'left', padding: '5px 6px', background: FR.slate, color: FR.salt, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', whiteSpace: 'nowrap' };
   const td = { padding: '3px 4px', borderBottom: `1px solid ${FR.sand}`, verticalAlign: 'middle' };
   const inp = { width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue', sans-serif", boxSizing: 'border-box' };
+  // The Seam column is the stitch's name — it mirrors the card title above and
+  // is not edited here (rename the stitch card to change it).
   const cols = [
-    { key: 'operation',  label: 'Operation',   ph: 'Side seam / Hem / Collar' },
     { key: 'seamType',   label: 'Seam Type',   ph: 'Flatlock / French seam' },
     { key: 'stitchType', label: 'Stitch Type', ph: '301 / 401 / 504' },
     { key: 'machine',    label: 'Machine',     ph: 'e.g. Juki MO-6814 overlock' },
@@ -1843,6 +1844,7 @@ function StitchSpecTableC({ seams, rowStart, count, onUpdateAt }) {
         <thead>
           <tr>
             <th style={{ ...th, width: 28, textAlign: 'center' }}>#</th>
+            <th style={th}>Seam</th>
             {cols.map(c => <th key={c.key} style={th}>{c.label}</th>)}
           </tr>
         </thead>
@@ -1850,9 +1852,15 @@ function StitchSpecTableC({ seams, rowStart, count, onUpdateAt }) {
           {Array.from({ length: count }).map((_, i) => {
             const gi = rowStart + i;
             const row = seams[gi] || {};
+            const name = seamNames[i] || '';
             return (
               <tr key={gi} style={{ background: i % 2 === 0 ? FR.salt : FR.white }}>
                 <td style={{ ...td, textAlign: 'center', fontFamily: 'ui-monospace, Menlo, monospace', color: FR.stone }}>{gi + 1}</td>
+                <td style={{ ...td, fontWeight: 600 }}>
+                  {name
+                    ? <span style={{ color: FR.slate }}>{name}</span>
+                    : <span style={{ color: FR.stone, fontStyle: 'italic', fontWeight: 400 }}>Name on the card</span>}
+                </td>
                 {cols.map(c => (
                   <td key={c.key} style={td}>
                     {c.color
@@ -1929,7 +1937,7 @@ function StitchingPageBody({ refSlot, nums, rowStart, tableCount, data, set, ima
 
       <div style={{ marginBottom: 10 }}>
         <label style={STITCH_SECTION_LABEL}>Seam &amp; Stitch Specification</label>
-        <StitchSpecTableC seams={seams} rowStart={rowStart} count={tableCount} onUpdateAt={onUpdateSeamAt} />
+        <StitchSpecTableC seams={seams} rowStart={rowStart} count={tableCount} onUpdateAt={onUpdateSeamAt} seamNames={entries.map(e => e.label || '')} />
       </div>
     </>
   );
@@ -2185,6 +2193,56 @@ export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, 
     window.addEventListener('pointerup', up);
   };
 
+  // Two-image mode: the dot layer is click-through (so the photos take uploads /
+  // recrops) until the operator clicks a number chip, which arms placement for a
+  // single click, then returns to normal so the photos stay editable.
+  const placeAtSplit = (e) => {
+    if (draggingRef.current) { draggingRef.current = false; return; }
+    if (armed == null) return;
+    onSetDot(armed, coordsFrom(e.clientX, e.clientY));
+    setArmed(null);
+  };
+  const startDragSplit = (num, e) => {
+    e.stopPropagation();
+    draggingRef.current = false;
+    const move = (ev) => { draggingRef.current = true; onSetDot(num, coordsFrom(ev.clientX, ev.clientY)); };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); setArmed(null); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  // Number chips — click to arm which call-out the next click drops, with a
+  // per-chip × to clear a placed dot. Shared by single- and two-image modes.
+  const numberChips = (
+    <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+      {entries.map(e => {
+        const active = armedNum === e.num;
+        const placed = !!e.dot;
+        return (
+          <button
+            key={e.num}
+            onClick={() => setArmed(e.num)}
+            title={placed ? `Call-out ${e.num} placed — click to re-arm` : `Click, then click the garment to place ${e.num}`}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 12,
+              border: `1px solid ${active ? '#A32D2D' : FR.sand}`,
+              background: active ? 'rgba(163,45,45,0.08)' : FR.white,
+              color: FR.slate, fontSize: 11, cursor: 'pointer', fontFamily: "'Helvetica Neue', sans-serif",
+            }}>
+            <span style={{ width: 14, height: 14, borderRadius: 7, background: placed ? '#A32D2D' : 'transparent', border: placed ? 'none' : `1.5px solid ${FR.stone}`, color: '#fff', fontSize: 9, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{placed ? e.num : ''}</span>
+            {!placed ? `Place ${e.num}` : `#${e.num}`}
+            {placed && (
+              <span
+                onClick={ev => { ev.stopPropagation(); onSetDot(e.num, null); }}
+                title="Clear this dot"
+                style={{ marginLeft: 2, color: FR.stone, fontSize: 13, lineHeight: 1 }}>×</span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>{label}</label>
@@ -2199,21 +2257,54 @@ export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, 
         </div>
       )}
       {splitMode ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {[{ slot: slotKey, ann: annotations, ttl: 'Reference (top)' }, { slot: slotKeyB, ann: annotationsB, ttl: 'Reference (bottom)' }].map(({ slot, ann, ttl }) => (
-            <div key={slot} style={{ width: '80%', margin: '0 auto' }}>
-              <AspectPhoto slotKey={slot} aspect={REF_2x3} images={images} onUpload={onUpload} onRemove={onRemove} label={undefined} />
-              {onAnnotate && (images || []).some(i => i.slot === slot) && (
-                <button onClick={() => onAnnotate(slot, ttl)} style={{ ...ANNOTATE_BTN, marginTop: -8 }}>
-                  <span style={{ color: '#A32D2D', fontWeight: 700 }}>+</span> Annotate{(ann && ann.length) ? ` (${ann.length})` : ''}
-                </button>
-              )}
+        <>
+          <div ref={boxRef} style={{ position: 'relative', width: '74%', margin: '0 auto', userSelect: 'none' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <AspectPhoto flush slotKey={slotKey}  aspect={REF_2x3} images={images} onUpload={onUpload} onRemove={onRemove} label={undefined} />
+              <AspectPhoto flush slotKey={slotKeyB} aspect={REF_2x3} images={images} onUpload={onUpload} onRemove={onRemove} label={undefined} />
             </div>
-          ))}
-          <p style={{ fontSize: 10, color: FR.stone, marginTop: 2, fontStyle: 'italic', textAlign: 'center' }}>
-            Two stacked 2:3 references — each can be cropped and annotated.
+            {/* dot layer over the whole stack: click-through unless a number is
+                armed (so the photos still take uploads / recrops); dots stay
+                draggable, and the coords are normalised to the stack so they
+                land in the same spot in the live preview. */}
+            <div
+              onClick={placeAtSplit}
+              style={{ position: 'absolute', inset: 0, pointerEvents: armed != null ? 'auto' : 'none', cursor: armed != null ? 'crosshair' : 'default' }}>
+              {entries.map(e => e.dot ? (
+                <div
+                  key={e.num}
+                  onPointerDown={ev => startDragSplit(e.num, ev)}
+                  title={`Call-out ${e.num} — drag to move`}
+                  style={{
+                    position: 'absolute', left: `${e.dot.x * 100}%`, top: `${e.dot.y * 100}%`,
+                    transform: 'translate(-50%, -50%)', width: 21, height: 21, borderRadius: '50%',
+                    background: '#A32D2D', color: '#fff', border: '1.5px solid #fff',
+                    fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'grab', boxShadow: '0 1px 4px rgba(0,0,0,0.28)', pointerEvents: 'auto',
+                    fontFamily: "'Helvetica Neue', sans-serif",
+                    outline: armedNum === e.num ? '2px solid rgba(163,45,45,0.35)' : 'none', outlineOffset: 1,
+                  }}>
+                  {e.num}
+                </div>
+              ) : null)}
+            </div>
+          </div>
+          {onAnnotate && (
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+              {[{ slot: slotKey, ann: annotations, ttl: 'Reference (top)', lbl: 'Annotate top' }, { slot: slotKeyB, ann: annotationsB, ttl: 'Reference (bottom)', lbl: 'Annotate bottom' }].map(({ slot, ann, ttl, lbl }) => (
+                (images || []).some(i => i.slot === slot) ? (
+                  <button key={slot} onClick={() => onAnnotate(slot, ttl)} style={ANNOTATE_BTN}>
+                    <span style={{ color: '#A32D2D', fontWeight: 700 }}>+</span> {lbl}{(ann && ann.length) ? ` (${ann.length})` : ''}
+                  </button>
+                ) : null
+              ))}
+            </div>
+          )}
+          {numberChips}
+          <p style={{ fontSize: 10, color: FR.stone, marginTop: 6, fontStyle: 'italic' }}>
+            Two stacked 2:3 references. Click a number, then click a photo to drop its dot; drag to fine-tune. Each photo can be cropped and annotated.
           </p>
-        </div>
+        </>
       ) : (
       <>
       {img ? (
@@ -2267,33 +2358,7 @@ export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, 
             </div>
           </div>
           {/* number chips: click to arm which dot the next click places */}
-          <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-            {entries.map(e => {
-              const active = armedNum === e.num;
-              const placed = !!e.dot;
-              return (
-                <button
-                  key={e.num}
-                  onClick={() => setArmed(e.num)}
-                  title={placed ? `Call-out ${e.num} placed — click to re-arm` : `Click, then click the garment to place ${e.num}`}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 12,
-                    border: `1px solid ${active ? '#A32D2D' : FR.sand}`,
-                    background: active ? 'rgba(163,45,45,0.08)' : FR.white,
-                    color: FR.slate, fontSize: 11, cursor: 'pointer', fontFamily: "'Helvetica Neue', sans-serif",
-                  }}>
-                  <span style={{ width: 14, height: 14, borderRadius: 7, background: placed ? '#A32D2D' : 'transparent', border: placed ? 'none' : `1.5px solid ${FR.stone}`, color: '#fff', fontSize: 9, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{placed ? e.num : ''}</span>
-                  {!placed ? `Place ${e.num}` : `#${e.num}`}
-                  {placed && (
-                    <span
-                      onClick={ev => { ev.stopPropagation(); onSetDot(e.num, null); }}
-                      title="Clear this dot"
-                      style={{ marginLeft: 2, color: FR.stone, fontSize: 13, lineHeight: 1 }}>×</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          {numberChips}
           <p style={{ fontSize: 10, color: FR.stone, marginTop: 6, fontStyle: 'italic' }}>
             Click a number, then click the garment to drop its dot. Drag a dot to fine-tune; × clears it.
           </p>

@@ -188,8 +188,9 @@ export async function generateTechPackPDF(pack) {
     }
   }
 
-  // Two stacked strict-2:3 reference images centred in the reference column.
-  function drawTwoRefs(baseSlot, x, y, w, h) {
+  // Two stacked strict-2:3 reference images centred in the reference column,
+  // plus the numbered dots (coords are 0..1 over the whole cellW × h stack).
+  function drawTwoRefs(baseSlot, x, y, w, h, dots = []) {
     const gap = 4;
     const cellH = (h - gap) / 2;
     const cellW = Math.round(cellH * (2 / 3));
@@ -207,6 +208,16 @@ export async function generateTechPackPDF(pack) {
         doc.setLineDashPattern([], 0);
       }
     });
+    (dots || []).forEach((dt) => {
+      const dx = cxx + dt.x * cellW;
+      const dy = y + dt.y * h;
+      doc.setFillColor(163, 45, 45);
+      doc.circle(dx, dy, 2.4, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6);
+      doc.text(String(dt.num), dx, dy + 0.9, { align: 'center' });
+    });
   }
 
   // Construction Details page renderer — 2:3 reference image on the left
@@ -222,7 +233,8 @@ export async function generateTechPackPDF(pack) {
     const refW = Math.round(refH * 0.44);       // CALLOUT_REF_RATIO — narrow portrait
     const refTwo = !!(d.referenceLayout && d.referenceLayout[`sketch-callout-${pageKey}`]);
     if (refTwo) {
-      drawTwoRefs(`sketch-callout-${pageKey}`, margin, top, refW, refH);
+      drawTwoRefs(`sketch-callout-${pageKey}`, margin, top, refW, refH,
+        (entries || []).filter(e => e.dot).map(e => ({ num: e.num, x: e.dot.x, y: e.dot.y })));
     } else {
     const callout = images.find(i => i.slot === `sketch-callout-${pageKey}`);
     if (callout) {
@@ -315,7 +327,8 @@ export async function generateTechPackPDF(pack) {
     const blockFor = (n) => blocks.find(b => b.num === n) || { num: n, label: '', dot: null };
     const refTwo = !!(d.referenceLayout && d.referenceLayout[`seam-stitch-callout-${pageKey}`]);
     if (refTwo) {
-      drawTwoRefs(`seam-stitch-callout-${pageKey}`, margin, top, refW, refH);
+      drawTwoRefs(`seam-stitch-callout-${pageKey}`, margin, top, refW, refH,
+        nums.map(n => blockFor(n)).filter(b => b.dot).map(b => ({ num: b.num, x: b.dot.x, y: b.dot.y })));
     } else {
     const callout = images.find(i => i.slot === `seam-stitch-callout-${pageKey}`);
     if (callout) {
@@ -402,9 +415,9 @@ export async function generateTechPackPDF(pack) {
     sectionHeading('Seam & Stitch Specification', ty); ty += 6;
     const rows = nums.map((n, i) => {
       const s = (d.seams || [])[rowStart + i] || {};
-      return [String(n), s.operation, s.seamType, s.stitchType, s.machine, s.spiSpcm, s.threadColor, s.notes];
+      return [String(n), blockFor(n).label || '', s.seamType, s.stitchType, s.machine, s.spiSpcm, s.threadColor, s.notes];
     });
-    table(['#', 'Operation', 'Seam Type', 'Stitch', 'Machine', 'SPI', 'Thread', 'Notes'],
+    table(['#', 'Seam', 'Seam Type', 'Stitch', 'Machine', 'SPI', 'Thread', 'Notes'],
       rows, 10, ty, [10, 38, 33, 22, 46, 16, 30, 82], { badgeFirstCol: true });
   }
 

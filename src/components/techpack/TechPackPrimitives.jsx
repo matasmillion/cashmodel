@@ -434,7 +434,7 @@ export function CoverPhoto({ label, slotKey, images, onUpload, onRemove, height 
 // `aspect` is an entry from ASPECTS (with .ratio and .label). Container
 // width × (1 / ratio) gives the slot height so the drop zone matches the
 // output proportion exactly.
-export function AspectPhoto({ slotKey, aspect = ASPECTS.A4_LANDSCAPE, images, onUpload, onRemove, label }) {
+export function AspectPhoto({ slotKey, aspect = ASPECTS.A4_LANDSCAPE, images, onUpload, onRemove, label, flush = false }) {
   const fileRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const [cropSrc, setCropSrc] = useState(null);
@@ -460,7 +460,7 @@ export function AspectPhoto({ slotKey, aspect = ASPECTS.A4_LANDSCAPE, images, on
   };
 
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div style={{ marginBottom: flush ? 0 : 16 }}>
       {label && <label style={labelStyle}>{label}</label>}
       <div
         onClick={() => fileRef.current?.click()}
