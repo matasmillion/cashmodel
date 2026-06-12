@@ -914,7 +914,8 @@ function PageConstruction({ d, images, pageKey = 'page1' }) {
 
       {/* garment callout reference (left) — one narrow image, or two stacked 2:3 */}
       {d?.referenceLayout?.[refSlot] ? (
-        <TwoStackedRefs imgs={imgs} baseSlot={refSlot} x={padX} y={refY} w={refW} h={refH} d={d} keyPrefix={`sg-${pageKey}`} />
+        <TwoStackedRefs imgs={imgs} baseSlot={refSlot} x={padX} y={refY} w={refW} h={refH} d={d} keyPrefix={`sg-${pageKey}`}
+          dots={nums.map(n => blockFor(n)).filter(b => b.dot).map(b => ({ num: b.num, x: b.dot.x, y: b.dot.y }))} />
       ) : (
         <>
           <PhotoSlot x={padX} y={refY} w={refW} h={refH} label="Stitch Map" image={callout} />
@@ -1010,7 +1011,7 @@ function ImageCell({ x, y, w, h, image, placeholder }) {
 // Two stacked strict-2:3 reference images centred in the reference column,
 // each with its own annotations. Used when the operator picks the 2-image
 // reference layout on the Construction / Sewing pages.
-function TwoStackedRefs({ imgs, baseSlot, x, y, w, h, d, keyPrefix }) {
+function TwoStackedRefs({ imgs, baseSlot, x, y, w, h, d, keyPrefix, dots = [] }) {
   const gap = 12;
   const cellH = (h - gap) / 2;
   const cellW = Math.round(cellH * (2 / 3));   // strict 2:3 portrait
@@ -1033,6 +1034,14 @@ function TwoStackedRefs({ imgs, baseSlot, x, y, w, h, d, keyPrefix }) {
           </g>
         );
       })}
+      {/* numbered dots — coords are 0..1 over the whole stack (cellW × h), the
+          same box the editor normalises to, so they land on the same spot. */}
+      {(dots || []).map(dt => (
+        <g key={`dot-${dt.num}`}>
+          <circle cx={cx + dt.x * cellW} cy={y + dt.y * h} r={11} fill="#A32D2D" stroke="#FFFFFF" strokeWidth={1.5} />
+          <text x={cx + dt.x * cellW} y={y + dt.y * h + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill="#FFFFFF">{dt.num}</text>
+        </g>
+      ))}
       <rect x={x} y={y + h} width={w} height={22} fill={FR.salt} stroke={FR.sand} />
       <text x={x + w / 2} y={y + h + 15} textAnchor="middle" fontSize="9" fontWeight="bold" fill={FR.slate} letterSpacing="1.5">REFERENCE</text>
     </g>
@@ -1093,7 +1102,8 @@ function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey, enhanc
 
         {/* garment reference (left) — one narrow image, or two stacked 2:3 */}
         {d?.referenceLayout?.[resolvedSlot] ? (
-          <TwoStackedRefs imgs={imgs} baseSlot={resolvedSlot} x={padX} y={refY} w={refW} h={refH} d={d} keyPrefix={`ga-${pageKey}`} />
+          <TwoStackedRefs imgs={imgs} baseSlot={resolvedSlot} x={padX} y={refY} w={refW} h={refH} d={d} keyPrefix={`ga-${pageKey}`}
+            dots={entries.filter(e => e.dot).map(e => ({ num: e.num, x: e.dot.x, y: e.dot.y }))} />
         ) : (
           <>
             <PhotoSlot x={padX} y={refY} w={refW} h={refH} label="Reference" image={callout} />
