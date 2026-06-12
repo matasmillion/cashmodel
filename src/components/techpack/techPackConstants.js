@@ -179,6 +179,10 @@ export const DEFAULT_DATA = {
   cutSewLaborCost: '',
   // Construction Details — two pages, four entries each. Each entry maps to a
   // red-numbered detail callout on the page's reference image. Title and
+  // Reference-column layout per base slot. Truthy = split into two stacked 2:3
+  // reference images (slots `${base}` + `${base}-b`); falsy/absent = one narrow
+  // image. Used on the Construction + Sewing pages.
+  referenceLayout: {},
   // description are dedicated fields so they can be translated independently
   // per factory. `dot` is the in-app placed marker (normalized { x, y } in
   // 0..1 over the garment reference image, or null when not yet placed).

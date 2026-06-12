@@ -1904,6 +1904,9 @@ function StitchingPageBody({ refSlot, nums, rowStart, tableCount, data, set, ima
             onSetDot={setDot}
             annotations={(annotations && annotations[refSlot]) || []}
             onAnnotate={onAnnotate}
+            splitMode={!!(data?.referenceLayout?.[refSlot])}
+            onToggleSplit={(v) => set('referenceLayout', { ...(data?.referenceLayout || {}), [refSlot]: v })}
+            annotationsB={(annotations && annotations[`${refSlot}-b`]) || []}
           />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignContent: 'start' }}>
@@ -2130,12 +2133,15 @@ function ConstructionDetailCard({ entry, onChange, images, onUpload, onRemove, e
 // Each dot's position is stored as normalized { x, y } (0..1) on the matching
 // call-out entry so the live preview and PDF render the same dots. Exported so
 // the Cut & Sew library builder can reuse the exact same control.
-export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, entries, onSetDot, annotations, onAnnotate }) {
+export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, entries, onSetDot, annotations, onAnnotate, splitMode = false, onToggleSplit, annotationsB }) {
   const boxRef = useRef(null);
   const draggingRef = useRef(false);
   const [armed, setArmed] = useState(null);
   const [cropSrc, setCropSrc] = useState(null);
   const img = (images || []).find(i => i.slot === slotKey);
+  const slotKeyB = `${slotKey}-b`;
+  // 2:3 portrait used by the two stacked references (strict 2:3 per operator).
+  const REF_2x3 = { ratio: 2 / 3, label: 'Reference (2 : 3)', shortLabel: '2:3 reference' };
 
   // Re-open the crop modal on the already-uploaded reference so the operator
   // can reposition / zoom / crop it to the reference shape. Dots live on the
@@ -2182,6 +2188,34 @@ export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>{label}</label>
+      {onToggleSplit && (
+        <div style={{ display: 'inline-flex', gap: 2, marginBottom: 10, background: FR.salt, borderRadius: 6, padding: 2, border: `0.5px solid ${FR.sand}`, alignSelf: 'flex-start' }}>
+          {[{ v: false, l: '1 image' }, { v: true, l: '2 images' }].map(({ v, l }) => (
+            <button key={l} onClick={() => onToggleSplit(v)} style={{
+              padding: '3px 10px', borderRadius: 4, border: 'none', cursor: 'pointer', fontSize: 10, fontWeight: 600, letterSpacing: 0.3,
+              background: (!!splitMode === v) ? FR.slate : 'transparent', color: (!!splitMode === v) ? FR.salt : FR.stone,
+            }}>{l}</button>
+          ))}
+        </div>
+      )}
+      {splitMode ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {[{ slot: slotKey, ann: annotations, ttl: 'Reference (top)' }, { slot: slotKeyB, ann: annotationsB, ttl: 'Reference (bottom)' }].map(({ slot, ann, ttl }) => (
+            <div key={slot} style={{ width: '80%', margin: '0 auto' }}>
+              <AspectPhoto slotKey={slot} aspect={REF_2x3} images={images} onUpload={onUpload} onRemove={onRemove} label={undefined} />
+              {onAnnotate && (images || []).some(i => i.slot === slot) && (
+                <button onClick={() => onAnnotate(slot, ttl)} style={{ ...ANNOTATE_BTN, marginTop: -8 }}>
+                  <span style={{ color: '#A32D2D', fontWeight: 700 }}>+</span> Annotate{(ann && ann.length) ? ` (${ann.length})` : ''}
+                </button>
+              )}
+            </div>
+          ))}
+          <p style={{ fontSize: 10, color: FR.stone, marginTop: 2, fontStyle: 'italic', textAlign: 'center' }}>
+            Two stacked 2:3 references — each can be cropped and annotated.
+          </p>
+        </div>
+      ) : (
+      <>
       {img ? (
         <>
           <div
@@ -2274,6 +2308,8 @@ export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, 
           label={undefined}
         />
       )}
+      </>
+      )}
       {cropSrc && (
         <CropModal
           src={cropSrc}
@@ -2329,6 +2365,9 @@ function ConstructionDetailsPage({ pageKey, dataKey, fieldName, data, set, image
               onSetDot={setDot}
               annotations={(annotations && annotations[`sketch-callout-${pageKey}`]) || []}
               onAnnotate={onAnnotate}
+              splitMode={!!(data?.referenceLayout?.[`sketch-callout-${pageKey}`])}
+              onToggleSplit={(v) => set('referenceLayout', { ...(data?.referenceLayout || {}), [`sketch-callout-${pageKey}`]: v })}
+              annotationsB={(annotations && annotations[`sketch-callout-${pageKey}-b`]) || []}
             />
           ) : (
             <>
