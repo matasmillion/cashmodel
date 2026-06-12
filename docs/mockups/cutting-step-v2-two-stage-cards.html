@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Part B — Cutting: per-fabric two-stage cutting cards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --salt:#F5F0E8; --slate:#3A3A3A; --sand:#EBE5D5; --soil:#854F0B;
+    --stone:#9A9A9A; --white:#fff; --good:#3B6D11; --warn:#854F0B; --bad:#A32D2D;
+    --border:rgba(58,58,58,0.15);
+    --serif:'Cormorant Garamond','Georgia',serif;
+    --sans:'General Sans','Inter','Helvetica Neue',system-ui,sans-serif;
+    --mono:ui-monospace,'SF Mono',Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--salt);color:var(--slate);font-family:var(--sans);font-size:13px}
+  h1,h2,h3,h4{font-family:var(--serif);font-weight:400;margin:0}
+  button,input,select{font-family:inherit;color:inherit}
+  .dye-input{position:absolute;opacity:0;pointer-events:none}
+
+  .topbar{display:flex;justify-content:space-between;align-items:center;padding:11px 22px;border-bottom:1px solid var(--border)}
+  .wordmark .big{font-family:var(--serif);font-size:19px;letter-spacing:3px}
+  .wordmark .small{font-size:8px;letter-spacing:3px;color:var(--soil);margin-top:1px}
+  .topnav{display:flex;align-items:center;gap:20px;font-size:13px}
+  .topnav .dot{width:7px;height:7px;border-radius:50%;background:var(--good);display:inline-block;margin-right:6px}
+  .topnav .on{background:var(--sand);padding:4px 10px;border-radius:6px}
+
+  .plmbar{display:flex;justify-content:space-between;align-items:center;padding:12px 22px 10px}
+  .plmbar .l{display:flex;align-items:center;gap:16px}.plmbar h1{font-size:22px}
+  .seg-tabs{display:inline-flex;gap:4px}
+  .seg-tabs button{background:transparent;border:none;padding:6px 14px;border-radius:7px;font-size:13px;cursor:pointer}
+  .seg-tabs button.on{background:var(--slate);color:var(--salt)}
+  .plmbar .r{display:flex;gap:8px}
+  .plmbar .r button{background:transparent;border:1px solid var(--border);border-radius:7px;padding:6px 12px;font-size:12px;cursor:pointer}
+  .plmbar .r button.on{background:var(--white)}
+
+  .stylebar{background:var(--slate);color:var(--salt);display:flex;justify-content:space-between;align-items:center;padding:12px 22px;gap:14px}
+  .stylebar .l{display:flex;align-items:center;gap:12px}
+  .stylebar .gbtn{background:transparent;border:1px solid rgba(245,240,232,0.25);color:var(--salt);border-radius:7px;padding:6px 12px;font-size:12px;cursor:pointer}
+  .stylebar .styleid .co{font-size:9px;letter-spacing:2px;color:var(--sand)}
+  .stylebar .styleid .no{font-family:var(--mono);font-size:13px;margin-top:1px}
+  .stylebar .r{display:flex;align-items:center;gap:10px}
+  .stylebar .pbtn{background:var(--salt);color:var(--slate);border:none;border-radius:7px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer}
+  .stylebar .pbtn.ghost{background:transparent;color:var(--salt);border:1px solid rgba(245,240,232,0.25);font-weight:500}
+  .stylebar .saved{font-size:11px;color:#9Fca7c}
+  .stylebar .cost{text-align:right;line-height:1.25;padding-left:8px;border-left:1px solid rgba(245,240,232,0.2)}
+  .stylebar .cost .k{font-size:8px;letter-spacing:1px;color:var(--sand);text-transform:uppercase}
+  .stylebar .cost .big{font-size:19px;font-weight:600}
+
+  .builder{display:grid;grid-template-columns:226px minmax(620px,1fr) 640px;min-height:calc(100vh - 150px)}
+  .stepnav{padding:16px 12px 30px;border-right:1px solid var(--border);overflow-y:auto}
+  .grp{margin:14px 0 4px;display:flex;justify-content:space-between;align-items:center;padding:0 8px}
+  .grp .gl{font-size:9px;letter-spacing:1.5px;color:var(--stone);font-weight:600;text-transform:uppercase}
+  .grp .gp{font-size:9px;font-family:var(--mono);color:var(--stone);background:var(--sand);border-radius:3px;padding:1px 6px}
+  .step{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;font-size:12px;cursor:pointer}
+  .step .n{font-family:var(--mono);font-size:10px;color:var(--stone);min-width:16px}
+  .step.active{background:var(--slate);color:var(--salt)}.step.active .n{color:var(--sand)}
+  .step.skip{color:var(--stone);text-decoration:line-through;opacity:0.7}.step.skip .n{color:var(--bad)}
+
+  .editor{padding:16px 24px 40px;background:var(--salt);overflow-y:auto}
+  .skipbar{display:flex;justify-content:space-between;align-items:center;background:var(--white);border:0.5px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--stone);margin-bottom:14px}
+  .skipbar button{background:transparent;border:1px solid var(--sand);border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer}
+  .ed-title{font-size:26px;margin-bottom:3px}
+  .ed-rule{height:2px;width:38px;background:var(--soil);opacity:0.5;margin-bottom:6px}
+  .ed-why{font-size:11px;color:var(--stone);line-height:1.5;margin-bottom:14px;max-width:560px}
+  .statebox{display:flex;align-items:center;gap:12px;background:rgba(133,79,11,0.06);border:1px dashed rgba(133,79,11,0.4);border-radius:8px;padding:9px 12px;margin-bottom:16px}
+  .seg2{display:inline-flex;background:var(--salt);border-radius:6px;padding:2px;gap:2px;border:1px solid var(--sand)}
+  .seg2 label{padding:4px 14px;border-radius:4px;font-size:11px;font-weight:600;color:var(--stone);cursor:pointer}
+  .l-base{background:var(--slate);color:var(--salt)!important}
+  body:has(.dye-input:checked) .l-base{background:transparent;color:var(--stone)!important}
+  body:has(.dye-input:checked) .l-dye{background:var(--slate);color:var(--salt)!important}
+  .statebox .cap{font-size:10px;color:var(--soil);line-height:1.4}
+
+  .pill{display:inline-block;padding:3px 8px;border-radius:5px;font-size:9px;letter-spacing:0.06em;text-transform:uppercase;font-weight:600}
+  .pill.assumed{background:rgba(133,79,11,0.12);color:var(--warn)}
+  .pill.valid{background:rgba(99,153,34,0.14);color:var(--good)}
+
+  /* fabric cutting card */
+  .fcard{background:var(--white);border:0.5px solid var(--border);border-left:3px solid var(--sand);border-radius:10px;margin-bottom:12px;overflow:hidden}
+  .fcard.body{border-left-color:var(--soil)}.fcard.pocket{border-left-color:#3a5a8c}
+  .fc-head{display:flex;align-items:center;justify-content:space-between;padding:11px 14px 9px}
+  .fc-head .l{display:flex;align-items:baseline;gap:9px}
+  .fc-head .role{font-size:9px;letter-spacing:1px;text-transform:uppercase;font-weight:700;color:var(--soil)}
+  .fcard.pocket .fc-head .role{color:#3a5a8c}
+  .fc-head .nm{font-family:var(--mono);font-size:15px}
+  .fc-head .desc{font-size:10px;color:var(--stone)}
+  .fc-head .ref{font-size:9px;color:var(--stone)}
+
+  .fc-body{padding:0 14px 13px;display:grid;grid-template-columns:1fr 200px;gap:14px}
+  .blk-lab{font-size:9px;color:var(--soil);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin:12px 0 7px;display:flex;align-items:center;gap:8px}
+
+  /* stage rows */
+  .stage{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .stage .when{font-size:10px;color:var(--slate);min-width:118px}
+  .stage .when b{display:block;font-size:8px;color:var(--stone);text-transform:uppercase;letter-spacing:0.5px;font-weight:600}
+  .seg3{display:inline-flex;background:var(--salt);border-radius:6px;padding:2px;gap:2px;border:1px solid var(--sand)}
+  .seg3 button{padding:4px 11px;border:none;background:transparent;border-radius:4px;font-size:11px;color:var(--stone);cursor:pointer;font-weight:600}
+  .seg3 button.on{background:var(--slate);color:var(--salt)}
+  .seg3 button.auto{background:rgba(133,79,11,0.14);color:var(--soil)}
+  .stage .res{margin-left:auto;font-size:10px;color:var(--stone);font-family:var(--mono)}
+
+  /* roll width hero */
+  .roll{background:var(--slate);color:var(--salt);border-radius:8px;padding:11px 13px;display:flex;align-items:center;justify-content:space-between}
+  .roll .k{font-size:9px;letter-spacing:0.5px;text-transform:uppercase;color:var(--sand)}
+  .roll .v{font-size:24px;font-family:var(--mono);font-weight:600}
+  .roll .src{font-size:9px;color:var(--sand);opacity:0.85;text-align:right;max-width:150px}
+
+  /* predicted shrink mini-table */
+  .pshrink{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:8px}
+  .pcell{border:1px solid var(--sand);border-radius:6px;padding:7px 9px;background:var(--salt)}
+  .pcell .k{font-size:8px;color:var(--stone);text-transform:uppercase;letter-spacing:0.4px;font-weight:600}
+  .pcell .v{font-size:14px;font-family:var(--mono);margin-top:2px}
+  .pcell .v small{font-size:8.5px;color:var(--stone)}
+
+  /* yield + marker */
+  .marker{background:var(--salt);border:1px dashed var(--sand);border-radius:8px;height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;position:relative;overflow:hidden}
+  .marker.has{border-style:solid;background:linear-gradient(135deg,#e7e0d2,#cdbf9c)}
+  .marker .plus{width:24px;height:24px;border:1px solid var(--sand);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--soil);background:var(--white)}
+  .marker .cap{font-size:9px;color:var(--stone);font-style:italic;text-align:center;padding:0 8px}
+  .marker .corner{position:absolute;bottom:0;left:0;right:0;background:rgba(58,58,58,0.78);color:var(--salt);font-size:8.5px;font-family:var(--mono);padding:3px 7px}
+  .yield{margin-top:8px;border:1px solid var(--sand);border-radius:8px;padding:9px 11px;background:rgba(133,79,11,0.04)}
+  .yield .k{font-size:8px;color:var(--stone);text-transform:uppercase;letter-spacing:0.4px;font-weight:600}
+  .yield .row{display:flex;align-items:baseline;gap:5px;margin-top:3px}
+  .yield input{width:56px;padding:4px 6px;border:1px solid var(--sand);border-radius:4px;font-size:18px;font-family:var(--mono);outline:none}
+  .yield small{font-size:9px;color:var(--stone)}
+  .yield .price{font-size:9px;color:var(--good);margin-top:5px}
+
+  /* net vs cut */
+  .netcut{background:var(--white);border-top:1px solid var(--sand);padding:9px 14px;font-size:10px;color:var(--stone);display:flex;align-items:center;gap:8px}
+  .netcut b{color:var(--slate);font-family:var(--mono)}
+  .netcut .up{color:var(--soil);font-weight:600}
+
+  /* actual override (collapsed) */
+  .actual{margin:0 14px 12px;border:1px dashed var(--sand);border-radius:7px;padding:8px 11px;font-size:10px;color:var(--stone);display:flex;align-items:center;justify-content:space-between}
+  .actual .lk{font-size:9px;color:var(--soil);font-weight:600;cursor:pointer}
+
+  .ed-foot{display:flex;justify-content:space-between;align-items:center;margin-top:18px;border-top:1px solid var(--sand);padding-top:14px}
+  .ed-foot button{border:1px solid var(--sand);background:var(--white);border-radius:7px;padding:8px 16px;font-size:12px;cursor:pointer}
+  .ed-foot .next{background:var(--slate);color:var(--salt);border-color:var(--slate)}
+  .ed-foot .pos{font-size:11px;color:var(--stone)}
+
+  /* live preview */
+  .preview{background:var(--sand);padding:16px 18px;overflow-y:auto}
+  .pv-head{display:flex;justify-content:space-between;font-size:9px;letter-spacing:2px;color:var(--stone);text-transform:uppercase;font-weight:600;margin-bottom:8px}
+  .page{background:var(--white);border-radius:4px;box-shadow:0 2px 14px rgba(0,0,0,0.10);padding:18px 20px;font-size:10px}
+  .pp-head{display:flex;justify-content:space-between;border-bottom:1px solid var(--slate);padding-bottom:8px}
+  .pp-head .co{font-size:8px;letter-spacing:1px}.pp-head .co b{font-size:9px}
+  .pp-head h3{font-family:var(--serif);font-size:17px}
+  .pp-head .rt{text-align:right;font-family:var(--mono);font-size:8px;color:var(--stone)}
+  .pp-sec{font-family:var(--serif);font-size:13px;margin:13px 0 6px}
+  .pp-tbl{width:100%;border-collapse:collapse;font-size:8px;margin-top:4px}
+  .pp-tbl th{background:var(--slate);color:var(--salt);text-align:left;padding:4px 5px;font-size:6.5px;letter-spacing:0.3px;text-transform:uppercase;font-weight:600}
+  .pp-tbl td{padding:4px 5px;border-bottom:0.5px solid var(--sand)}
+  .pp-img{height:84px;border:1px dashed var(--sand);border-radius:3px;background:linear-gradient(135deg,#efe9dd,#ddd3bf);display:flex;align-items:flex-end;justify-content:flex-end;padding:6px;margin-top:4px}
+  .pp-img .lab{font-family:var(--mono);font-size:7px;background:var(--slate);color:var(--salt);padding:2px 6px;border-radius:2px}
+  .pp-foot{display:flex;justify-content:space-between;margin-top:14px;padding-top:8px;border-top:0.5px solid var(--sand);font-size:7px;color:var(--stone)}
+
+  .stage2-only{display:none}
+  body:has(.dye-input:checked) .stage2-only{display:flex}
+  body:has(.dye-input:checked) .stage2-row .seg3 .s2none{background:transparent;color:var(--stone)}
+  body:has(.dye-input:checked) .stage2-row .seg3 .s2tumble{background:rgba(133,79,11,0.14);color:var(--soil)}
+</style>
+</head>
+<body>
+<input type="checkbox" id="dyeToggle" class="dye-input">
+
+<div class="topbar">
+  <div class="wordmark"><div class="big">ENTERPRISE RESOURCE PLANNING</div><div class="small">FOREIGN RESOURCE</div></div>
+  <div class="topnav"><span><span class="dot"></span>Cash</span><span>Marketing ▾</span><span class="on">Product ▾</span><span>Inventory ▾</span><span>Operations ▾</span><span>⚙</span></div>
+</div>
+<div class="plmbar">
+  <div class="l"><h1>Product Lifecycle Management</h1><div class="seg-tabs"><button>▤ Library</button><button class="on">⬡ Styles</button><button>◳ Production</button></div></div>
+  <div class="r"><button>⤓ Backup</button><button class="on">✦ Sync diagnostics</button><button>⛨ Storage Health</button></div>
+</div>
+<div class="stylebar">
+  <div class="l"><button class="gbtn">← Back</button><button class="gbtn">↺ Restore points</button><div class="styleid"><div class="co">FOREIGN RESOURCE</div><div class="no">FW26-BB-ZH-0001</div></div></div>
+  <div class="r"><button class="pbtn ghost">⇪ Send sample</button><button class="pbtn ghost">▣ Send PO</button><span class="saved">✓ All changes saved</span><div class="cost"><div class="k">Total Unit Cost</div><div class="big">$31.45</div></div></div>
+</div>
+
+<div class="builder">
+  <nav class="stepnav">
+    <div class="grp"><span class="gl">Design</span></div>
+    <div class="step"><span class="n">01</span> Style Overview</div>
+    <div class="step"><span class="n">02</span> Design Overview</div>
+    <div class="grp"><span class="gl">Bill of Materials</span><span class="gp">$17.91</span></div>
+    <div class="step"><span class="n">03</span> Fabrics</div>
+    <div class="step"><span class="n">04</span> Trims</div>
+    <div class="step"><span class="n">05</span> Packaging</div>
+    <div class="grp"><span class="gl">Cut &amp; Sew</span><span class="gp">$5.00</span></div>
+    <div class="step"><span class="n">06</span> Pattern</div>
+    <div class="step"><span class="n">07</span> Construction (1)</div>
+    <div class="step"><span class="n">08</span> Construction (2)</div>
+    <div class="step"><span class="n">09</span> Sewing (1)</div>
+    <div class="step"><span class="n">10</span> Sewing (2)</div>
+    <div class="step"><span class="n">$</span> Cut &amp; Sew Cost</div>
+    <div class="step active"><span class="n">11</span> Cutting</div>
+    <div class="step"><span class="n">12</span> Points of Measure</div>
+    <div class="step"><span class="n">13</span> Size Grading</div>
+  </nav>
+
+  <div class="editor">
+    <div class="skipbar"><span>Not using this page? Skip it and it will be crossed out in the export.</span><button>Skip page</button></div>
+    <div class="ed-title">Cutting</div>
+    <div class="ed-rule"></div>
+    <div class="ed-why">Shrink each fabric, settle the <b>roll width to cut at</b>, read the marker to get <b>fabric yield</b> — the number that backs into the fabric price we negotiate. One card per fabric.</div>
+    <div class="statebox">
+      <div class="seg2"><label class="l-base" for="dyeToggle">No wash/dye</label><label class="l-dye" for="dyeToggle">Wash/dye style</label></div>
+      <div class="cap">Mockup toggle only. When the style uses a wash/dye treatment, Stage 2 (during-wash tumble) switches on by itself.</div>
+    </div>
+
+    <!-- ───── BODY card ───── -->
+    <div class="fcard body">
+      <div class="fc-head">
+        <div class="l"><span class="role">Body</span><span class="nm">B1750</span><span class="desc">French terry · 380 gsm · 180 cm raw</span></div>
+        <div class="ref">🔒 from fabric library</div>
+      </div>
+      <div class="fc-body">
+        <div>
+          <div class="blk-lab">Shrink schedule — when do we shrink it?</div>
+          <div class="stage">
+            <div class="when"><b>Stage 1 · before cutting</b>sets the roll width</div>
+            <div class="seg3"><button>None</button><button class="on">Hang dry</button><button>Tumble dry</button></div>
+            <span class="res">→ 171 cm</span>
+          </div>
+          <div class="stage stage2-row">
+            <div class="when"><b>Stage 2 · during wash</b>shrinks the sewn garment</div>
+            <div class="seg3"><button class="s2none on">None</button><button class="s2tumble">Tumble dry</button></div>
+            <span class="res stage2-only" style="display:none">residual 5.0%</span>
+          </div>
+          <div class="stage2-only" style="font-size:9.5px;color:var(--soil);background:rgba(133,79,11,0.06);border-radius:5px;padding:5px 9px;margin-bottom:8px">↑ auto-on: style uses <b>Gone — global dye</b> (a wash/dye) → tumble during wash.</div>
+
+          <div class="blk-lab">Predicted shrinkage <span class="pill assumed">assumed</span> <span class="pill valid">✓ model valid</span></div>
+          <div class="pshrink">
+            <div class="pcell"><div class="k">Hang weft</div><div class="v">5.0<small>%</small></div></div>
+            <div class="pcell"><div class="k">Tumble weft</div><div class="v">9.7<small>%</small></div></div>
+            <div class="pcell"><div class="k">Residual h→t</div><div class="v">5.0<small>%</small></div></div>
+          </div>
+
+          <div class="blk-lab">Roll width to cut at</div>
+          <div class="roll">
+            <div><div class="k">Create the cutting plan at</div><div class="v">171 cm</div></div>
+            <div class="src">Stage 1 = hang dry → post-hang width</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="blk-lab">Marker / layout</div>
+          <div class="marker has"><div class="corner">B1750 · marker @ 171 cm · 82% util</div></div>
+          <div class="yield">
+            <div class="k">Fabric yield</div>
+            <div class="row"><input value="1.5"><small>m/unit</small></div>
+            <div class="price">↳ backs into fabric price · $5.53/m → $8.30/unit</div>
+          </div>
+        </div>
+      </div>
+      <div class="netcut stage2-only" style="display:none">Net vs cut: garment tumbles during dye → cut bigger by <b>1 ÷ (1 − 0.05)</b> = <span class="up">+5.3%</span> · factory applies on the marker.</div>
+      <div class="actual"><span>Actual shrinkage from the factory's test — add later, flips assumed → confirmed.</span><span class="lk">+ enter actual</span></div>
+    </div>
+
+    <!-- ───── POCKET card ───── -->
+    <div class="fcard pocket">
+      <div class="fc-head">
+        <div class="l"><span class="role">Pocket</span><span class="nm">B1968</span><span class="desc">Fleece · 235 gsm · 165 cm raw</span></div>
+        <div class="ref">🔒 from fabric library</div>
+      </div>
+      <div class="fc-body">
+        <div>
+          <div class="blk-lab">Shrink schedule — when do we shrink it?</div>
+          <div class="stage">
+            <div class="when"><b>Stage 1 · before cutting</b>sets the roll width</div>
+            <div class="seg3"><button>None</button><button class="on">Hang dry</button><button>Tumble dry</button></div>
+            <span class="res">→ 157 cm</span>
+          </div>
+          <div class="stage stage2-row">
+            <div class="when"><b>Stage 2 · during wash</b>shrinks the sewn garment</div>
+            <div class="seg3"><button class="s2none on">None</button><button class="s2tumble">Tumble dry</button></div>
+            <span class="res stage2-only" style="display:none">residual —</span>
+          </div>
+
+          <div class="blk-lab">Predicted shrinkage <span class="pill assumed">assumed</span></div>
+          <div class="pshrink">
+            <div class="pcell"><div class="k">Hang weft</div><div class="v">5.0<small>%</small></div></div>
+            <div class="pcell"><div class="k">Tumble weft</div><div class="v" style="color:var(--stone)">— </div><div style="font-size:7.5px;color:var(--warn);margin-top:1px">enter tumble GSM in library</div></div>
+            <div class="pcell"><div class="k">Residual h→t</div><div class="v" style="color:var(--stone)">—</div></div>
+          </div>
+
+          <div class="blk-lab">Roll width to cut at</div>
+          <div class="roll">
+            <div><div class="k">Create the cutting plan at</div><div class="v">157 cm</div></div>
+            <div class="src">Stage 1 = hang dry → post-hang width</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="blk-lab">Marker / layout</div>
+          <div class="marker"><div class="plus">+</div><div class="cap">Drop the layout screenshot · marker @ 157 cm</div></div>
+          <div class="yield">
+            <div class="k">Fabric yield</div>
+            <div class="row"><input value="0.3"><small>m/unit</small></div>
+            <div class="price">↳ backs into fabric price · $3.17/m → $0.95/unit</div>
+          </div>
+        </div>
+      </div>
+      <div class="actual"><span>Actual shrinkage from the factory's test — add later, flips assumed → confirmed.</span><span class="lk">+ enter actual</span></div>
+    </div>
+
+    <div style="font-size:10px;color:var(--stone);font-style:italic;padding:4px 2px">+ A third fabric card would stack here — the page holds at least three.</div>
+
+    <div class="ed-foot"><button>← Previous</button><span class="pos">Step 14 of 28</span><button class="next">Next →</button></div>
+  </div>
+
+  <!-- live preview -->
+  <div class="preview">
+    <div class="pv-head"><span>Live preview</span><span>Page 14 / 28</span></div>
+    <div class="page">
+      <div class="pp-head"><div class="co"><b>FOREIGN RESOURCE CO.</b><br>CUT &amp; SEW</div><h3>Cutting</h3><div class="rt">FW26-BB-ZH-0001<br>PAGE 11 / 25</div></div>
+
+      <div class="pp-sec">Body · B1750</div>
+      <div class="pp-img"><span class="lab">marker @ 171 cm · 82% util</span></div>
+      <table class="pp-tbl">
+        <tbody>
+          <tr><td>Shrink before cut</td><td>Hang dry → roll width 171 cm</td></tr>
+          <tr><td>Shrink in wash</td><td class="stage2-cell">None</td></tr>
+          <tr><td>Predicted weft shrink</td><td>hang 5.0% · tumble 9.7% (assumed)</td></tr>
+          <tr><td>Fabric yield</td><td>1.5 m/unit</td></tr>
+        </tbody>
+      </table>
+
+      <div class="pp-sec">Pocket · B1968</div>
+      <table class="pp-tbl">
+        <tbody>
+          <tr><td>Shrink before cut</td><td>Hang dry → roll width 157 cm</td></tr>
+          <tr><td>Shrink in wash</td><td>None</td></tr>
+          <tr><td>Predicted weft shrink</td><td>hang 5.0% · tumble — (assumed)</td></tr>
+          <tr><td>Fabric yield</td><td>0.3 m/unit</td></tr>
+        </tbody>
+      </table>
+
+      <div class="pp-foot"><span>© 2026 Foreign Resource Co. — Confidential Tech Pack</span><span>PAGE 11 / 25</span></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
