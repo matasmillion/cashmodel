@@ -2543,77 +2543,318 @@ export function StepSketches2({ data, set, images, onUpload, onRemove, annotatio
     />
   );
 }
-export function StepPattern({ data, set, images, onUpload, onRemove }) {
-  const pieces = data.patternPieces && data.patternPieces.length ? data.patternPieces : [{ pieceNum: '', pieceName: '', quantity: '', fabric: '', grain: '', fusing: '', notes: '' }];
-  const updP = (i, k, v) => set('patternPieces', pieces.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
-  const addP = () => set('patternPieces', [...pieces, { pieceNum: '', pieceName: '', quantity: '', fabric: '', grain: '', fusing: '', notes: '' }]);
-  const rmP  = (i) => set('patternPieces', pieces.filter((_, idx) => idx !== i));
+// Cutting step (Variant B — fabric cards). Resolves each picked fabric atom's
+// post-wash width + raw shrinkage by reference, and detects a wash/dye treatment
+// to drive the garment-dye layer. The resolved values are cached back onto the
+// saved data (entry.cuttingRef + data.dyeCuttingRef) so the PDF/SVG generators —
+// which are pure functions of the saved data, with no async library lookups —
+// can print the cutting numbers without re-reading the library.
+const DYE_TREATMENT_TYPES = ['wash', 'garment_dye', 'piece_dye'];
+const SELVAGE_CM = 2; // default trim each side of the roll the marker can't use
+
+export function StepPattern({ data, set, packId }) {
+  // Library specs resolved from the fabric store, keyed by fabricId. Holds the
+  // read-only "by reference" numbers (post-wash width, raw shrinkage, etc.).
+  const [fabRefs, setFabRefs] = useState({}); // fabricId -> { name, code, widthPost, widthPre, shrinkWarp, shrinkWeft, weave, composition, gsm }
+  // The dye/wash treatment atom this style references, if any.
+  const [dyeTreatment, setDyeTreatment] = useState(null); // { name, code, assumedPct } | null
+
+  const picked = useMemo(() => (data.pickedFabrics || []), [data.pickedFabrics]);
+  const fabricIdKey = picked.map(p => p?.fabricId).filter(Boolean).join('|');
+  const cuttingPlanFiles = Array.isArray(data.cuttingPlanFiles) ? data.cuttingPlanFiles : [];
+
+  // ── Resolve fabric specs by reference (mirrors StepFabrics' async resolver) ──
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ids = picked.map(p => p?.fabricId).filter(Boolean);
+      if (!ids.length) { if (!cancelled) setFabRefs({}); return; }
+      const { getFabric } = await import('../../utils/fabricStore');
+      const next = {};
+      for (const id of ids) {
+        const row = await getFabric(id);
+        if (cancelled) return;
+        if (!row) continue;
+        const widthPre  = parseFloat(row.width_cm) || null;
+        const widthPost = (row.width_cm_post != null && row.width_cm_post !== '')
+          ? parseFloat(row.width_cm_post)
+          : widthPre;
+        next[id] = {
+          name:        row.name || row.mill_fabric_no || id,
+          code:        row.code || row.mill_fabric_no || '',
+          widthPost:   widthPost,
+          widthPre:    widthPre,
+          shrinkWarp:  row.shrinkage_warp_pct != null ? parseFloat(row.shrinkage_warp_pct) : null,
+          shrinkWeft:  row.shrinkage_weft_pct != null ? parseFloat(row.shrinkage_weft_pct) : null,
+          weave:       row.weave || '',
+          composition: row.composition || '',
+          gsm:         row.weight_gsm != null ? parseFloat(row.weight_gsm) : null,
+        };
+      }
+      if (!cancelled) setFabRefs(next);
+    })();
+    return () => { cancelled = true; };
+  }, [fabricIdKey]);
+
+  // ── Detect a wash/dye/piece-dye treatment referenced by this style ──
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const rows = (data.treatmentWashTypes || []).filter(r => r && r.treatment_id);
+      if (!rows.length) { if (!cancelled) setDyeTreatment(null); return; }
+      const all = await listTreatments({ includeArchived: true });
+      if (cancelled) return;
+      const byId = new Map(all.map(t => [t.id, t]));
+      let found = null;
+      for (const r of rows) {
+        const t = byId.get(r.treatment_id);
+        if (t && DYE_TREATMENT_TYPES.includes(t.type)) { found = t; break; }
+      }
+      if (!cancelled) {
+        setDyeTreatment(found ? {
+          name: found.name || '',
+          code: found.code || '',
+          assumedPct: found.shrinkage_expected_pct != null ? parseFloat(found.shrinkage_expected_pct) : null,
+        } : null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [(data.treatmentWashTypes || []).map(r => r?.treatment_id).filter(Boolean).join('|')]);
+
+  // ── Denormalize fabric cutting refs onto each pickedFabrics entry ──
+  // Pure functions (PDF/SVG) read from data only, so cache the numbers there.
+  // Guarded: only write when a value actually changed, to avoid an update loop.
+  useEffect(() => {
+    if (!picked.length) return;
+    let changed = false;
+    const arr = picked.map(entry => {
+      if (!entry?.fabricId) return entry;
+      const ref = fabRefs[entry.fabricId];
+      if (!ref) return entry;
+      const nextRef = {
+        postWidthCm:   ref.widthPost,
+        shrinkWarpPct: ref.shrinkWarp,
+        shrinkWeftPct: ref.shrinkWeft,
+        name:          ref.name,
+        code:          ref.code,
+      };
+      const prev = entry.cuttingRef || {};
+      const same = prev.postWidthCm === nextRef.postWidthCm
+        && prev.shrinkWarpPct === nextRef.shrinkWarpPct
+        && prev.shrinkWeftPct === nextRef.shrinkWeftPct
+        && prev.name === nextRef.name
+        && prev.code === nextRef.code;
+      if (same) return entry;
+      changed = true;
+      return { ...entry, cuttingRef: nextRef };
+    });
+    if (changed) set('pickedFabrics', arr);
+  }, [fabRefs, fabricIdKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Denormalize the dye treatment ref onto data (additive) ──
+  useEffect(() => {
+    const nextRef = dyeTreatment
+      ? { name: dyeTreatment.name, code: dyeTreatment.code, assumedPct: dyeTreatment.assumedPct }
+      : null;
+    const prev = data.dyeCuttingRef || null;
+    const same = (!prev && !nextRef)
+      || (prev && nextRef && prev.name === nextRef.name && prev.code === nextRef.code && prev.assumedPct === nextRef.assumedPct);
+    if (!same) set('dyeCuttingRef', nextRef);
+  }, [dyeTreatment]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pickedWithFabric = picked.filter(p => p?.fabricId);
+  const dyeOn = !!dyeTreatment;
+
+  // Body / first fabric drives the net-vs-cut upscale note.
+  const bodyEntry = pickedWithFabric.find(p => /body/i.test(p.role || '')) || pickedWithFabric[0] || null;
+  const bodyRef = bodyEntry ? fabRefs[bodyEntry.fabricId] : null;
+
+  // Dye residual comparison (actual vs assumed).
+  const assumedPct = dyeTreatment?.assumedPct;
+  const actualPctRaw = data.dyeResidualActualPct;
+  const actualPct = (actualPctRaw === '' || actualPctRaw == null) ? null : parseFloat(actualPctRaw);
+  const dyeHotter = (assumedPct != null && actualPct != null) ? (actualPct > assumedPct) : false;
+
+  const secLabel = { display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, color: FR.soil, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', margin: '16px 0 8px' };
+  const lk = { fontSize: 9, color: FR.stone, fontWeight: 600, background: FR.white, border: `1px solid ${FR.sand}`, borderRadius: 3, padding: '2px 6px', textTransform: 'none', letterSpacing: 0.2 };
+  const pillProv = { display: 'inline-block', padding: '3px 8px', borderRadius: 5, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, background: 'rgba(133,79,11,0.12)', color: '#854F0B' };
+  const refBlkK = { fontSize: 8, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 };
+  const refBlkV = { fontSize: 12, fontFamily: 'ui-monospace, Menlo, monospace', color: FR.slate, marginTop: 2 };
+  const fldK = { fontSize: 8, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 };
+  const fldV = { fontSize: 14, fontFamily: 'ui-monospace, Menlo, monospace', color: FR.slate, marginTop: 2 };
+
+  const fmtPct = (n) => (n != null && Number.isFinite(n)) ? `${n}%` : '—';
+  const cuttable = (postW, entry) => {
+    const sel = (entry && entry.selvageCm != null && entry.selvageCm !== '') ? parseFloat(entry.selvageCm) : SELVAGE_CM;
+    return (postW != null && Number.isFinite(postW)) ? Math.round((postW - sel) * 10) / 10 : null;
+  };
 
   return (
     <div>
       <SectionTitle>Cutting</SectionTitle>
 
-      <PhotoUpload label="Pattern Pieces Layout" slotKey="pattern-layout" images={images} onUpload={onUpload} onRemove={onRemove} />
-
-      <div style={{ marginBottom: 10 }}>
-        <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>Pattern Piece Index</label>
-        <ArrayTable
-          headers={[
-            { key: 'pieceNum',  label: 'Piece #',          placeholder: 'P-01' },
-            { key: 'pieceName', label: 'Piece Name',       placeholder: 'Front Body' },
-            { key: 'quantity',  label: 'Quantity',         placeholder: '2' },
-            { key: 'fabric',    label: 'Fabric',           placeholder: 'Shell' },
-            { key: 'grain',     label: 'Grain',            placeholder: 'Lengthwise' },
-            { key: 'fusing',    label: 'Fusing/Interlining', placeholder: 'None' },
-            { key: 'notes',     label: 'Notes' },
-          ]}
-          rows={pieces} onUpdate={updP} onAdd={addP} onRemove={rmP} />
+      {/* ── Cutting plan (PDF) uploader ── */}
+      <div style={secLabel}>Cutting plan <span style={lk}>PDF or image</span></div>
+      <div style={{ fontSize: 11, color: FR.stone, marginBottom: 8, lineHeight: 1.5 }}>
+        Save the real cutting plan as a PDF (image still accepted). It rides along in the exported tech pack.
       </div>
+      <FilesPanel
+        attachments={cuttingPlanFiles}
+        packId={packId}
+        onAdd={(ref) => set('cuttingPlanFiles', [...cuttingPlanFiles, ref])}
+        onRemove={(i) => set('cuttingPlanFiles', cuttingPlanFiles.filter((_, idx) => idx !== i))}
+      />
 
-      {/* Fabric Yield — CLO3D actual override */}
-      {(data.pickedFabrics || []).some(p => p?.fabricId) && (
-        <div style={{ marginBottom: 18 }}>
-          <label style={{ display: 'block', fontSize: 10, color: FR.soil, fontWeight: 600, marginBottom: 4, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-            Fabric Yield — CLO3D Actual
-          </label>
-          <p style={{ fontSize: 10, color: FR.stone, marginBottom: 10, lineHeight: 1.5 }}>
-            After optimizing the marker in CLO3D, enter the actual yield per unit here. This overrides the standard estimate from the BOM step and updates the cost roll-up.
-          </p>
-          {(data.pickedFabrics || []).map((entry, i) => {
-            if (!entry?.fabricId) return null;
-            const role = entry.role || `Fabric ${i + 1}`;
-            return (
-              <div key={entry.fabricId} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, padding: '8px 10px', background: FR.salt, borderRadius: 4, border: `0.5px solid ${FR.sand}` }}>
-                <span style={{ fontSize: 11, color: FR.slate, fontWeight: 500, minWidth: 90 }}>{role}</span>
-                <span style={{ fontSize: 10, color: FR.stone, flex: 1 }}>
-                  {entry.metersPerUnit
-                    ? `${entry.metersPerUnit}m/unit — ${entry.yieldIsActual ? 'CLO3D actual' : entry.yieldIsManual ? 'manual' : 'std. estimate'}`
-                    : 'No yield set'}
-                </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.1"
-                    max="10"
-                    value={entry.metersPerUnit || ''}
-                    placeholder="m/unit"
-                    onChange={e => {
-                      const v = parseFloat(e.target.value);
-                      const arr = [...(data.pickedFabrics || [])];
-                      arr[i] = { ...arr[i], metersPerUnit: Number.isFinite(v) ? v : null, yieldIsActual: Number.isFinite(v) };
-                      set('pickedFabrics', arr);
-                    }}
-                    style={{ width: 70, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '4px 6px', fontSize: 10, color: FR.slate, background: FR.white, outline: 'none' }}
-                  />
-                  <span style={{ fontSize: 10, color: FR.stone }}>m/unit</span>
-                  {entry.yieldIsActual && (
-                    <span style={{ fontSize: 9, color: '#3B6D11', fontWeight: 600, padding: '2px 5px', background: '#EEF6E8', borderRadius: 3 }}>CLO3D</span>
-                  )}
-                </div>
+      {/* ── Fabrics — reference + cutting ── */}
+      <div style={secLabel}>Fabrics — reference + cutting <span style={lk}>up to 3</span></div>
+      {pickedWithFabric.length === 0 && (
+        <p style={{ fontSize: 11, color: FR.stone, fontStyle: 'italic', padding: '10px 0' }}>
+          No fabrics picked yet — choose them on the Fabrics step.
+        </p>
+      )}
+      {pickedWithFabric.map((entry) => {
+        const ref = fabRefs[entry.fabricId];
+        const isBody = /body/i.test(entry.role || '');
+        const postW = ref?.widthPost;
+        const cut = cuttable(postW, entry);
+        const desc = ref ? [ref.weave, ref.gsm ? `${ref.gsm} gsm` : ''].filter(Boolean).join(' · ') : '';
+        // Combined upscale = raw shrink + dye residual (actual if set, else assumed)
+        const dyeAdd = dyeOn ? (actualPct != null ? actualPct : assumedPct) : null;
+        const baseYield = parseFloat(entry.metersPerUnit);
+        const combinedYield = (dyeOn && dyeAdd != null && Number.isFinite(baseYield))
+          ? Math.round(baseYield * (1 + dyeAdd / 100) * 100) / 100
+          : null;
+        return (
+          <div key={entry.fabricId} style={{ background: FR.white, border: `0.5px solid rgba(58,58,58,0.15)`, borderLeft: `3px solid ${isBody ? FR.soil : FR.sand}`, borderRadius: 10, marginBottom: 10, overflow: 'hidden' }}>
+            {/* header */}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 9, padding: '10px 14px 8px' }}>
+              <span style={{ fontSize: 9, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700, color: FR.soil }}>{entry.role || 'Fabric'}</span>
+              <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 15, color: FR.slate }}>{ref?.name || '—'}</span>
+              {desc && <span style={{ fontSize: 10, color: FR.stone }}>{desc}</span>}
+            </div>
+            {/* LOCKED reference strip (cream / read-only) */}
+            <div style={{ background: FR.salt, padding: '8px 14px', display: 'flex', gap: 24, borderTop: `1px solid ${FR.sand}`, borderBottom: `1px solid ${FR.sand}` }}>
+              <div><div style={refBlkK}>Post-wash width</div><div style={refBlkV}>{postW != null ? `${postW} cm` : '—'}</div></div>
+              <div><div style={refBlkK}>Raw shrinkage</div><div style={refBlkV}>{ref ? `${fmtPct(ref.shrinkWarp)} L · ${fmtPct(ref.shrinkWeft)} W` : '—'}</div></div>
+              <div><div style={refBlkK}>Composition</div><div style={refBlkV}>{ref?.composition || '—'}</div></div>
+              <div style={{ marginLeft: 'auto', alignSelf: 'center', fontSize: 9, color: FR.stone }}>🔒 by reference</div>
+            </div>
+            {/* EDITABLE worksheet row */}
+            <div style={{ padding: '11px 14px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+              <div style={{ border: `1px solid ${FR.sand}`, borderRadius: 5, padding: '7px 9px', background: FR.white }}>
+                <div style={fldK}>Cutting width</div>
+                <div style={fldV}>{postW != null ? postW : '—'} <small style={{ fontSize: 8.5, color: FR.stone }}>cm</small></div>
               </div>
-            );
-          })}
+              <div style={{ border: `1px solid ${FR.sand}`, borderRadius: 5, padding: '7px 9px', background: FR.white }}>
+                <div style={fldK}>Cuttable width</div>
+                <div style={fldV}>{cut != null ? cut : '—'} <small style={{ fontSize: 8.5, color: FR.stone }}>cm · −{(entry.selvageCm != null && entry.selvageCm !== '') ? entry.selvageCm : SELVAGE_CM} selvage</small></div>
+              </div>
+              <div style={{ border: `1px solid ${FR.sand}`, borderRadius: 5, padding: '7px 9px', background: 'rgba(133,79,11,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={fldK}>Cut yield</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.1"
+                      max="10"
+                      value={entry.metersPerUnit || ''}
+                      placeholder="m/unit"
+                      onChange={e => {
+                        const v = parseFloat(e.target.value);
+                        const arr = [...(data.pickedFabrics || [])];
+                        const idx = arr.findIndex(p => p?.fabricId === entry.fabricId);
+                        if (idx >= 0) {
+                          arr[idx] = { ...arr[idx], metersPerUnit: Number.isFinite(v) ? v : null, yieldIsActual: Number.isFinite(v) };
+                          set('pickedFabrics', arr);
+                        }
+                      }}
+                      style={{ width: 58, border: `0.5px solid ${FR.sand}`, borderRadius: 3, padding: '4px 6px', fontSize: 13, fontFamily: 'ui-monospace, Menlo, monospace', color: FR.slate, background: FR.white, outline: 'none' }}
+                    />
+                    <small style={{ fontSize: 8.5, color: FR.stone }}>m/unit</small>
+                  </div>
+                </div>
+                <span style={pillProv}>prov</span>
+              </div>
+            </div>
+            {/* combined upscale line — dye on only */}
+            {dyeOn && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 9.5, color: FR.soil, background: 'rgba(133,79,11,0.06)', padding: '6px 14px' }}>
+                ↑ + dye residual {fmtPct(dyeAdd)}
+                {combinedYield != null ? ` → cut yield ${combinedYield} m/unit` : ''} · factory applies on the marker
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* ── Nap / grain & net-vs-cut ── */}
+      {pickedWithFabric.length > 0 && (
+        <>
+          <div style={{ marginTop: 6 }}>
+            <Input label="Nap / Grain Note" value={data.napGrain} onChange={v => set('napGrain', v)}
+              placeholder="e.g. Napped back (brushed) — one-way nap. All body pieces laid in the same direction." />
+          </div>
+          <div style={{ background: FR.white, border: `0.5px solid rgba(58,58,58,0.15)`, borderLeft: `3px solid ${FR.soil}`, borderRadius: 6, padding: '11px 13px', marginTop: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 3 }}>Net vs cut — pieces are cut bigger than finished</div>
+            <p style={{ margin: 0, fontSize: 11, lineHeight: 1.5, color: FR.stone }}>
+              Pieces are cut bigger than finished. Upscale <b style={{ color: FR.slate }}>+{fmtPct(bodyRef?.shrinkWarp)} L / +{fmtPct(bodyRef?.shrinkWeft)} W</b>
+              {bodyRef?.name ? ` (from ${bodyRef.name}'s raw shrinkage)` : ''}. <span style={{ color: FR.soil, fontWeight: 600 }}>Applied by the factory</span> on the marker.
+            </p>
+          </div>
+        </>
+      )}
+
+      {/* ── Garment-dye layer — only when a wash/dye treatment is referenced ── */}
+      {dyeOn && (
+        <div style={{ background: FR.white, border: `0.5px solid rgba(58,58,58,0.15)`, borderTop: `3px solid ${FR.soil}`, borderRadius: 8, padding: 14, margin: '12px 0 14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: FR.soil }} />
+            <div style={{ fontSize: 12, fontWeight: 600 }}>Garment dye — extra cutting allowance <span style={{ fontWeight: 400, color: FR.stone }}>· keyed to the treatment atom</span></div>
+          </div>
+          <p style={{ fontSize: 12, lineHeight: 1.5, margin: '0 0 12px' }}>
+            This style gets <b>{dyeTreatment.name}</b> <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 10, color: FR.stone }}>({dyeTreatment.code})</span>. Cut pieces bigger for extra shrinkage.
+          </p>
+          <div style={{ fontSize: 9, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 600, marginBottom: 6 }}>
+            Residual shrinkage from the dye (cut → finished) — separate from the fabric's pre→post-wash number
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+            <div style={{ border: `1px solid ${FR.sand}`, borderRadius: 6, padding: '9px 11px', background: FR.salt }}>
+              <div style={{ fontSize: 8.5, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 600, marginBottom: 4 }}>Assumed</div>
+              <div style={{ fontSize: 23, fontFamily: 'ui-monospace, Menlo, monospace', lineHeight: 1 }}>{fmtPct(assumedPct)}</div>
+              <div style={{ fontSize: 9, color: FR.stone, marginTop: 4 }}>default from treatment atom</div>
+            </div>
+            <div style={{ border: `1px solid ${FR.sand}`, borderRadius: 6, padding: '9px 11px', background: FR.white }}>
+              <div style={{ fontSize: 8.5, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 600, marginBottom: 4 }}>Actual</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="30"
+                  value={data.dyeResidualActualPct ?? ''}
+                  placeholder="—"
+                  onChange={e => set('dyeResidualActualPct', e.target.value)}
+                  style={{ width: 64, border: `0.5px solid ${FR.sand}`, borderRadius: 4, padding: '4px 6px', fontSize: 20, fontFamily: 'ui-monospace, Menlo, monospace', color: FR.slate, background: FR.white, outline: 'none' }}
+                />
+                <span style={{ fontSize: 16, fontFamily: 'ui-monospace, Menlo, monospace', color: FR.stone }}>%</span>
+              </div>
+              <div style={{ fontSize: 9, color: FR.stone, marginTop: 4 }}>measured on the PP test</div>
+            </div>
+          </div>
+          {actualPct != null && assumedPct != null && (
+            dyeHotter ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, background: 'rgba(133,79,11,0.07)', borderRadius: 6, padding: '8px 11px' }}>
+                <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: 5, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, background: 'rgba(133,79,11,0.14)', color: '#854F0B' }}>re-cut</span>
+                Actual runs <b style={{ margin: '0 3px' }}>{Math.round((actualPct - assumedPct) * 10) / 10} pt</b> hotter than assumed — bump the marker upscale before bulk.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, background: 'rgba(58,58,58,0.04)', borderRadius: 6, padding: '8px 11px', color: FR.stone }}>
+                <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: 5, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, background: 'rgba(99,153,34,0.14)', color: '#3B6D11' }}>on plan</span>
+                Actual is in line with assumed — the planned marker upscale holds.
+              </div>
+            )
+          )}
         </div>
       )}
 

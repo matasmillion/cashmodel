@@ -1249,68 +1249,93 @@ function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey, enhanc
   );
 }
 
-// ─── Page 8 — Pattern Pieces & Cutting ──────────────────────────────────────
+// ─── Page 8 — Cutting (Variant B: cutting plan + fabrics & cutting + dye) ─────
 function PagePattern({ d, images }) {
-  const layout = (images || []).find(i => i.slot === 'pattern-layout');
-  const pieces = (d.patternPieces || []).filter(r => r.pieceName || r.pieceNum || r.fabric);
   const pickedFabrics = (d?.pickedFabrics || []).filter(p => p?.fabricId);
-  const yieldCols = Math.max(pickedFabrics.length, 1);
-  const yieldColW = (PAGE_W - 80) / yieldCols;
+  const planFiles = (d.cuttingPlanFiles || []).filter(f => f && f.name);
+  const dye = d.dyeCuttingRef || null;
+  const SELVAGE = 2;
 
-  const cols = [
-    { key: 'pieceNum',  label: 'Piece #',            w: 90  },
-    { key: 'pieceName', label: 'Piece Name',         w: 220 },
-    { key: 'quantity',  label: 'Qty',                w: 70  },
-    { key: 'fabric',    label: 'Fabric',             w: 160 },
-    { key: 'grain',     label: 'Grain',              w: 130 },
-    { key: 'fusing',    label: 'Fusing/Interlining', w: 180 },
-    { key: 'notes',     label: 'Notes',              w: 193 },
+  // Fabrics & cutting rows, reading the denormalized entry.cuttingRef.
+  const cutCols = [
+    { key: 'area',    label: 'Area',        w: 280 },
+    { key: 'postW',   label: 'Post-wash W', w: 150 },
+    { key: 'cuttable',label: 'Cuttable',    w: 150 },
+    { key: 'shrink',  label: 'Raw shrink',  w: 180 },
+    { key: 'yield',   label: 'Yield',       w: 283 },
   ];
+  const cutRows = pickedFabrics.map(p => {
+    const ref = p.cuttingRef || {};
+    const postW = ref.postWidthCm;
+    const sel = (p.selvageCm != null && p.selvageCm !== '') ? parseFloat(p.selvageCm) : SELVAGE;
+    const cut = (postW != null && Number.isFinite(postW)) ? (Math.round((postW - sel) * 10) / 10) : null;
+    const shrink = (ref.shrinkWarpPct != null || ref.shrinkWeftPct != null)
+      ? `${ref.shrinkWarpPct != null ? ref.shrinkWarpPct + '%' : '—'} / ${ref.shrinkWeftPct != null ? ref.shrinkWeftPct + '%' : '—'}`
+      : '—';
+    return {
+      area:     ref.name ? `${p.role || '—'} · ${ref.name}` : (p.role || '—'),
+      postW:    postW != null ? `${postW} cm` : '—',
+      cuttable: cut != null ? `${cut} cm` : '—',
+      shrink,
+      yield:    p.metersPerUnit != null ? `${p.metersPerUnit} m` : '— TBD',
+    };
+  });
+
+  const dyeAssumed = (dye && dye.assumedPct != null) ? `${dye.assumedPct}%` : '—';
+  const dyeActual = (d.dyeResidualActualPct === '' || d.dyeResidualActualPct == null) ? '—' : `${d.dyeResidualActualPct}%`;
+  const notes = [d.napGrain, d.cuttingNotes || d.cuttingInstructions].filter(Boolean).join('  ·  ') || '—';
 
   return (
     <g>
       <InfoStrip d={d} />
 
-      <SectionHeading x={40} y={158}>Pattern Pieces Layout</SectionHeading>
-      <PhotoSlot x={40} y={175} w={PAGE_W - 80} h={200} label="Pattern Layout" image={layout} />
-
-      <SectionHeading x={40} y={420}>Pattern Piece Index</SectionHeading>
-      {/* bodyRows=4 frees ~22px for the yield strip below */}
-      <GridTable x={40} y={432} cols={cols} rows={pieces} bodyRows={4} />
-
-      {/* Fabric Yield — compact 3-column strip, one cell per picked fabric */}
-      <SectionHeading x={40} y={545}>Fabric Yield</SectionHeading>
-      {pickedFabrics.length === 0 && (
-        <text x={50} y={568} fontSize={10} fill={FR.stone} fontStyle="italic">
-          No fabrics picked yet — set garment type in the BOM step.
-        </text>
+      {/* Cutting Plan — the attached source document(s) */}
+      <SectionHeading x={40} y={170}>Cutting Plan</SectionHeading>
+      {planFiles.length === 0 ? (
+        <text x={50} y={196} fontSize={10} fill={FR.stone} fontStyle="italic">— none attached</text>
+      ) : (
+        <g>
+          <rect x={40} y={182} width={PAGE_W - 80} height={Math.min(planFiles.length, 4) * 22 + 8} fill={FR.salt} stroke={FR.sand} />
+          {planFiles.slice(0, 4).map((f, i) => {
+            const kind = (f.type || '').split('/').pop()?.toUpperCase() || 'FILE';
+            return (
+              <text key={i} x={50} y={200 + i * 22} fontSize={10}
+                fontFamily="ui-monospace, Menlo, monospace" fill={FR.slate}>
+                {clampLine(esc(`${f.name}  (${kind})`), PAGE_W - 110, 6)}
+              </text>
+            );
+          })}
+        </g>
       )}
-      {pickedFabrics.map((entry, i) => {
-        const fx = 40 + i * yieldColW;
-        const hasMpu = entry.metersPerUnit != null;
-        return (
-          <g key={i}>
-            <text x={fx + 10} y={562} fontSize={8} fontWeight={600} fill={FR.soil} letterSpacing={0.4}>
-              {(entry.role || `FABRIC ${i + 1}`).toUpperCase()}
-            </text>
-            <text x={fx + 10} y={578} fontSize={12} fontWeight={600} fill={hasMpu ? FR.slate : FR.stone}
-              fontFamily="ui-monospace, Menlo, monospace">
-              {hasMpu ? `${entry.metersPerUnit}m` : '— TBD'}
-            </text>
-            <text x={fx + 10} y={592} fontSize={8}
-              fill={hasMpu ? (entry.yieldIsActual || entry.yieldIsManual ? '#3B6D11' : '#854F0B') : '#854F0B'}>
-              {hasMpu
-                ? (entry.yieldIsActual ? 'CLO3D actual' : entry.yieldIsManual ? 'manual' : 'std. estimate')
-                : 'set garment type in BOM step'}
-            </text>
-          </g>
-        );
-      })}
 
-      <SectionHeading x={40} y={615}>Cutting Instructions</SectionHeading>
-      <foreignObject x="40" y="630" width={PAGE_W - 80} height="130">
+      {/* Fabrics & cutting */}
+      <SectionHeading x={40} y={300}>Fabrics &amp; Cutting</SectionHeading>
+      {cutRows.length === 0 ? (
+        <text x={50} y={326} fontSize={10} fill={FR.stone} fontStyle="italic">
+          No fabrics picked yet — choose them on the Fabrics step.
+        </text>
+      ) : (
+        <GridTable x={40} y={314} cols={cutCols} rows={cutRows} bodyRows={Math.max(cutRows.length, 1)} />
+      )}
+
+      {/* Garment dye — cut bigger (only when a dye treatment was detected) */}
+      {dye && (
+        <g>
+          <SectionHeading x={40} y={470}>Garment Dye — cut bigger</SectionHeading>
+          <rect x={40} y={482} width={PAGE_W - 80} height={50} fill={FR.salt} stroke={FR.sand} />
+          <text x={50} y={502} fontSize={11} fontWeight={600} fill={FR.soil}>
+            {esc(`${dye.name || '—'}${dye.code ? ` (${dye.code})` : ''}`)}
+          </text>
+          <text x={50} y={520} fontSize={10} fill={FR.slate} fontFamily="ui-monospace, Menlo, monospace">
+            {esc(`residual shrink (cut→finished): assumed ${dyeAssumed} · actual ${dyeActual}`)}
+          </text>
+        </g>
+      )}
+
+      <SectionHeading x={40} y={dye ? 575 : 470}>Cutting Notes</SectionHeading>
+      <foreignObject x="40" y={dye ? 590 : 485} width={PAGE_W - 80} height="150">
         <div xmlns="http://www.w3.org/1999/xhtml" style={{ fontFamily: 'Helvetica, Arial, sans-serif', fontSize: 11, color: FR.slate, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-          {d.cuttingInstructions || '—'}
+          {notes}
         </div>
       </foreignObject>
     </g>

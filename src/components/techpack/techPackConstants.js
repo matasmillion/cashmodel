@@ -224,6 +224,12 @@ export const DEFAULT_DATA = {
   patternPieces: [{ pieceNum: '', pieceName: '', quantity: '', fabric: '', grain: '', fusing: '', notes: '' }],
   cuttingNotes: '',
   cuttingInstructions: '',
+  // Cutting step (Variant B) — dedicated cutting-plan PDFs (kept separate from
+  // the generic `attachments` so the cutting page lists only the cut plan),
+  // measured garment-dye residual shrinkage, and a nap/grain note.
+  cuttingPlanFiles: [],
+  dyeResidualActualPct: '',
+  napGrain: '',
   measurementMethod: 'Lay garment flat on table. Smooth without stretching. Measure with flexible tape.',
   poms: [
     { name: 'Chest Width (1/2)', tol: '1', s: '', m: '', l: '', xl: '', method: '' },

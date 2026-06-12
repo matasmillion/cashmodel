@@ -149,16 +149,28 @@ export function generateTechPackSVG(pack) {
     const tf = table(40, 130, ['Component', 'Fabric Type', 'Composition', 'Weight GSM', 'Color/Pantone', 'Vendor'], fabRows, [130, 160, 160, 110, 150, 333]);
     svg += tf.svg;
   }
-  // Fabric yield from library-picked fabrics (metersPerUnit stored on pack data)
+  // Fabric yield + cutting from library-picked fabrics. metersPerUnit is stored
+  // on pack data; post-wash width + cuttable come from the denormalized
+  // entry.cuttingRef cached by the Cutting step (guarded so missing refs don't
+  // break the row — older packs without cuttingRef just show "—").
   const yieldFabs = (d.pickedFabrics || []).filter(p => p?.fabricId && p.metersPerUnit != null);
   if (yieldFabs.length) {
-    svg += sectionHeading('Fabric Yield', 40, 250);
-    const yieldRows = yieldFabs.map(p => [
-      p.role || '—',
-      `${p.metersPerUnit}m/unit`,
-      p.yieldIsActual ? 'CLO3D actual' : 'Std. estimate',
-    ]);
-    const ty = table(40, 270, ['Fabric Area', 'Yield', 'Source'], yieldRows, [280, 180, 583]);
+    svg += sectionHeading('Fabric Yield & Cutting', 40, 250);
+    const SELVAGE = 2;
+    const yieldRows = yieldFabs.map(p => {
+      const ref = p.cuttingRef || {};
+      const postW = ref.postWidthCm;
+      const sel = (p.selvageCm != null && p.selvageCm !== '') ? parseFloat(p.selvageCm) : SELVAGE;
+      const cut = (postW != null && Number.isFinite(postW)) ? (Math.round((postW - sel) * 10) / 10) : null;
+      return [
+        p.role || '—',
+        `${p.metersPerUnit}m/unit`,
+        postW != null ? `${postW} cm` : '—',
+        cut != null ? `${cut} cm` : '—',
+        p.yieldIsActual ? 'CLO3D actual' : 'Std. estimate',
+      ];
+    });
+    const ty = table(40, 270, ['Fabric Area', 'Yield', 'Post-wash W', 'Cuttable', 'Source'], yieldRows, [220, 150, 160, 150, 363]);
     svg += ty.svg;
   }
 

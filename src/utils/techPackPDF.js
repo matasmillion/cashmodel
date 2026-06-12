@@ -732,28 +732,83 @@ export async function generateTechPackPDF(pack) {
   drawStitchingPage('Sewing (1)', 10, [1, 2, 3, 4], 0, 'page1');
   drawStitchingPage('Sewing (2)', 11, [5, 6, 7, 8], 4, 'page2');
 
-  // ─── Cut & Sew → Pattern & Cutting ───
+  // ─── Cut & Sew → Cutting (Variant B — cutting plan + fabrics & cutting) ───
   newPage('Cutting', null, 13);
   y = 28;
-  const ppRows = (d.patternPieces || []).filter(p => p.name || p.pieceName).map(p =>
-    [p.pieceName || p.name, p.quantity || p.qty, p.fabric, p.grain, p.fusing, p.notes]);
-  y = table(['Piece', 'Qty', 'Fabric', 'Grain', 'Fusing', 'Notes'], ppRows, 10, y, [50, 20, 40, 40, 30, 97]);
+
+  // Cutting Plan — list the attached source documents (filename + type).
+  sectionHeading('Cutting Plan', y);
   y += 8;
-  // Fabric Yield sub-table
-  const yieldRows = (d.pickedFabrics || [])
+  const cutPlanFiles = (d.cuttingPlanFiles || []).filter(f => f && f.name);
+  if (cutPlanFiles.length) {
+    cutPlanFiles.forEach((f) => {
+      const kind = (f.type || '').split('/').pop()?.toUpperCase() || 'FILE';
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(...hex(FR.slate));
+      doc.text(`• ${f.name}  (${kind})`, 12, y);
+      y += 6;
+    });
+  } else {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(9);
+    doc.setTextColor(...hex(FR.stone));
+    doc.text('— none attached', 12, y);
+    doc.setFont('helvetica', 'normal');
+    y += 6;
+  }
+  y += 6;
+
+  // Fabrics & Cutting — post-wash width, cuttable, raw shrink, yield (from
+  // the denormalized entry.cuttingRef cached by the Cutting step).
+  const SELVAGE = 2;
+  const cutRows = (d.pickedFabrics || [])
     .filter(p => p?.fabricId)
-    .map(p => [
-      p.role || '—',
-      p.metersPerUnit != null ? `${p.metersPerUnit}m/unit` : '— TBD',
-      p.metersPerUnit != null ? (p.yieldIsActual ? 'CLO3D actual' : 'Std. estimate') : 'Not set',
-    ]);
-  if (yieldRows.length) {
-    sectionHeading('Fabric Yield', y);
+    .map(p => {
+      const ref = p.cuttingRef || {};
+      const postW = ref.postWidthCm;
+      const sel = (p.selvageCm != null && p.selvageCm !== '') ? parseFloat(p.selvageCm) : SELVAGE;
+      const cut = (postW != null && Number.isFinite(postW)) ? (Math.round((postW - sel) * 10) / 10) : null;
+      const shrink = (ref.shrinkWarpPct != null || ref.shrinkWeftPct != null)
+        ? `${ref.shrinkWarpPct != null ? ref.shrinkWarpPct + '%' : '—'} / ${ref.shrinkWeftPct != null ? ref.shrinkWeftPct + '%' : '—'}`
+        : '—';
+      const area = ref.name ? `${p.role || '—'} · ${ref.name}` : (p.role || '—');
+      return [
+        area,
+        postW != null ? `${postW} cm` : '—',
+        cut != null ? `${cut} cm` : '—',
+        shrink,
+        p.metersPerUnit != null ? `${p.metersPerUnit} m` : '— TBD',
+      ];
+    });
+  if (cutRows.length) {
+    sectionHeading('Fabrics & Cutting', y);
     y += 8;
-    y = table(['Fabric Area', 'Yield', 'Source'], yieldRows, 10, y, [70, 50, 57]);
+    y = table(['Area', 'Post-wash W', 'Cuttable', 'Raw shrink', 'Yield'], cutRows, 10, y, [70, 35, 35, 50, 87]);
     y += 8;
   }
+
+  // Garment dye — cut bigger (only when a dye treatment was detected).
+  if (d.dyeCuttingRef) {
+    const dr = d.dyeCuttingRef;
+    sectionHeading('Garment Dye — cut bigger', y);
+    y += 8;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(...hex(FR.slate));
+    const nameLine = `${dr.name || '—'}${dr.code ? ` (${dr.code})` : ''}`;
+    doc.text(nameLine, 12, y); y += 5;
+    const assumed = dr.assumedPct != null ? `${dr.assumedPct}%` : '—';
+    const actual = (d.dyeResidualActualPct === '' || d.dyeResidualActualPct == null) ? '—' : `${d.dyeResidualActualPct}%`;
+    doc.text(`residual shrink (cut→finished): assumed ${assumed} · actual ${actual}`, 12, y);
+    y += 9;
+  }
+
+  // Cutting Notes (+ optional nap/grain).
   field('Cutting Notes', d.cuttingNotes || d.cuttingInstructions, 10, y);
+  if (d.napGrain) {
+    field('Nap / Grain', d.napGrain, 10, y + 16);
+  }
 
   // ─── Cut & Sew → Points of Measure ───
   newPage('Points of Measure (cm)', null, 14);
