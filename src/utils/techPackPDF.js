@@ -309,7 +309,9 @@ export async function generateTechPackPDF(pack) {
     const cellW = (rightW - colGap) / 2;
     const cellH = (refH - rowGap) / 2;
     const imgGap = 1.5;
-    const imgH = (cellW - 2 - imgGap) / (1.5 + 1.0);
+    // Cap the band height so the numbered title row fits inside the short stitch
+    // card; the main image then fills the leftover cell width.
+    const imgH = Math.min((cellW - 2 - imgGap) / (1.5 + 1.0), cellH - 10);
     nums.forEach((n, i) => {
       const b = blockFor(n);
       const cx = rightX + (i % 2) * (cellW + colGap);
@@ -318,10 +320,10 @@ export async function generateTechPackPDF(pack) {
       doc.setLineWidth(0.2);
       doc.roundedRect(cx, cy, cellW, cellH, 1, 1);
       const support = images.find(im => im.slot === `seam-stitch-${n}-support`);
-      const mainW = support ? 1.5 * imgH : (cellW - 2);
+      const supW  = 1.0 * imgH;
+      const mainW = support ? (cellW - 2 - imgGap - supW) : (cellW - 2);
       addImage(`seam-stitch-${n}`, cx + 1, cy + 1, mainW, imgH);
       if (support) {
-        const supW = 1.0 * imgH;
         addImage(`seam-stitch-${n}-support`, cx + 1 + mainW + imgGap, cy + 1, supW, imgH);
       }
       doc.setFillColor(163, 45, 45);
@@ -342,7 +344,7 @@ export async function generateTechPackPDF(pack) {
       }
     });
 
-    let ty = top + refH + 12;
+    let ty = top + refH + 16;
     sectionHeading('Seam & Stitch Specification', ty); ty += 6;
     const rows = nums.map((n, i) => {
       const s = (d.seams || [])[rowStart + i] || {};
