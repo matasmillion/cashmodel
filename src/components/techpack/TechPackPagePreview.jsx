@@ -958,7 +958,20 @@ function PageConstruction({ d, images, pageKey = 'page1' }) {
       })}
 
       <SectionHeading x={40} y={tableY - 12}>Seam &amp; Stitch Specification</SectionHeading>
-      <GridTable x={40} y={tableY} cols={seamCols} rows={pageRows} bodyRows={nums.length} />
+      <GridTable
+        x={40} y={tableY} cols={seamCols} rows={pageRows} bodyRows={nums.length}
+        renderCell={(key, row, cellX, ry) => {
+          if (key !== 'num') return null;
+          const ccx = cellX + 13;
+          const ccy = ry + 11;
+          return (
+            <>
+              <circle cx={ccx} cy={ccy} r={8} fill="#A32D2D" />
+              <text x={ccx} y={ccy + 3} textAnchor="middle" fontSize="9" fontWeight="600" fill="#FFFFFF">{row.num}</text>
+            </>
+          );
+        }}
+      />
     </g>
   );
 }
@@ -1790,13 +1803,13 @@ const PAGE_FNS = [
   { title: 'Trims',                             phase: 'Bill of Materials', body: ({ d, componentsById }) => <PageTrims d={d} componentsById={componentsById} /> },
   { title: 'Packaging',                         phase: 'Bill of Materials', body: ({ d, componentsById }) => <PagePackaging d={d} componentsById={componentsById} /> },
   // 07–13 — Cut & Sew
-  { title: 'Flat Lay',                          phase: 'Cut & Sew',         body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
-  { title: 'Call Outs',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page1" enhanced /> },
-  { title: 'Call Outs',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page2" enhanced /> },
-  { title: 'Stitching',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageConstruction d={d} images={images} pageKey="page1" /> },
-  { title: 'Stitching',                         phase: 'Cut & Sew',         body: ({ d, images }) => <PageConstruction d={d} images={images} pageKey="page2" /> },
-  { title: 'Pattern & Cutting',                 phase: 'Cut & Sew',         body: ({ d, images }) => <PagePattern d={d} images={images} /> },
-  { title: 'POM',                               phase: 'Cut & Sew',         body: ({ d, images }) => <PagePom d={d} images={images} /> },
+  { title: 'Pattern',                           phase: 'Cut & Sew',         body: ({ d, images }) => <PageFlatlays d={d} images={images} /> },
+  { title: 'Construction (1)',                  phase: 'Cut & Sew',         body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page1" enhanced /> },
+  { title: 'Construction (2)',                  phase: 'Cut & Sew',         body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page2" enhanced /> },
+  { title: 'Sewing (1)',                        phase: 'Cut & Sew',         body: ({ d, images }) => <PageConstruction d={d} images={images} pageKey="page1" /> },
+  { title: 'Sewing (2)',                        phase: 'Cut & Sew',         body: ({ d, images }) => <PageConstruction d={d} images={images} pageKey="page2" /> },
+  { title: 'Cutting',                           phase: 'Cut & Sew',         body: ({ d, images }) => <PagePattern d={d} images={images} /> },
+  { title: 'Points of Measure',                 phase: 'Cut & Sew',         body: ({ d, images }) => <PagePom d={d} images={images} /> },
   { title: 'Size Grading',                      phase: 'Cut & Sew',         body: ({ d }) => <PageSizeMatrix d={d} /> },
   // 14–18 — Embellishments
   { title: 'Colorways',                         phase: 'Embellishments',    body: ({ d }) => <PageColorways d={d} /> },

@@ -119,7 +119,7 @@ export async function generateTechPackPDF(pack) {
     doc.text(String(value || '—'), x, y + 4);
   }
 
-  function table(headers, rows, x, y, colWidths) {
+  function table(headers, rows, x, y, colWidths, opts = {}) {
     const rowH = 6;
     // header row
     doc.setFillColor(...hex(FR.slate));
@@ -144,8 +144,23 @@ export async function generateTechPackPDF(pack) {
       }
       let cx2 = x;
       row.forEach((cell, i) => {
-        const txt = String(cell || '').slice(0, Math.floor(colWidths[i] / 1.8));
-        doc.text(txt, cx2 + 1.5, ry + 4);
+        if (opts.badgeFirstCol && i === 0) {
+          // red number circle (matches the callout dots used everywhere else)
+          const bx = cx2 + colWidths[0] / 2;
+          const by = ry + rowH / 2;
+          doc.setFillColor(163, 45, 45);
+          doc.circle(bx, by, 2.1, 'F');
+          doc.setTextColor(255, 255, 255);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(6);
+          doc.text(String(cell || ''), bx, by + 0.8, { align: 'center' });
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8);
+          doc.setTextColor(...hex(FR.slate));
+        } else {
+          const txt = String(cell || '').slice(0, Math.floor(colWidths[i] / 1.8));
+          doc.text(txt, cx2 + 1.5, ry + 4);
+        }
         cx2 += colWidths[i];
       });
     });
@@ -177,14 +192,14 @@ export async function generateTechPackPDF(pack) {
   // plus a 2x2 grid of detail cards on the right. Each card has its own
   // image, red number, title, and description so the factory sees the
   // close-up alongside the instruction.
-  function drawConstructionDetailsPage(title, stepIdx, entries) {
+  function drawConstructionDetailsPage(title, stepIdx, entries, pageKey) {
     newPage(title, null, stepIdx);
     const margin = 10;
     const top = 24;
     const colGap = 6;
     const refH = 170;                          // fill the page height
     const refW = Math.round(refH * 0.44);       // CALLOUT_REF_RATIO — narrow portrait
-    const callout = images.find(i => i.slot === `sketch-callout-${title.endsWith('Page 2') ? 'page2' : 'page1'}`);
+    const callout = images.find(i => i.slot === `sketch-callout-${pageKey}`);
     if (callout) {
       try { doc.addImage(callout.data, 'JPEG', margin, top, refW, refH, undefined, 'FAST'); }
       catch (err) { console.error('callout embed:', err); }
@@ -359,7 +374,7 @@ export async function generateTechPackPDF(pack) {
       return [String(n), s.operation, s.seamType, s.stitchType, s.machine, s.spiSpcm, s.threadColor, s.notes];
     });
     table(['#', 'Operation', 'Seam Type', 'Stitch', 'Machine', 'SPI', 'Thread', 'Notes'],
-      rows, 10, ty, [10, 38, 33, 22, 46, 16, 30, 82]);
+      rows, 10, ty, [10, 38, 33, 22, 46, 16, 30, 82], { badgeFirstCol: true });
   }
 
   // ─── Page 000: Competitor Landscape (Merchandising) ───
@@ -644,7 +659,7 @@ export async function generateTechPackPDF(pack) {
   // ─── Cut & Sew → Flat Lay Diagrams (stepIdx 7) ───
   // A4 landscape page is 297×210mm. Two side-by-side cells maximised to
   // fill the printable area: ~138×125mm each at 10mm margin / 5mm gutter.
-  newPage('Flat Lay Diagrams', null, 7);
+  newPage('Pattern', null, 7);
   {
     const top = 28;
     const margin = 10;
@@ -665,16 +680,16 @@ export async function generateTechPackPDF(pack) {
   }
 
   // ─── Cut & Sew → Construction Details Page 1 (stepIdx 5) ───
-  drawConstructionDetailsPage('Construction Details — Page 1', 8, d.constructionDetailsPage1);
+  drawConstructionDetailsPage('Construction (1)', 8, d.constructionDetailsPage1, 'page1');
   // ─── Cut & Sew → Construction Details Page 2 (stepIdx 6) ───
-  drawConstructionDetailsPage('Construction Details — Page 2', 9, d.constructionDetailsPage2);
+  drawConstructionDetailsPage('Construction (2)', 9, d.constructionDetailsPage2, 'page2');
 
   // ─── Cut & Sew → Stitching, two pages (stepIdx 10, 11) ───
-  drawStitchingPage('Stitching — Page 1', 10, [1, 2, 3, 4], 0, 'page1');
-  drawStitchingPage('Stitching — Page 2', 11, [5, 6, 7, 8], 4, 'page2');
+  drawStitchingPage('Sewing (1)', 10, [1, 2, 3, 4], 0, 'page1');
+  drawStitchingPage('Sewing (2)', 11, [5, 6, 7, 8], 4, 'page2');
 
   // ─── Cut & Sew → Pattern & Cutting ───
-  newPage('Pattern Pieces & Cutting', null, 12);
+  newPage('Cutting', null, 12);
   y = 28;
   const ppRows = (d.patternPieces || []).filter(p => p.name || p.pieceName).map(p =>
     [p.pieceName || p.name, p.quantity || p.qty, p.fabric, p.grain, p.fusing, p.notes]);

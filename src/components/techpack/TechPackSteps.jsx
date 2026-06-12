@@ -1249,7 +1249,7 @@ export function StepFlatlays({ data, set, images, onUpload, onRemove, onSeedImag
 
   return (
     <div>
-      <SectionTitle>Flat Lay</SectionTitle>
+      <SectionTitle>Pattern</SectionTitle>
 
       <LibraryDropdownBar
         label="Garment Block"
@@ -1949,7 +1949,7 @@ export function StepConstruction({ data, set, images, onUpload, onRemove, annota
 
   return (
     <div>
-      <SectionTitle>Stitching</SectionTitle>
+      <SectionTitle>Sewing (1)</SectionTitle>
 
       <LibraryDropdownBar
         label="Garment Block"
@@ -1987,7 +1987,7 @@ export function StepConstruction2({ data, set, images, onUpload, onRemove, annot
   const tableCount = Math.max(4, totalSeams - 4);
   return (
     <div>
-      <SectionTitle>Stitching</SectionTitle>
+      <SectionTitle>Sewing (2)</SectionTitle>
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, fontStyle: 'italic' }}>
         Continuation — stitches 5–8. Click the garment to place dots 5–8; each pairs with its callout card (3D render + reference) and its row in the spec table below.
       </p>
@@ -2292,7 +2292,7 @@ export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, 
 // the clickable in-app dot-placement garment image, and each card carries an
 // optional supporting image beside its main image. Without `enhanced`
 // (Embellishments 16, Treatments 19) the original layout is preserved exactly.
-function ConstructionDetailsPage({ pageKey, dataKey, fieldName, data, set, images, onUpload, onRemove, enhanced, annotations, onAnnotate }) {
+function ConstructionDetailsPage({ pageKey, dataKey, fieldName, data, set, images, onUpload, onRemove, enhanced, annotations, onAnnotate, heading = 'Call Outs' }) {
   const entries = (data?.[fieldName] || DEFAULT_DATA[fieldName]).slice(0, 4);
   const update = (idx, next) => {
     const copy = [...(data?.[fieldName] || DEFAULT_DATA[fieldName])];
@@ -2308,7 +2308,7 @@ function ConstructionDetailsPage({ pageKey, dataKey, fieldName, data, set, image
   };
   return (
     <div>
-      <SectionTitle>Call Outs</SectionTitle>
+      <SectionTitle>{heading}</SectionTitle>
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, fontStyle: 'italic' }}>
         {enhanced
           ? 'Click the garment image on the left to drop a numbered dot for each call-out, then add a main close-up, an optional supporting image, and the description. All text is per-field so it can be translated per factory.'
@@ -2372,6 +2372,7 @@ export function StepSketches({ data, set, images, onUpload, onRemove, annotation
     <ConstructionDetailsPage
       pageKey="page1"
       fieldName="constructionDetailsPage1"
+      heading="Construction (1)"
       data={data}
       set={set}
       images={images}
@@ -2389,6 +2390,7 @@ export function StepSketches2({ data, set, images, onUpload, onRemove, annotatio
     <ConstructionDetailsPage
       pageKey="page2"
       fieldName="constructionDetailsPage2"
+      heading="Construction (2)"
       data={data}
       set={set}
       images={images}
@@ -2408,7 +2410,7 @@ export function StepPattern({ data, set, images, onUpload, onRemove }) {
 
   return (
     <div>
-      <SectionTitle>Pattern &amp; Cutting</SectionTitle>
+      <SectionTitle>Cutting</SectionTitle>
 
       <PhotoUpload label="Pattern Pieces Layout" slotKey="pattern-layout" images={images} onUpload={onUpload} onRemove={onRemove} />
 
@@ -2492,7 +2494,7 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
 
   return (
     <div>
-      <SectionTitle>POM (cm)</SectionTitle>
+      <SectionTitle>Points of Measure (cm)</SectionTitle>
 
       <PhotoUpload label="POM Diagram (numbered measurement points)" slotKey="pom-diagram" images={images} onUpload={onUpload} onRemove={onRemove} />
 
