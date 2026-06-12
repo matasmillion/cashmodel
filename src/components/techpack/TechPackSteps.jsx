@@ -4305,17 +4305,22 @@ export function StepEmbSizing({ data, set, images, onUpload, onRemove }) {
   );
 }
 
-export function StepTreatmentCallouts({ data, set, images, onUpload, onRemove }) {
+export function StepTreatmentCallouts({ data, set, images, onUpload, onRemove, stepLocked, stepOverridden, toggleLockOverride }) {
   return (
-    <ConstructionDetailsPage
-      pageKey="treat-callouts"
-      fieldName="treatCalloutDetails"
-      data={data}
-      set={set}
-      images={images}
-      onUpload={onUpload}
-      onRemove={onRemove}
-    />
+    <div>
+      {(stepLocked || stepOverridden) && <LockedBanner status={data.status} overridden={stepOverridden} onToggle={toggleLockOverride} />}
+      <fieldset disabled={stepLocked} style={{ border: 'none', padding: 0, margin: 0, opacity: stepLocked ? 0.45 : 1, pointerEvents: stepLocked ? 'none' : 'auto' }}>
+        <ConstructionDetailsPage
+          pageKey="treat-callouts"
+          fieldName="treatCalloutDetails"
+          data={data}
+          set={set}
+          images={images}
+          onUpload={onUpload}
+          onRemove={onRemove}
+        />
+      </fieldset>
+    </div>
   );
 }
 
