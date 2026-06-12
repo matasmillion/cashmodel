@@ -20,13 +20,13 @@ import CoverImagePicker from './CoverImagePicker';
 // ── Page definitions (mirrors STEPS icons in techPackConstants) ───────────────
 const PAGES = [
   { id: 'identity',  icon: '01', title: 'Identity',          phase: 'Block Info' },
-  { id: 'flatlay',   icon: '06', title: 'Flat Lay',           phase: 'Cut & Sew' },
-  { id: 'callouts1', icon: '07', title: 'Call Outs',          phase: 'Cut & Sew' },
-  { id: 'callouts2', icon: '08', title: 'Call Outs',          phase: 'Cut & Sew' },
-  { id: 'stitching', icon: '09', title: 'Stitching',          phase: 'Cut & Sew' },
-  { id: 'stitching2',icon: '10', title: 'Stitching',          phase: 'Cut & Sew' },
-  { id: 'pattern',   icon: '11', title: 'Pattern & Cutting',  phase: 'Cut & Sew' },
-  { id: 'pom',       icon: '12', title: 'POM',                phase: 'Cut & Sew' },
+  { id: 'flatlay',   icon: '06', title: 'Pattern',            phase: 'Cut & Sew' },
+  { id: 'callouts1', icon: '07', title: 'Construction (1)',   phase: 'Cut & Sew' },
+  { id: 'callouts2', icon: '08', title: 'Construction (2)',   phase: 'Cut & Sew' },
+  { id: 'stitching', icon: '09', title: 'Sewing (1)',         phase: 'Cut & Sew' },
+  { id: 'stitching2',icon: '10', title: 'Sewing (2)',         phase: 'Cut & Sew' },
+  { id: 'pattern',   icon: '11', title: 'Cutting',            phase: 'Cut & Sew' },
+  { id: 'pom',       icon: '12', title: 'Points of Measure',  phase: 'Cut & Sew' },
   { id: 'grading',   icon: '13', title: 'Size Grading',       phase: 'Cut & Sew' },
 ];
 
