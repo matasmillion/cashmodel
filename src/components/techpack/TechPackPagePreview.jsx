@@ -870,16 +870,17 @@ function PageConstruction({ d, images, pageKey = 'page1' }) {
   const colGap2 = 16;
   const cardW  = (rightW - colGap2) / 2;
   const cardH  = (refH - rowGap) / 2;
-  const pad    = 9;
-  const imgGap = 8;
-  const dotR   = 11;
+  const pad      = 9;
+  const imgGap   = 8;
+  const dotR     = 11;
+  const labelGap = 14;   // room for the small RENDER / REFERENCE label above the image
   const bandW  = cardW - pad * 2;
-  // Height-cap so the numbered title row below the image always fits inside the
-  // (shorter) stitch card — the spec table beneath leaves less vertical room
-  // than the Call Outs page. The main image then fills the leftover band width.
+  // Height-cap so the small label above + the numbered title row below both fit
+  // inside the (shorter) stitch card — the spec table beneath leaves less
+  // vertical room than the Call Outs page. Main then fills the leftover width.
   const imageH = Math.min(
     Math.round((bandW - imgGap) / (CALLOUT_MAIN_RATIO + CALLOUT_SUPPORT_RATIO)),
-    cardH - 48,
+    cardH - 48 - labelGap,
   );
 
   // Spec table below, one fixed row per stitch on this page (# = stitch number).
@@ -925,15 +926,21 @@ function PageConstruction({ d, images, pageKey = 'page1' }) {
         const mainImg = imgs.find(im => im.slot === `seam-stitch-${n}`);
         const suppImg = imgs.find(im => im.slot === `seam-stitch-${n}-support`);
         const bandX = cx + pad;
-        const bandY = cy + pad;
+        const bandY = cy + pad + labelGap;
         const supW  = CALLOUT_SUPPORT_RATIO * imageH;
         const mainW = suppImg ? (bandW - imgGap - supW) : bandW;
         const titleY = bandY + imageH + 24;
+        const labelY = cy + pad + 9;
         const numCx  = bandX + 11;
         const code   = (seams[n - 1] || {}).stitchType;
         return (
           <g key={n}>
             <rect x={cx} y={cy} width={cardW} height={cardH} fill={FR.white} stroke={FR.sand} strokeWidth={0.5} rx={6} />
+            {/* small labels above each image */}
+            <text x={bandX} y={labelY} fontSize="7.5" fontWeight="bold" fill={FR.soil} letterSpacing="0.8">RENDER</text>
+            {suppImg && (
+              <text x={bandX + mainW + imgGap} y={labelY} fontSize="7.5" fontWeight="bold" fill={FR.soil} letterSpacing="0.8">REFERENCE</text>
+            )}
             <ImageCell x={bandX} y={bandY} w={mainW} h={imageH} image={mainImg} placeholder={`Stitch ${n} — 3D render`} />
             <AnnotationSvg annos={d?.calloutAnnotations?.[`seam-stitch-${n}`]} x={bandX} y={bandY} w={mainW} h={imageH} keyPrefix={`sm-${n}`} />
             {suppImg && <ImageCell x={bandX + mainW + imgGap} y={bandY} w={supW} h={imageH} image={suppImg} placeholder="Ref" />}
