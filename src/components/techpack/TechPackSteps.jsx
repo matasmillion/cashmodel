@@ -5,7 +5,7 @@
 // that will be replaced in subsequent prompts.
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, CALLOUT_REF_RATIO, CALLOUT_MAIN_RATIO, CALLOUT_SUPPORT_RATIO, isStepLocked, isMerchLocked, isPreProduction, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
+import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, CALLOUT_REF_RATIO, CALLOUT_MAIN_RATIO, CALLOUT_SUPPORT_RATIO, isMerchLocked, isPreProduction, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
 
 // Aspect used by the Cut & Sew call-out garment reference upload/crop, matching
 // the live preview + PDF reference box so placed dots line up everywhere.
@@ -104,13 +104,31 @@ function computeFulfillmentCost(weightKg, rateCard) {
   return (rateCard.pickPack || 0) + (tier.rate || 0) + (rateCard.packagingMaterials || 0);
 }
 
-function LockedBanner({ status }) {
-  return (
-    <div style={{ padding: 14, background: FR.salt, border: `1px dashed ${FR.soil}`, borderRadius: 6, marginBottom: 16 }}>
-      <div style={{ fontSize: 12, color: FR.slate, fontWeight: 600, marginBottom: 4 }}>🔒 Locked until Pre-Production</div>
-      <div style={{ fontSize: 11, color: FR.stone, lineHeight: 1.5 }}>
-        Current status: <strong>{status || 'Design'}</strong>. This step unlocks when you set the status to <strong>Pre-Production</strong> (or later) on Page 1.
+const LOCK_OVERRIDE_BTN = { flexShrink: 0, fontSize: 11, background: FR.white, border: '0.5px solid rgba(58,58,58,0.15)', padding: '6px 12px', borderRadius: 6, color: FR.slate, cursor: 'pointer', whiteSpace: 'nowrap' };
+
+// Shown on any status-locked step. When `overridden`, the operator has chosen
+// "edit anyway" — the page is editable and this becomes a slim re-lock notice.
+// `onToggle` flips the override for this step (wired from the builder).
+function LockedBanner({ status, overridden, onToggle }) {
+  if (overridden) {
+    return (
+      <div style={{ padding: '10px 14px', background: FR.salt, border: `1px dashed ${FR.sand}`, borderRadius: 6, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ fontSize: 11, color: FR.stone, lineHeight: 1.5 }}>
+          <strong style={{ color: FR.slate }}>Lock overridden</strong> — editing enabled even though status is <strong>{status || 'Design'}</strong>.
+        </div>
+        {onToggle && <button type="button" onClick={onToggle} style={LOCK_OVERRIDE_BTN}>Re-lock</button>}
       </div>
+    );
+  }
+  return (
+    <div style={{ padding: 14, background: FR.salt, border: `1px dashed ${FR.soil}`, borderRadius: 6, marginBottom: 16, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+      <div>
+        <div style={{ fontSize: 12, color: FR.slate, fontWeight: 600, marginBottom: 4 }}>🔒 Locked until Pre-Production</div>
+        <div style={{ fontSize: 11, color: FR.stone, lineHeight: 1.5 }}>
+          Current status: <strong>{status || 'Design'}</strong>. This step unlocks when you set the status to <strong>Pre-Production</strong> (or later) on Page 1.
+        </div>
+      </div>
+      {onToggle && <button type="button" onClick={onToggle} style={LOCK_OVERRIDE_BTN}>Edit anyway</button>}
     </div>
   );
 }
@@ -3059,7 +3077,7 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
 // StepSizeMatrix — graded size table. Sizes are derived from the Style Overview
 // sizeRange field; the user picks the sample size (whose values come straight
 // from the POM page) and enters per-size deltas. Final values: sample + delta.
-export function StepSizeMatrix({ data, set, images, onUpload, onRemove }) {
+export function StepSizeMatrix({ data, set, images, onUpload, onRemove, stepLocked, stepOverridden, toggleLockOverride }) {
   const matrix = data.gradedSizeMatrix || { baseSize: 'M', sizes: [], grading: [] };
   // Graded pattern nest — inherited read-only from the Pattern Pieces Layout
   // image (the canonical pattern geometry, carried on the linked Cut & Sew block).
@@ -3084,7 +3102,7 @@ export function StepSizeMatrix({ data, set, images, onUpload, onRemove }) {
   const sizes = rawSizes.length ? rawSizes : ['S', 'M', 'L', 'XL'];
   const baseSize = sizes.includes(matrix.baseSize) ? matrix.baseSize : sizes[0];
   const poms = (data.poms || []).filter(p => p.name);
-  const gradingLocked = !isPreProduction(data.status);
+  const gradingLocked = stepLocked; // status lock routed via the builder's real step index (Size Grading = index 15)
 
   const update = (patch) => set('gradedSizeMatrix', { ...matrix, ...patch });
 
@@ -3126,7 +3144,7 @@ export function StepSizeMatrix({ data, set, images, onUpload, onRemove }) {
   return (
     <div>
       <SectionTitle>Size Grading</SectionTitle>
-      {gradingLocked && <LockedBanner status={data.status} />}
+      {(gradingLocked || stepOverridden) && <LockedBanner status={data.status} overridden={stepOverridden} onToggle={toggleLockOverride} />}
       <fieldset disabled={gradingLocked} style={{ border: 'none', padding: 0, margin: 0, opacity: gradingLocked ? 0.45 : 1, pointerEvents: gradingLocked ? 'none' : 'auto' }}>
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, lineHeight: 1.5 }}>
         Grade rules turn the approved sample size into every other size. Enter per-size deltas; final values are computed as <code style={{ fontFamily: 'ui-monospace,Menlo,monospace', background: FR.salt, padding: '1px 5px', borderRadius: 3 }}>sample + delta</code> and write back into the Points of Measure size chart. The sample size is set and locked on the Points of Measure page.
@@ -3672,8 +3690,8 @@ export function StepTreatments({ data, set, images, onUpload, onRemove }) {
     </div>
   );
 }
-export function StepLabels({ data, set, images, onUpload, onRemove }) {
-  const locked = isStepLocked(23, data.status);
+export function StepLabels({ data, set, images, onUpload, onRemove, stepLocked, stepOverridden, toggleLockOverride }) {
+  const locked = stepLocked;
 
   const packaging = data.packagingItems && data.packagingItems.length ? data.packagingItems : [{ component: '', material: '', color: '', size: '', artworkPrint: '', qtyPerOrder: '', notes: '' }];
   const updP = (i, k, v) => set('packagingItems', packaging.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
@@ -3686,7 +3704,7 @@ export function StepLabels({ data, set, images, onUpload, onRemove }) {
   return (
     <div>
       <SectionTitle>Labels &amp; Packaging</SectionTitle>
-      {locked && <LockedBanner status={data.status} />}
+      {(locked || stepOverridden) && <LockedBanner status={data.status} overridden={stepOverridden} onToggle={toggleLockOverride} />}
       <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
 
         <div style={{ marginBottom: 16 }}>
@@ -3730,8 +3748,8 @@ function computeQtyRow(row) {
   return { totalUnits, totalCost };
 }
 
-export function StepOrder({ data, set, library, saveToLibrary }) {
-  const locked = isStepLocked(24, data.status);
+export function StepOrder({ data, set, library, saveToLibrary, stepLocked, stepOverridden, toggleLockOverride }) {
+  const locked = stepLocked;
   const [unitWeightG, setUnitWeightG] = useState(data.unitWeightGrams || '500');
   const [aiKey, setAiKey] = useState(getStoredKey());
   const [aiNotes, setAiNotes] = useState('');
@@ -3796,7 +3814,7 @@ export function StepOrder({ data, set, library, saveToLibrary }) {
   return (
     <div>
       <SectionTitle>Order &amp; Delivery</SectionTitle>
-      {locked && <LockedBanner status={data.status} />}
+      {(locked || stepOverridden) && <LockedBanner status={data.status} overridden={stepOverridden} onToggle={toggleLockOverride} />}
       <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
 
         <div style={{ marginBottom: 18 }}>
@@ -3870,8 +3888,8 @@ export function StepOrder({ data, set, library, saveToLibrary }) {
     </div>
   );
 }
-export function StepCompliance({ data, set }) {
-  const locked = isStepLocked(21, data.status);
+export function StepCompliance({ data, set, stepLocked, stepOverridden, toggleLockOverride }) {
+  const locked = stepLocked;
 
   const shipping = data.shippingReqs && data.shippingReqs.length ? data.shippingReqs : [{ requirement: '', specification: '', notes: '' }];
   const updS = (i, k, v) => set('shippingReqs', shipping.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
@@ -3914,7 +3932,7 @@ export function StepCompliance({ data, set }) {
   return (
     <div>
       <SectionTitle>Compliance &amp; Testing</SectionTitle>
-      {locked && <LockedBanner status={data.status} />}
+      {(locked || stepOverridden) && <LockedBanner status={data.status} overridden={stepOverridden} onToggle={toggleLockOverride} />}
       <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
 
         <div style={{ marginBottom: 18 }}>
@@ -3967,8 +3985,8 @@ export function StepCompliance({ data, set }) {
 const INSPECTION_STAGES = ['Pre-Production', 'During Production', 'Final Random Inspection', 'Pre-Shipment'];
 const SEVERITY_OPTIONS = ['Critical', 'Major', 'Minor'];
 
-export function StepQuality({ data, set }) {
-  const locked = isStepLocked(22, data.status);
+export function StepQuality({ data, set, stepLocked, stepOverridden, toggleLockOverride }) {
+  const locked = stepLocked;
 
   const qi = data.qualityInspection || { aqlMajor: '2.5', aqlMinor: '4.0', inspectionStage: 'During Production', checklist: [], photoRequirements: '' };
   const setQI = (k, v) => set('qualityInspection', { ...qi, [k]: v });
@@ -3990,7 +4008,7 @@ export function StepQuality({ data, set }) {
   return (
     <div>
       <SectionTitle>Quality Inspection (AQL)</SectionTitle>
-      {locked && <LockedBanner status={data.status} />}
+      {(locked || stepOverridden) && <LockedBanner status={data.status} overridden={stepOverridden} onToggle={toggleLockOverride} />}
       <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
 
         <div style={{ marginBottom: 18 }}>

@@ -1124,6 +1124,13 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     if (pickedBlockId) saveBlockSlotAnnotations(pickedBlockId, slot, next).then(map => setBlockAnnotations(map)).catch(() => {});
     else set('calloutAnnotations', withSlotAnnotations(data.calloutAnnotations, slot, next));
   };
+  // Lock state for the CURRENT step, computed off the real STEPS index so the
+  // editor lock always agrees with the sidebar padlock. `stepOverridden` = the
+  // step would be locked by status but the operator chose "edit anyway".
+  const naturalLocked = isStepLocked(step, data.status);
+  const stepOverridden = naturalLocked && !!(data.lockOverrides && data.lockOverrides[step]);
+  const stepLocked = naturalLocked && !stepOverridden;
+  const toggleLockOverride = () => set('lockOverrides', { ...(data.lockOverrides || {}), [step]: !(data.lockOverrides && data.lockOverrides[step]) });
   const stepProps = {
     data, set, images, onUpload: handleImgUpload, onRemove: handleImgRemove,
     onSeedImages: handleSeedImages,
@@ -1134,6 +1141,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     existingSuppliers,
     onCreateRevision: createRevision,
     packId: pack.id,
+    stepLocked, stepOverridden, toggleLockOverride,
   };
 
   return (
@@ -1248,7 +1256,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
         <div style={{ width: 220, minWidth: 220, borderRight: `1px solid ${FR.sand}`, background: FR.salt, display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '8px 0', flex: 1, overflowY: 'auto' }}>
             {STEPS.map((s, i) => {
-              const stepLocked = isStepLocked(i, data.status);
+              const stepLocked = isStepLocked(i, data.status, data.lockOverrides);
               const stepSkipped = skippedSteps.includes(i);
               const phaseChanged = i === 0 || STEPS[i - 1].phase !== s.phase;
               return (
