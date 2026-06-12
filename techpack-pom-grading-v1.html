@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FR Tech Pack — POM + Size Grading (mockup v1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --salt:#F5F0E8; --slate:#3A3A3A; --sand:#EBE5D5;
+  --sand-deep:#C9BBA0; --sand-tint:#EFE9DA;
+  --line:rgba(58,58,58,.15); --line-soft:rgba(58,58,58,.08);
+  --muted:rgba(58,58,58,.55); --faint:rgba(58,58,58,.38);
+  --green:#3B6D11; --white:#fff;
+  --serif:'Cormorant Garamond',Georgia,serif;
+  --sans:'General Sans','Inter','Helvetica Neue',Arial,sans-serif;
+  --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--salt);color:var(--slate);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+body{min-width:1340px}
+.app{min-height:100vh}
+
+/* ---------- top bar ---------- */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 34px 10px}
+.brand .erp{font-family:var(--serif);font-size:23px;letter-spacing:.12em;font-weight:500;line-height:1}
+.brand .fr{font-family:var(--serif);font-style:italic;font-size:12px;letter-spacing:.18em;color:var(--muted);margin-top:3px}
+.nav{display:flex;align-items:center;gap:26px;font-size:14px}
+.nav .dot{width:7px;height:7px;border-radius:50%;background:#8FB07A;display:inline-block;margin-right:14px}
+.nav a{color:var(--slate);text-decoration:none;display:flex;align-items:center;gap:5px;opacity:.85}
+.nav a.active{background:var(--sand);padding:7px 14px;border-radius:6px;opacity:1}
+.nav .caret{font-size:9px;color:var(--faint)}
+.gear{width:18px;height:18px;color:var(--faint)}
+
+/* ---------- plm sub-header ---------- */
+.subhead{display:flex;align-items:center;justify-content:space-between;padding:8px 34px 16px}
+.subhead h1{font-family:var(--serif);font-size:27px;font-weight:500;margin:0}
+.tabgroup{display:flex;gap:8px;margin-left:26px}
+.tab{display:flex;align-items:center;gap:7px;font-size:13.5px;padding:8px 16px;border-radius:6px;color:var(--slate);background:transparent;border:none;cursor:default}
+.tab .ic{width:14px;height:14px;opacity:.7}
+.tab.active{background:var(--slate);color:var(--salt)}
+.tab.active .ic{opacity:1}
+.subleft{display:flex;align-items:center}
+.utils{display:flex;gap:8px}
+.util{display:flex;align-items:center;gap:7px;font-size:13px;padding:8px 14px;border-radius:6px;border:.5px solid var(--line);background:var(--white);color:var(--slate);cursor:default}
+.util.on{box-shadow:0 0 0 1px var(--line)}
+.util .ic{width:13px;height:13px;opacity:.7}
+
+/* ---------- dark style bar ---------- */
+.stylebar{background:var(--slate);color:var(--salt);display:flex;align-items:flex-start;justify-content:space-between;padding:16px 34px;border-radius:10px;margin:0 18px}
+.sb-left{display:flex;align-items:center;gap:14px}
+.sb-btn{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--salt);background:rgba(245,240,232,.08);border:.5px solid rgba(245,240,232,.18);padding:8px 13px;border-radius:7px;cursor:default}
+.sb-btn .ic{width:13px;height:13px}
+.sb-style{margin-left:8px}
+.sb-style .lbl{font-size:11px;letter-spacing:.16em;color:rgba(245,240,232,.7)}
+.sb-style .id{font-family:var(--mono);font-size:15px;margin-top:3px}
+.sb-right{display:flex;align-items:flex-start;gap:18px}
+.sb-actions{display:flex;align-items:center;gap:10px;margin-top:4px}
+.sb-action{display:flex;align-items:center;gap:7px;font-size:13px;background:var(--salt);color:var(--slate);border:none;padding:9px 15px;border-radius:7px;cursor:default}
+.sb-action.ghost{background:rgba(245,240,232,.08);color:rgba(245,240,232,.55);border:.5px solid rgba(245,240,232,.18)}
+.sb-saved{font-size:13px;color:#9FC07F;display:flex;align-items:center;gap:6px;align-self:center}
+.sb-cost{text-align:right;line-height:1.35}
+.sb-cost .cl{font-size:10px;letter-spacing:.16em;color:rgba(245,240,232,.55)}
+.sb-cost .cv{font-size:26px;font-weight:600;margin-top:1px}
+.sb-cost .meta{font-family:var(--mono);font-size:10.5px;color:rgba(245,240,232,.7);margin-top:3px}
+.sb-cost .good{color:#9FC07F}
+.sb-cost .dim{color:rgba(245,240,232,.45)}
+.sb-cost .pctv{position:absolute}
+
+/* ---------- body 3-col ---------- */
+.body{display:flex;gap:0;padding:18px;align-items:flex-start}
+.steps{width:236px;flex:0 0 236px;padding-right:14px}
+.editor{flex:1 1 auto;min-width:0;background:var(--salt)}
+.preview{width:610px;flex:0 0 610px;padding-left:18px;border-left:.5px solid var(--line)}
+
+/* ---------- steps sidebar ---------- */
+.grp{margin-top:18px}
+.grp:first-child{margin-top:4px}
+.grp-h{display:flex;align-items:center;justify-content:space-between;font-size:10.5px;letter-spacing:.18em;color:var(--muted);padding:0 6px 8px}
+.grp-h .v{font-family:var(--mono);font-size:10.5px;background:var(--sand);color:var(--slate);padding:2px 8px;border-radius:5px;letter-spacing:.04em}
+.step{display:flex;align-items:center;gap:11px;padding:7px 10px;border-radius:7px;font-size:13.5px;color:var(--slate);cursor:default}
+.step .n{font-family:var(--mono);font-size:11.5px;color:var(--muted);min-width:20px}
+.step.skip{color:var(--faint)}
+.step.skip .lab{text-decoration:line-through}
+.step.skip .x{width:12px;height:12px;color:var(--faint)}
+.step.click{cursor:pointer}
+.step.click:hover{background:var(--sand-tint)}
+.step.active{background:var(--white);box-shadow:inset 0 0 0 .5px var(--line)}
+.synced{display:flex;align-items:center;justify-content:space-between;margin-top:26px;padding:0 6px}
+.synced .s{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.synced .s .d{width:7px;height:7px;border-radius:50%;background:#6B8E6B}
+.synced .v{font-family:var(--mono);font-size:11px;background:var(--sand);padding:2px 8px;border-radius:5px}
+
+/* ---------- editor common ---------- */
+.skipbar{display:flex;align-items:center;justify-content:space-between;background:var(--white);border:.5px solid var(--line);border-radius:9px;padding:14px 18px;font-size:13.5px;color:var(--muted)}
+.skipbar button{font-size:13px;background:var(--salt);border:.5px solid var(--line);padding:8px 16px;border-radius:7px;color:var(--slate);cursor:default}
+.ptitle{font-family:var(--serif);font-size:30px;font-weight:500;margin:26px 0 0}
+.ptitle .rule{display:block;width:54px;height:2px;background:var(--slate);margin-top:10px}
+.changenote{background:var(--sand);border-radius:8px;padding:11px 15px;margin-top:16px;font-size:12.5px;color:var(--slate);line-height:1.5}
+.changenote b{font-weight:600}
+.phase{display:inline-flex;align-items:center;gap:8px;margin-top:14px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--white);border:.5px solid var(--line);padding:6px 12px;border-radius:20px}
+.phase .pd{width:7px;height:7px;border-radius:50%;background:var(--sand-deep)}
+.flabel{font-size:11px;letter-spacing:.14em;color:var(--muted);margin:24px 0 8px}
+.help{font-size:12px;color:var(--muted);margin-top:7px;line-height:1.5}
+.drop{border:1.5px dashed var(--line);border-radius:9px;background:var(--white);padding:42px;text-align:center;color:var(--muted)}
+.drop .plus{font-size:22px;color:var(--faint)}
+.drop .t{font-size:14px;margin-top:8px}
+.drop .s{font-size:11.5px;color:var(--faint);margin-top:4px}
+.select{width:100%;background:var(--white);border:.5px solid var(--line);border-radius:9px;padding:14px 16px;font-size:14px;color:var(--slate);display:flex;align-items:center;justify-content:space-between}
+.row2{display:flex;gap:22px}
+.row2 > div{flex:1}
+
+/* ---------- spec table ---------- */
+.spec{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px;background:var(--white);border:.5px solid var(--line);border-radius:9px;overflow:hidden}
+.spec thead th{background:var(--slate);color:var(--salt);font-weight:500;text-align:left;padding:11px 12px;font-size:11px;letter-spacing:.08em}
+.spec thead th.num{text-align:center}
+.spec tbody td{padding:12px;border-top:.5px solid var(--line-soft)}
+.spec tbody td.num{color:var(--muted);font-family:var(--mono);text-align:center;width:34px}
+.spec td.val{font-family:var(--mono)}
+.spec td.lock{color:var(--faint);font-family:var(--mono)}
+.spec th.sample,.spec td.sample{background:var(--sand-tint)}
+.spec th.sample{background:var(--sand-deep);color:var(--slate)}
+.spec td.edit{font-family:var(--mono);background:#fcfaf6}
+.spec td.method{color:var(--muted)}
+.spec td .xr{float:right;color:var(--faint)}
+.addrow{margin-top:10px;font-size:13px;background:var(--white);border:.5px solid var(--line);padding:8px 16px;border-radius:7px;color:var(--muted);cursor:default}
+.txtarea{width:100%;background:var(--white);border:.5px solid var(--line);border-radius:9px;padding:15px;font-size:14px;color:var(--slate);min-height:70px;font-family:var(--sans)}
+.foot{font-size:12px;color:var(--muted);font-style:italic;margin-top:16px;line-height:1.5}
+
+/* ---------- export panel ---------- */
+.export{margin-top:26px;background:var(--white);border:.5px solid var(--line);border-radius:11px;padding:20px 22px}
+.export .eh{display:flex;align-items:center;justify-content:space-between}
+.export .et{font-family:var(--serif);font-size:21px;font-weight:500}
+.export .tag{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);background:var(--sand);padding:4px 10px;border-radius:20px}
+.export .eb{font-size:13px;color:var(--muted);line-height:1.6;margin-top:8px;max-width:560px}
+.mini{width:100%;border-collapse:collapse;margin-top:16px;font-size:12px;border:.5px solid var(--line);border-radius:8px;overflow:hidden}
+.mini thead th{background:var(--sand-tint);color:var(--slate);text-align:left;padding:8px 11px;font-weight:600;font-size:10.5px;letter-spacing:.06em}
+.mini tbody td{padding:8px 11px;border-top:.5px solid var(--line-soft);font-family:var(--mono)}
+.mini tbody td.m0{font-family:var(--sans);color:var(--slate)}
+.ebtns{display:flex;gap:10px;margin-top:16px}
+.ebtn{font-size:13px;background:var(--slate);color:var(--salt);border:none;padding:10px 18px;border-radius:7px;cursor:default;display:flex;align-items:center;gap:8px}
+.ebtn.alt{background:var(--white);color:var(--slate);border:.5px solid var(--line)}
+.ecap{font-size:11.5px;color:var(--faint);margin-top:10px}
+
+/* ---------- grading specifics ---------- */
+.gradetbl{width:100%;border-collapse:collapse;margin-top:14px;font-size:12.5px;background:var(--white);border:.5px solid var(--line);border-radius:9px;overflow:hidden}
+.gradetbl thead th{background:var(--slate);color:var(--salt);font-weight:500;padding:10px;font-size:11px;letter-spacing:.06em;text-align:center}
+.gradetbl thead th.meas{text-align:left}
+.gradetbl thead th.sample{background:var(--sand-deep);color:var(--slate)}
+.gradetbl .subh td{padding:5px 10px;font-size:10px;letter-spacing:.06em;color:var(--muted);text-align:center;border-top:none;background:#fbf9f4}
+.gradetbl .subh td.meas{text-align:left}
+.gradetbl tbody td{padding:10px;border-top:.5px solid var(--line-soft);text-align:center;font-family:var(--mono)}
+.gradetbl tbody td.meas{text-align:left;font-family:var(--sans)}
+.gradetbl tbody td.sample{background:var(--sand-tint)}
+.gradetbl td .d{color:var(--muted)}
+.lockfield{background:var(--white);border:.5px solid var(--line);border-radius:9px;padding:14px 16px;font-size:14px;color:var(--slate);display:flex;align-items:center;justify-content:space-between}
+.lockfield .lk{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+
+.card2{margin-top:26px;background:var(--white);border:.5px solid var(--line);border-radius:11px;padding:20px 22px}
+.card2 .c2h{font-family:var(--serif);font-size:21px;font-weight:500}
+.card2 .c2s{font-size:12.5px;color:var(--muted);margin-top:6px;line-height:1.6;max-width:560px}
+.nest{margin-top:16px;border:1.5px dashed var(--line);border-radius:9px;background:var(--salt);height:180px;display:flex;align-items:center;justify-content:center;position:relative}
+.nest svg{opacity:.5}
+.nest .nl{position:absolute;bottom:12px;font-size:11px;letter-spacing:.1em;color:var(--faint);text-transform:uppercase}
+.fits{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:16px}
+.fit{border:.5px solid var(--line);border-radius:9px;overflow:hidden;background:var(--salt)}
+.fit .frame{height:200px;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#efe9dd,#e6dfd0)}
+.fit .frame svg{opacity:.45}
+.fit .meta{padding:10px 12px;background:var(--white);border-top:.5px solid var(--line)}
+.fit .sz{font-size:11px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+.fit .dl{margin-top:8px;font-size:11.5px;background:var(--slate);color:var(--salt);border:none;width:100%;padding:7px;border-radius:6px;cursor:default;display:flex;align-items:center;justify-content:center;gap:6px}
+.fitbar{display:flex;align-items:center;justify-content:space-between;margin-top:4px}
+.fitbar .dla{font-size:12.5px;background:var(--white);border:.5px solid var(--line);padding:8px 15px;border-radius:7px;color:var(--slate);cursor:default;display:flex;align-items:center;gap:7px}
+
+.pnav{display:flex;align-items:center;justify-content:space-between;margin-top:28px}
+.pnav button{font-size:13.5px;background:var(--white);border:.5px solid var(--line);padding:11px 22px;border-radius:7px;color:var(--slate);cursor:default}
+.pnav button.next{background:var(--slate);color:var(--salt);border:none}
+.pnav .stp{font-size:12.5px;color:var(--muted)}
+
+/* ---------- live preview ---------- */
+.pvhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.pvhead .l{font-size:11px;letter-spacing:.16em;color:var(--muted)}
+.pvhead .r{font-size:11px;color:var(--faint)}
+.page{background:var(--white);border:.5px solid var(--line);border-radius:6px;overflow:hidden;box-shadow:0 1px 0 rgba(58,58,58,.04)}
+.pgband{background:var(--slate);color:var(--salt);display:flex;align-items:flex-start;justify-content:space-between;padding:16px 20px}
+.pgband .co{font-size:11px;letter-spacing:.1em}
+.pgband .cs{font-size:9px;letter-spacing:.16em;color:rgba(245,240,232,.6);margin-top:4px}
+.pgband .ttl{font-family:var(--serif);font-size:19px;font-weight:500}
+.pgband .rt{text-align:right}
+.pgband .rid{font-family:var(--mono);font-size:10px}
+.pgband .rp{font-size:8.5px;letter-spacing:.14em;color:rgba(245,240,232,.6);margin-top:4px}
+.pgbody{padding:20px}
+.pgmeta{display:flex;border:.5px solid var(--line);border-radius:5px;overflow:hidden;margin-bottom:18px}
+.pgmeta div{flex:1;padding:9px 12px;border-right:.5px solid var(--line-soft)}
+.pgmeta div:last-child{border-right:none}
+.pgmeta .k{font-size:8px;letter-spacing:.12em;color:var(--faint)}
+.pgmeta .vv{font-size:11px;margin-top:3px}
+.pgmeta .vv.mono{font-family:var(--mono)}
+.pgcols{display:flex;gap:18px}
+.pgcols .lft{flex:0 0 230px}
+.pgcols .rgt{flex:1}
+.pgsubt{font-family:var(--serif);font-size:14px;border-bottom:.5px solid var(--line);padding-bottom:5px;margin-bottom:10px}
+.pgdiag{border:.5px dashed var(--line);border-radius:4px;height:300px;display:flex;align-items:flex-end;justify-content:center;position:relative}
+.pgdiag .ph{position:absolute;top:50%;transform:translateY(-50%);font-style:italic;font-size:11px;color:var(--faint)}
+.pgdiag .cap{font-size:8px;letter-spacing:.1em;color:var(--faint);padding:8px;text-transform:uppercase}
+.pgtbl{width:100%;border-collapse:collapse;font-size:9.5px}
+.pgtbl th{text-align:left;border-bottom:.5px solid var(--line);padding:5px 4px;font-weight:600;font-size:8px;letter-spacing:.04em;color:var(--muted)}
+.pgtbl th.num,.pgtbl th.c{text-align:center}
+.pgtbl th.sample{background:var(--sand-deep);color:var(--slate)}
+.pgtbl td{padding:5px 4px;border-bottom:.5px solid var(--line-soft);font-family:var(--mono)}
+.pgtbl td.lab{font-family:var(--sans)}
+.pgtbl td.num{text-align:center;color:var(--faint)}
+.pgtbl td.c{text-align:center}
+.pgtbl td.sample{background:var(--sand-tint);text-align:center}
+.pgtbl td.blank{color:var(--faint);text-align:center}
+.pgnote{font-size:9px;color:var(--muted);font-style:italic;margin-top:14px;line-height:1.5}
+.pgnote b{font-style:normal;font-weight:600;font-size:8px;letter-spacing:.08em;color:var(--faint);display:block;margin-bottom:2px}
+.pgfit{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px}
+.pgfit .f{border:.5px solid var(--line);border-radius:4px;overflow:hidden}
+.pgfit .fi{height:90px;background:linear-gradient(180deg,#efe9dd,#e6dfd0);display:flex;align-items:center;justify-content:center}
+.pgfit .fi svg{opacity:.4}
+.pgfit .fl{font-size:8px;letter-spacing:.1em;text-align:center;padding:5px;color:var(--muted)}
+.pgfoot{display:flex;justify-content:space-between;font-size:8px;color:var(--faint);padding:14px 20px 18px}
+
+/* view toggling */
+.v-pom,.v-grading{display:none}
+[data-view="pom"] .v-pom{display:block}
+[data-view="grading"] .v-grading{display:block}
+[data-view="pom"] #step12{background:var(--white);box-shadow:inset 0 0 0 .5px var(--line)}
+[data-view="grading"] #step13{background:var(--white);box-shadow:inset 0 0 0 .5px var(--line)}
+.hint{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--slate);color:var(--salt);font-size:12px;padding:9px 18px;border-radius:20px;opacity:.92;z-index:20}
+.hint b{font-weight:600}
+</style>
+</head>
+<body data-view="pom" id="root">
+<div class="app">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="erp">ENTERPRISE RESOURCE PLANNING</div>
+      <div class="fr">FOREIGN RESOURCE</div>
+    </div>
+    <nav class="nav">
+      <span><span class="dot"></span>Cash</span>
+      <a>Marketing <span class="caret">▾</span></a>
+      <a class="active">Product <span class="caret">▾</span></a>
+      <a>Inventory <span class="caret">▾</span></a>
+      <a>Operations <span class="caret">▾</span></a>
+      <svg class="gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </nav>
+  </div>
+
+  <!-- PLM SUB-HEADER -->
+  <div class="subhead">
+    <div class="subleft">
+      <h1>Product Lifecycle Management</h1>
+      <div class="tabgroup">
+        <button class="tab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 19V5a1 1 0 0 1 1-1h4v16H5a1 1 0 0 1-1-1z"/><path d="M9 4h5v16H9z"/><path d="M14 4l4 1 2 14-5 1z"/></svg>Library</button>
+        <button class="tab active"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l8 4v6c0 4-3.5 7-8 8-4.5-1-8-4-8-8V7z"/></svg>Styles</button>
+        <button class="tab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 9l9-5 9 5-9 5z"/><path d="M3 9v6l9 5 9-5V9"/></svg>Production</button>
+      </div>
+    </div>
+    <div class="utils">
+      <button class="util"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 15V3"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Backup</button>
+      <button class="util on"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>Sync diagnostics</button>
+      <button class="util"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Storage Health</button>
+    </div>
+  </div>
+
+  <!-- DARK STYLE BAR -->
+  <div class="stylebar">
+    <div class="sb-left">
+      <button class="sb-btn"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m15 18-6-6 6-6"/></svg>Back</button>
+      <button class="sb-btn"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Restore points</button>
+      <div class="sb-style">
+        <div class="lbl">FOREIGN RESOURCE</div>
+        <div class="id">FW26-BB-ZH-0001</div>
+      </div>
+    </div>
+    <div class="sb-right">
+      <div class="sb-actions">
+        <button class="sb-action"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m22 2-7 20-4-9-9-4z"/></svg>Send sample</button>
+        <button class="sb-action"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/></svg>Send PO</button>
+        <button class="sb-action ghost">Save</button>
+        <span class="sb-saved"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 5 5L20 7"/></svg>All changes saved</span>
+      </div>
+      <div class="sb-cost">
+        <div class="cl">TOTAL UNIT COST</div>
+        <div class="cv">$31.45</div>
+        <div class="meta">incl. Dongguan Shengde Clothing Ltd. +20% · $5.24</div>
+        <div class="meta good">−2.52 vs max FOB</div>
+        <div class="meta dim">BOM $0.00 · Color $0.00 &nbsp; 35% &nbsp; v1</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div class="body">
+
+    <!-- STEPS -->
+    <aside class="steps">
+      <div class="grp">
+        <div class="grp-h"><span>MERCHANDISING</span></div>
+        <div class="step skip"><svg class="x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg><span class="lab">Competitor Landscape</span></div>
+        <div class="step skip"><svg class="x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg><span class="lab">Merchandising Preview</span></div>
+      </div>
+      <div class="grp">
+        <div class="grp-h"><span>DESIGN</span></div>
+        <div class="step"><span class="n">01</span><span class="lab">Style Overview</span></div>
+        <div class="step"><span class="n">02</span><span class="lab">Design Overview</span></div>
+      </div>
+      <div class="grp">
+        <div class="grp-h"><span>BILL OF MATERIALS</span><span class="v">$17.91</span></div>
+        <div class="step"><span class="n">03</span><span class="lab">Fabrics</span></div>
+        <div class="step"><span class="n">03.1</span><span class="lab">Fabrics</span></div>
+        <div class="step"><span class="n">04</span><span class="lab">Trims</span></div>
+        <div class="step"><span class="n">05</span><span class="lab">Packaging</span></div>
+      </div>
+      <div class="grp">
+        <div class="grp-h"><span>CUT &amp; SEW</span><span class="v">$5.00</span></div>
+        <div class="step"><span class="n">06</span><span class="lab">Pattern</span></div>
+        <div class="step"><span class="n">07</span><span class="lab">Construction (1)</span></div>
+        <div class="step"><span class="n">08</span><span class="lab">Construction (2)</span></div>
+        <div class="step"><span class="n">09</span><span class="lab">Sewing (1)</span></div>
+        <div class="step"><span class="n">10</span><span class="lab">Sewing (2)</span></div>
+        <div class="step"><span class="n">$</span><span class="lab">Cut &amp; Sew Cost</span></div>
+        <div class="step"><span class="n">11</span><span class="lab">Cutting</span></div>
+        <div class="step click" id="step12" onclick="setView('pom')"><span class="n">12</span><span class="lab">Points of Measure</span></div>
+        <div class="step click" id="step13" onclick="setView('grading')"><span class="n">13</span><span class="lab">Size Grading</span></div>
+      </div>
+      <div class="grp">
+        <div class="grp-h"><span>EMBELLISHMENTS</span></div>
+        <div class="step skip"><svg class="x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg><span class="lab">Colorways</span></div>
+        <div class="step skip"><svg class="x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg><span class="lab">Artwork &amp; Placement</span></div>
+        <div class="step skip"><svg class="x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg><span class="lab">Flat Lay</span></div>
+        <div class="step skip"><svg class="x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg><span class="lab">Call Outs</span></div>
+        <div class="step"><span class="n">18</span><span class="lab">Sizing &amp; Colors</span></div>
+      </div>
+      <div class="synced">
+        <div class="s"><span class="d"></span>Synced · 20h ago</div>
+        <span class="v">$3.30</span>
+      </div>
+    </aside>
+
+    <!-- EDITOR -->
+    <main class="editor">
+
+      <!-- ============ POM EDITOR ============ -->
+      <div class="v-pom">
+        <div class="skipbar"><span>Not using this page? Skip it and it will be crossed out in the export.</span><button>Skip page</button></div>
+        <div class="ptitle">Points of Measure (cm)<span class="rule"></span></div>
+
+        <div class="changenote"><b>What changed —</b> This page is now the QC contract for the <b>sample size</b> and the source of the customer size chart. The <b>Sample size</b> selector moved here, a real <b>Tolerance (±)</b> column was added (this is what AQL and your 3rd-party QC measure against), and you can <b>export a redacted customer chart straight to Shopify</b>. S / M / XL stay locked until the sample is approved and Size Grading fills them.</div>
+
+        <div class="phase"><span class="pd"></span>Sampling phase · locking the L sample</div>
+
+        <div class="flabel">POM DIAGRAM (NUMBERED MEASUREMENT POINTS)</div>
+        <div class="drop"><div class="plus">+</div><div class="t">Click or drag photos here</div><div class="s">JPG, PNG — auto-resized</div></div>
+
+        <div class="row2">
+          <div>
+            <div class="flabel">SIZE TYPE</div>
+            <div class="select">apparel <span style="color:var(--faint)">▾</span></div>
+          </div>
+          <div>
+            <div class="flabel">SAMPLE SIZE &nbsp;·&nbsp; <span style="color:var(--sand-deep);font-weight:600">moved here</span></div>
+            <div class="select">L <span style="color:var(--faint)">▾</span></div>
+          </div>
+        </div>
+        <div class="help">The sample size is the one size you make and approve first. Everything else is graded from it. Only the sample column is editable until the sample is signed off.</div>
+
+        <div class="flabel">MEASUREMENT SPEC (cm)</div>
+        <table class="spec">
+          <thead><tr>
+            <th class="num">#</th><th>MEASUREMENT</th>
+            <th class="c">S</th><th class="c">M</th><th class="sample">L · SAMPLE</th><th class="c">XL</th>
+            <th class="c">TOL ±</th><th>METHOD</th>
+          </tr></thead>
+          <tbody>
+            <tr><td class="num">1</td><td>Chest Width (1/2)</td><td class="lock">—</td><td class="lock">—</td><td class="sample val">59.26</td><td class="lock">—</td><td class="edit">1</td><td class="method">Lay flat / Tape <span class="xr">×</span></td></tr>
+            <tr><td class="num">2</td><td>Body Length (HPS)</td><td class="lock">—</td><td class="lock">—</td><td class="sample val">63</td><td class="lock">—</td><td class="edit">1</td><td class="method">Lay flat / Tape <span class="xr">×</span></td></tr>
+            <tr><td class="num">3</td><td>Shoulder Width</td><td class="lock">—</td><td class="lock">—</td><td class="sample val">71</td><td class="lock">—</td><td class="edit">1</td><td class="method">Lay flat / Tape <span class="xr">×</span></td></tr>
+            <tr><td class="num">4</td><td>Sleeve Length (HPS)</td><td class="lock">—</td><td class="lock">—</td><td class="sample val">80.1</td><td class="lock">—</td><td class="edit">1</td><td class="method">Lay flat / Tape <span class="xr">×</span></td></tr>
+            <tr><td class="num">5</td><td>Armhole</td><td class="lock">—</td><td class="lock">—</td><td class="sample val">22.5</td><td class="lock">—</td><td class="edit">0.5</td><td class="method">Lay flat / Tape <span class="xr">×</span></td></tr>
+            <tr><td class="num">6</td><td>Hem Width (1/2)</td><td class="lock">—</td><td class="lock">—</td><td class="sample val">59.25</td><td class="lock">—</td><td class="edit">1</td><td class="method">Lay flat / Tape <span class="xr">×</span></td></tr>
+            <tr><td class="num">7</td><td>Cuff Opening</td><td class="lock">—</td><td class="lock">—</td><td class="sample val">11</td><td class="lock">—</td><td class="edit">1</td><td class="method">Lay flat / Tape <span class="xr">×</span></td></tr>
+            <tr><td class="num">8</td><td>Cuff Height</td><td class="lock">—</td><td class="lock">—</td><td class="sample val">8</td><td class="lock">—</td><td class="edit">0.5</td><td class="method">Lay flat / Tape <span class="xr">×</span></td></tr>
+            <tr><td class="num">9</td><td>Hood Height</td><td class="lock">—</td><td class="lock">—</td><td class="sample val">43.6</td><td class="lock">—</td><td class="edit">1</td><td class="method">Lay flat / Tape <span class="xr">×</span></td></tr>
+          </tbody>
+        </table>
+        <button class="addrow">+ Add Row</button>
+
+        <div class="flabel">MEASUREMENT METHOD</div>
+        <textarea class="txtarea">Lay garment flat on table. Smooth without stretching. Measure with flexible tape.</textarea>
+
+        <!-- EXPORT -->
+        <div class="export">
+          <div class="eh">
+            <div class="et">Export customer size chart</div>
+            <div class="tag">New · to Shopify</div>
+          </div>
+          <div class="eb">Pulls the graded sizes from this spec, <b>strips tolerance and method</b> (those are factory-only), and labels every measurement garment-flat. Drops straight into your Shopify size-chart app — no retyping.</div>
+          <table class="mini">
+            <thead><tr><th>MEASUREMENT (garment-flat, cm)</th><th>S</th><th>M</th><th>L</th><th>XL</th></tr></thead>
+            <tbody>
+              <tr><td class="m0">Chest Width (1/2)</td><td>54.3</td><td>56.8</td><td>59.3</td><td>61.8</td></tr>
+              <tr><td class="m0">Body Length (HPS)</td><td>59.0</td><td>61.0</td><td>63.0</td><td>65.0</td></tr>
+              <tr><td class="m0">Sleeve Length (HPS)</td><td>77.1</td><td>78.6</td><td>80.1</td><td>81.6</td></tr>
+              <tr><td class="m0">Hem Width (1/2)</td><td>54.3</td><td>56.8</td><td>59.3</td><td>61.8</td></tr>
+            </tbody>
+          </table>
+          <div class="ebtns">
+            <button class="ebtn"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 15V3"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Download CSV</button>
+            <button class="ebtn alt"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>Copy for Shopify</button>
+          </div>
+          <div class="ecap">Fills with all four sizes once Size Grading is complete. Tolerance and measurement method never leave the tech pack.</div>
+        </div>
+
+        <div class="foot">All measurements in centimetres. Measure flat, relaxed. Tolerance ±1 cm unless otherwise specified.</div>
+
+        <div class="pnav"><button>Previous</button><span class="stp">Step 15 of 28</span><button class="next">Next</button></div>
+      </div>
+
+      <!-- ============ GRADING EDITOR ============ -->
+      <div class="v-grading">
+        <div class="skipbar"><span>Not using this page? Skip it and it will be crossed out in the export.</span><button>Skip page</button></div>
+        <div class="ptitle">Size Grading<span class="rule"></span></div>
+
+        <div class="changenote"><b>What changed —</b> This page is now only about <b>grading the pattern</b> and <b>fit</b> — not a second list of measurements. The grade rules write S / M / XL back into Points of Measure. The sample-size picker is gone (it lives on Points of Measure now); the L column here is read-only. Added the <b>graded pattern nest</b> and <b>four CLO3D fit renders</b> (one per size) you can download for the Shopify product page.</div>
+
+        <div class="phase"><span class="pd"></span>Pre-production · unlocks after the L sample is approved</div>
+
+        <p class="help" style="margin-top:18px;font-size:13px">Grade rules turn the approved <b>L</b> sample into S, M and XL. Final values are computed as <span style="font-family:var(--mono)">sample + delta</span> and write back into Points of Measure. The sample size is locked on the Points of Measure page.</p>
+
+        <div class="row2">
+          <div>
+            <div class="flabel">SIZES (FROM STYLE OVERVIEW)</div>
+            <div class="select" style="font-family:var(--mono)">S, M, L, XL</div>
+          </div>
+          <div>
+            <div class="flabel">SAMPLE SIZE</div>
+            <div class="lockfield">L <span class="lk"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>set on Points of Measure</span></div>
+          </div>
+        </div>
+
+        <table class="gradetbl">
+          <thead>
+            <tr><th class="meas" rowspan="2">MEASUREMENT</th><th colspan="2">S</th><th colspan="2">M</th><th class="sample">L · SAMPLE</th><th colspan="2">XL</th></tr>
+            <tr class="subh"><td>Δ</td><td>cm</td><td>Δ</td><td>cm</td><td class="sample" style="font-size:9px">cm</td><td>Δ</td><td>cm</td></tr>
+          </thead>
+          <tbody>
+            <tr><td class="meas">Chest Width (1/2)</td><td class="d">−5.0</td><td>54.3</td><td class="d">−2.5</td><td>56.8</td><td class="sample">59.3</td><td class="d">+2.5</td><td>61.8</td></tr>
+            <tr><td class="meas">Body Length (HPS)</td><td class="d">−4.0</td><td>59.0</td><td class="d">−2.0</td><td>61.0</td><td class="sample">63.0</td><td class="d">+2.0</td><td>65.0</td></tr>
+            <tr><td class="meas">Shoulder Width</td><td class="d">−2.0</td><td>69.0</td><td class="d">−1.0</td><td>70.0</td><td class="sample">71.0</td><td class="d">+1.0</td><td>72.0</td></tr>
+            <tr><td class="meas">Sleeve Length (HPS)</td><td class="d">−3.0</td><td>77.1</td><td class="d">−1.5</td><td>78.6</td><td class="sample">80.1</td><td class="d">+1.5</td><td>81.6</td></tr>
+            <tr><td class="meas">Armhole</td><td class="d">−1.2</td><td>21.3</td><td class="d">−0.6</td><td>21.9</td><td class="sample">22.5</td><td class="d">+0.6</td><td>23.1</td></tr>
+            <tr><td class="meas">Hem Width (1/2)</td><td class="d">−5.0</td><td>54.3</td><td class="d">−2.5</td><td>56.8</td><td class="sample">59.3</td><td class="d">+2.5</td><td>61.8</td></tr>
+            <tr><td class="meas">Cuff Opening</td><td class="d">−1.0</td><td>10.0</td><td class="d">−0.5</td><td>10.5</td><td class="sample">11.0</td><td class="d">+0.5</td><td>11.5</td></tr>
+            <tr><td class="meas">Cuff Height</td><td class="d">0</td><td>8.0</td><td class="d">0</td><td>8.0</td><td class="sample">8.0</td><td class="d">0</td><td>8.0</td></tr>
+            <tr><td class="meas">Hood Height</td><td class="d">0</td><td>43.6</td><td class="d">0</td><td>43.6</td><td class="sample">43.6</td><td class="d">0</td><td>43.6</td></tr>
+          </tbody>
+        </table>
+        <div class="foot">Per-size values derived as sample + delta. Base column comes from Points of Measure.</div>
+
+        <!-- PATTERN GRADE -->
+        <div class="card2">
+          <div class="c2h">Pattern grade</div>
+          <div class="c2s">The graded nest — every size stacked on one marker. Inherited from the Pattern page (06) and the Cut &amp; Sew block; this is the geometry the factory cuts each size from.</div>
+          <div class="nest">
+            <svg width="260" height="120" viewBox="0 0 260 120" fill="none" stroke="#3A3A3A" stroke-width="1">
+              <path d="M40 100 L40 40 Q40 20 70 20 L150 20 Q180 20 180 40 L180 100 Z"/>
+              <path d="M50 96 L50 42 Q50 26 74 26 L146 26 Q170 26 170 42 L170 96 Z" opacity=".6"/>
+              <path d="M60 92 L60 44 Q60 32 78 32 L142 32 Q160 32 160 44 L160 92 Z" opacity=".4"/>
+              <path d="M70 88 L70 46 Q70 38 82 38 L138 38 Q150 38 150 46 L150 88 Z" opacity=".25"/>
+            </svg>
+            <div class="nl">Graded nest · inherited from Pattern (page 06)</div>
+          </div>
+        </div>
+
+        <!-- FIT MODELS -->
+        <div class="card2">
+          <div class="c2h">Fit models — CLO3D, one per size</div>
+          <div class="c2s">A render of the actual garment on a body at each size, so customers can see how it fits. Rendered from CLO3D after the sample is locked. Download each to upload to the Shopify product page.</div>
+          <div class="fitbar">
+            <span style="font-size:11.5px;color:var(--muted)">S · M · L · XL</span>
+            <button class="dla"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 15V3"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Download all (PNG)</button>
+          </div>
+          <div class="fits">
+            <div class="fit"><div class="frame"><svg width="46" height="120" viewBox="0 0 46 120" fill="none" stroke="#3A3A3A" stroke-width="1.4"><circle cx="23" cy="14" r="9"/><path d="M9 44 Q23 30 37 44 L34 84 L12 84 Z"/><path d="M9 44 L4 70 M37 44 L42 70"/><path d="M16 84 L14 116 M30 84 L32 116"/></svg></div><div class="meta"><div class="sz">Size S</div><button class="dl"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15V3"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Download</button></div></div>
+            <div class="fit"><div class="frame"><svg width="50" height="120" viewBox="0 0 50 120" fill="none" stroke="#3A3A3A" stroke-width="1.4"><circle cx="25" cy="14" r="9"/><path d="M10 44 Q25 30 40 44 L37 86 L13 86 Z"/><path d="M10 44 L4 72 M40 44 L46 72"/><path d="M17 86 L15 116 M33 86 L35 116"/></svg></div><div class="meta"><div class="sz">Size M</div><button class="dl"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15V3"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Download</button></div></div>
+            <div class="fit"><div class="frame"><svg width="54" height="120" viewBox="0 0 54 120" fill="none" stroke="#3A3A3A" stroke-width="1.4"><circle cx="27" cy="14" r="10"/><path d="M10 45 Q27 30 44 45 L41 88 L13 88 Z"/><path d="M10 45 L3 74 M44 45 L51 74"/><path d="M18 88 L16 116 M36 88 L38 116"/></svg></div><div class="meta"><div class="sz">Size L · sample</div><button class="dl"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15V3"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Download</button></div></div>
+            <div class="fit"><div class="frame"><svg width="58" height="120" viewBox="0 0 58 120" fill="none" stroke="#3A3A3A" stroke-width="1.4"><circle cx="29" cy="14" r="10"/><path d="M10 46 Q29 30 48 46 L45 90 L13 90 Z"/><path d="M10 46 L2 76 M48 46 L56 76"/><path d="M19 90 L17 116 M39 90 L41 116"/></svg></div><div class="meta"><div class="sz">Size XL</div><button class="dl"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15V3"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Download</button></div></div>
+          </div>
+        </div>
+
+        <div class="pnav"><button>Previous</button><span class="stp">Step 16 of 28</span><button class="next">Next</button></div>
+      </div>
+
+    </main>
+
+    <!-- LIVE PREVIEW -->
+    <aside class="preview">
+      <div class="pvhead"><span class="l">LIVE PREVIEW</span><span class="r v-pom" style="display:none">Page 15 / 28</span><span class="r v-grading" style="display:none">Page 16 / 28</span></div>
+
+      <!-- POM PAGE -->
+      <div class="v-pom">
+        <div class="page">
+          <div class="pgband">
+            <div><div class="co">FOREIGN RESOURCE CO.</div><div class="cs">CUT &amp; SEW</div></div>
+            <div class="ttl">Points of Measure</div>
+            <div class="rt"><div class="rid">FW26-BB-ZH-0001</div><div class="rp">PAGE 12 / 25</div></div>
+          </div>
+          <div class="pgbody">
+            <div class="pgmeta">
+              <div><div class="k">STYLE #</div><div class="vv mono">FW26-BB-ZH-0001</div></div>
+              <div><div class="k">COLLECTION</div><div class="vv">Borderless Basics</div></div>
+              <div><div class="k">SEASON</div><div class="vv">FW26</div></div>
+              <div><div class="k">VERSION</div><div class="vv">V1.0</div></div>
+              <div><div class="k">COLORWAY</div><div class="vv">Slate</div></div>
+              <div><div class="k">SIZE RANGE</div><div class="vv">S / M / L / XL</div></div>
+            </div>
+            <div class="pgcols">
+              <div class="lft">
+                <div class="pgsubt">POM Diagram</div>
+                <div class="pgdiag"><span class="ph">Drop numbered measurement points here</span><span class="cap">Numbered Measurement Points</span></div>
+              </div>
+              <div class="rgt">
+                <div class="pgsubt">Measurement Spec (cm)</div>
+                <table class="pgtbl">
+                  <thead><tr><th class="num">#</th><th>MEASUREMENT</th><th class="c">TOL ±</th><th class="c">S</th><th class="c">M</th><th class="sample">L</th><th class="c">XL</th></tr></thead>
+                  <tbody>
+                    <tr><td class="num">1</td><td class="lab">Chest Width (1/2)</td><td class="c">1</td><td class="blank">—</td><td class="blank">—</td><td class="sample">59.26</td><td class="blank">—</td></tr>
+                    <tr><td class="num">2</td><td class="lab">Body Length (HPS)</td><td class="c">1</td><td class="blank">—</td><td class="blank">—</td><td class="sample">63</td><td class="blank">—</td></tr>
+                    <tr><td class="num">3</td><td class="lab">Shoulder Width</td><td class="c">1</td><td class="blank">—</td><td class="blank">—</td><td class="sample">71</td><td class="blank">—</td></tr>
+                    <tr><td class="num">4</td><td class="lab">Sleeve Length (HPS)</td><td class="c">1</td><td class="blank">—</td><td class="blank">—</td><td class="sample">80.1</td><td class="blank">—</td></tr>
+                    <tr><td class="num">5</td><td class="lab">Armhole</td><td class="c">0.5</td><td class="blank">—</td><td class="blank">—</td><td class="sample">22.5</td><td class="blank">—</td></tr>
+                    <tr><td class="num">6</td><td class="lab">Hem Width (1/2)</td><td class="c">1</td><td class="blank">—</td><td class="blank">—</td><td class="sample">59.25</td><td class="blank">—</td></tr>
+                    <tr><td class="num">7</td><td class="lab">Cuff Opening</td><td class="c">1</td><td class="blank">—</td><td class="blank">—</td><td class="sample">11</td><td class="blank">—</td></tr>
+                    <tr><td class="num">8</td><td class="lab">Cuff Height</td><td class="c">0.5</td><td class="blank">—</td><td class="blank">—</td><td class="sample">8</td><td class="blank">—</td></tr>
+                    <tr><td class="num">9</td><td class="lab">Hood Height</td><td class="c">1</td><td class="blank">—</td><td class="blank">—</td><td class="sample">43.6</td><td class="blank">—</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="pgnote">All measurements in centimetres. Measure flat, relaxed. Tolerance ±1 cm unless otherwise specified. <b style="margin-top:8px">MEASUREMENT METHOD</b>Lay garment flat on table. Smooth without stretching. Measure with flexible tape.</div>
+          </div>
+          <div class="pgfoot"><span>© 2026 Foreign Resource Co. — Confidential Tech Pack</span><span>PAGE 12 / 25</span></div>
+        </div>
+      </div>
+
+      <!-- GRADING PAGE -->
+      <div class="v-grading">
+        <div class="page">
+          <div class="pgband">
+            <div><div class="co">FOREIGN RESOURCE CO.</div><div class="cs">CUT &amp; SEW</div></div>
+            <div class="ttl">Size Grading</div>
+            <div class="rt"><div class="rid">FW26-BB-ZH-0001</div><div class="rp">PAGE 13 / 25</div></div>
+          </div>
+          <div class="pgbody">
+            <div class="pgmeta">
+              <div><div class="k">STYLE #</div><div class="vv mono">FW26-BB-ZH-0001</div></div>
+              <div><div class="k">COLLECTION</div><div class="vv">Borderless Basics</div></div>
+              <div><div class="k">SEASON</div><div class="vv">FW26</div></div>
+              <div><div class="k">VERSION</div><div class="vv">V1.0</div></div>
+              <div><div class="k">COLORWAY</div><div class="vv">Slate</div></div>
+              <div><div class="k">SIZE RANGE</div><div class="vv">S / M / L / XL</div></div>
+            </div>
+            <div class="pgsubt">Graded Size Matrix (cm)</div>
+            <table class="pgtbl">
+              <thead><tr><th>MEASUREMENT</th><th class="c">S</th><th class="c">M</th><th class="sample">L</th><th class="c">XL</th></tr></thead>
+              <tbody>
+                <tr><td class="lab">Chest Width (1/2)</td><td class="c">54.3</td><td class="c">56.8</td><td class="sample">59.3</td><td class="c">61.8</td></tr>
+                <tr><td class="lab">Body Length (HPS)</td><td class="c">59.0</td><td class="c">61.0</td><td class="sample">63.0</td><td class="c">65.0</td></tr>
+                <tr><td class="lab">Shoulder Width</td><td class="c">69.0</td><td class="c">70.0</td><td class="sample">71.0</td><td class="c">72.0</td></tr>
+                <tr><td class="lab">Sleeve Length (HPS)</td><td class="c">77.1</td><td class="c">78.6</td><td class="sample">80.1</td><td class="c">81.6</td></tr>
+                <tr><td class="lab">Armhole</td><td class="c">21.3</td><td class="c">21.9</td><td class="sample">22.5</td><td class="c">23.1</td></tr>
+                <tr><td class="lab">Hem Width (1/2)</td><td class="c">54.3</td><td class="c">56.8</td><td class="sample">59.3</td><td class="c">61.8</td></tr>
+                <tr><td class="lab">Cuff Opening</td><td class="c">10.0</td><td class="c">10.5</td><td class="sample">11.0</td><td class="c">11.5</td></tr>
+                <tr><td class="lab">Cuff Height</td><td class="c">8.0</td><td class="c">8.0</td><td class="sample">8.0</td><td class="c">8.0</td></tr>
+                <tr><td class="lab">Hood Height</td><td class="c">43.6</td><td class="c">43.6</td><td class="sample">43.6</td><td class="c">43.6</td></tr>
+              </tbody>
+            </table>
+            <div class="pgfit">
+              <div class="f"><div class="fi"><svg width="30" height="74" viewBox="0 0 46 120" fill="none" stroke="#3A3A3A" stroke-width="1.6"><circle cx="23" cy="14" r="9"/><path d="M9 44 Q23 30 37 44 L34 84 L12 84 Z"/><path d="M16 84 L14 116 M30 84 L32 116"/></svg></div><div class="fl">S</div></div>
+              <div class="f"><div class="fi"><svg width="32" height="74" viewBox="0 0 50 120" fill="none" stroke="#3A3A3A" stroke-width="1.6"><circle cx="25" cy="14" r="9"/><path d="M10 44 Q25 30 40 44 L37 86 L13 86 Z"/><path d="M17 86 L15 116 M33 86 L35 116"/></svg></div><div class="fl">M</div></div>
+              <div class="f"><div class="fi"><svg width="34" height="74" viewBox="0 0 54 120" fill="none" stroke="#3A3A3A" stroke-width="1.6"><circle cx="27" cy="14" r="10"/><path d="M10 45 Q27 30 44 45 L41 88 L13 88 Z"/><path d="M18 88 L16 116 M36 88 L38 116"/></svg></div><div class="fl">L · sample</div></div>
+              <div class="f"><div class="fi"><svg width="36" height="74" viewBox="0 0 58 120" fill="none" stroke="#3A3A3A" stroke-width="1.6"><circle cx="29" cy="14" r="10"/><path d="M10 46 Q29 30 48 46 L45 90 L13 90 Z"/><path d="M19 90 L17 116 M39 90 L41 116"/></svg></div><div class="fl">XL</div></div>
+            </div>
+            <div class="pgnote">Per-size values derived as sample + delta. Base column comes from Points of Measure. Fit renders from CLO3D.</div>
+          </div>
+          <div class="pgfoot"><span>© 2026 Foreign Resource Co. — Confidential Tech Pack</span><span>PAGE 13 / 25</span></div>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+</div>
+
+<div class="hint">Click <b>12 Points of Measure</b> or <b>13 Size Grading</b> in the sidebar to switch pages</div>
+
+<script>
+function setView(v){document.getElementById('root').setAttribute('data-view',v);window.scrollTo({top:0,behavior:'smooth'});}
+</script>
+</body>
+</html>
