@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Part B — Cutting: per-fabric two-stage cards (3 fabrics, A4 markers)</title>
+<title>Part B — Cutting: two-stage cards · A4 markers · table export</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -50,7 +50,7 @@
   .stylebar .cost .k{font-size:8px;letter-spacing:1px;color:var(--sand);text-transform:uppercase}
   .stylebar .cost .big{font-size:19px;font-weight:600}
 
-  .builder{display:grid;grid-template-columns:210px minmax(660px,1fr) 560px;min-height:calc(100vh - 150px)}
+  .builder{display:grid;grid-template-columns:210px minmax(640px,1fr) 540px;min-height:calc(100vh - 150px)}
   .stepnav{padding:16px 12px 30px;border-right:1px solid var(--border);overflow-y:auto}
   .grp{margin:14px 0 4px;display:flex;justify-content:space-between;align-items:center;padding:0 8px}
   .grp .gl{font-size:9px;letter-spacing:1.5px;color:var(--stone);font-weight:600;text-transform:uppercase}
@@ -87,7 +87,7 @@
   .fc-head .desc{font-size:10px;color:var(--stone)}
   .fc-head .ref{font-size:9px;color:var(--stone)}
 
-  .fc-body{padding:0 14px 13px;display:grid;grid-template-columns:1fr 300px;gap:16px}
+  .fc-body{padding:0 14px 13px;display:grid;grid-template-columns:1fr 178px;gap:16px}
   .blk-lab{font-size:9px;color:var(--soil);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin:12px 0 7px;display:flex;align-items:center;gap:8px}
 
   .stage{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
@@ -109,22 +109,22 @@
   .pcell .v{font-size:14px;font-family:var(--mono);margin-top:2px}
   .pcell .v small{font-size:8.5px;color:var(--stone)}
 
-  /* A4-format marker upload (landscape 297:210) */
-  .marker{position:relative;width:100%;aspect-ratio:297/210;background:var(--salt);border:1px dashed var(--sand);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;overflow:hidden}
+  /* A4 PORTRAIT marker upload (210 x 297) */
+  .marker{position:relative;width:100%;aspect-ratio:210/297;background:var(--salt);border:1px dashed var(--sand);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;overflow:hidden}
   .marker.has{border-style:solid;background:linear-gradient(135deg,#efe9dd,#dcd2bd)}
   .marker .plus{width:26px;height:26px;border:1px solid var(--sand);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--soil);background:var(--white)}
-  .marker .cap{font-size:9px;color:var(--stone);font-style:italic;text-align:center;padding:0 10px}
-  .marker .a4{position:absolute;right:7px;top:7px;background:var(--white);border:1px solid var(--sand);color:var(--stone);font-size:8px;font-family:var(--mono);padding:2px 6px;border-radius:3px;letter-spacing:0.5px}
-  .marker .corner{position:absolute;bottom:0;left:0;right:0;background:rgba(58,58,58,0.78);color:var(--salt);font-size:8.5px;font-family:var(--mono);padding:3px 8px}
-  .marker .grid{position:absolute;inset:8px;background-image:linear-gradient(rgba(58,58,58,0.06) 1px,transparent 1px),linear-gradient(90deg,rgba(58,58,58,0.06) 1px,transparent 1px);background-size:22px 22px}
-  .mk-note{font-size:9px;color:var(--stone);margin-top:5px;text-align:center}
+  .marker .cap{font-size:9px;color:var(--stone);font-style:italic;text-align:center;padding:0 12px;line-height:1.4}
+  .marker .a4{position:absolute;right:6px;top:6px;background:var(--white);border:1px solid var(--sand);color:var(--stone);font-size:7.5px;font-family:var(--mono);padding:2px 5px;border-radius:3px}
+  .marker .corner{position:absolute;bottom:0;left:0;right:0;background:rgba(58,58,58,0.78);color:var(--salt);font-size:8px;font-family:var(--mono);padding:3px 7px;text-align:center}
+  .marker .grid{position:absolute;inset:8px;background-image:linear-gradient(rgba(58,58,58,0.06) 1px,transparent 1px),linear-gradient(90deg,rgba(58,58,58,0.06) 1px,transparent 1px);background-size:18px 18px}
+  .mk-note{font-size:9px;color:var(--stone);margin-top:6px;text-align:center;line-height:1.4}
 
   .yield{margin-top:9px;border:1px solid var(--sand);border-radius:8px;padding:9px 11px;background:rgba(133,79,11,0.04)}
   .yield .k{font-size:8px;color:var(--stone);text-transform:uppercase;letter-spacing:0.4px;font-weight:600}
   .yield .row{display:flex;align-items:baseline;gap:5px;margin-top:3px}
-  .yield input{width:56px;padding:4px 6px;border:1px solid var(--sand);border-radius:4px;font-size:18px;font-family:var(--mono);outline:none}
+  .yield input{width:50px;padding:4px 6px;border:1px solid var(--sand);border-radius:4px;font-size:16px;font-family:var(--mono);outline:none}
   .yield small{font-size:9px;color:var(--stone)}
-  .yield .price{font-size:9px;color:var(--good);margin-top:5px}
+  .yield .price{font-size:8.5px;color:var(--good);margin-top:5px;line-height:1.4}
 
   .netcut{background:var(--white);border-top:1px solid var(--sand);padding:9px 14px;font-size:10px;color:var(--stone);display:flex;align-items:center;gap:8px}
   .netcut b{color:var(--slate);font-family:var(--mono)}
@@ -142,37 +142,34 @@
   body:has(.dye-input:checked) .stage2-row .seg3 .s2none{background:transparent;color:var(--stone)}
   body:has(.dye-input:checked) .stage2-row .seg3 .s2tumble{background:rgba(133,79,11,0.14);color:var(--soil)}
 
-  /* live preview — the clean export, in miniature */
-  .preview{background:var(--sand);padding:16px 16px;overflow-y:auto}
+  /* ── live preview = the standard table export, in miniature ── */
+  .preview{background:var(--sand);padding:16px 14px;overflow-y:auto}
   .pv-head{display:flex;justify-content:space-between;font-size:9px;letter-spacing:2px;color:var(--stone);text-transform:uppercase;font-weight:600;margin-bottom:8px}
   .page{background:var(--white);border-radius:4px;box-shadow:0 2px 14px rgba(0,0,0,0.10);padding:16px 18px;aspect-ratio:297/210;display:flex;flex-direction:column}
   .pp-head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1.2px solid var(--slate);padding-bottom:6px}
   .pp-head .co{font-size:6.5px;letter-spacing:1px;line-height:1.5}.pp-head .co b{font-size:8px}
   .pp-head h3{font-family:var(--serif);font-size:16px}
   .pp-head .rt{text-align:right;font-family:var(--mono);font-size:6.5px;color:var(--stone)}
-  .pp-intro{font-size:7px;color:var(--stone);margin:6px 0 2px}
-  .pp-bands{flex:1;display:flex;flex-direction:column;justify-content:space-around}
-  .pp-band{display:grid;grid-template-columns:130px 1fr;gap:12px;align-items:center;border-top:0.5px solid var(--sand);padding:6px 0}
-  .pp-band:first-child{border-top:none}
-  .pp-band .role{font-size:6.5px;letter-spacing:1px;text-transform:uppercase;font-weight:700;color:var(--soil)}
-  .pp-band.pocket .role{color:#3a5a8c}.pp-band.rib .role{color:var(--good)}
-  .pp-band .nm{font-family:var(--serif);font-size:13px;line-height:1}
-  .pp-band .cutat{font-family:var(--mono);font-size:16px;font-weight:600;margin-top:3px}
-  .pp-band .cutat small{font-size:8px;color:var(--stone);font-weight:400}
-  .pp-band .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
-  .pp-band .chip{font-size:6.5px;color:var(--slate);background:var(--salt);border:0.5px solid var(--sand);border-radius:10px;padding:2px 6px}
-  .pp-band .chip.cut{color:var(--soil);background:rgba(133,79,11,0.07);border-color:rgba(133,79,11,0.3)}
-  .pp-band .clab{font-size:5px;letter-spacing:0.5px;text-transform:uppercase;color:var(--stone);font-weight:700;margin-top:3px}
-  .pp-band .ln{font-size:6.5px;color:var(--slate);margin-top:2px;line-height:1.3}
-  .pp-band .ln b{font-size:5px;letter-spacing:0.4px;text-transform:uppercase;color:var(--stone);font-weight:700;margin-right:3px}
-  .pp-band .ln .bump{color:var(--soil);font-weight:600;font-family:var(--mono)}
-  .base-only{display:block}
-  body:has(.dye-input:checked) .base-only{display:none}
-  .pp-mk{position:relative;width:100%;aspect-ratio:297/210;max-height:74px;margin-left:auto;background:linear-gradient(135deg,#efe9dd,#dcd2bd);border:0.5px solid var(--sand);border-radius:2px;overflow:hidden}
-  .pp-mk .g{position:absolute;inset:5px;background-image:linear-gradient(rgba(58,58,58,0.06) 1px,transparent 1px),linear-gradient(90deg,rgba(58,58,58,0.06) 1px,transparent 1px);background-size:14px 14px}
-  .pp-mk .t{position:absolute;left:0;bottom:0;background:rgba(58,58,58,0.78);color:var(--salt);font-family:var(--mono);font-size:6px;padding:1px 5px}
-  .pp-mk .a4{position:absolute;right:3px;top:3px;background:var(--white);border:0.5px solid var(--sand);color:var(--stone);font-size:5.5px;font-family:var(--mono);padding:1px 4px;border-radius:2px}
-  .pp-foot{display:flex;justify-content:space-between;border-top:0.5px solid var(--sand);padding-top:5px;font-size:6px;color:var(--stone)}
+  .pp-sec{font-family:var(--serif);font-size:11px;margin:9px 0 4px}
+  .pp-tbl{width:100%;border-collapse:collapse}
+  .pp-tbl th{background:var(--slate);color:var(--salt);text-align:left;font-size:5.5px;letter-spacing:0.3px;text-transform:uppercase;font-weight:600;padding:4px 5px}
+  .pp-tbl td{padding:4px 5px;border-bottom:0.5px solid var(--sand);font-size:7px;vertical-align:middle}
+  .pp-tbl tr:nth-child(odd) td{background:rgba(245,240,232,0.6)}
+  .pp-tbl .role{font-size:5.5px;letter-spacing:0.5px;text-transform:uppercase;font-weight:700;color:var(--soil);display:block}
+  .pp-tbl .pocket .role{color:#3a5a8c}.pp-tbl .rib .role{color:var(--good)}
+  .pp-tbl .nm{font-family:var(--mono);font-size:7px}
+  .pp-tbl .cutat{font-family:var(--mono);font-size:9px;font-weight:600}
+  .pp-tbl .when{color:var(--soil);font-weight:600}
+  .pp-tbl .bump{font-family:var(--mono);color:var(--soil);font-weight:600}
+  .pp-tbl .muted{color:var(--stone)}
+  .pp-mks{display:flex;gap:10px;margin-top:5px}
+  .pp-mk{width:46px}
+  .pp-mk .sheet{position:relative;width:100%;aspect-ratio:210/297;background:linear-gradient(135deg,#efe9dd,#dcd2bd);border:0.5px solid var(--sand);border-radius:1px;overflow:hidden}
+  .pp-mk .sheet .g{position:absolute;inset:3px;background-image:linear-gradient(rgba(58,58,58,0.06) 1px,transparent 1px),linear-gradient(90deg,rgba(58,58,58,0.06) 1px,transparent 1px);background-size:9px 9px}
+  .pp-mk .sheet .a4{position:absolute;right:2px;top:2px;background:var(--white);border:0.5px solid var(--sand);color:var(--stone);font-size:4.5px;font-family:var(--mono);padding:0 3px;border-radius:1px}
+  .pp-mk .c{font-size:5px;color:var(--slate);text-align:center;margin-top:2px;line-height:1.3}
+  .pp-mk .c b{font-family:var(--mono)}
+  .pp-foot{display:flex;justify-content:space-between;border-top:0.5px solid var(--sand);margin-top:auto;padding-top:5px;font-size:6px;color:var(--stone)}
 </style>
 </head>
 <body>
@@ -233,9 +230,9 @@
           <div class="pshrink"><div class="pcell"><div class="k">Hang weft</div><div class="v">5.0<small>%</small></div></div><div class="pcell"><div class="k">Tumble weft</div><div class="v">9.7<small>%</small></div></div><div class="pcell"><div class="k">Residual h→t</div><div class="v">5.0<small>%</small></div></div></div>
         </div>
         <div>
-          <div class="blk-lab">Marker / layout <span style="color:var(--stone);font-weight:600">· A4</span></div>
-          <div class="marker has"><div class="grid"></div><div class="a4">A4 · 297×210</div><div class="corner">B1750 · marker @ 171 cm · 82% util</div></div>
-          <div class="mk-note">Drop the layout screenshot — cropped to A4, the export format.</div>
+          <div class="blk-lab">Marker · A4</div>
+          <div class="marker has"><div class="grid"></div><div class="a4">A4 · 210×297</div><div class="corner">B1750 · @ 171 cm · 82%</div></div>
+          <div class="mk-note">Drop the layout screenshot — A4 portrait, the export shape.</div>
           <div class="yield"><div class="k">Fabric yield</div><div class="row"><input value="1.5"><small>m/unit</small></div><div class="price">↳ backs into price · $5.53/m → $8.30/unit</div></div>
         </div>
       </div>
@@ -256,9 +253,9 @@
           <div class="pshrink"><div class="pcell"><div class="k">Hang weft</div><div class="v">5.0<small>%</small></div></div><div class="pcell"><div class="k">Tumble weft</div><div class="v" style="color:var(--stone)">—</div><div style="font-size:7px;color:var(--warn);margin-top:1px">enter tumble GSM in library</div></div><div class="pcell"><div class="k">Residual h→t</div><div class="v" style="color:var(--stone)">—</div></div></div>
         </div>
         <div>
-          <div class="blk-lab">Marker / layout <span style="color:var(--stone);font-weight:600">· A4</span></div>
-          <div class="marker"><div class="a4">A4 · 297×210</div><div class="plus">+</div><div class="cap">Drop the layout screenshot · marker @ 157 cm</div></div>
-          <div class="mk-note">Cropped to A4, the export format.</div>
+          <div class="blk-lab">Marker · A4</div>
+          <div class="marker"><div class="a4">A4 · 210×297</div><div class="plus">+</div><div class="cap">Drop the layout screenshot · @ 157 cm</div></div>
+          <div class="mk-note">A4 portrait, the export shape.</div>
           <div class="yield"><div class="k">Fabric yield</div><div class="row"><input value="0.3"><small>m/unit</small></div><div class="price">↳ backs into price · $3.17/m → $0.95/unit</div></div>
         </div>
       </div>
@@ -278,9 +275,9 @@
           <div class="pshrink"><div class="pcell"><div class="k">Hang weft</div><div class="v">4.5<small>%</small></div></div><div class="pcell"><div class="k">Tumble weft</div><div class="v">9.0<small>%</small></div></div><div class="pcell"><div class="k">Residual h→t</div><div class="v">4.7<small>%</small></div></div></div>
         </div>
         <div>
-          <div class="blk-lab">Marker / layout <span style="color:var(--stone);font-weight:600">· A4</span></div>
-          <div class="marker has"><div class="grid"></div><div class="a4">A4 · 297×210</div><div class="corner">B-RIB · marker @ 88 cm · 74% util</div></div>
-          <div class="mk-note">Cropped to A4, the export format.</div>
+          <div class="blk-lab">Marker · A4</div>
+          <div class="marker has"><div class="grid"></div><div class="a4">A4 · 210×297</div><div class="corner">B-RIB · @ 88 cm · 74%</div></div>
+          <div class="mk-note">A4 portrait, the export shape.</div>
           <div class="yield"><div class="k">Fabric yield</div><div class="row"><input value="0.18"><small>m/unit</small></div><div class="price">↳ backs into price · $4.10/m → $0.74/unit</div></div>
         </div>
       </div>
@@ -291,29 +288,36 @@
     <div class="ed-foot"><button>← Previous</button><span class="pos">Step 14 of 28</span><button class="next">Next →</button></div>
   </div>
 
-  <!-- live preview — the clean export in miniature -->
+  <!-- live preview — the standard table export, in miniature -->
   <div class="preview">
     <div class="pv-head"><span>Live preview · the factory PDF</span><span>Page 14 / 28</span></div>
     <div class="page">
       <div class="pp-head"><div class="co"><b>FOREIGN RESOURCE CO.</b><br>CUT &amp; SEW</div><h3>Cutting</h3><div class="rt">FW26-BB-ZH-0001<br>PAGE 11 / 25</div></div>
-      <div class="pp-intro">Cut each fabric at the roll width shown, after the pre-cut shrink. Where marked, cut pieces bigger for wash shrinkage.</div>
-      <div class="pp-bands">
-        <div class="pp-band body">
-          <div><div class="role">Body</div><div class="nm">B1750</div><div class="clab">② cut at</div><div class="cutat">171 <small>cm</small></div><div class="ln"><b>before</b> hang-dry roll (pre-shrink)</div><div class="ln stage2-only" style="display:none"><b>after</b> tumble in dye → cut <span class="bump">+5.3%</span></div><div class="ln base-only"><b>after</b> none</div><div class="ln"><b>yield</b> 1.5 m / garment</div></div>
-          <div class="pp-mk"><div class="g"></div><div class="a4">A4</div><div class="t">@ 171 cm · 82%</div></div>
-        </div>
-        <div class="pp-band pocket">
-          <div><div class="role">Pocket</div><div class="nm">B1968</div><div class="clab">② cut at</div><div class="cutat">157 <small>cm</small></div><div class="ln"><b>before</b> hang-dry roll (pre-shrink)</div><div class="ln"><b>after</b> none — size final at cut</div><div class="ln"><b>yield</b> 0.3 m / garment</div></div>
-          <div class="pp-mk"><div class="g"></div><div class="a4">A4</div><div class="t">@ 157 cm · 79%</div></div>
-        </div>
-        <div class="pp-band rib">
-          <div><div class="role">Rib</div><div class="nm">B-RIB-2×1</div><div class="clab">② cut at</div><div class="cutat">88 <small>cm</small></div><div class="ln"><b>before</b> tumble-dry roll (pre-shrink)</div><div class="ln stage2-only" style="display:none"><b>after</b> tumble in dye → cut <span class="bump">+5.3%</span></div><div class="ln base-only"><b>after</b> none</div><div class="ln"><b>yield</b> 0.18 m / garment</div></div>
-          <div class="pp-mk"><div class="g"></div><div class="a4">A4</div><div class="t">@ 88 cm · 74%</div></div>
-        </div>
+
+      <div class="pp-sec">Fabrics &amp; Cutting</div>
+      <table class="pp-tbl">
+        <thead><tr><th>Fabric</th><th>① Before cut</th><th>② Cut at</th><th>③ After cut</th><th>Bigger</th><th>Yield</th></tr></thead>
+        <tbody>
+          <tr class="body"><td><span class="role">Body</span><span class="nm">B1750</span></td><td>Hang-dry roll</td><td class="cutat">171 cm</td><td><span class="when stage2-only" style="display:none">tumble · Gone dye</span><span class="base-after">None</span></td><td><span class="bump stage2-only" style="display:none">+5.3%</span><span class="base-after muted">—</span></td><td>1.5 m</td></tr>
+          <tr class="pocket"><td><span class="role">Pocket</span><span class="nm">B1968</span></td><td>Hang-dry roll</td><td class="cutat">157 cm</td><td class="muted">None</td><td class="muted">—</td><td>0.3 m</td></tr>
+          <tr class="rib"><td><span class="role">Rib</span><span class="nm">B-RIB</span></td><td>Tumble-dry roll</td><td class="cutat">88 cm</td><td><span class="when stage2-only" style="display:none">tumble · Gone dye</span><span class="base-after">None</span></td><td><span class="bump stage2-only" style="display:none">+5.3%</span><span class="base-after muted">—</span></td><td>0.18 m</td></tr>
+        </tbody>
+      </table>
+
+      <div class="pp-sec">Pattern Markers <span style="font-size:6px;color:var(--stone)">· A4</span></div>
+      <div class="pp-mks">
+        <div class="pp-mk"><div class="sheet"><div class="g"></div><div class="a4">A4</div></div><div class="c"><b>B1750</b><br>@171 · 82%</div></div>
+        <div class="pp-mk"><div class="sheet"><div class="g"></div><div class="a4">A4</div></div><div class="c"><b>B1968</b><br>@157 · 79%</div></div>
+        <div class="pp-mk"><div class="sheet"><div class="g"></div><div class="a4">A4</div></div><div class="c"><b>B-RIB</b><br>@88 · 74%</div></div>
       </div>
+
       <div class="pp-foot"><span>© 2026 Foreign Resource Co.</span><span>PAGE 11 / 25</span></div>
     </div>
   </div>
 </div>
+<style>
+  .base-after{display:inline}
+  body:has(.dye-input:checked) .base-after{display:none}
+</style>
 </body>
 </html>
