@@ -3,15 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cutting step redesign — Variant C · Locked-left / Worksheet-right</title>
+<title>Cutting redesign · Variant C — Worksheet table (in real builder)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
     --salt:#F5F0E8; --slate:#3A3A3A; --sand:#EBE5D5; --soil:#854F0B;
-    --stone:#9A9A9A; --white:#fff;
-    --good:#3B6D11; --warn:#854F0B; --bad:#A32D2D;
+    --stone:#9A9A9A; --white:#fff; --good:#3B6D11; --warn:#854F0B; --bad:#A32D2D;
     --border:rgba(58,58,58,0.15);
     --serif:'Cormorant Garamond','Georgia',serif;
     --sans:'General Sans','Inter','Helvetica Neue',system-ui,sans-serif;
@@ -20,276 +18,279 @@
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;background:var(--salt);color:var(--slate);font-family:var(--sans);font-size:13px}
   h1,h2,h3,h4{font-family:var(--serif);font-weight:400;margin:0}
+  button,input,textarea,select{font-family:inherit;color:inherit}
+  .dye-input{position:absolute;opacity:0;pointer-events:none}
 
-  .wrap{max-width:840px;margin:0 auto;padding:22px 22px 70px}
+  .topbar{display:flex;justify-content:space-between;align-items:center;padding:11px 22px;border-bottom:1px solid var(--border)}
+  .wordmark .big{font-family:var(--serif);font-size:19px;letter-spacing:3px}
+  .wordmark .small{font-size:8px;letter-spacing:3px;color:var(--soil);margin-top:1px}
+  .topnav{display:flex;align-items:center;gap:20px;font-size:13px}
+  .topnav .dot{width:7px;height:7px;border-radius:50%;background:var(--good);display:inline-block;margin-right:6px}
+  .topnav .on{background:var(--sand);padding:4px 10px;border-radius:6px}
+  .topnav .gear{color:var(--stone)}
 
-  .state{display:flex;align-items:center;gap:8px;margin:34px 0 14px;font-size:9px;letter-spacing:2px;text-transform:uppercase;font-weight:600;color:var(--stone)}
-  .state:first-of-type{margin-top:6px}
-  .state .ln{flex:1;height:1px;background:var(--border)}
-  .state b{color:var(--slate);font-weight:700}
+  .plmbar{display:flex;justify-content:space-between;align-items:center;padding:12px 22px 10px}
+  .plmbar .l{display:flex;align-items:center;gap:16px}.plmbar h1{font-size:22px}
+  .seg-tabs{display:inline-flex;gap:4px}
+  .seg-tabs button{background:transparent;border:none;padding:6px 14px;border-radius:7px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px}
+  .seg-tabs button.on{background:var(--slate);color:var(--salt)}
+  .plmbar .r{display:flex;gap:8px}
+  .plmbar .r button{background:transparent;border:1px solid var(--border);border-radius:7px;padding:6px 12px;font-size:12px;cursor:pointer}
+  .plmbar .r button.on{background:var(--white)}
 
-  .step-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
-  .step-head h2{font-size:26px;letter-spacing:0.2px}
-  .step-head .crumb{font-size:10px;color:var(--stone);text-transform:uppercase;letter-spacing:1.4px;font-weight:600;margin-bottom:4px}
-  .pg-badge{font-family:var(--mono);font-size:10px;color:var(--stone);border:1px solid var(--sand);border-radius:4px;padding:3px 7px}
+  .stylebar{background:var(--slate);color:var(--salt);display:flex;justify-content:space-between;align-items:center;padding:12px 22px;gap:14px}
+  .stylebar .l{display:flex;align-items:center;gap:12px}
+  .stylebar .gbtn{background:transparent;border:1px solid rgba(245,240,232,0.25);color:var(--salt);border-radius:7px;padding:6px 12px;font-size:12px;cursor:pointer}
+  .stylebar .styleid .co{font-size:9px;letter-spacing:2px;color:var(--sand)}
+  .stylebar .styleid .no{font-family:var(--mono);font-size:13px;margin-top:1px}
+  .stylebar .r{display:flex;align-items:center;gap:10px}
+  .stylebar .pbtn{background:var(--salt);color:var(--slate);border:none;border-radius:7px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer}
+  .stylebar .pbtn.ghost{background:transparent;color:var(--salt);border:1px solid rgba(245,240,232,0.25);font-weight:500}
+  .stylebar .pbtn.dis{opacity:0.4}
+  .stylebar .saved{font-size:11px;color:#9Fca7c}
+  .stylebar .cost{text-align:right;line-height:1.25;padding-left:8px;border-left:1px solid rgba(245,240,232,0.2)}
+  .stylebar .cost .k{font-size:8px;letter-spacing:1px;color:var(--sand);text-transform:uppercase}
+  .stylebar .cost .big{font-size:19px;font-weight:600}
+  .stylebar .cost .sub{font-size:8.5px;color:var(--sand);opacity:0.8}
 
-  /* the split */
-  .split{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
-  .col-head{font-size:10px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:7px}
-  .col-head.ref{color:var(--stone)}
-  .col-head.work{color:var(--soil)}
-  .col-head .chip{font-size:8.5px;font-weight:600;border-radius:3px;padding:2px 6px;text-transform:none;letter-spacing:0.2px}
-  .col-head.ref .chip{background:var(--salt);border:1px solid var(--sand);color:var(--stone)}
-  .col-head.work .chip{background:rgba(133,79,11,0.12);color:var(--warn)}
+  .builder{display:grid;grid-template-columns:226px minmax(560px,1fr) 700px;min-height:calc(100vh - 150px)}
+  .stepnav{padding:16px 12px 30px;border-right:1px solid var(--border);overflow-y:auto}
+  .grp{margin:14px 0 4px;display:flex;justify-content:space-between;align-items:center;padding:0 8px}
+  .grp .gl{font-size:9px;letter-spacing:1.5px;color:var(--stone);font-weight:600;text-transform:uppercase}
+  .grp .gp{font-size:9px;font-family:var(--mono);color:var(--stone);background:var(--sand);border-radius:3px;padding:1px 6px}
+  .step{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;font-size:12px;cursor:pointer}
+  .step .n{font-family:var(--mono);font-size:10px;color:var(--stone);min-width:16px}
+  .step.active{background:var(--slate);color:var(--salt)}.step.active .n{color:var(--sand)}
+  .step.skip{color:var(--stone);text-decoration:line-through;opacity:0.7}.step.skip .n{color:var(--bad)}
 
-  /* LEFT — locked / by reference (cream) */
-  .lref{background:var(--salt);border:0.5px solid var(--border);border-radius:8px;padding:12px}
-  .fab-mini{padding:9px 0;border-bottom:1px solid var(--sand)}
-  .fab-mini:first-child{padding-top:0}
-  .fab-mini .role{font-size:9px;letter-spacing:1px;text-transform:uppercase;font-weight:700;color:var(--soil)}
-  .fab-mini.rib .role{color:#3a5a8c}.fab-mini.hood .role{color:var(--good)}
-  .fab-mini .nm{font-family:var(--serif);font-size:16px;color:var(--slate)}
-  .fab-mini .code{font-family:var(--mono);font-size:9px;color:var(--stone);margin-left:6px}
-  .fab-mini .kv{display:flex;gap:16px;margin-top:5px}
-  .fab-mini .kv .k{font-size:8px;color:var(--stone);text-transform:uppercase;letter-spacing:0.4px;font-weight:600}
-  .fab-mini .kv .v{font-size:11.5px;font-family:var(--mono);color:var(--slate);margin-top:1px}
+  .editor{padding:16px 24px 40px;background:var(--salt);overflow-y:auto}
+  .skipbar{display:flex;justify-content:space-between;align-items:center;background:var(--white);border:0.5px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--stone);margin-bottom:14px}
+  .skipbar button{background:transparent;border:1px solid var(--sand);border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer}
+  .ed-title{font-size:26px;margin-bottom:3px}
+  .ed-rule{height:2px;width:38px;background:var(--soil);opacity:0.5;margin-bottom:14px}
+  .statebox{display:flex;align-items:center;gap:12px;background:rgba(133,79,11,0.06);border:1px dashed rgba(133,79,11,0.4);border-radius:8px;padding:9px 12px;margin-bottom:16px}
+  .seg2{display:inline-flex;background:var(--salt);border-radius:6px;padding:2px;gap:2px;border:1px solid var(--sand)}
+  .seg2 label{padding:4px 14px;border-radius:4px;font-size:11px;font-weight:600;color:var(--stone);cursor:pointer}
+  .l-base{background:var(--slate);color:var(--salt)!important}
+  body:has(.dye-input:checked) .l-base{background:transparent;color:var(--stone)!important}
+  body:has(.dye-input:checked) .l-dye{background:var(--slate);color:var(--salt)!important}
+  .statebox .cap{font-size:10px;color:var(--soil);line-height:1.4}
 
-  .ptable{width:100%;border-collapse:separate;border-spacing:0;font-size:10.5px;margin-top:4px}
-  .ptable th{text-align:left;font-size:8px;color:var(--stone);letter-spacing:0.3px;text-transform:uppercase;font-weight:600;padding:3px 4px;border-bottom:1px solid var(--sand)}
-  .ptable td{padding:4px 4px;border-bottom:1px solid var(--sand);color:var(--slate)}
-  .ptable td.m{font-family:var(--mono);font-size:9px;color:var(--stone)}
-  .ptable tr:last-child td{border-bottom:none}
-  .tag{display:inline-block;font-size:8.5px;font-weight:600;border-radius:3px;padding:1px 5px}
-  .tag.body{background:rgba(133,79,11,0.12);color:var(--soil)}
-  .tag.rib{background:rgba(58,90,140,0.12);color:#3a5a8c}
-  .sub-label{font-size:9px;color:var(--stone);text-transform:uppercase;letter-spacing:0.6px;font-weight:600;margin:14px 0 4px;display:flex;align-items:center;gap:6px}
+  .sec-label{font-size:10px;color:var(--soil);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin:16px 0 8px;display:flex;align-items:center;gap:8px}
+  .sec-label .lk{font-size:9px;color:var(--stone);font-weight:600;background:var(--white);border:1px solid var(--sand);border-radius:3px;padding:2px 6px;text-transform:none;letter-spacing:0.2px}
+  .sec-label .sp{flex:1}
   .pill{display:inline-block;padding:3px 8px;border-radius:5px;font-size:9px;letter-spacing:0.06em;text-transform:uppercase;font-weight:600}
   .pill.prov{background:rgba(133,79,11,0.12);color:var(--warn)}
   .pill.linked{background:rgba(58,58,58,0.06);color:var(--slate);text-transform:none;letter-spacing:0.2px;font-family:var(--mono);font-size:9px}
   .pill.warn{background:rgba(133,79,11,0.14);color:var(--warn)}
-  .lock-note{display:flex;align-items:center;gap:6px;font-size:9.5px;color:var(--stone);margin-top:8px}
+  .pill.lock{background:var(--salt);border:1px solid var(--sand);color:var(--stone);text-transform:none;letter-spacing:0.2px}
 
-  /* RIGHT — worksheet / editable (white) */
-  .lwork{display:flex;flex-direction:column;gap:9px}
-  .wblock{background:var(--white);border:0.5px solid var(--border);border-radius:8px;padding:11px 12px}
-  .wblock .wh{font-size:11px;font-weight:600;color:var(--slate);margin-bottom:8px}
-  .wblock .wh small{font-family:var(--mono);font-weight:400;color:var(--stone);font-size:9px;margin-left:5px}
-  .marker-slot{background:var(--salt);border:1px dashed var(--sand);border-radius:6px;height:70px;display:flex;align-items:center;justify-content:center;gap:8px;color:var(--stone);margin-bottom:8px}
-  .marker-slot .plus{width:22px;height:22px;border:1px solid var(--sand);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--soil);background:var(--white)}
-  .marker-slot .cap{font-size:9px;font-style:italic}
-  .marker-slot .fn{font-family:var(--mono);font-size:8.5px;color:var(--slate);font-style:normal}
-  .wfields{display:grid;grid-template-columns:1fr 1fr;gap:7px}
-  .fld{border:1px solid var(--sand);border-radius:5px;padding:6px 8px;background:var(--white)}
-  .fld .k{font-size:8px;color:var(--stone);text-transform:uppercase;letter-spacing:0.4px;font-weight:600}
-  .fld .v{font-size:13px;font-family:var(--mono);color:var(--slate);margin-top:1px}
-  .fld .v small{font-size:8.5px;color:var(--stone)}
-  .fld.yield{grid-column:1 / -1;display:flex;align-items:center;justify-content:space-between;background:rgba(133,79,11,0.04)}
-  .fld.yield .v{font-size:16px}
-  .updye{display:none;align-items:center;gap:6px;font-size:9.5px;color:var(--soil);background:rgba(133,79,11,0.06);border-radius:5px;padding:5px 9px;margin-top:7px}
+  .markers{display:flex;gap:10px;margin-bottom:4px}
+  .mk{flex:1;background:var(--white);border:1px dashed var(--sand);border-radius:8px;height:86px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;position:relative;overflow:hidden}
+  .mk.has{border-style:solid;background:linear-gradient(135deg,#e7e0d2,#cdbf9c)}
+  .mk .plus{width:22px;height:22px;border:1px solid var(--sand);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--soil);background:var(--white)}
+  .mk .cap{font-size:8.5px;color:var(--stone);font-style:italic}
+  .mk .corner{position:absolute;bottom:0;left:0;right:0;background:var(--slate);color:var(--salt);font-size:9px;font-family:var(--mono);padding:3px 8px}
 
-  .nap{display:flex;align-items:center;gap:8px;background:var(--white);border:0.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:11px}
-  .nap .ar{font-family:var(--mono);color:var(--soil);font-size:14px}
-  .note{background:var(--white);border:0.5px solid var(--border);border-left:3px solid var(--soil);border-radius:6px;padding:10px 12px}
-  .note .h{font-size:10.5px;font-weight:600;color:var(--slate);margin-bottom:3px}
-  .note p{margin:0;font-size:10.5px;line-height:1.5;color:var(--stone)}
-  .note .who{color:var(--soil);font-weight:600}
+  /* the worksheet table */
+  .ws-wrap{background:var(--white);border:0.5px solid var(--border);border-radius:8px;overflow:hidden}
+  .ws{width:100%;border-collapse:collapse;font-size:11px}
+  .ws thead th{background:var(--slate);color:var(--salt);text-align:left;padding:7px 9px;font-size:8px;letter-spacing:0.4px;text-transform:uppercase;font-weight:600}
+  .ws thead th.lockcol{background:#4a4a4a}
+  .ws tbody td{padding:8px 9px;border-bottom:1px solid var(--sand);vertical-align:middle}
+  .ws tbody tr:last-child td{border-bottom:none}
+  .ws td.lockcol{background:var(--salt)} /* cream = pulled by reference */
+  .ws .role{font-size:8px;letter-spacing:1px;text-transform:uppercase;font-weight:700;color:var(--soil);display:block}
+  .ws .fno{font-family:var(--mono);font-size:12px;color:var(--slate)}
+  .ws .desc{font-size:8.5px;color:var(--stone)}
+  .ws .mono{font-family:var(--mono)}
+  .ws .ed{font-family:var(--mono);background:var(--white);border:1px solid var(--sand);border-radius:4px;padding:4px 7px;display:inline-block;min-width:48px}
+  .ws .yieldcell{display:flex;align-items:center;gap:6px}
+  .ws .mkmini{width:42px;height:30px;border-radius:3px;background:linear-gradient(135deg,#e7e0d2,#cdbf9c);border:0.5px solid var(--sand);display:inline-block;vertical-align:middle}
+  .ws .mkmini.empty{background:var(--salt);border:1px dashed var(--sand);text-align:center;line-height:30px;color:var(--soil)}
+  .lockcol-head{display:flex;align-items:center;justify-content:center;gap:6px;font-size:9px;color:var(--stone);background:var(--salt);border:1px solid var(--sand);border-radius:0 0 8px 8px;border-top:none;padding:5px;margin:0 0 0 0}
+  .dye-col{display:none}
+  body:has(.dye-input:checked) .dye-col{display:table-cell}
+  .lock-note{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--stone);margin-top:7px}
 
-  /* dye full-width strip beneath both columns */
-  .dye{background:var(--white);border:0.5px solid var(--border);border-top:3px solid var(--soil);border-radius:8px;padding:14px;margin-top:14px}
+  .card.locked{background:var(--salt);border:0.5px solid var(--border);border-radius:8px;padding:4px 12px}
+  .ptable{width:100%;border-collapse:separate;border-spacing:0;font-size:11px}
+  .ptable th{text-align:left;font-size:8.5px;color:var(--stone);letter-spacing:0.3px;text-transform:uppercase;font-weight:600;padding:5px 6px;border-bottom:1px solid var(--sand)}
+  .ptable td{padding:6px 6px;border-bottom:1px solid var(--sand)}
+  .ptable td.m{font-family:var(--mono);font-size:10px;color:var(--stone)}
+  .ptable tr:last-child td{border-bottom:none}
+  .tag{display:inline-block;font-size:9px;font-weight:600;border-radius:3px;padding:1px 6px}
+  .tag.shell{background:rgba(133,79,11,0.10);color:var(--soil)}
+  .tag.pocket{background:rgba(58,90,140,0.12);color:#3a5a8c}
+
+  .nap{display:flex;align-items:center;gap:9px;background:var(--white);border:0.5px solid var(--border);border-radius:8px;padding:10px 13px;font-size:12px}
+  .nap .ar{font-family:var(--mono);color:var(--soil);font-size:15px}
+  .note{background:var(--white);border:0.5px solid var(--border);border-left:3px solid var(--soil);border-radius:6px;padding:11px 13px;margin-top:10px}
+  .note .h{font-size:11px;font-weight:600;margin-bottom:3px}
+  .note p{margin:0;font-size:11px;line-height:1.5;color:var(--stone)}.note .who{color:var(--soil);font-weight:600}
+
+  .dye-only{display:none}
+  body:has(.dye-input:checked) .dye-only{display:block}
+  .dye{background:var(--white);border:0.5px solid var(--border);border-top:3px solid var(--soil);border-radius:8px;padding:14px;margin-top:12px}
   .dye-h{display:flex;align-items:center;gap:8px;margin-bottom:8px}
   .dye-h .dot{width:8px;height:8px;border-radius:50%;background:var(--soil)}
-  .dye-h .t{font-size:12px;font-weight:600;color:var(--slate)}
-  .dye-h .t span{font-weight:400;color:var(--stone)}
-  .dye .lead{font-size:12px;line-height:1.5;color:var(--slate);margin:0 0 12px}
-  .dye .lead b{font-weight:600}
-  .dye-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;align-items:start}
-  .aa{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .aa .box{border:1px solid var(--sand);border-radius:6px;padding:10px 12px;background:var(--salt)}
+  .dye-h .t{font-size:12px;font-weight:600}.dye-h .t span{font-weight:400;color:var(--stone)}
+  .dye .lead{font-size:12px;line-height:1.5;margin:0 0 12px}.dye .lead b{font-weight:600}
+  .aa{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+  .aa .box{border:1px solid var(--sand);border-radius:6px;padding:9px 11px;background:var(--salt)}
   .aa .box.actual{background:var(--white)}
   .aa .box .k{font-size:8.5px;color:var(--stone);text-transform:uppercase;letter-spacing:0.6px;font-weight:600;margin-bottom:4px}
-  .aa .box .num{font-size:24px;font-family:var(--mono);color:var(--slate);line-height:1}
+  .aa .box .num{font-size:23px;font-family:var(--mono);line-height:1}
   .aa .box .sub{font-size:9px;color:var(--stone);margin-top:4px}
-  .dye-status{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--slate);background:rgba(133,79,11,0.07);border-radius:6px;padding:8px 11px;margin-top:10px}
-  .dye-side .k{font-size:8.5px;color:var(--stone);text-transform:uppercase;letter-spacing:0.6px;font-weight:600;margin-bottom:6px}
-  .dye-side .uline{display:flex;justify-content:space-between;font-size:10.5px;padding:5px 0;border-bottom:1px solid var(--sand)}
-  .dye-side .uline:last-child{border-bottom:none}
-  .dye-side .uline .v{font-family:var(--mono);color:var(--soil);font-weight:600}
+  .dye-status{display:flex;align-items:center;gap:8px;font-size:11px;background:rgba(133,79,11,0.07);border-radius:6px;padding:8px 11px}
 
-  /* dye-on variant toggling: in the dye-on block we reveal .updye */
-  .dye-on .updye{display:flex}
+  .ed-foot{display:flex;justify-content:space-between;align-items:center;margin-top:22px;border-top:1px solid var(--sand);padding-top:14px}
+  .ed-foot button{border:1px solid var(--sand);background:var(--white);border-radius:7px;padding:8px 16px;font-size:12px;cursor:pointer}
+  .ed-foot .next{background:var(--slate);color:var(--salt);border-color:var(--slate)}
+  .ed-foot .pos{font-size:11px;color:var(--stone)}
+
+  .preview{background:var(--sand);padding:16px 18px;overflow-y:auto}
+  .pv-head{display:flex;justify-content:space-between;font-size:9px;letter-spacing:2px;color:var(--stone);text-transform:uppercase;font-weight:600;margin-bottom:8px}
+  .page{background:var(--white);border-radius:4px;box-shadow:0 2px 14px rgba(0,0,0,0.10);padding:20px 22px;font-size:10px}
+  .pp-head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid var(--slate);padding-bottom:8px}
+  .pp-head .co{font-size:8px;letter-spacing:1px}.pp-head .co b{font-size:9px}
+  .pp-head h3{font-family:var(--serif);font-size:17px}
+  .pp-head .rt{text-align:right;font-family:var(--mono);font-size:8px;color:var(--stone)}
+  .pp-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin:10px 0;padding:8px;background:var(--salt);border-radius:3px}
+  .pp-strip .k{font-size:6.5px;letter-spacing:0.5px;text-transform:uppercase;color:var(--stone)}
+  .pp-strip .v{font-size:9px;margin-top:1px}
+  .pp-sec{font-family:var(--serif);font-size:13px;margin:14px 0 6px}
+  .pp-img{height:120px;border:1px dashed var(--sand);border-radius:3px;background:linear-gradient(135deg,#efe9dd,#ddd3bf);display:flex;align-items:flex-end;justify-content:flex-end;padding:6px}
+  .pp-img .lab{font-family:var(--mono);font-size:7px;background:var(--slate);color:var(--salt);padding:2px 6px;border-radius:2px}
+  .pp-tbl{width:100%;border-collapse:collapse;font-size:8px;margin-top:4px}
+  .pp-tbl th{background:var(--slate);color:var(--salt);text-align:left;padding:4px 6px;font-size:6.5px;letter-spacing:0.4px;text-transform:uppercase;font-weight:600}
+  .pp-tbl td{padding:4px 6px;border-bottom:0.5px solid var(--sand)}
+  .pp-dye{border:0.5px solid var(--sand);border-left:2px solid var(--soil);border-radius:3px;padding:7px 9px;margin-top:8px;background:var(--salt)}
+  .pp-dye .h{font-size:8px;font-weight:700;color:var(--soil);text-transform:uppercase;letter-spacing:0.4px}
+  .pp-dye .r{display:flex;gap:14px;margin-top:4px;font-size:9px}.pp-dye .mono{font-family:var(--mono)}
+  .pp-foot{display:flex;justify-content:space-between;margin-top:16px;padding-top:8px;border-top:0.5px solid var(--sand);font-size:7px;color:var(--stone)}
 </style>
 </head>
 <body>
-<div class="wrap">
+<input type="checkbox" id="dyeToggle" class="dye-input">
 
-  <div style="font-size:11px;color:var(--stone);font-family:var(--mono)">Variant C — Locked-left / Worksheet-right (source vs editable, split) · static spec mockup</div>
+<div class="topbar">
+  <div class="wordmark"><div class="big">ENTERPRISE RESOURCE PLANNING</div><div class="small">FOREIGN RESOURCE</div></div>
+  <div class="topnav"><span><span class="dot"></span>Cash</span><span>Marketing ▾</span><span class="on">Product ▾</span><span>Inventory ▾</span><span>Operations ▾</span><span class="gear">⚙</span></div>
+</div>
+<div class="plmbar">
+  <div class="l"><h1>Product Lifecycle Management</h1><div class="seg-tabs"><button>▤ Library</button><button class="on">⬡ Styles</button><button>◳ Production</button></div></div>
+  <div class="r"><button>⤓ Backup</button><button class="on">✦ Sync diagnostics</button><button>⛨ Storage Health</button></div>
+</div>
+<div class="stylebar">
+  <div class="l"><button class="gbtn">← Back</button><button class="gbtn">↺ Restore points</button><div class="styleid"><div class="co">FOREIGN RESOURCE</div><div class="no">FW26-BB-ZH-0001</div></div></div>
+  <div class="r"><button class="pbtn ghost">⇪ Send sample</button><button class="pbtn ghost">▣ Send PO</button><button class="pbtn dis">Save</button><span class="saved">✓ All changes saved</span><div class="cost"><div class="k">Total Unit Cost</div><div class="big">$31.45</div><div class="sub">incl. Dongguan Shengde +20% · $5.24</div></div></div>
+</div>
 
-  <!-- ════════════════════ BASE STATE ════════════════════ -->
-  <div class="state"><b>Base state</b><span>— style has no wash/dye treatment</span><span class="ln"></span></div>
+<div class="builder">
+  <nav class="stepnav">
+    <div class="grp"><span class="gl">Merchandising</span></div>
+    <div class="step skip"><span class="n">✕</span> Competitor Landscape</div>
+    <div class="step skip"><span class="n">✕</span> Merchandising Preview</div>
+    <div class="grp"><span class="gl">Design</span></div>
+    <div class="step"><span class="n">01</span> Style Overview</div>
+    <div class="step"><span class="n">02</span> Design Overview</div>
+    <div class="grp"><span class="gl">Bill of Materials</span><span class="gp">$17.91</span></div>
+    <div class="step"><span class="n">03</span> Fabrics</div>
+    <div class="step"><span class="n">04</span> Trims</div>
+    <div class="step"><span class="n">05</span> Packaging</div>
+    <div class="grp"><span class="gl">Cut &amp; Sew</span><span class="gp">$5.00</span></div>
+    <div class="step"><span class="n">06</span> Pattern</div>
+    <div class="step"><span class="n">07</span> Construction (1)</div>
+    <div class="step"><span class="n">08</span> Construction (2)</div>
+    <div class="step"><span class="n">09</span> Sewing (1)</div>
+    <div class="step"><span class="n">10</span> Sewing (2)</div>
+    <div class="step"><span class="n">$</span> Cut &amp; Sew Cost</div>
+    <div class="step active"><span class="n">11</span> Cutting</div>
+    <div class="step"><span class="n">12</span> Points of Measure</div>
+    <div class="step"><span class="n">13</span> Size Grading</div>
+    <div class="grp"><span class="gl">Embellishments</span></div>
+    <div class="step skip"><span class="n">✕</span> Colorways</div>
+    <div class="step skip"><span class="n">✕</span> Artwork &amp; Placement</div>
+  </nav>
 
-  <div class="step-head">
-    <div><div class="crumb">Cut &amp; Sew · Page 11</div><h2>Cutting</h2></div>
-    <div class="pg-badge">AP-HD-STONE-01</div>
-  </div>
-
-  <div class="split">
-    <!-- LEFT: locked / by reference -->
-    <div>
-      <div class="col-head ref">🔒 Pulled by reference <span class="chip">read-only · from atoms</span></div>
-      <div class="lref">
-        <div class="fab-mini body">
-          <div class="role">Body</div>
-          <span class="nm">FR French Terry 320</span><span class="code">FB-FT-002</span>
-          <div class="kv"><div><div class="k">Post-wash width</div><div class="v">178 cm</div></div><div><div class="k">Raw shrinkage</div><div class="v">4.5% L · 4.0% W</div></div></div>
-        </div>
-        <div class="fab-mini rib">
-          <div class="role">Rib</div>
-          <span class="nm">2×1 Cotton Rib</span><span class="code">FB-RIB-003</span>
-          <div class="kv"><div><div class="k">Post-wash width</div><div class="v">90 cm</div></div><div><div class="k">Raw shrinkage</div><div class="v">5.0% L · 6.0% W</div></div></div>
-        </div>
-        <div class="fab-mini hood">
-          <div class="role">Hood lining</div>
-          <span class="nm">Combed Jersey 180</span><span class="code">FB-JSY-001</span>
-          <div class="kv"><div><div class="k">Post-wash width</div><div class="v">170 cm</div></div><div><div class="k">Raw shrinkage</div><div class="v">3.0% L · 2.5% W</div></div></div>
-        </div>
-
-        <div class="sub-label">Pattern piece index <span class="pill linked">CS-HD-HEAVY-01</span></div>
-        <table class="ptable">
-          <thead><tr><th>#</th><th>Piece</th><th>Qty</th><th>Fabric</th><th>Grain</th></tr></thead>
-          <tbody>
-            <tr><td class="m">P-01</td><td>Front Body</td><td class="m">1</td><td><span class="tag body">Body</span></td><td>Lengthwise</td></tr>
-            <tr><td class="m">P-02</td><td>Back Body</td><td class="m">1</td><td><span class="tag body">Body</span></td><td>Lengthwise</td></tr>
-            <tr><td class="m">P-03</td><td>Sleeve</td><td class="m">2</td><td><span class="tag body">Body</span></td><td>Lengthwise</td></tr>
-            <tr><td class="m">P-04</td><td>Hood Panel</td><td class="m">2</td><td><span class="tag body">Body</span></td><td>Lengthwise</td></tr>
-            <tr><td class="m">P-05</td><td>Kangaroo Pocket</td><td class="m">1</td><td><span class="tag body">Body</span></td><td>Lengthwise</td></tr>
-            <tr><td class="m">P-06</td><td>Cuff</td><td class="m">2</td><td><span class="tag rib">Rib</span></td><td>Crossgrain</td></tr>
-            <tr><td class="m">P-07</td><td>Waistband</td><td class="m">1</td><td><span class="tag rib">Rib</span></td><td>Crossgrain</td></tr>
-          </tbody>
-        </table>
-        <div class="lock-note">🔒 Edit fabrics on their atoms · edit pieces on the Cut &amp; Sew block.</div>
-      </div>
+  <div class="editor">
+    <div class="skipbar"><span>Not using this page? Skip it and it will be crossed out in the export.</span><button>Skip page</button></div>
+    <div class="ed-title">Cutting</div>
+    <div class="ed-rule"></div>
+    <div class="statebox">
+      <div class="seg2"><label class="l-base" for="dyeToggle">Base</label><label class="l-dye" for="dyeToggle">Dye-on</label></div>
+      <div class="cap">Mockup toggle only. In the real app the dye layer appears automatically when the style references a wash/dye treatment.</div>
     </div>
 
-    <!-- RIGHT: worksheet / editable -->
-    <div>
-      <div class="col-head work">✎ Cutting worksheet <span class="chip">provisional · you edit here</span></div>
-      <div class="lwork">
-        <div class="wblock">
-          <div class="wh">Body <small>178 cm</small></div>
-          <div class="marker-slot"><div class="plus">+</div><div><div class="cap">Drop marker image</div><div class="fn">marker_body_178cm.png</div></div></div>
-          <div class="wfields">
-            <div class="fld"><div class="k">Cutting width</div><div class="v">178 <small>cm</small></div></div>
-            <div class="fld"><div class="k">Cuttable width</div><div class="v">176 <small>cm · −2 selvage</small></div></div>
-            <div class="fld yield"><div><div class="k">Cut yield</div><div class="v">1.85 <small>m/unit</small></div></div><span class="pill prov">provisional</span></div>
-          </div>
-          <div class="updye">↑ + dye residual +4.6% → yield 1.94 m/unit · factory applies</div>
-        </div>
-        <div class="wblock">
-          <div class="wh">Rib <small>90 cm</small></div>
-          <div class="marker-slot"><div class="plus">+</div><div><div class="cap">Drop marker image</div><div class="fn">marker_rib_90cm.png</div></div></div>
-          <div class="wfields">
-            <div class="fld"><div class="k">Cutting width</div><div class="v">90 <small>cm</small></div></div>
-            <div class="fld"><div class="k">Cuttable width</div><div class="v">88 <small>cm · −2 selvage</small></div></div>
-            <div class="fld yield"><div><div class="k">Cut yield</div><div class="v">0.22 <small>m/unit</small></div></div><span class="pill prov">provisional</span></div>
-          </div>
-          <div class="updye">↑ + dye residual +4.6% → yield 0.23 m/unit · factory applies</div>
-        </div>
-        <div class="wblock">
-          <div class="wh">Hood lining <small>170 cm</small></div>
-          <div class="marker-slot"><div class="plus">+</div><div><div class="cap">Drop marker image</div><div class="fn">marker_hood_170cm.png</div></div></div>
-          <div class="wfields">
-            <div class="fld"><div class="k">Cutting width</div><div class="v">170 <small>cm</small></div></div>
-            <div class="fld"><div class="k">Cuttable width</div><div class="v">168 <small>cm · −2 selvage</small></div></div>
-            <div class="fld yield"><div><div class="k">Cut yield</div><div class="v">0.35 <small>m/unit</small></div></div><span class="pill prov">provisional</span></div>
-          </div>
-          <div class="updye">↑ + dye residual +4.6% → yield 0.37 m/unit · factory applies</div>
-        </div>
-        <div class="nap"><span class="ar">↑↑↑</span><div>Napped back — <b>one-way nap</b>. All body pieces same direction.</div></div>
-        <div class="note"><div class="h">Net vs cut — cut bigger than finished</div><p>Body upscale <b>+4.5% L / +4.0% W</b>. <span class="who">Applied by the factory</span> on the marker.</p></div>
-      </div>
+    <div class="sec-label">Pattern pieces layout · marker per fabric</div>
+    <div class="markers">
+      <div class="mk has"><div class="corner">B1750 · 171 cm width</div></div>
+      <div class="mk"><div class="plus">+</div><div class="cap">Pocket marker · 165 cm</div></div>
     </div>
-  </div>
 
-  <!-- ════════════════════ DYE-ON STATE ════════════════════ -->
-  <div class="state"><b>Dye-on state</b><span>— style references a wash/dye treatment atom</span><span class="ln"></span></div>
-
-  <div class="step-head">
-    <div><div class="crumb">Cut &amp; Sew · Page 11</div><h2>Cutting</h2></div>
-    <div class="pg-badge">AP-HD-STONE-01</div>
-  </div>
-
-  <!-- same split; worksheet blocks reveal their +dye line via .dye-on -->
-  <div class="split dye-on">
-    <div>
-      <div class="col-head ref">🔒 Pulled by reference <span class="chip">read-only · from atoms</span></div>
-      <div class="lref">
-        <div class="fab-mini body"><div class="role">Body</div><span class="nm">FR French Terry 320</span><span class="code">FB-FT-002</span>
-          <div class="kv"><div><div class="k">Post-wash width</div><div class="v">178 cm</div></div><div><div class="k">Raw shrinkage</div><div class="v">4.5% L · 4.0% W</div></div></div></div>
-        <div class="fab-mini rib"><div class="role">Rib</div><span class="nm">2×1 Cotton Rib</span><span class="code">FB-RIB-003</span>
-          <div class="kv"><div><div class="k">Post-wash width</div><div class="v">90 cm</div></div><div><div class="k">Raw shrinkage</div><div class="v">5.0% L · 6.0% W</div></div></div></div>
-        <div class="fab-mini hood"><div class="role">Hood lining</div><span class="nm">Combed Jersey 180</span><span class="code">FB-JSY-001</span>
-          <div class="kv"><div><div class="k">Post-wash width</div><div class="v">170 cm</div></div><div><div class="k">Raw shrinkage</div><div class="v">3.0% L · 2.5% W</div></div></div></div>
-        <div class="sub-label">Pattern piece index <span class="pill linked">CS-HD-HEAVY-01</span></div>
-        <table class="ptable">
-          <thead><tr><th>#</th><th>Piece</th><th>Qty</th><th>Fabric</th><th>Grain</th></tr></thead>
-          <tbody>
-            <tr><td class="m">P-01</td><td>Front Body</td><td class="m">1</td><td><span class="tag body">Body</span></td><td>Lengthwise</td></tr>
-            <tr><td class="m">P-02</td><td>Back Body</td><td class="m">1</td><td><span class="tag body">Body</span></td><td>Lengthwise</td></tr>
-            <tr><td class="m">P-03</td><td>Sleeve</td><td class="m">2</td><td><span class="tag body">Body</span></td><td>Lengthwise</td></tr>
-            <tr><td class="m">P-04</td><td>Hood Panel</td><td class="m">2</td><td><span class="tag body">Body</span></td><td>Lengthwise</td></tr>
-            <tr><td class="m">P-05</td><td>Kangaroo Pocket</td><td class="m">1</td><td><span class="tag body">Body</span></td><td>Lengthwise</td></tr>
-            <tr><td class="m">P-06</td><td>Cuff</td><td class="m">2</td><td><span class="tag rib">Rib</span></td><td>Crossgrain</td></tr>
-            <tr><td class="m">P-07</td><td>Waistband</td><td class="m">1</td><td><span class="tag rib">Rib</span></td><td>Crossgrain</td></tr>
-          </tbody>
-        </table>
-        <div class="lock-note">🔒 Edit fabrics on their atoms · edit pieces on the Cut &amp; Sew block.</div>
-      </div>
+    <div class="sec-label">Cutting worksheet <span class="sp"></span><span class="pill lock">🔒 cream = by reference</span><span class="pill prov">provisional = editable</span></div>
+    <div class="ws-wrap">
+      <table class="ws">
+        <thead>
+          <tr>
+            <th class="lockcol">Fabric</th>
+            <th class="lockcol">Post-wash W</th>
+            <th class="lockcol">Raw shrink</th>
+            <th class="dye-col">Dye residual</th>
+            <th>Marker</th>
+            <th>Cutting W</th>
+            <th>Cuttable</th>
+            <th>Cut yield</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="lockcol"><span class="role">Body</span><span class="fno">B1750</span><span class="desc">French terry</span></td>
+            <td class="lockcol mono">171 cm</td>
+            <td class="lockcol mono">5.5% / 5.0%</td>
+            <td class="dye-col mono">+4.6%</td>
+            <td><span class="mkmini"></span></td>
+            <td><span class="ed">171</span></td>
+            <td><span class="ed">169</span></td>
+            <td><div class="yieldcell"><span class="ed">1.5</span><span class="pill prov">prov</span></div></td>
+          </tr>
+          <tr>
+            <td class="lockcol"><span class="role">Pocket</span><span class="fno">B1968</span><span class="desc">Fleece</span></td>
+            <td class="lockcol mono">165 cm</td>
+            <td class="lockcol mono">4.0% / 3.5%</td>
+            <td class="dye-col mono">+4.6%</td>
+            <td><span class="mkmini empty">+</span></td>
+            <td><span class="ed">165</span></td>
+            <td><span class="ed">163</span></td>
+            <td><div class="yieldcell"><span class="ed">0.3</span><span class="pill prov">prov</span></div></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
-    <div>
-      <div class="col-head work">✎ Cutting worksheet <span class="chip">provisional · you edit here</span></div>
-      <div class="lwork">
-        <div class="wblock">
-          <div class="wh">Body <small>178 cm</small></div>
-          <div class="marker-slot"><div class="plus">+</div><div><div class="cap">Drop marker image</div><div class="fn">marker_body_178cm.png</div></div></div>
-          <div class="wfields">
-            <div class="fld"><div class="k">Cutting width</div><div class="v">178 <small>cm</small></div></div>
-            <div class="fld"><div class="k">Cuttable width</div><div class="v">176 <small>cm · −2 selvage</small></div></div>
-            <div class="fld yield"><div><div class="k">Cut yield</div><div class="v">1.94 <small>m/unit</small></div></div><span class="pill prov">provisional</span></div>
-          </div>
-          <div class="updye">↑ fabric +4.5% then dye residual +4.6% · factory applies</div>
-        </div>
-        <div class="wblock">
-          <div class="wh">Rib <small>90 cm</small></div>
-          <div class="marker-slot"><div class="plus">+</div><div><div class="cap">Drop marker image</div><div class="fn">marker_rib_90cm.png</div></div></div>
-          <div class="wfields">
-            <div class="fld"><div class="k">Cutting width</div><div class="v">90 <small>cm</small></div></div>
-            <div class="fld"><div class="k">Cuttable width</div><div class="v">88 <small>cm · −2 selvage</small></div></div>
-            <div class="fld yield"><div><div class="k">Cut yield</div><div class="v">0.23 <small>m/unit</small></div></div><span class="pill prov">provisional</span></div>
-          </div>
-          <div class="updye">↑ fabric +5.0% then dye residual +4.6% · factory applies</div>
-        </div>
-        <div class="wblock">
-          <div class="wh">Hood lining <small>170 cm</small></div>
-          <div class="marker-slot"><div class="plus">+</div><div><div class="cap">Drop marker image</div><div class="fn">marker_hood_170cm.png</div></div></div>
-          <div class="wfields">
-            <div class="fld"><div class="k">Cutting width</div><div class="v">170 <small>cm</small></div></div>
-            <div class="fld"><div class="k">Cuttable width</div><div class="v">168 <small>cm · −2 selvage</small></div></div>
-            <div class="fld yield"><div><div class="k">Cut yield</div><div class="v">0.37 <small>m/unit</small></div></div><span class="pill prov">provisional</span></div>
-          </div>
-          <div class="updye">↑ fabric +3.0% then dye residual +4.6% · factory applies</div>
-        </div>
-        <div class="nap"><span class="ar">↑↑↑</span><div>Napped back — <b>one-way nap</b>. All body pieces same direction.</div></div>
-        <div class="note"><div class="h">Net vs cut — cut bigger than finished</div><p>Body upscale <b>+4.5% L / +4.0% W</b>, plus dye residual. <span class="who">Applied by the factory</span> on the marker.</p></div>
-      </div>
-    </div>
-  </div>
+    <div class="lockcol-head">🔒 the three cream columns are pulled from the fabric atoms — read-only · up to three fabrics fit</div>
 
-  <!-- dye full-width strip beneath the split -->
-  <div class="dye">
-    <div class="dye-h"><span class="dot"></span><div class="t">Garment dye — extra cutting allowance <span>· keyed to the treatment atom</span></div></div>
-    <p class="lead">This style gets <b>Gone — global dye</b> <span style="font-family:var(--mono);font-size:10px;color:var(--stone)">(TR-GDY-001)</span>. Cut pieces bigger for extra shrinkage — the dye bath shrinks the garment again after it's sewn.</p>
-    <div class="dye-grid">
-      <div>
+    <div class="sec-label">Pattern piece index <span class="pill linked">linked · CS-HD-HEAVY-01</span></div>
+    <div class="card locked">
+      <table class="ptable">
+        <thead><tr><th>Piece #</th><th>Piece name</th><th>Qty</th><th>Fabric</th><th>Grain</th><th>Fusing</th></tr></thead>
+        <tbody>
+          <tr><td class="m">P-01</td><td>Front Body</td><td class="m">2</td><td><span class="tag shell">Shell</span></td><td>Lengthwise</td><td>None</td></tr>
+          <tr><td class="m">P-02</td><td>Back Body</td><td class="m">1</td><td><span class="tag shell">Shell</span></td><td>Lengthwise</td><td>None</td></tr>
+          <tr><td class="m">P-03</td><td>Pocket Bag</td><td class="m">2</td><td><span class="tag pocket">Pocket</span></td><td>Lengthwise</td><td>None</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="lock-note">🔒 Read-only — edit pieces on the Cut &amp; Sew block. <b style="color:var(--soil)">Behavior change vs today.</b></div>
+
+    <div class="sec-label">Nap / grain &amp; net-vs-cut</div>
+    <div class="nap"><span class="ar">↑↑↑</span><div>Napped back (brushed) — <b>one-way nap</b>. All body pieces laid in the same direction.</div></div>
+    <div class="note"><div class="h">Net vs cut — pieces are cut bigger than finished</div><p>Body upscale <b>+5.5% length / +5.0% width</b> (from B1750's raw shrinkage). <span class="who">Applied by the factory</span> on the marker.</p></div>
+
+    <div class="dye-only">
+      <div class="dye">
+        <div class="dye-h"><span class="dot"></span><div class="t">Garment dye — extra cutting allowance <span>· keyed to the treatment atom</span></div></div>
+        <p class="lead">This style gets <b>Gone — global dye</b> <span style="font-family:var(--mono);font-size:10px;color:var(--stone)">(TR-GDY-001)</span>. The <b>Dye residual</b> column appears in the worksheet above; cut pieces bigger for extra shrinkage.</p>
         <div style="font-size:9px;color:var(--stone);text-transform:uppercase;letter-spacing:0.6px;font-weight:600;margin-bottom:6px">Residual shrinkage from the dye (cut → finished) — separate from the fabric's pre→post-wash number</div>
         <div class="aa">
           <div class="box"><div class="k">Assumed</div><div class="num">4.0%</div><div class="sub">default from treatment atom</div></div>
@@ -297,15 +298,48 @@
         </div>
         <div class="dye-status"><span class="pill warn">re-cut</span> Actual runs <b style="margin:0 3px">0.6 pt</b> hotter than assumed — bump the marker upscale before bulk.</div>
       </div>
-      <div class="dye-side">
-        <div class="k">Combined cut upscale (fabric → then dye)</div>
-        <div class="uline"><span>Body</span><span class="v">+4.5% → +4.6%</span></div>
-        <div class="uline"><span>Rib</span><span class="v">+5.0% → +4.6%</span></div>
-        <div class="uline"><span>Hood lining</span><span class="v">+3.0% → +4.6%</span></div>
-      </div>
     </div>
+
+    <div class="ed-foot"><button>← Previous</button><span class="pos">Step 14 of 28</span><button class="next">Next →</button></div>
   </div>
 
+  <div class="preview">
+    <div class="pv-head"><span>Live preview</span><span>Page 14 / 28</span></div>
+    <div class="page">
+      <div class="pp-head"><div class="co"><b>FOREIGN RESOURCE CO.</b><br>CUT &amp; SEW</div><h3>Cutting</h3><div class="rt">FW26-BB-ZH-0001<br>PAGE 11 / 25</div></div>
+      <div class="pp-strip">
+        <div><div class="k">Style #</div><div class="v">FW26-BB-ZH-0001</div></div>
+        <div><div class="k">Collection</div><div class="v">Borderless Basics</div></div>
+        <div><div class="k">Season</div><div class="v">FW26</div></div>
+        <div><div class="k">Version</div><div class="v">V1.0</div></div>
+        <div><div class="k">Colorway</div><div class="v">Slate</div></div>
+        <div><div class="k">Size Range</div><div class="v">S / M / L / XL</div></div>
+      </div>
+      <div class="pp-sec">Pattern Pieces Layout</div>
+      <div class="pp-img"><span class="lab">B1750 · 171 cm width</span></div>
+      <div class="pp-sec">Cutting Worksheet</div>
+      <table class="pp-tbl">
+        <thead><tr><th>Fabric</th><th>Post-wash W</th><th>Cuttable</th><th>Raw shrink</th><th>Yield</th></tr></thead>
+        <tbody>
+          <tr><td>Body · B1750</td><td>171 cm</td><td>169 cm</td><td>5.5% / 5.0%</td><td>1.5 m</td></tr>
+          <tr><td>Pocket · B1968</td><td>165 cm</td><td>163 cm</td><td>4.0% / 3.5%</td><td>0.3 m</td></tr>
+        </tbody>
+      </table>
+      <div class="pp-sec">Pattern Piece Index</div>
+      <table class="pp-tbl">
+        <thead><tr><th>#</th><th>Piece</th><th>Qty</th><th>Fabric</th><th>Grain</th><th>Fusing</th></tr></thead>
+        <tbody>
+          <tr><td>P-01</td><td>Front Body</td><td>2</td><td>Shell</td><td>Lengthwise</td><td>None</td></tr>
+          <tr><td>P-02</td><td>Back Body</td><td>1</td><td>Shell</td><td>Lengthwise</td><td>None</td></tr>
+          <tr><td>P-03</td><td>Pocket Bag</td><td>2</td><td>Pocket</td><td>Lengthwise</td><td>None</td></tr>
+        </tbody>
+      </table>
+      <div class="dye-only"><div class="pp-dye"><div class="h">Garment dye — Gone (TR-GDY-001) · cut bigger</div><div class="r"><span>Residual shrink (cut→finished)</span><span class="mono">assumed 4.0% · actual 4.6%</span></div></div></div>
+      <div class="pp-sec">Cutting Notes</div>
+      <div style="font-size:9px;color:var(--stone)">One-way nap (napped back). Cut pieces upscaled +5.5% L / +5.0% W by factory.</div>
+      <div class="pp-foot"><span>© 2026 Foreign Resource Co. — Confidential Tech Pack</span><span>PAGE 11 / 25</span></div>
+    </div>
+  </div>
 </div>
 </body>
 </html>
