@@ -1394,7 +1394,7 @@ function PagePom({ d, images }) {
 }
 
 // ─── Page 11 — Graded Size Matrix ───────────────────────────────────────────
-function PageSizeMatrix({ d }) {
+function PageSizeMatrix({ d, images }) {
   const matrix = d.gradedSizeMatrix || { baseSize: 'M', grading: [] };
   const rawSizes = Array.isArray(d.sizeRange)
     ? d.sizeRange
@@ -1458,8 +1458,24 @@ function PageSizeMatrix({ d }) {
         ))}
       </g>
 
-      <text x={40} y={680} fontSize={10} fill={FR.stone} fontStyle="italic">
-        Per-size values derived as <tspan fontFamily="ui-monospace,Menlo,monospace">base + delta</tspan>. Base column comes from Points of Measure.
+      {/* Fit models (CLO3D) — one render per size, mirrors the editor card */}
+      <SectionHeading x={40} y={534}>Fit Models (CLO3D)</SectionHeading>
+      {(() => {
+        const fitGap = 14;
+        const fitW = (tableW - fitGap * (sizes.length - 1)) / sizes.length;
+        const fitH = 100;
+        const fitY = 546;
+        return sizes.map((s, i) => {
+          const fit = (images || []).find(img => img.slot === `fit-model-${String(s).toLowerCase()}`);
+          return (
+            <PhotoSlot key={s} x={40 + i * (fitW + fitGap)} y={fitY} w={fitW} h={fitH}
+              label={`Size ${s}${s === baseSize ? ' · sample' : ''}`} image={fit} placeholder="CLO3D render" />
+          );
+        });
+      })()}
+
+      <text x={40} y={690} fontSize={10} fill={FR.stone} fontStyle="italic">
+        Per-size values derived as <tspan fontFamily="ui-monospace,Menlo,monospace">base + delta</tspan>. Base column comes from Points of Measure. Fit renders from CLO3D.
       </text>
     </g>
   );
@@ -2028,7 +2044,7 @@ const PAGE_FNS = [
   { title: 'Cut & Sew Cost',                    phase: 'Cut & Sew',         body: ({ d }) => <PageCutSewCost d={d} /> },
   { title: 'Cutting',                           phase: 'Cut & Sew',         body: ({ d, images }) => <PagePattern d={d} images={images} /> },
   { title: 'Points of Measure',                 phase: 'Cut & Sew',         body: ({ d, images }) => <PagePom d={d} images={images} /> },
-  { title: 'Size Grading',                      phase: 'Cut & Sew',         body: ({ d }) => <PageSizeMatrix d={d} /> },
+  { title: 'Size Grading',                      phase: 'Cut & Sew',         body: ({ d, images }) => <PageSizeMatrix d={d} images={images} /> },
   // 14–18 — Embellishments
   { title: 'Colorways',                         phase: 'Embellishments',    body: ({ d }) => <PageColorways d={d} /> },
   { title: 'Artwork & Placement',               phase: 'Embellishments',    body: ({ d, images }) => <PageArtwork d={d} images={images} /> },

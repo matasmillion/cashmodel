@@ -839,7 +839,19 @@ export async function generateTechPackPDF(pack) {
   };
   const matrixRows = (d.poms || []).filter(p => p.name).map(p => [p.name, ...matrixSizes.map(s => computeCell(p, s))]);
   const sizeColW = Math.floor((W - 20 - 70) / matrixSizes.length);
-  table(['Measurement', ...matrixSizes], matrixRows, 10, y, [70, ...matrixSizes.map(() => sizeColW)]);
+  y = table(['Measurement', ...matrixSizes], matrixRows, 10, y, [70, ...matrixSizes.map(() => sizeColW)]);
+
+  // Fit models — one CLO3D render per size (mirrors the editor + live preview).
+  if (H - y > 30) {
+    y += 6;
+    sectionHeading('Fit Models (CLO3D)', y); y += 6;
+    const fitGap = 5;
+    const fitW = (W - 20 - fitGap * (matrixSizes.length - 1)) / matrixSizes.length;
+    const fitH = Math.min(60, H - y - 8);
+    matrixSizes.forEach((s, i) => {
+      addImage(`fit-model-${String(s).toLowerCase()}`, 10 + i * (fitW + fitGap), y, fitW, fitH);
+    });
+  }
 
   // ─── Embellishments → Colorways ───
   newPage('Colorways', null, 16);
