@@ -69,6 +69,7 @@ export const STEPS = [
   { id: 'sketches-2',    title: 'Construction (2)',                 icon: '08', phase: 'Cut & Sew' },
   { id: 'construction',  title: 'Sewing (1)',                       icon: '09', phase: 'Cut & Sew' },
   { id: 'construction-2',title: 'Sewing (2)',                       icon: '10', phase: 'Cut & Sew' },
+  { id: 'cutsew-cost',   title: 'Cut & Sew Cost',                   icon: '$',  phase: 'Cut & Sew', internal: true },
   { id: 'pattern',       title: 'Cutting',                          icon: '11', phase: 'Cut & Sew' },
   { id: 'pom',           title: 'Points of Measure',                icon: '12', phase: 'Cut & Sew' },
   { id: 'size-matrix',   title: 'Size Grading',                     icon: '13', phase: 'Cut & Sew', skippable: true },

@@ -18,7 +18,8 @@ function clampLine(s, maxW, charW = 6.5) {
   return s.slice(0, Math.max(1, max - 1)) + '…';
 }
 
-function PageFrame({ title, phase, pageNum, styleInfo, styleNumber, children }) {
+function PageFrame({ title, phase, pageNum, styleInfo, styleNumber, children, internal }) {
+  const headerTag = internal ? 'INTERNAL · NOT EXPORTED' : `PAGE ${pageNum} / ${TOTAL_PAGES}`;
   return (
     <g>
       <rect x="0" y="0" width={PAGE_W} height={PAGE_H} fill={FR.white} />
@@ -31,10 +32,10 @@ function PageFrame({ title, phase, pageNum, styleInfo, styleNumber, children }) 
       {styleNumber && (
         <text x={PAGE_W - 40} y="28" textAnchor="end" fontSize="10" fontWeight="bold" fill={FR.salt} letterSpacing="2" fontFamily="ui-monospace,Menlo,monospace">{esc(styleNumber)}</text>
       )}
-      <text x={PAGE_W - 40} y="50" textAnchor="end" fontSize="8" fill={FR.sand} letterSpacing="2">PAGE {pageNum} / {TOTAL_PAGES}</text>
+      <text x={PAGE_W - 40} y="50" textAnchor="end" fontSize="8" fill={FR.sand} letterSpacing="2">{headerTag}</text>
       <rect x="0" y="70" width={PAGE_W} height={2} fill={FR.soil} />
       <text x="40" y="775" fontSize="9" fill={FR.stone}>{styleInfo}</text>
-      <text x={PAGE_W - 40} y="775" textAnchor="end" fontSize="9" fill={FR.stone}>PAGE {pageNum} / {TOTAL_PAGES}</text>
+      <text x={PAGE_W - 40} y="775" textAnchor="end" fontSize="9" fill={internal ? '#854F0B' : FR.stone} fontWeight={internal ? 'bold' : 'normal'}>{internal ? 'INTERNAL — NOT EXPORTED' : `PAGE ${pageNum} / ${TOTAL_PAGES}`}</text>
       {children}
     </g>
   );
@@ -1847,6 +1848,128 @@ function ComingSoon({ pageNum, title }) {
 // Index parity is required — TechPackPagePreview indexes into PAGE_FNS by
 // `step` directly, so a misaligned slot here means the wrong page renders
 // for the wrong sidebar entry (the bug from PR #83).
+// Cut & Sew Cost — internal-only page. Mirrors the AI labor estimate + the
+// specs it reads off the Construction (07–08) and Sewing (09–10) pages. Never
+// exported to the factory pack (PageFrame draws the INTERNAL tag).
+function PageCutSewCost({ d }) {
+  const meta = d.cutSewLaborCostMeta;
+  const costVal = meta?.value != null ? Number(meta.value)
+    : (d.cutSewLaborCost ? Number(d.cutSewLaborCost) : null);
+  const hasCost = costVal != null && !Number.isNaN(costVal);
+  const src = meta?.mode === 'sam_rate'
+    ? `via SAM × $${Number(meta.samRate || meta.vendorSamRate || 0).toFixed(2)}/min`
+    : 'via Regional CMT Benchmark';
+
+  // specs pulled off pages 07–10
+  const callouts = [...(d.constructionDetailsPage1 || []), ...(d.constructionDetailsPage2 || [])]
+    .filter(c => c && (c.title || c.description));
+  const blocks = d.seamStitchBlocks || [];
+  const seams = d.seams || [];
+  const stitches = [];
+  for (let i = 0; i < 8; i++) {
+    const label = (blocks.find(b => b.num === i + 1) || {}).label || '';
+    const s = seams[i] || {};
+    if (label || s.seamType || s.stitchType) stitches.push({ num: i + 1, label, stitchType: s.stitchType || '', spi: s.spiSpcm || '' });
+  }
+
+  const wrap = (str, max) => {
+    const words = String(str || '').split(/\s+/).filter(Boolean);
+    const lines = []; let cur = '';
+    for (const w of words) {
+      if ((cur ? cur + ' ' + w : w).length > max) { if (cur) lines.push(cur); cur = w; } else cur = cur ? cur + ' ' + w : w;
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  };
+
+  const x0 = 40, x1 = PAGE_W - 40, fullW = x1 - x0;
+  const heroY = 154, heroH = 190;
+  const splitX = x0 + 330;
+  const colY = heroY + heroH + 56, colGap = 16, colW = (fullW - colGap) / 2, colX2 = x0 + colW + colGap, colH = 300;
+
+  const ListCol = ({ x, name, pages, count, rows, render }) => (
+    <g>
+      <rect x={x} y={colY} width={colW} height={colH} fill={FR.white} stroke="rgba(58,58,58,0.15)" strokeWidth={0.5} rx={8} />
+      <text x={x + 16} y={colY + 22} fontSize="10" fontWeight="bold" fill={FR.soil} letterSpacing="0.8">{name}</text>
+      <text x={x + colW - 16} y={colY + 22} textAnchor="end" fontSize="9" fill={FR.stone} fontFamily="ui-monospace,Menlo,monospace">{pages}</text>
+      <text x={x + colW - 56} y={colY + 22} textAnchor="end" fontSize="13" fontWeight="600" fill={FR.slate}>{count}</text>
+      {rows.length === 0 && <text x={x + 16} y={colY + 48} fontSize="11" fill={FR.stone} fontStyle="italic">Nothing specified yet on these pages.</text>}
+      {rows.slice(0, 8).map((r, i) => {
+        const ry = colY + 40 + i * 30;
+        return (
+          <g key={i}>
+            <circle cx={x + 24} cy={ry + 4} r={8} fill="#A32D2D" />
+            <text x={x + 24} y={ry + 7} textAnchor="middle" fontSize="9" fontWeight="600" fill="#fff">{r.num}</text>
+            {render(r, x, ry)}
+            <line x1={x + 16} y1={ry + 18} x2={x + colW - 16} y2={ry + 18} stroke={FR.sand} />
+          </g>
+        );
+      })}
+      {rows.length > 8 && <text x={x + 16} y={colY + 40 + 8 * 30 + 6} fontSize="10" fill={FR.stone} fontStyle="italic">+{rows.length - 8} more</text>}
+    </g>
+  );
+
+  return (
+    <g>
+      <InfoStrip d={d} />
+
+      {/* internal banner */}
+      <rect x={x0} y={heroY - 40} width={fullW} height={28} rx={6} fill="rgba(133,79,11,0.06)" stroke="rgba(133,79,11,0.45)" strokeWidth={0.5} />
+      <circle cx={x0 + 16} cy={heroY - 26} r={4} fill="#854F0B" />
+      <text x={x0 + 28} y={heroY - 22} fontSize="11" fontWeight="600" fill="#854F0B">INTERNAL — Cut &amp; Sew labor cost. For your eyes only; left out of the exported factory pack.</text>
+
+      {/* hero cost card */}
+      <rect x={x0} y={heroY} width={fullW} height={heroH} rx={8} fill={FR.white} stroke="rgba(58,58,58,0.15)" strokeWidth={0.5} />
+      <line x1={splitX} y1={heroY} x2={splitX} y2={heroY + heroH} stroke="rgba(58,58,58,0.12)" />
+      {/* left — number */}
+      <text x={x0 + 26} y={heroY + 28} fontSize="9" fontWeight="600" fill={FR.stone} letterSpacing="1">ESTIMATED CUT &amp; SEW LABOR</text>
+      {hasCost ? (
+        <>
+          <text x={x0 + 24} y={heroY + 76} fontSize="42" fontWeight="500" fill={FR.slate} fontFamily="Helvetica, Arial, sans-serif">${costVal.toFixed(2)}</text>
+          <text x={x0 + 26} y={heroY + 98} fontSize="12" fill={FR.stone}>per garment{meta && (meta.low != null || meta.high != null) ? ` · range $${Number(meta.low ?? costVal).toFixed(2)}–$${Number(meta.high ?? costVal).toFixed(2)}` : ''}</text>
+          <text x={x0 + 26} y={heroY + 128} fontSize="9" fontWeight="600" fill={FR.soil} letterSpacing="1">{esc(src.toUpperCase())}</text>
+          <text x={x0 + 26} y={heroY + 150} fontSize="11" fill={FR.slate}>{esc((meta?.vendor || d.vendor || '—'))}</text>
+          {meta?.vendorCity && meta?.vendorCountry && <text x={x0 + 26} y={heroY + 165} fontSize="11" fill={FR.stone}>{esc(`${meta.vendorCity}, ${meta.vendorCountry}`)}</text>}
+          <text x={x0 + 26} y={heroY + 181} fontSize="9" fill={FR.stone} fontStyle="italic">{meta?.generatedAt ? `Generated ${new Date(meta.generatedAt).toLocaleString()}` : ''}</text>
+        </>
+      ) : (
+        <>
+          <text x={x0 + 24} y={heroY + 78} fontSize="34" fontWeight="500" fill={FR.sand} fontFamily="Helvetica, Arial, sans-serif">$—.——</text>
+          <text x={x0 + 26} y={heroY + 104} fontSize="11" fill={FR.stone} fontStyle="italic">Run “Estimate with AI” on the</text>
+          <text x={x0 + 26} y={heroY + 119} fontSize="11" fill={FR.stone} fontStyle="italic">left to populate this page.</text>
+        </>
+      )}
+      {/* right — reasoning */}
+      <text x={splitX + 26} y={heroY + 28} fontSize="9" fontWeight="600" fill={FR.stone} letterSpacing="1">HOW THE AI GOT HERE</text>
+      {hasCost ? (
+        <>
+          {wrap(meta?.reasoning || meta?.vendorContext || '', 92).slice(0, 5).map((ln, i) => (
+            <text key={i} x={splitX + 26} y={heroY + 50 + i * 18} fontSize="12.5" fill={FR.slate}>{esc(ln)}</text>
+          ))}
+        </>
+      ) : (
+        <text x={splitX + 26} y={heroY + 50} fontSize="12" fill={FR.stone} fontStyle="italic">The AI’s reasoning will show here once you run the estimate.</text>
+      )}
+      <text x={splitX + 26} y={heroY + heroH - 30} fontSize="10" fill={FR.stone}>CMT-only — conversion labor (cut, sew, finish, pack, overhead).</text>
+      <text x={splitX + 26} y={heroY + heroH - 16} fontSize="10" fill={FR.stone}>Excludes fabric, trims, treatments &amp; vendor markup — those roll up elsewhere.</text>
+
+      {/* what it reads */}
+      <text x={x0} y={colY - 26} fontFamily="'Cormorant Garamond', Georgia, serif" fontSize="17" fill={FR.slate}>What this estimate reads</text>
+      <text x={x0} y={colY - 10} fontSize="11" fill={FR.stone} fontStyle="italic">Pulled live off pages 07–10 — change a call-out or stitch row and re-run to update the number.</text>
+      <ListCol x={x0} name="CONSTRUCTION CALL-OUTS" pages="PAGES 07–08" count={callouts.length} rows={callouts}
+        render={(r, x, ry) => (<>
+          <text x={x + 40} y={ry + 7} fontSize="12" fontWeight="600" fill={FR.slate}>{esc((r.title || '(untitled)').slice(0, 32))}</text>
+          {r.description && <text x={x + colW - 16} y={ry + 7} textAnchor="end" fontSize="10" fill={FR.stone}>{esc(r.description.slice(0, 26))}</text>}
+        </>)} />
+      <ListCol x={colX2} name="STITCH OPERATIONS" pages="PAGES 09–10" count={stitches.length} rows={stitches}
+        render={(r, x, ry) => (<>
+          <text x={x + 40} y={ry + 7} fontSize="12" fontWeight="600" fill={FR.slate}>{esc((r.label || '(unnamed)').slice(0, 30))}</text>
+          <text x={x + colW - 16} y={ry + 7} textAnchor="end" fontSize="10" fill={FR.stone} fontFamily="ui-monospace,Menlo,monospace">{esc([r.stitchType, r.spi].filter(Boolean).join(' · '))}</text>
+        </>)} />
+    </g>
+  );
+}
+
 const PAGE_FNS = [
   // 00, 01 — Merchandising
   { title: 'Competitor Landscape',              phase: 'Merchandising',     body: ({ d }) => <PageCompetitorLandscape d={d} /> },
@@ -1864,6 +1987,7 @@ const PAGE_FNS = [
   { title: 'Construction (2)',                  phase: 'Cut & Sew',         body: ({ d, images }) => <PageSketches d={d} images={images} pageKey="page2" enhanced /> },
   { title: 'Sewing (1)',                        phase: 'Cut & Sew',         body: ({ d, images }) => <PageConstruction d={d} images={images} pageKey="page1" /> },
   { title: 'Sewing (2)',                        phase: 'Cut & Sew',         body: ({ d, images }) => <PageConstruction d={d} images={images} pageKey="page2" /> },
+  { title: 'Cut & Sew Cost',                    phase: 'Cut & Sew',         body: ({ d }) => <PageCutSewCost d={d} /> },
   { title: 'Cutting',                           phase: 'Cut & Sew',         body: ({ d, images }) => <PagePattern d={d} images={images} /> },
   { title: 'Points of Measure',                 phase: 'Cut & Sew',         body: ({ d, images }) => <PagePom d={d} images={images} /> },
   { title: 'Size Grading',                      phase: 'Cut & Sew',         body: ({ d }) => <PageSizeMatrix d={d} /> },
@@ -1918,7 +2042,7 @@ export default function TechPackPagePreview({ data, images, step, skippedSteps, 
       viewBox={`0 0 ${PAGE_W} ${PAGE_H}`}
       preserveAspectRatio="xMidYMin meet"
       style={{ width: '100%', height: 'auto', background: FR.white, boxShadow: '0 2px 14px rgba(0,0,0,0.12)', borderRadius: 6, fontFamily: 'Helvetica, Arial, sans-serif' }}>
-      <PageFrame title={current.title} phase={current.phase} pageNum={pageNum} styleInfo={styleInfo} styleNumber={d.styleNumber}>
+      <PageFrame title={current.title} phase={current.phase} pageNum={pageNum} styleInfo={styleInfo} styleNumber={d.styleNumber} internal={!!stepEntry.internal}>
         <Body d={d} images={images} treatmentsById={treatmentsById} componentsById={componentsById} fabricsById={fabricsById} fabricPageIdx={fabricPageIdx} />
       </PageFrame>
       {isSkipped && <SkipOverlay />}
