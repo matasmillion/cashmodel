@@ -188,6 +188,27 @@ export async function generateTechPackPDF(pack) {
     }
   }
 
+  // Two stacked strict-2:3 reference images centred in the reference column.
+  function drawTwoRefs(baseSlot, x, y, w, h) {
+    const gap = 4;
+    const cellH = (h - gap) / 2;
+    const cellW = Math.round(cellH * (2 / 3));
+    const cxx = x + (w - cellW) / 2;
+    [baseSlot, `${baseSlot}-b`].forEach((slot, i) => {
+      const im = images.find(g => g.slot === slot);
+      const cyy = y + i * (cellH + gap);
+      if (im) {
+        try { doc.addImage(im.data, 'JPEG', cxx, cyy, cellW, cellH, undefined, 'FAST'); }
+        catch (err) { console.error('ref embed:', err); }
+      } else {
+        doc.setDrawColor(...hex(FR.sand));
+        doc.setLineDashPattern([1, 1], 0);
+        doc.rect(cxx, cyy, cellW, cellH);
+        doc.setLineDashPattern([], 0);
+      }
+    });
+  }
+
   // Construction Details page renderer — 2:3 reference image on the left
   // plus a 2x2 grid of detail cards on the right. Each card has its own
   // image, red number, title, and description so the factory sees the
@@ -199,6 +220,10 @@ export async function generateTechPackPDF(pack) {
     const colGap = 6;
     const refH = 170;                          // fill the page height
     const refW = Math.round(refH * 0.44);       // CALLOUT_REF_RATIO — narrow portrait
+    const refTwo = !!(d.referenceLayout && d.referenceLayout[`sketch-callout-${pageKey}`]);
+    if (refTwo) {
+      drawTwoRefs(`sketch-callout-${pageKey}`, margin, top, refW, refH);
+    } else {
     const callout = images.find(i => i.slot === `sketch-callout-${pageKey}`);
     if (callout) {
       try { doc.addImage(callout.data, 'JPEG', margin, top, refW, refH, undefined, 'FAST'); }
@@ -229,6 +254,7 @@ export async function generateTechPackPDF(pack) {
     doc.setFontSize(7);
     doc.setTextColor(...hex(FR.soil));
     doc.text('REFERENCE', margin, top + refH + 4);
+    }
 
     const rightX = margin + refW + colGap;
     const rightW = W - margin - rightX;
@@ -287,6 +313,10 @@ export async function generateTechPackPDF(pack) {
     const refW = Math.round(refH * 0.44);
     const blocks = d.seamStitchBlocks || [];
     const blockFor = (n) => blocks.find(b => b.num === n) || { num: n, label: '', dot: null };
+    const refTwo = !!(d.referenceLayout && d.referenceLayout[`seam-stitch-callout-${pageKey}`]);
+    if (refTwo) {
+      drawTwoRefs(`seam-stitch-callout-${pageKey}`, margin, top, refW, refH);
+    } else {
     const callout = images.find(i => i.slot === `seam-stitch-callout-${pageKey}`);
     if (callout) {
       try { doc.addImage(callout.data, 'JPEG', margin, top, refW, refH, undefined, 'FAST'); }
@@ -317,6 +347,7 @@ export async function generateTechPackPDF(pack) {
     doc.setFontSize(7);
     doc.setTextColor(...hex(FR.soil));
     doc.text('STITCH MAP', margin, top + refH + 4);
+    }
 
     const rightX = margin + refW + colGap;
     const rightW = W - margin - rightX;

@@ -906,15 +906,21 @@ function PageConstruction({ d, images, pageKey = 'page1' }) {
         Numbered dots mark where each stitch runs. Each card carries the closed 3D render, an optional reference photo, and its number; specs are in the table below.
       </text>
 
-      {/* garment callout reference (left) */}
-      <PhotoSlot x={padX} y={refY} w={refW} h={refH} label="Stitch Map" image={callout} />
-      {nums.map(n => { const b = blockFor(n); return b.dot ? (
-        <g key={`dot-${n}`}>
-          <circle cx={padX + 4 + b.dot.x * (refW - 8)} cy={refY + 4 + b.dot.y * (refH - 8)} r={dotR} fill="#A32D2D" stroke="#FFFFFF" strokeWidth={1.5} />
-          <text x={padX + 4 + b.dot.x * (refW - 8)} y={refY + 4 + b.dot.y * (refH - 8) + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill="#FFFFFF">{n}</text>
-        </g>
-      ) : null; })}
-      <AnnotationSvg annos={d?.calloutAnnotations?.[refSlot]} x={padX + 4} y={refY + 4} w={refW - 8} h={refH - 8} keyPrefix={`sg-${pageKey}`} />
+      {/* garment callout reference (left) — one narrow image, or two stacked 2:3 */}
+      {d?.referenceLayout?.[refSlot] ? (
+        <TwoStackedRefs imgs={imgs} baseSlot={refSlot} x={padX} y={refY} w={refW} h={refH} d={d} keyPrefix={`sg-${pageKey}`} />
+      ) : (
+        <>
+          <PhotoSlot x={padX} y={refY} w={refW} h={refH} label="Stitch Map" image={callout} />
+          {nums.map(n => { const b = blockFor(n); return b.dot ? (
+            <g key={`dot-${n}`}>
+              <circle cx={padX + 4 + b.dot.x * (refW - 8)} cy={refY + 4 + b.dot.y * (refH - 8)} r={dotR} fill="#A32D2D" stroke="#FFFFFF" strokeWidth={1.5} />
+              <text x={padX + 4 + b.dot.x * (refW - 8)} y={refY + 4 + b.dot.y * (refH - 8) + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill="#FFFFFF">{n}</text>
+            </g>
+          ) : null; })}
+          <AnnotationSvg annos={d?.calloutAnnotations?.[refSlot]} x={padX + 4} y={refY + 4} w={refW - 8} h={refH - 8} keyPrefix={`sg-${pageKey}`} />
+        </>
+      )}
 
       {/* 2×2 grid of stitch cards */}
       {nums.map((n, i) => {
@@ -995,6 +1001,38 @@ function ImageCell({ x, y, w, h, image, placeholder }) {
   );
 }
 
+// Two stacked strict-2:3 reference images centred in the reference column,
+// each with its own annotations. Used when the operator picks the 2-image
+// reference layout on the Construction / Sewing pages.
+function TwoStackedRefs({ imgs, baseSlot, x, y, w, h, d, keyPrefix }) {
+  const gap = 12;
+  const cellH = (h - gap) / 2;
+  const cellW = Math.round(cellH * (2 / 3));   // strict 2:3 portrait
+  const cx = x + (w - cellW) / 2;              // centred in the column
+  const slots = [baseSlot, `${baseSlot}-b`];
+  return (
+    <g>
+      {slots.map((slot, i) => {
+        const im = (imgs || []).find(g => g.slot === slot);
+        const cy = y + i * (cellH + gap);
+        return (
+          <g key={slot}>
+            <rect x={cx} y={cy} width={cellW} height={cellH} fill={FR.white} stroke={FR.soil} strokeDasharray="5 4" />
+            {im ? (
+              <image href={im.data} x={cx} y={cy} width={cellW} height={cellH} preserveAspectRatio="xMidYMid slice" />
+            ) : (
+              <text x={cx + cellW / 2} y={cy + cellH / 2 + 4} textAnchor="middle" fontSize="10" fill={FR.stone} fontStyle="italic">{`Reference ${i + 1}`}</text>
+            )}
+            <AnnotationSvg annos={d?.calloutAnnotations?.[slot]} x={cx} y={cy} w={cellW} h={cellH} keyPrefix={`${keyPrefix}-${i}`} />
+          </g>
+        );
+      })}
+      <rect x={x} y={y + h} width={w} height={22} fill={FR.salt} stroke={FR.sand} />
+      <text x={x + w / 2} y={y + h + 15} textAnchor="middle" fontSize="9" fontWeight="bold" fill={FR.slate} letterSpacing="1.5">REFERENCE</text>
+    </g>
+  );
+}
+
 // ─── Page 7 — Construction Notes ────────────────────────────────────────────
 // ─── Construction Details Pages (1 of 2) ────────────────────────────────────
 // Construction Details — page 1 or page 2 depending on `pageKey`. Layout:
@@ -1047,25 +1085,27 @@ function PageSketches({ d, images, pageKey = 'page1', fieldName, slotKey, enhanc
           Numbered dots mark each call-out on the garment. Each card carries a large main close-up, an optional supporting image, a title, and a description.
         </text>
 
-        {/* garment reference (left), full height */}
-        <PhotoSlot x={padX} y={refY} w={refW} h={refH} label="Reference" image={callout} />
-
-        {/* in-app placed numbered dots — coords are 0..1 over the image area
-            drawn inside the PhotoSlot (inset 4px) */}
-        {entries.map(entry => entry.dot ? (
-          <g key={`dot-${entry.num}`}>
-            <circle cx={padX + 4 + entry.dot.x * (refW - 8)} cy={refY + 4 + entry.dot.y * (refH - 8)}
-              r={dotR} fill="#A32D2D" stroke="#FFFFFF" strokeWidth={1.5} />
-            <text x={padX + 4 + entry.dot.x * (refW - 8)} y={refY + 4 + entry.dot.y * (refH - 8) + 4}
-              textAnchor="middle" fontSize="12" fontWeight="600" fill="#FFFFFF">
-              {entry.num}
-            </text>
-          </g>
-        ) : null)}
-
-        {/* red box / text annotations drawn on the garment reference (inset 4px,
-            exactly where the dots are placed) */}
-        <AnnotationSvg annos={d?.calloutAnnotations?.[resolvedSlot]} x={padX + 4} y={refY + 4} w={refW - 8} h={refH - 8} keyPrefix={`ga-${pageKey}`} />
+        {/* garment reference (left) — one narrow image, or two stacked 2:3 */}
+        {d?.referenceLayout?.[resolvedSlot] ? (
+          <TwoStackedRefs imgs={imgs} baseSlot={resolvedSlot} x={padX} y={refY} w={refW} h={refH} d={d} keyPrefix={`ga-${pageKey}`} />
+        ) : (
+          <>
+            <PhotoSlot x={padX} y={refY} w={refW} h={refH} label="Reference" image={callout} />
+            {/* in-app placed numbered dots — coords are 0..1 over the image area
+                drawn inside the PhotoSlot (inset 4px) */}
+            {entries.map(entry => entry.dot ? (
+              <g key={`dot-${entry.num}`}>
+                <circle cx={padX + 4 + entry.dot.x * (refW - 8)} cy={refY + 4 + entry.dot.y * (refH - 8)}
+                  r={dotR} fill="#A32D2D" stroke="#FFFFFF" strokeWidth={1.5} />
+                <text x={padX + 4 + entry.dot.x * (refW - 8)} y={refY + 4 + entry.dot.y * (refH - 8) + 4}
+                  textAnchor="middle" fontSize="12" fontWeight="600" fill="#FFFFFF">
+                  {entry.num}
+                </text>
+              </g>
+            ) : null)}
+            <AnnotationSvg annos={d?.calloutAnnotations?.[resolvedSlot]} x={padX + 4} y={refY + 4} w={refW - 8} h={refH - 8} keyPrefix={`ga-${pageKey}`} />
+          </>
+        )}
 
         {/* 2x2 grid of large detail cards */}
         {entries.map((entry, i) => {
