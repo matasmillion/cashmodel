@@ -309,38 +309,46 @@ export async function generateTechPackPDF(pack) {
     const cellW = (rightW - colGap) / 2;
     const cellH = (refH - rowGap) / 2;
     const imgGap = 1.5;
-    // Cap the band height so the numbered title row fits inside the short stitch
-    // card; the main image then fills the leftover cell width.
-    const imgH = Math.min((cellW - 2 - imgGap) / (1.5 + 1.0), cellH - 10);
+    const labelGap = 3.5;  // room for the RENDER / REFERENCE label above each image
+    // Cap the band height so the small label above + the numbered title row
+    // below both fit inside the short stitch card; main fills the leftover width.
+    const imgH = Math.min((cellW - 2 - imgGap) / (1.5 + 1.0), cellH - 10 - labelGap);
     nums.forEach((n, i) => {
       const b = blockFor(n);
       const cx = rightX + (i % 2) * (cellW + colGap);
       const cy = top + Math.floor(i / 2) * (cellH + rowGap);
+      const imgY = cy + 1 + labelGap;
       doc.setDrawColor(...hex(FR.sand));
       doc.setLineWidth(0.2);
       doc.roundedRect(cx, cy, cellW, cellH, 1, 1);
       const support = images.find(im => im.slot === `seam-stitch-${n}-support`);
       const supW  = 1.0 * imgH;
       const mainW = support ? (cellW - 2 - imgGap - supW) : (cellW - 2);
-      addImage(`seam-stitch-${n}`, cx + 1, cy + 1, mainW, imgH);
+      // small labels above each image
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(5);
+      doc.setTextColor(...hex(FR.soil));
+      doc.text('RENDER', cx + 1.5, cy + 4);
+      if (support) doc.text('REFERENCE', cx + 1.5 + mainW + imgGap, cy + 4);
+      addImage(`seam-stitch-${n}`, cx + 1, imgY, mainW, imgH);
       if (support) {
-        addImage(`seam-stitch-${n}-support`, cx + 1 + mainW + imgGap, cy + 1, supW, imgH);
+        addImage(`seam-stitch-${n}-support`, cx + 1 + mainW + imgGap, imgY, supW, imgH);
       }
       doc.setFillColor(163, 45, 45);
-      doc.circle(cx + 5, cy + imgH + 5, 3, 'F');
+      doc.circle(cx + 5, imgY + imgH + 4, 3, 'F');
       doc.setTextColor(255, 255, 255);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(7);
-      doc.text(String(n), cx + 5, cy + imgH + 6.5, { align: 'center' });
+      doc.text(String(n), cx + 5, imgY + imgH + 5.5, { align: 'center' });
       doc.setTextColor(...hex(FR.slate));
       doc.setFontSize(8);
-      doc.text(String(b.label || `Stitch ${n}`).slice(0, 40), cx + 10, cy + imgH + 6.5);
+      doc.text(String(b.label || `Stitch ${n}`).slice(0, 40), cx + 10, imgY + imgH + 5.5);
       const code = ((d.seams || [])[n - 1] || {}).stitchType;
       if (code) {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(7);
         doc.setTextColor(...hex(FR.soil));
-        doc.text(String(code).slice(0, 14), cx + cellW - 2, cy + imgH + 6.5, { align: 'right' });
+        doc.text(String(code).slice(0, 14), cx + cellW - 2, imgY + imgH + 5.5, { align: 'right' });
       }
     });
 
