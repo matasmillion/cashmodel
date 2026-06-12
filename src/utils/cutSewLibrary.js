@@ -17,7 +17,7 @@ import * as _atomTypes from '../types/atoms';
 
 /**
  * @typedef {{ num: number, title: string, description: string, image_url: string, dot: ({ x: number, y: number }|null) }} CalloutDetail
- * @typedef {{ id: string, type: 'box'|'text', x: number, y: number, w?: number, h?: number, text?: string }} Annotation
+ * @typedef {{ id: string, type: 'box'|'text', x: number, y: number, w?: number, h?: number, rot?: number, text?: string }} Annotation
  * @typedef {{ num: number, label: string, hidden: boolean, image_url: string, dot: ({ x: number, y: number }|null) }} StitchBlock
  * @typedef {{ piece_num: string, piece_name: string, quantity: string, fabric: string, grain: string, fusing: string, notes: string }} PatternPiece
  * @typedef {{ name: string, tol: string, s: string, m: string, l: string, xl: string, method: string }} PomRow

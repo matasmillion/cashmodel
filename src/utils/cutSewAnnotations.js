@@ -15,7 +15,7 @@ import { getCutSew, saveCutSew } from './cutSewStore';
 import { CALLOUT_REF_RATIO, CALLOUT_MAIN_RATIO, CALLOUT_SUPPORT_RATIO } from '../components/techpack/techPackConstants';
 
 /**
- * @typedef {{ id: string, type: 'box',  x: number, y: number, w: number, h: number }
+ * @typedef {{ id: string, type: 'box',  x: number, y: number, w: number, h: number, rot?: number }
  *         | { id: string, type: 'text', x: number, y: number, text: string }} Annotation
  * Coordinates are normalized 0..1 of the displayed photo, so a mark lands in the
  * same spot in the editor, the live preview and the PDF, at any size.
@@ -26,7 +26,7 @@ const uid = () =>
   `an-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
 /** A fresh red box, centred-ish so the operator can drag it into place. */
-export function newBox()  { return { id: uid(), type: 'box',  x: 0.30, y: 0.28, w: 0.34, h: 0.30 }; }
+export function newBox()  { return { id: uid(), type: 'box',  x: 0.30, y: 0.28, w: 0.34, h: 0.30, rot: 0 }; }
 /** A fresh red text mark, ready to edit. */
 export function newText() { return { id: uid(), type: 'text', x: 0.28, y: 0.55, text: 'Note' }; }
 
