@@ -2890,6 +2890,7 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
   const updPom = (i, k, v) => set('poms', poms.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
   const addPom = () => set('poms', [...poms, { name: '', tol: '1', s: '', m: '', l: '', xl: '', method: '' }]);
   const rmPom  = (i) => set('poms', poms.filter((_, idx) => idx !== i));
+  const [copied, setCopied] = useState(false);
 
   // Sample size lives here now (moved off the Size Grading page). It is the one
   // size we sew + approve first; every other size is graded from it. Stored on
@@ -2938,6 +2939,27 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
     },
   }));
 
+  // Customer size chart export (Shopify): garment-flat cm per size, with the
+  // tolerance + method stripped. Value = manual override → graded (sample+delta).
+  const chartValue = (p, sizeLabel) => {
+    const key = (baseSzH.find(x => x.label === sizeLabel) || {}).key;
+    const override = key ? p[key] : '';
+    if (override !== undefined && override !== null && override !== '') return String(override);
+    return sizeLabel === sampleSize ? '' : gradedFor(p, sizeLabel);
+  };
+  const chartData = poms.filter(p => p.name).map(p => ({ name: p.name, values: gradeSizes.map(s => chartValue(p, s)) }));
+  const chartMatrix = [['Measurement (garment-flat, cm)', ...gradeSizes], ...chartData.map(r => [r.name, ...r.values])];
+  const csvCell = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+  const downloadChart = () => {
+    const csv = chartMatrix.map(r => r.map(csvCell).join(',')).join('\r\n');
+    downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'customer-size-chart.csv');
+  };
+  const copyChart = async () => {
+    const tsv = chartMatrix.map(r => r.join('\t')).join('\n');
+    try { await navigator.clipboard.writeText(tsv); setCopied(true); setTimeout(() => setCopied(false), 1800); }
+    catch { /* clipboard blocked — no-op */ }
+  };
+
   return (
     <div>
       <SectionTitle>Points of Measure (cm)</SectionTitle>
@@ -2972,7 +2994,46 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
       <Input label="Measurement Method" value={data.measurementMethod} onChange={v => set('measurementMethod', v)} multiline
         placeholder="Lay garment flat on table. Smooth without stretching. Measure with flexible tape." />
 
-      <p style={{ fontSize: 10, color: FR.stone, marginTop: 8, fontStyle: 'italic' }}>
+      {data.sizeType !== 'one-size' && (
+        <div style={{ marginTop: 22, background: FR.white, border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 11, padding: '20px 22px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ fontFamily: "'Cormorant Garamond','Georgia',serif", fontSize: 18, color: FR.slate }}>Export customer size chart</div>
+            <span style={{ fontSize: 9.5, letterSpacing: 0.8, textTransform: 'uppercase', color: FR.stone, background: FR.salt, padding: '4px 10px', borderRadius: 20 }}>New · to Shopify</span>
+          </div>
+          <p style={{ fontSize: 11.5, color: FR.stone, marginTop: 8, lineHeight: 1.6, maxWidth: 560 }}>
+            Pulls the graded sizes from this spec, <strong>strips tolerance and method</strong> (those are factory-only), and labels every measurement garment-flat. Drops straight into your Shopify size-chart app — no retyping.
+          </p>
+          <div style={{ overflowX: 'auto', marginTop: 14 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, border: `0.5px solid ${FR.sand}` }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', padding: '8px 11px', background: FR.salt, color: FR.slate, fontSize: 10, fontWeight: 600, letterSpacing: 0.5 }}>Measurement (garment-flat, cm)</th>
+                  {gradeSizes.map(s => <th key={s} style={{ textAlign: 'center', padding: '8px 11px', background: FR.salt, color: FR.slate, fontSize: 10, fontWeight: 600 }}>{s}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {chartData.length === 0 ? (
+                  <tr><td colSpan={gradeSizes.length + 1} style={{ padding: 12, color: FR.stone, fontStyle: 'italic', fontSize: 11 }}>Add measurement rows above to build the chart.</td></tr>
+                ) : chartData.map((r, i) => (
+                  <tr key={i}>
+                    <td style={{ padding: '7px 11px', borderTop: `0.5px solid ${FR.sand}`, color: FR.slate }}>{r.name}</td>
+                    {r.values.map((v, j) => <td key={j} style={{ padding: '7px 11px', borderTop: `0.5px solid ${FR.sand}`, textAlign: 'center', fontFamily: 'ui-monospace,Menlo,monospace', color: v ? FR.slate : FR.stone }}>{v || '—'}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+            <button type="button" onClick={downloadChart} style={{ fontSize: 12.5, background: FR.slate, color: FR.salt, border: 'none', padding: '10px 18px', borderRadius: 7, cursor: 'pointer' }}>Download CSV</button>
+            <button type="button" onClick={copyChart} style={{ fontSize: 12.5, background: FR.white, color: FR.slate, border: '0.5px solid rgba(58,58,58,0.15)', padding: '10px 18px', borderRadius: 7, cursor: 'pointer' }}>{copied ? 'Copied' : 'Copy for Shopify'}</button>
+          </div>
+          <p style={{ fontSize: 11, color: FR.stone, marginTop: 10 }}>
+            Fills with all sizes once Size Grading is complete. Tolerance and measurement method never leave the tech pack.
+          </p>
+        </div>
+      )}
+
+      <p style={{ fontSize: 10, color: FR.stone, marginTop: 14, fontStyle: 'italic' }}>
         All measurements in centimetres. Measure flat, relaxed. Tolerance ±1 cm unless otherwise specified.
       </p>
     </div>
