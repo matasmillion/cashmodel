@@ -1,6 +1,6 @@
 // Main Tech Pack builder — 14-step wizard + PLM features (revisions, cost, samples, variants)
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowLeft, History, Plus, CheckCircle, XCircle, Clock, Camera, Save } from 'lucide-react';
+import { ArrowLeft, History, Plus, CheckCircle, XCircle, Clock, Camera, Save, Undo2, Redo2 } from 'lucide-react';
 import VersionHistoryPanel from './VersionHistoryPanel';
 import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STEPS, IMG_STEPS, computeCompletion, isStepLocked, computeBOMCost, computeColorwayCost, SAMPLE_TYPES, SAMPLE_VERDICTS } from './techPackConstants';
 import SendToVendorButton from './SendToVendorButton';
@@ -836,24 +836,32 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
   const dataRef = useRef(data);
   useEffect(() => { dataRef.current = data; }, [data]);
   const historyRef = useRef({ past: [], future: [] });
+  const [hist, setHist] = useState({ canUndo: false, canRedo: false });
+  const syncHist = useCallback(() => {
+    const h = historyRef.current;
+    setHist({ canUndo: h.past.length > 0, canRedo: h.future.length > 0 });
+  }, []);
   const recordHistory = useCallback(() => {
     const h = historyRef.current;
     h.past.push(dataRef.current);
     if (h.past.length > 100) h.past.shift();
     h.future = [];
-  }, []);
+    syncHist();
+  }, [syncHist]);
   const undo = useCallback(() => {
     const h = historyRef.current;
     if (!h.past.length) return;
     h.future.push(dataRef.current);
     setData(h.past.pop());
-  }, []);
+    syncHist();
+  }, [syncHist]);
   const redo = useCallback(() => {
     const h = historyRef.current;
     if (!h.future.length) return;
     h.past.push(dataRef.current);
     setData(h.future.pop());
-  }, []);
+    syncHist();
+  }, [syncHist]);
 
   const set = useCallback((k, v) => { recordHistory(); setData(p => ({ ...p, [k]: v })); }, [recordHistory]);
 
@@ -1163,6 +1171,15 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           <button onClick={() => setShowVersions(true)} title="Browse and restore past saved versions of this style"
             style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: FR.salt, padding: '5px 10px', borderRadius: 3, fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
             <History size={12} /> Restore points
+          </button>
+          <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.18)' }} />
+          <button onClick={undo} disabled={!hist.canUndo} title="Undo (⌘Z / Ctrl+Z)"
+            style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: FR.salt, padding: '5px 10px', borderRadius: 3, fontSize: 10, cursor: hist.canUndo ? 'pointer' : 'default', opacity: hist.canUndo ? 1 : 0.4, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Undo2 size={12} /> Undo
+          </button>
+          <button onClick={redo} disabled={!hist.canRedo} title="Redo (⌘⇧Z / Ctrl+Y)"
+            style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: FR.salt, padding: '5px 10px', borderRadius: 3, fontSize: 10, cursor: hist.canRedo ? 'pointer' : 'default', opacity: hist.canRedo ? 1 : 0.4, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Redo2 size={12} /> Redo
           </button>
           <div>
             <div style={{
