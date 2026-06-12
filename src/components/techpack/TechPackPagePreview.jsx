@@ -3,7 +3,7 @@
 // numbered tech pack pages. The denominator stays 19 — merchandising pages
 // are pre-pack strategy and aren't counted toward the numbered total.
 
-import { FR, STEPS, CALLOUT_REF_RATIO, CALLOUT_MAIN_RATIO, CALLOUT_SUPPORT_RATIO } from './techPackConstants';
+import { FR, STEPS, CALLOUT_REF_RATIO, CALLOUT_MAIN_RATIO, CALLOUT_SUPPORT_RATIO, isPreProduction } from './techPackConstants';
 import { FabricBOMPreviewBody } from './FabricBOMPreview';
 import { AnnotationSvg } from './ImageAnnotator';
 
@@ -497,9 +497,12 @@ function GridTable({ x, y, cols, rows, bodyRows = 4, rowH = 22, headerH = 22, re
     <g>
       <rect x={x} y={y} width={tableW} height={headerH} fill={FR.slate} />
       {cols.map((c, i) => (
-        <text key={c.key} x={colX[i] + 6} y={y + 15} fontSize="8.5" fontWeight="bold" fill={FR.salt} letterSpacing="0.5">
-          {esc((c.label || c.key).toUpperCase())}
-        </text>
+        <g key={c.key}>
+          {c.headerFill && <rect x={colX[i]} y={y} width={c.w} height={headerH} fill={c.headerFill} />}
+          <text x={colX[i] + 6} y={y + 15} fontSize="8.5" fontWeight="bold" fill={FR.salt} letterSpacing="0.5">
+            {esc((c.label || c.key).toUpperCase())}
+          </text>
+        </g>
       ))}
       {Array.from({ length: bodyRows }).map((_, ri) => {
         const ry = y + headerH + ri * rowH;
@@ -513,9 +516,12 @@ function GridTable({ x, y, cols, rows, bodyRows = 4, rowH = 22, headerH = 22, re
               if (custom) return <g key={c.key}>{custom}</g>;
               const val = c.key === '#' ? String(ri + 1) : (row[c.key] ?? '');
               return (
-                <text key={c.key} x={colX[ci] + 6} y={ry + 15} fontSize="9.5" fill={c.key === '#' ? FR.stone : FR.slate}>
-                  {clampLine(esc(val), c.w - 12, 5.6)}
-                </text>
+                <g key={c.key}>
+                  {c.fill && <rect x={colX[ci]} y={ry} width={c.w} height={rowH} fill={c.fill} />}
+                  <text x={colX[ci] + 6} y={ry + 15} fontSize="9.5" fill={c.key === '#' ? FR.stone : FR.slate}>
+                    {clampLine(esc(val), c.w - 12, 5.6)}
+                  </text>
+                </g>
               );
             })}
             {!row && <text x={colX[0] + 6} y={ry + 15} fontSize="9.5" fill={FR.sand}>{ri + 1}</text>}
@@ -1351,11 +1357,28 @@ function PagePom({ d, images }) {
     ? [{ k: 's', l: 'W30' }, { k: 'm', l: 'W32' }, { k: 'l', l: 'W34' }, { k: 'xl', l: 'W36' }]
     : [{ k: 's', l: 'S' }, { k: 'm', l: 'M' }, { k: 'l', l: 'L' }, { k: 'xl', l: 'XL' }];
 
+  // Highlight the sample-size column; gray the non-sample columns while they
+  // are still locked (design phase), matching the editor.
+  const matrix = d.gradedSizeMatrix || {};
+  const rawSizes = Array.isArray(d.sizeRange) ? d.sizeRange : (d.sizeRange ? String(d.sizeRange).split(/[/,]+/).map(s => s.trim()).filter(Boolean) : []);
+  const gradeSizes = rawSizes.length ? rawSizes : ['S', 'M', 'L', 'XL'];
+  const sampleSize = gradeSizes.includes(matrix.baseSize) ? matrix.baseSize : gradeSizes[0];
+  const sizesUnlocked = isPreProduction(d.status);
+  const sampleK = (szH.find(s => s.l === sampleSize) || {}).k;
+
   const cols = [
     { key: '#',    label: '#',            w: 36  },
     { key: 'name', label: 'Measurement',  w: 234 },
     { key: 'tol',  label: 'Tol ±',        w: 60  },
-    ...szH.map(s => ({ key: s.k, label: s.l, w: 65 })),
+    ...szH.map(s => {
+      const isSample = s.k === sampleK;
+      const grayed = !isSample && sampleK && !sizesUnlocked;
+      return {
+        key: s.k, label: s.l, w: 65,
+        headerFill: isSample ? FR.soil : (grayed ? '#7C766B' : undefined),
+        fill: isSample ? '#F3ECDB' : (grayed ? '#EFEDE8' : undefined),
+      };
+    }),
   ];
 
   // Two-column layout

@@ -2957,22 +2957,35 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
     if (dv === undefined || dv === null || Number.isNaN(Number(dv))) return '';
     return (base + Number(dv)).toFixed(1);
   };
-  const szH = baseSzH.map(h => ({
-    key: h.key,
-    label: h.key === sampleKey ? `${h.label} · sample` : h.label,
-    render: (val, onChange, row) => {
-      // Sample column: always editable, holds the typed QC value.
-      if (h.key === sampleKey || !sampleKey) {
-        return <input value={val || ''} onChange={e => onChange(e.target.value)} style={editCellStyle} />;
-      }
-      // Non-sample columns are filled by Size Grading. Blank + locked until the
-      // style reaches Pre-Production; then the graded value (sample + delta) is
-      // passed back here, editable, with any manual override taking priority.
-      if (!sizesUnlocked) return <span style={lockedCellStyle}>—</span>;
-      const display = (val !== undefined && val !== null && val !== '') ? val : gradedFor(row, h.label);
-      return <input value={display} onChange={e => onChange(e.target.value)} style={editCellStyle} />;
-    },
-  }));
+  // Column styling: the sample column is highlighted (always); the non-sample
+  // columns are grayed out while they're still locked (design phase) so it's
+  // clear only the sample size is in play until grading fills the rest.
+  const sampleHeaderStyle = { background: FR.soil };
+  const sampleColCellStyle = { background: '#F3ECDB' };
+  const grayHeaderStyle = { background: '#7C766B' };
+  const grayColCellStyle = { background: '#EFEDE8' };
+  const szH = baseSzH.map(h => {
+    const isSample = h.key === sampleKey;
+    const grayed = !isSample && sampleKey && !sizesUnlocked;
+    return {
+      key: h.key,
+      label: isSample ? `${h.label} · sample` : h.label,
+      headerStyle: isSample ? sampleHeaderStyle : (grayed ? grayHeaderStyle : undefined),
+      cellStyle: isSample ? sampleColCellStyle : (grayed ? grayColCellStyle : undefined),
+      render: (val, onChange, row) => {
+        // Sample column: always editable, holds the typed QC value.
+        if (h.key === sampleKey || !sampleKey) {
+          return <input value={val || ''} onChange={e => onChange(e.target.value)} style={editCellStyle} />;
+        }
+        // Non-sample columns are filled by Size Grading. Blank + locked until the
+        // style reaches Pre-Production; then the graded value (sample + delta) is
+        // passed back here, editable, with any manual override taking priority.
+        if (!sizesUnlocked) return <span style={lockedCellStyle}>—</span>;
+        const display = (val !== undefined && val !== null && val !== '') ? val : gradedFor(row, h.label);
+        return <input value={display} onChange={e => onChange(e.target.value)} style={editCellStyle} />;
+      },
+    };
+  });
 
   // Customer size chart export (Shopify): garment-flat cm per size, with the
   // tolerance + method stripped. Value = manual override → graded (sample+delta).
