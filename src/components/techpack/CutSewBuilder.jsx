@@ -840,6 +840,11 @@ export default function CutSewBuilder({ block, onBack }) {
           ? [{ key: 's', label: 'W30' }, { key: 'm', label: 'W32' }, { key: 'l', label: 'W34' }, { key: 'xl', label: 'W36' }]
           : [{ key: 's', label: 'S' }, { key: 'm', label: 'M' }, { key: 'l', label: 'L' }, { key: 'xl', label: 'XL' }];
 
+        // Sample size lives on this POM card now (moved off the grading card),
+        // stored on the existing graded_size_matrix.baseSize.
+        const gradeSizes = draft.sizes || ['S', 'M', 'L', 'XL'];
+        const sampleSize = gradeSizes.includes(gradingMatrix.baseSize) ? gradingMatrix.baseSize : gradeSizes[0];
+
         return (
           <div style={CARD}>
             <h4 style={SECTION_HEAD}>Points of Measure</h4>
@@ -851,6 +856,12 @@ export default function CutSewBuilder({ block, onBack }) {
                 <option value="apparel">Apparel (S / M / L / XL)</option>
                 <option value="waist">Waist (W30 / W32 / W34 / W36)</option>
                 <option value="one-size">One size</option>
+              </select>
+            </Field>
+
+            <Field label="Sample size">
+              <select value={sampleSize} onChange={e => set({ graded_size_matrix: { ...gradingMatrix, baseSize: e.target.value } })} style={INPUT_STYLE}>
+                {gradeSizes.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </Field>
 
@@ -914,7 +925,7 @@ export default function CutSewBuilder({ block, onBack }) {
           <div style={CARD}>
             <h4 style={SECTION_HEAD}>Size Grading</h4>
             <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, lineHeight: 1.5 }}>
-              Sizes are pulled from the Identity page. Select the sample size — its values come from the POM page. Enter per-size deltas for all other sizes; final values are computed as <code style={{ fontFamily: 'ui-monospace,Menlo,monospace', background: FR.salt, padding: '1px 5px', borderRadius: 3 }}>sample + delta</code>.
+              Grade rules turn the sample size into every other size. Enter per-size deltas; final values are computed as <code style={{ fontFamily: 'ui-monospace,Menlo,monospace', background: FR.salt, padding: '1px 5px', borderRadius: 3 }}>sample + delta</code> and write back into the POM size chart. The sample size is set on the Points of Measure page.
             </p>
 
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 18 }}>
@@ -926,13 +937,10 @@ export default function CutSewBuilder({ block, onBack }) {
               </div>
               <div>
                 <label style={SECTION_LABEL}>Sample Size</label>
-                <select
-                  value={baseSize}
-                  onChange={e => set({ graded_size_matrix: { ...gradingMatrix, baseSize: e.target.value } })}
-                  style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: '#fff' }}
-                >
-                  {sizes.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
+                <div style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.salt, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontFamily: 'ui-monospace,Menlo,monospace' }}>{baseSize}</span>
+                  <span style={{ fontSize: 10, color: FR.stone }}>set on Points of Measure</span>
+                </div>
               </div>
             </div>
 

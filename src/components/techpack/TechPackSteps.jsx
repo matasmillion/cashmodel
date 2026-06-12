@@ -2894,13 +2894,30 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
     ? [{ key: 's', label: 'W30' }, { key: 'm', label: 'W32' }, { key: 'l', label: 'W34' }, { key: 'xl', label: 'W36' }]
     : [{ key: 's', label: 'S' }, { key: 'm', label: 'M' }, { key: 'l', label: 'L' }, { key: 'xl', label: 'XL' }];
 
+  // Sample size lives here now (moved off the Size Grading page). It is the one
+  // size we sew + approve first; every other size is graded from it. Stored on
+  // the existing gradedSizeMatrix.baseSize so nothing downstream has to change.
+  const matrix = data.gradedSizeMatrix || { baseSize: 'M', sizes: [], grading: [] };
+  const rawSizes = Array.isArray(data.sizeRange)
+    ? data.sizeRange
+    : (data.sizeRange ? String(data.sizeRange).split(/[/,]+/).map(s => s.trim()).filter(Boolean) : []);
+  const gradeSizes = rawSizes.length ? rawSizes : ['S', 'M', 'L', 'XL'];
+  const sampleSize = gradeSizes.includes(matrix.baseSize) ? matrix.baseSize : gradeSizes[0];
+  const setSampleSize = (v) => set('gradedSizeMatrix', { ...matrix, baseSize: v });
+
   return (
     <div>
       <SectionTitle>Points of Measure (cm)</SectionTitle>
 
       <PhotoUpload label="POM Diagram (numbered measurement points)" slotKey="pom-diagram" images={images} onUpload={onUpload} onRemove={onRemove} />
 
-      <Select label="Size Type" value={data.sizeType} onChange={v => set('sizeType', v)} options={['apparel', 'waist', 'one-size']} />
+      <Row>
+        <Select label="Size Type" value={data.sizeType} onChange={v => set('sizeType', v)} options={['apparel', 'waist', 'one-size']} />
+        <Select label="Sample Size" value={sampleSize} onChange={setSampleSize} options={gradeSizes} />
+      </Row>
+      <p style={{ fontSize: 11, color: FR.stone, marginTop: -2, marginBottom: 14, lineHeight: 1.5 }}>
+        The sample size is the one size you make and approve first. Everything else is graded from it on the Size Grading page. Only the sample column is editable until the sample is signed off.
+      </p>
 
       {data.sizeType !== 'one-size' && (
         <div style={{ marginBottom: 10 }}>
@@ -2983,7 +3000,7 @@ export function StepSizeMatrix({ data, set }) {
     <div>
       <SectionTitle>Size Grading</SectionTitle>
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, lineHeight: 1.5 }}>
-        Sizes are pulled from the Style Overview page. Select the sample size — its values come straight from the Points of Measure page. Enter per-size deltas for all other sizes; final values are computed as <code style={{ fontFamily: 'ui-monospace,Menlo,monospace', background: FR.salt, padding: '1px 5px', borderRadius: 3 }}>sample + delta</code>.
+        Grade rules turn the approved sample size into every other size. Enter per-size deltas; final values are computed as <code style={{ fontFamily: 'ui-monospace,Menlo,monospace', background: FR.salt, padding: '1px 5px', borderRadius: 3 }}>sample + delta</code> and write back into the Points of Measure size chart. The sample size is set and locked on the Points of Measure page.
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 18 }}>
@@ -2995,10 +3012,10 @@ export function StepSizeMatrix({ data, set }) {
         </div>
         <div>
           <label style={sectionLabel}>Sample Size</label>
-          <select value={baseSize} onChange={e => update({ baseSize: e.target.value })}
-            style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.white }}>
-            {sizes.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <div style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.salt, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontFamily: 'ui-monospace,Menlo,monospace' }}>{baseSize}</span>
+            <span style={{ fontSize: 10, color: FR.stone }}>set on Points of Measure</span>
+          </div>
         </div>
       </div>
 
