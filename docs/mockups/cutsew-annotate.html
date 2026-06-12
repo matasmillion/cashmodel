@@ -52,6 +52,8 @@
     background:rgba(58,58,58,0.55);padding:1px 6px;border-radius:3px}
   .photo .ph-mid{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:rgba(58,58,58,0.40)}
+  .cap{font-size:11px;color:var(--stone);margin:8px 2px 0;line-height:1.5}
+  .cap b{color:var(--soil)}
 
   /* ───────── The red annotation box ───────── */
   .abox{position:absolute;border:2px solid var(--red);background:rgba(163,45,45,0.10);border-radius:2px;cursor:move}
@@ -65,6 +67,11 @@
   .abox .del{position:absolute;top:-11px;right:-11px;width:20px;height:20px;border-radius:50%;background:var(--slate);
     color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center;cursor:pointer;line-height:1;
     box-shadow:0 1px 4px rgba(0,0,0,0.3)}
+  /* rotation handle — a round knob on a short stem above the box's top edge */
+  .abox .rot-stem{position:absolute;left:50%;top:0;width:1.5px;height:22px;background:var(--red);
+    transform:translate(-50%,-100%);opacity:0.65}
+  .abox .rot{position:absolute;left:50%;top:-22px;width:15px;height:15px;border-radius:50%;background:var(--salt);
+    border:2px solid var(--red);transform:translate(-50%,-50%);cursor:grab;box-shadow:0 1px 3px rgba(0,0,0,0.28)}
 
   /* ───────── The red text control ───────── */
   .atext{position:absolute;color:var(--red);font-weight:600;font-size:13px;font-family:var(--sans);cursor:move;
@@ -123,13 +130,15 @@
     <h1 class="mock-title">Draw on the photos — red box &amp; red text</h1>
     <p class="mock-sub">
       A small <b>Annotate</b> button on any call-out photo opens this editor. You can drop a
-      <b>red box</b> (move it, resize it from the corners) and <b>red text</b> (move it, click to type).
+      <b>red box</b> (move it, resize it from the corners, and <b>rotate it to any angle</b> with the knob on top)
+      and <b>red text</b> (move it, click to type).
       Marks are saved on the photo and show in the page 07/08 preview. The numbered-dot tool, the
       card layout, the BOM and the PDF are all left exactly as they are.
     </p>
     <div class="legend">
       <span class="chip"><span class="swatch" style="background:var(--red)"></span> Red box outline</span>
       <span class="chip"><span class="swatch" style="background:var(--salt);border:2px solid var(--red)"></span> Corner handle (resize)</span>
+      <span class="chip"><span class="swatch" style="background:var(--salt);border:2px solid var(--red);border-radius:50%"></span> Rotate handle (spin to any angle)</span>
       <span class="chip"><span class="swatch" style="background:var(--red);border-radius:50%"></span> Red text</span>
       <span class="chip"><span class="swatch" style="background:var(--slate)"></span> × delete</span>
     </div>
@@ -150,9 +159,10 @@
       <span class="ph-cap">Detail 1 · Main</span>
       <span class="ph-mid">construction close-up</span>
 
-      <!-- a selected red box with handles + delete -->
-      <div class="abox" style="left:12%;top:20%;width:40%;height:46%">
+      <!-- a selected red box with rotate handle + corner handles + delete -->
+      <div class="abox" style="left:12%;top:24%;width:40%;height:46%">
         <span class="del">×</span>
+        <span class="rot-stem"></span><span class="rot"></span>
         <span class="handle nw"></span>
         <span class="handle ne"></span>
         <span class="handle sw"></span>
@@ -169,6 +179,10 @@
         <span class="tdel">×</span>keep seam even<span class="caret"></span>
       </div>
     </div>
+    <p class="cap"><b>Matches the crop exactly.</b> The editor reads the uploaded photo's <b>real width-to-height</b>
+      (the exact shape it was cropped to) and shows it at that ratio — so the photo here looks identical to the one on
+      the card / page, never a stretched or differently-cropped version. A wide stitch crop opens wide; a tall garment
+      reference opens tall.</p>
   </div>
 
   <!-- ───────── 2. ANATOMY ───────── -->
@@ -177,20 +191,24 @@
     <div class="editor" style="box-shadow:none">
       <div class="photo" style="aspect-ratio:4/3">
         <span class="ph-mid">photo</span>
-        <div class="abox" style="left:18%;top:22%;width:46%;height:50%">
+        <!-- shown rotated ~ -22° to demonstrate the rotate handle -->
+        <div class="abox" style="left:24%;top:26%;width:46%;height:46%;transform:rotate(-22deg)">
           <span class="del">×</span>
+          <span class="rot-stem"></span><span class="rot"></span>
           <span class="handle nw"></span><span class="handle ne"></span>
           <span class="handle sw"></span><span class="handle se"></span>
         </div>
-        <div class="atext" style="left:60%;top:74%"><span class="thandle"></span>red note</div>
+        <div class="atext" style="left:62%;top:82%"><span class="thandle"></span>red note</div>
       </div>
     </div>
     <div class="notes">
       <div class="n"><span class="k">A</span><div><b>Red box</b> — a 2px red outline, see-through inside so it just frames the area. Drag the middle to <b>move</b> it.</div></div>
       <div class="n"><span class="k">B</span><div><b>Corner handles</b> — the four little squares. Drag any one to <b>resize</b> the box freely.</div></div>
+      <div class="n"><span class="k">F</span><div><b>Rotate handle</b> — the round knob on the stem above the box. Drag it left or right to <b>spin the box to any angle</b>, clockwise or counter-clockwise. (The box above is tilted ~22°.)</div></div>
       <div class="n"><span class="k">C</span><div><b>× on the box</b> — removes that box.</div></div>
       <div class="n"><span class="k">D</span><div><b>Red text</b> — click <b>＋ Text</b>, type your note. Drag it anywhere; click it again to edit; its own × removes it.</div></div>
       <div class="n"><span class="k">E</span><div><b>Done</b> — closes the editor. Your marks stay on the photo and show in the live page 07/08 preview.</div></div>
+      <div class="n"><span class="k">G</span><div><b>True crop shape</b> — the editor opens at the photo's exact cropped width-to-height, so it looks identical to the card on the page (no stretch, no different crop).</div></div>
     </div>
   </div>
 

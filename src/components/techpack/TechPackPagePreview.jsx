@@ -18,8 +18,8 @@ function clampLine(s, maxW, charW = 6.5) {
   return s.slice(0, Math.max(1, max - 1)) + '…';
 }
 
-function PageFrame({ title, phase, pageNum, styleInfo, styleNumber, children, internal }) {
-  const headerTag = internal ? 'INTERNAL · NOT EXPORTED' : `PAGE ${pageNum} / ${TOTAL_PAGES}`;
+function PageFrame({ title, phase, pageNum, styleInfo, styleNumber, children, internal, total = TOTAL_PAGES }) {
+  const headerTag = internal ? 'INTERNAL · NOT EXPORTED' : `PAGE ${pageNum} / ${total}`;
   return (
     <g>
       <rect x="0" y="0" width={PAGE_W} height={PAGE_H} fill={FR.white} />
@@ -35,7 +35,7 @@ function PageFrame({ title, phase, pageNum, styleInfo, styleNumber, children, in
       <text x={PAGE_W - 40} y="50" textAnchor="end" fontSize="8" fill={FR.sand} letterSpacing="2">{headerTag}</text>
       <rect x="0" y="70" width={PAGE_W} height={2} fill={FR.soil} />
       <text x="40" y="775" fontSize="9" fill={FR.stone}>{styleInfo}</text>
-      <text x={PAGE_W - 40} y="775" textAnchor="end" fontSize="9" fill={internal ? '#854F0B' : FR.stone} fontWeight={internal ? 'bold' : 'normal'}>{internal ? 'INTERNAL — NOT EXPORTED' : `PAGE ${pageNum} / ${TOTAL_PAGES}`}</text>
+      <text x={PAGE_W - 40} y="775" textAnchor="end" fontSize="9" fill={internal ? '#854F0B' : FR.stone} fontWeight={internal ? 'bold' : 'normal'}>{internal ? 'INTERNAL — NOT EXPORTED' : `PAGE ${pageNum} / ${total}`}</text>
       {children}
     </g>
   );
@@ -1878,6 +1878,7 @@ function ComingSoon({ pageNum, title }) {
 // exported to the factory pack (PageFrame draws the INTERNAL tag).
 function PageCutSewCost({ d }) {
   const meta = d.cutSewLaborCostMeta;
+  const external = !!d.cutSewCostExternal;
   const costVal = meta?.value != null ? Number(meta.value)
     : (d.cutSewLaborCost ? Number(d.cutSewLaborCost) : null);
   const hasCost = costVal != null && !Number.isNaN(costVal);
@@ -1906,9 +1907,11 @@ function PageCutSewCost({ d }) {
     if (cur) lines.push(cur);
     return lines;
   };
+  const clip = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n).trimEnd() + '…' : s; };
 
   const x0 = 40, x1 = PAGE_W - 40, fullW = x1 - x0;
-  const heroY = 154, heroH = 190;
+  const bannerY = 144, bannerH = 26;
+  const heroY = 182, heroH = 190;
   const splitX = x0 + 330;
   const colY = heroY + heroH + 56, colGap = 16, colW = (fullW - colGap) / 2, colX2 = x0 + colW + colGap, colH = 300;
 
@@ -1916,11 +1919,11 @@ function PageCutSewCost({ d }) {
     <g>
       <rect x={x} y={colY} width={colW} height={colH} fill={FR.white} stroke="rgba(58,58,58,0.15)" strokeWidth={0.5} rx={8} />
       <text x={x + 16} y={colY + 22} fontSize="10" fontWeight="bold" fill={FR.soil} letterSpacing="0.8">{name}</text>
-      <text x={x + colW - 16} y={colY + 22} textAnchor="end" fontSize="9" fill={FR.stone} fontFamily="ui-monospace,Menlo,monospace">{pages}</text>
-      <text x={x + colW - 56} y={colY + 22} textAnchor="end" fontSize="13" fontWeight="600" fill={FR.slate}>{count}</text>
+      <text x={x + colW - 46} y={colY + 22} textAnchor="end" fontSize="9" fill={FR.stone} fontFamily="ui-monospace,Menlo,monospace">{pages}</text>
+      <text x={x + colW - 16} y={colY + 22} textAnchor="end" fontSize="13" fontWeight="600" fill={FR.slate}>{count}</text>
       {rows.length === 0 && <text x={x + 16} y={colY + 48} fontSize="11" fill={FR.stone} fontStyle="italic">Nothing specified yet on these pages.</text>}
       {rows.slice(0, 8).map((r, i) => {
-        const ry = colY + 40 + i * 30;
+        const ry = colY + 42 + i * 30;
         return (
           <g key={i}>
             <circle cx={x + 24} cy={ry + 4} r={8} fill="#A32D2D" />
@@ -1930,7 +1933,7 @@ function PageCutSewCost({ d }) {
           </g>
         );
       })}
-      {rows.length > 8 && <text x={x + 16} y={colY + 40 + 8 * 30 + 6} fontSize="10" fill={FR.stone} fontStyle="italic">+{rows.length - 8} more</text>}
+      {rows.length > 8 && <text x={x + 16} y={colY + 42 + 8 * 30 + 4} fontSize="10" fill={FR.stone} fontStyle="italic">+{rows.length - 8} more</text>}
     </g>
   );
 
@@ -1938,10 +1941,20 @@ function PageCutSewCost({ d }) {
     <g>
       <InfoStrip d={d} />
 
-      {/* internal banner */}
-      <rect x={x0} y={heroY - 40} width={fullW} height={28} rx={6} fill="rgba(133,79,11,0.06)" stroke="rgba(133,79,11,0.45)" strokeWidth={0.5} />
-      <circle cx={x0 + 16} cy={heroY - 26} r={4} fill="#854F0B" />
-      <text x={x0 + 28} y={heroY - 22} fontSize="11" fontWeight="600" fill="#854F0B">INTERNAL — Cut &amp; Sew labor cost. For your eyes only; left out of the exported factory pack.</text>
+      {/* internal / exported banner */}
+      {external ? (
+        <>
+          <rect x={x0} y={bannerY} width={fullW} height={bannerH} rx={6} fill="rgba(212,149,106,0.10)" stroke="rgba(212,149,106,0.55)" strokeWidth={0.5} />
+          <circle cx={x0 + 16} cy={bannerY + bannerH / 2} r={4} fill={FR.sienna} />
+          <text x={x0 + 28} y={bannerY + bannerH / 2 + 4} fontSize="11" fontWeight="600" fill="#8A5A33">EXPORTED — added as the final page of the tech pack. The factory will see this cost.</text>
+        </>
+      ) : (
+        <>
+          <rect x={x0} y={bannerY} width={fullW} height={bannerH} rx={6} fill="rgba(133,79,11,0.06)" stroke="rgba(133,79,11,0.45)" strokeWidth={0.5} />
+          <circle cx={x0 + 16} cy={bannerY + bannerH / 2} r={4} fill="#854F0B" />
+          <text x={x0 + 28} y={bannerY + bannerH / 2 + 4} fontSize="11" fontWeight="600" fill="#854F0B">INTERNAL — Cut &amp; Sew labor cost. For your eyes only; left out of the exported factory pack.</text>
+        </>
+      )}
 
       {/* hero cost card */}
       <rect x={x0} y={heroY} width={fullW} height={heroH} rx={8} fill={FR.white} stroke="rgba(58,58,58,0.15)" strokeWidth={0.5} />
@@ -1983,12 +1996,12 @@ function PageCutSewCost({ d }) {
       <text x={x0} y={colY - 10} fontSize="11" fill={FR.stone} fontStyle="italic">Pulled live off pages 07–10 — change a call-out or stitch row and re-run to update the number.</text>
       <ListCol x={x0} name="CONSTRUCTION CALL-OUTS" pages="PAGES 07–08" count={callouts.length} rows={callouts}
         render={(r, x, ry) => (<>
-          <text x={x + 40} y={ry + 7} fontSize="12" fontWeight="600" fill={FR.slate}>{esc((r.title || '(untitled)').slice(0, 32))}</text>
-          {r.description && <text x={x + colW - 16} y={ry + 7} textAnchor="end" fontSize="10" fill={FR.stone}>{esc(r.description.slice(0, 26))}</text>}
+          <text x={x + 40} y={ry + 7} fontSize="12" fontWeight="600" fill={FR.slate}>{esc(clip(r.title || '(untitled)', 30))}</text>
+          {r.description && <text x={x + colW - 16} y={ry + 7} textAnchor="end" fontSize="10" fill={FR.stone}>{esc(clip(r.description, 22))}</text>}
         </>)} />
       <ListCol x={colX2} name="STITCH OPERATIONS" pages="PAGES 09–10" count={stitches.length} rows={stitches}
         render={(r, x, ry) => (<>
-          <text x={x + 40} y={ry + 7} fontSize="12" fontWeight="600" fill={FR.slate}>{esc((r.label || '(unnamed)').slice(0, 30))}</text>
+          <text x={x + 40} y={ry + 7} fontSize="12" fontWeight="600" fill={FR.slate}>{esc(clip(r.label || '(unnamed)', 30))}</text>
           <text x={x + colW - 16} y={ry + 7} textAnchor="end" fontSize="10" fill={FR.stone} fontFamily="ui-monospace,Menlo,monospace">{esc([r.stitchType, r.spi].filter(Boolean).join(' · '))}</text>
         </>)} />
     </g>
@@ -2054,9 +2067,19 @@ export default function TechPackPagePreview({ data, images, step, skippedSteps, 
   // Fabrics step gets a "03.N" suffix when the operator picks multiple fabrics
   // and is paginating through them via the sidebar sub-entries.
   const stepEntry = STEPS[step] || STEPS[0];
+  // The internal Cut & Sew Cost page can be opted into the export. When it is,
+  // the factory pack grows from 25 to 26 pages and the cost page becomes the
+  // final page; otherwise it stays internal (no page number, INTERNAL tag).
+  const exportCost = !!d.cutSewCostExternal;
+  const total = TOTAL_PAGES + (exportCost ? 1 : 0);
   let pageNum = stepEntry.icon || String((step ?? 0) + 1);
   if (stepEntry.id === 'fabrics' && fabricPageIdx > 0) {
     pageNum = `${pageNum}.${fabricPageIdx}`;
+  }
+  let internalTag = !!stepEntry.internal;
+  if (stepEntry.id === 'cutsew-cost' && exportCost) {
+    pageNum = total;
+    internalTag = false;
   }
   const current = PAGE_FNS[step] || PAGE_FNS[0];
   const Body = current.body;
@@ -2067,7 +2090,7 @@ export default function TechPackPagePreview({ data, images, step, skippedSteps, 
       viewBox={`0 0 ${PAGE_W} ${PAGE_H}`}
       preserveAspectRatio="xMidYMin meet"
       style={{ width: '100%', height: 'auto', background: FR.white, boxShadow: '0 2px 14px rgba(0,0,0,0.12)', borderRadius: 6, fontFamily: 'Helvetica, Arial, sans-serif' }}>
-      <PageFrame title={current.title} phase={current.phase} pageNum={pageNum} styleInfo={styleInfo} styleNumber={d.styleNumber} internal={!!stepEntry.internal}>
+      <PageFrame title={current.title} phase={current.phase} pageNum={pageNum} total={total} styleInfo={styleInfo} styleNumber={d.styleNumber} internal={internalTag}>
         <Body d={d} images={images} treatmentsById={treatmentsById} componentsById={componentsById} fabricsById={fabricsById} fabricPageIdx={fabricPageIdx} />
       </PageFrame>
       {isSkipped && <SkipOverlay />}

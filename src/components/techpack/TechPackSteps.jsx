@@ -2034,18 +2034,38 @@ export function StepConstruction2({ data, set, images, onUpload, onRemove, annot
 // construction call-out and stitch operation off pages 07–10. Internal only —
 // excluded from the exported factory pack.
 export function StepCutSewCost({ data, set }) {
+  const external = !!data.cutSewCostExternal;
+  const tabBtn = (active) => ({
+    flex: 1, padding: '8px 12px', borderRadius: 6,
+    border: `1px solid ${active ? FR.slate : FR.sand}`,
+    background: active ? FR.slate : 'transparent',
+    color: active ? FR.salt : FR.stone,
+    fontSize: 12, fontWeight: 600, cursor: 'pointer', letterSpacing: 0.2,
+  });
   return (
     <div>
       <SectionTitle>Cut &amp; Sew Cost</SectionTitle>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, border: '0.5px solid rgba(133,79,11,0.45)', background: 'rgba(133,79,11,0.06)', borderRadius: 6, padding: '8px 14px', marginBottom: 14 }}>
-        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#854F0B', flex: '0 0 auto' }} />
-        <span style={{ fontSize: 11, color: '#854F0B', fontWeight: 600, letterSpacing: 0.3 }}>
-          Internal — for your eyes only. This page is left out of the exported factory tech pack.
-        </span>
-      </div>
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, fontStyle: 'italic' }}>
         The AI reads every construction call-out (Construction 1–2) and stitch operation (Sewing 1–2), plus your BOM and chosen vendor, to estimate best-case cut &amp; sew labor. Argue with it or paste a real factory quote in the chat to refine.
       </p>
+
+      {/* Internal vs. exported toggle. Default = internal (cost never leaves the building). */}
+      <div style={{ border: `0.5px solid ${FR.sand}`, borderRadius: 8, padding: '12px 14px', marginBottom: 16, background: FR.white }}>
+        <label style={STITCH_SECTION_LABEL}>Where this page goes</label>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 9 }}>
+          <button type="button" onClick={() => set('cutSewCostExternal', false)} style={tabBtn(!external)}>Internal only</button>
+          <button type="button" onClick={() => set('cutSewCostExternal', true)} style={tabBtn(external)}>Add as final page of PDF</button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: external ? FR.sienna : '#854F0B', flex: '0 0 auto' }} />
+          <span style={{ fontSize: 11, color: external ? '#8A5A33' : '#854F0B', fontWeight: 600, letterSpacing: 0.2 }}>
+            {external
+              ? 'Exported — added as the final page of the tech pack. The factory will see your cut & sew cost.'
+              : 'Internal — for your eyes only. Left out of the exported factory tech pack.'}
+          </span>
+        </div>
+      </div>
+
       <CutSewLaborCostBlock data={data} set={set} sectionLabel={STITCH_SECTION_LABEL} />
       <CutSewCostChat data={data} set={set} sectionLabel={STITCH_SECTION_LABEL} />
     </div>

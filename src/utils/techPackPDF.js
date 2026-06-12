@@ -955,6 +955,65 @@ export async function generateTechPackPDF(pack) {
   doc.text(`Source: Foreign Resource Cash Model — Product tab`, 10, y); y += 6;
   doc.text(`Tech pack ID: ${pack.id}`, 10, y);
 
+  // ─── Cut & Sew Cost — optional final page (only when opted into the export) ───
+  // The cost page is internal by default; the operator can flip it to ship as the
+  // pack's final page. CMT labor only — never the BOM/material cost.
+  if (d.cutSewCostExternal) {
+    const meta = d.cutSewLaborCostMeta || {};
+    const costVal = meta.value != null ? Number(meta.value)
+      : (d.cutSewLaborCost ? Number(d.cutSewLaborCost) : null);
+    const srcLabel = meta.mode === 'sam_rate'
+      ? `via SAM × $${Number(meta.samRate || meta.vendorSamRate || 0).toFixed(2)}/min`
+      : 'via Regional CMT Benchmark';
+    const callouts = [...(d.constructionDetailsPage1 || []), ...(d.constructionDetailsPage2 || [])]
+      .filter(c => c && (c.title || c.description)).slice(0, 16);
+    const blocks = d.seamStitchBlocks || [];
+    const seams = d.seams || [];
+    const stitches = [];
+    for (let i = 0; i < 8; i++) {
+      const label = (blocks.find(b => b.num === i + 1) || {}).label || '';
+      const s = seams[i] || {};
+      if (label || s.seamType || s.stitchType) stitches.push([String(i + 1), label || '(unnamed)', [s.stitchType, s.spiSpcm].filter(Boolean).join(' · ')]);
+    }
+
+    newPage('Cut & Sew Cost', 'CMT labor — conversion cost only', 12);
+    const cy = 32;
+    // big number (left)
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(...hex(FR.soil));
+    doc.text('ESTIMATED CUT & SEW LABOR (PER GARMENT)', 10, cy);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(28); doc.setTextColor(...hex(FR.slate));
+    doc.text(costVal != null ? `$${costVal.toFixed(2)}` : '—', 10, cy + 13);
+    // source / vendor (middle)
+    let ry2 = cy + 2;
+    doc.setFontSize(8); doc.setTextColor(...hex(FR.stone));
+    if (costVal != null && (meta.low != null || meta.high != null)) {
+      doc.text(`Best-case range $${Number(meta.low ?? costVal).toFixed(2)}–$${Number(meta.high ?? costVal).toFixed(2)}`, 72, ry2); ry2 += 5;
+    }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(...hex(FR.soil));
+    doc.text(srcLabel.toUpperCase(), 72, ry2); ry2 += 5;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...hex(FR.slate));
+    doc.text(`${meta.vendor || d.vendor || '—'}${meta.vendorCity && meta.vendorCountry ? ` — ${meta.vendorCity}, ${meta.vendorCountry}` : ''}`, 72, ry2);
+    // reasoning (right)
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(...hex(FR.stone));
+    doc.text('HOW THE AI GOT HERE', 150, cy);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...hex(FR.slate));
+    doc.text(doc.splitTextToSize(meta.reasoning || meta.vendorContext || '—', 137).slice(0, 6), 150, cy + 5);
+    // CMT-only note
+    doc.setFontSize(7); doc.setTextColor(...hex(FR.stone));
+    doc.text('CMT-only — cut, sew, finish, pack, factory overhead. Excludes fabric, trims, treatments & vendor markup (those roll up on their own pages).', 10, cy + 21);
+
+    // two spec tables — what the estimate read off pages 07–10
+    let ty = cy + 30;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...hex(FR.slate));
+    doc.text(`Construction call-outs (${callouts.length})`, 10, ty);
+    doc.text(`Stitch operations (${stitches.length})`, 152, ty);
+    ty += 3;
+    table(['#', 'Call-out', 'Detail'],
+      callouts.map((c, i) => [String(i + 1), c.title || '(untitled)', c.description || '']),
+      10, ty, [10, 62, 63], { badgeFirstCol: true });
+    table(['#', 'Seam', 'Stitch / SPI'], stitches, 152, ty, [10, 62, 63], { badgeFirstCol: true });
+  }
+
   // Second pass — stamp the "PAGE NOT USED" overlay on top of any skipped
   // pages. Done after all content is drawn so the overlay actually lands
   // on top instead of under the page text / images.

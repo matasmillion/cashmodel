@@ -33,7 +33,7 @@ export function AnnotationOverlay({ annos, style }) {
   return (
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', ...style }}>
       {annos.map(a => a.type === 'box' ? (
-        <div key={a.id} style={{ position: 'absolute', left: `${a.x * 100}%`, top: `${a.y * 100}%`, width: `${a.w * 100}%`, height: `${a.h * 100}%`, border: `2px solid ${RED}`, borderRadius: 2, boxSizing: 'border-box' }} />
+        <div key={a.id} style={{ position: 'absolute', left: `${a.x * 100}%`, top: `${a.y * 100}%`, width: `${a.w * 100}%`, height: `${a.h * 100}%`, border: `2px solid ${RED}`, borderRadius: 2, boxSizing: 'border-box', transform: `rotate(${a.rot || 0}deg)`, transformOrigin: 'center' }} />
       ) : (
         <div key={a.id} style={{ position: 'absolute', left: `${a.x * 100}%`, top: `${a.y * 100}%`, transform: 'translateY(-50%)', color: RED, fontWeight: 600, fontSize: 12, lineHeight: 1.1, fontFamily: "'Helvetica Neue', sans-serif", textShadow: '0 1px 2px rgba(255,255,255,0.75)', whiteSpace: 'nowrap', maxWidth: '96%', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.text}</div>
       ))}
@@ -48,7 +48,8 @@ export function AnnotationSvg({ annos, x, y, w, h, keyPrefix = 'an' }) {
     <>
       {annos.map((a, i) => a.type === 'box' ? (
         <rect key={`${keyPrefix}-${a.id || i}`} x={x + a.x * w} y={y + a.y * h} width={a.w * w} height={a.h * h}
-          fill="none" stroke={RED} strokeWidth={2} rx={2} />
+          fill="none" stroke={RED} strokeWidth={2} rx={2}
+          transform={a.rot ? `rotate(${a.rot} ${x + a.x * w + a.w * w / 2} ${y + a.y * h + a.h * h / 2})` : undefined} />
       ) : (
         <text key={`${keyPrefix}-${a.id || i}`} x={x + a.x * w} y={y + a.y * h} fill={RED} fontSize={11} fontWeight={600}
           fontFamily="'Helvetica Neue', sans-serif" dominantBaseline="middle">{a.text}</text>
@@ -64,6 +65,10 @@ export default function ImageAnnotator({ image, annos, onChange, onClose, title 
   const [items, setItems] = useState(() => (annos || []).map(a => ({ ...a })));
   const [selected, setSelected] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  // Measured from the real cropped image once it loads, so the editor opens at
+  // the photo's exact width-to-height — identical to the card on the page — for
+  // any slot. `aspect` (from describeSlot) is only the pre-load fallback shape.
+  const [measuredAspect, setMeasuredAspect] = useState(null);
 
   const commit = useCallback((next) => { setItems(next); onChange(next); }, [onChange]);
 
@@ -87,6 +92,33 @@ export default function ImageAnnotator({ image, annos, onChange, onClose, title 
         } else {
           next[idx] = { ...b, x: clamp01(p.x - d.grab.x), y: clamp01(p.y - d.grab.y) };
         }
+      } else if (d.mode === 'rotate') {
+        // angle from the box centre to the (unclamped) pointer; 0° = pointer straight up
+        const r = wrapRef.current.getBoundingClientRect();
+        const cx = (b.x + b.w / 2) * r.width, cy = (b.y + b.h / 2) * r.height;
+        let deg = Math.atan2((e.clientY - r.top) - cy, (e.clientX - r.left) - cx) * 180 / Math.PI + 90;
+        deg = ((deg + 180) % 360 + 360) % 360 - 180; // normalise to -180..180
+        next[idx] = { ...b, rot: Math.round(deg) };
+      } else if (b.rot) {
+        // resize a ROTATED box: keep the opposite corner pinned in screen space.
+        const r = wrapRef.current.getBoundingClientRect();
+        const W = r.width, H = r.height;
+        const rad = b.rot * Math.PI / 180;
+        const u = { x: Math.cos(rad), y: Math.sin(rad) };   // local +width axis, in screen px
+        const v = { x: -Math.sin(rad), y: Math.cos(rad) };  // local +height axis, in screen px
+        const bw = b.w * W, bh = b.h * H;
+        const cx0 = (b.x + b.w / 2) * W, cy0 = (b.y + b.h / 2) * H;
+        const sx = d.mode.includes('e') ? 1 : -1;
+        const sy = d.mode.includes('s') ? 1 : -1;
+        const ax = cx0 - sx * (bw / 2) * u.x - sy * (bh / 2) * v.x; // pinned opposite corner
+        const ay = cy0 - sx * (bw / 2) * u.y - sy * (bh / 2) * v.y;
+        const dx = (e.clientX - r.left) - ax, dy = (e.clientY - r.top) - ay;
+        const newW = Math.max(MIN * W, (dx * u.x + dy * u.y) * sx);
+        const newH = Math.max(MIN * H, (dx * v.x + dy * v.y) * sy);
+        const ncx = ax + sx * (newW / 2) * u.x + sy * (newH / 2) * v.x;
+        const ncy = ay + sx * (newW / 2) * u.y + sy * (newH / 2) * v.y;
+        const wN = newW / W, hN = newH / H;
+        next[idx] = { ...b, x: ncx / W - wN / 2, y: ncy / H - hN / 2, w: wN, h: hN };
       } else {
         let { x, y, w, h } = b; const right = x + w, bottom = y + h;
         if (d.mode.includes('w')) { x = clamp01(Math.min(p.x, right - MIN)); w = right - x; }
@@ -123,6 +155,11 @@ export default function ImageAnnotator({ image, annos, onChange, onClose, title 
     setSelected(it.id);
     dragRef.current = { mode: cid, id: it.id, box: { ...it } };
   };
+  const startRotate = (it) => (e) => {
+    e.preventDefault(); e.stopPropagation();
+    setSelected(it.id);
+    dragRef.current = { mode: 'rotate', id: it.id, box: { ...it } };
+  };
 
   const addBox  = () => { const b = newBox();  commit([...items, b]); setSelected(b.id); setEditingId(null); };
   const addText = () => { const t = newText(); commit([...items, t]); setSelected(t.id); setEditingId(t.id); };
@@ -143,17 +180,23 @@ export default function ImageAnnotator({ image, annos, onChange, onClose, title 
         </div>
 
         <div ref={wrapRef} onPointerDown={() => { setSelected(null); if (editingId) commitText(); }}
-          style={{ position: 'relative', width: '100%', aspectRatio: `${aspect}`, background: '#1c1c1c', borderRadius: 6, overflow: 'hidden', userSelect: 'none', touchAction: 'none' }}>
+          style={{ position: 'relative', width: '100%', aspectRatio: `${measuredAspect || aspect}`, background: '#1c1c1c', borderRadius: 6, overflow: 'hidden', userSelect: 'none', touchAction: 'none' }}>
           {image
-            ? <AssetImage image={image} alt={title} style={{ width: '100%', height: '100%', objectFit: fit, display: 'block', pointerEvents: 'none' }} />
+            ? <AssetImage image={image} alt={title}
+                onLoad={e => { const w = e?.target?.naturalWidth, h = e?.target?.naturalHeight; if (w && h) setMeasuredAspect(w / h); }}
+                style={{ width: '100%', height: '100%', objectFit: measuredAspect ? 'contain' : fit, display: 'block', pointerEvents: 'none' }} />
             : <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: FR.stone, fontSize: 12 }}>No image to annotate</div>}
 
           {items.map(it => it.type === 'box' ? (
             <div key={it.id} onPointerDown={startMove(it)}
-              style={{ position: 'absolute', left: `${it.x * 100}%`, top: `${it.y * 100}%`, width: `${it.w * 100}%`, height: `${it.h * 100}%`, border: `2px solid ${RED}`, background: selected === it.id ? 'rgba(163,45,45,0.10)' : 'transparent', boxSizing: 'border-box', cursor: 'move', borderRadius: 2 }}>
+              style={{ position: 'absolute', left: `${it.x * 100}%`, top: `${it.y * 100}%`, width: `${it.w * 100}%`, height: `${it.h * 100}%`, border: `2px solid ${RED}`, background: selected === it.id ? 'rgba(163,45,45,0.10)' : 'transparent', boxSizing: 'border-box', cursor: 'move', borderRadius: 2, transform: `rotate(${it.rot || 0}deg)`, transformOrigin: 'center' }}>
               {selected === it.id && (
                 <>
                   <div onPointerDown={e => { e.stopPropagation(); removeItem(it.id); }} title="Delete box" style={DEL}>×</div>
+                  {/* rotate handle — knob on a stem above the top edge */}
+                  <div style={{ position: 'absolute', left: '50%', top: 0, width: 1.5, height: 22, background: RED, transform: 'translate(-50%,-100%)', opacity: 0.65, pointerEvents: 'none' }} />
+                  <div onPointerDown={startRotate(it)} title="Drag to rotate"
+                    style={{ position: 'absolute', left: '50%', top: -22, width: 15, height: 15, borderRadius: '50%', transform: 'translate(-50%,-50%)', background: FR.salt, border: `2px solid ${RED}`, cursor: 'grab', boxShadow: '0 1px 3px rgba(0,0,0,0.28)' }} />
                   {CORNERS.map(c => (
                     <div key={c.id} onPointerDown={startResize(it, c.id)}
                       style={{ position: 'absolute', left: `${c.cx * 100}%`, top: `${c.cy * 100}%`, width: 13, height: 13, transform: 'translate(-50%,-50%)', background: FR.salt, border: `2px solid ${RED}`, borderRadius: 3, cursor: c.cursor }} />
@@ -185,7 +228,7 @@ export default function ImageAnnotator({ image, annos, onChange, onClose, title 
         </div>
 
         <p style={{ fontSize: 10.5, color: FR.stone, marginTop: 8, fontStyle: 'italic' }}>
-          <b style={{ color: RED }}>+ Box</b> draws a red rectangle — drag it to move, drag a corner to resize.&nbsp;
+          <b style={{ color: RED }}>+ Box</b> draws a red rectangle — drag it to move, drag a corner to resize, drag the top knob to rotate.&nbsp;
           <b style={{ color: RED }}>+ Text</b> adds red writing — drag to move, double-click to edit.&nbsp;
           Select something, then × deletes it. <b>Done</b> closes and saves.
         </p>
