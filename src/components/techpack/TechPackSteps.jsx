@@ -2910,13 +2910,30 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
   const sampleKey = (baseSzH.find(h => h.label === sampleSize) || {}).key;
   const lockedCellStyle = { fontSize: 11, color: FR.stone, padding: '3px 2px', display: 'block', textAlign: 'center', fontFamily: 'ui-monospace,Menlo,monospace' };
   const editCellStyle = { width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box' };
+  // Graded value for a non-sample size = sample value + the per-size delta
+  // entered on the Size Grading page (grading is keyed by the size label).
+  const gradedFor = (pom, sizeLabel) => {
+    const base = parseFloat(pom[sampleKey]);
+    if (!Number.isFinite(base)) return '';
+    const g = (matrix.grading || []).find(x => x.pomName === pom.name);
+    const dv = g?.perSizeDelta?.[sizeLabel];
+    if (dv === undefined || dv === null || Number.isNaN(Number(dv))) return '';
+    return (base + Number(dv)).toFixed(1);
+  };
   const szH = baseSzH.map(h => ({
     key: h.key,
     label: h.key === sampleKey ? `${h.label} · sample` : h.label,
-    render: (val, onChange) => {
-      const colLocked = !sizesUnlocked && sampleKey && h.key !== sampleKey;
-      if (colLocked) return <span style={lockedCellStyle}>{val || '—'}</span>;
-      return <input value={val || ''} onChange={e => onChange(e.target.value)} style={editCellStyle} />;
+    render: (val, onChange, row) => {
+      // Sample column: always editable, holds the typed QC value.
+      if (h.key === sampleKey || !sampleKey) {
+        return <input value={val || ''} onChange={e => onChange(e.target.value)} style={editCellStyle} />;
+      }
+      // Non-sample columns are filled by Size Grading. Blank + locked until the
+      // style reaches Pre-Production; then the graded value (sample + delta) is
+      // passed back here, editable, with any manual override taking priority.
+      if (!sizesUnlocked) return <span style={lockedCellStyle}>—</span>;
+      const display = (val !== undefined && val !== null && val !== '') ? val : gradedFor(row, h.label);
+      return <input value={display} onChange={e => onChange(e.target.value)} style={editCellStyle} />;
     },
   }));
 
