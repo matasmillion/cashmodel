@@ -64,6 +64,10 @@ export default function ImageAnnotator({ image, annos, onChange, onClose, title 
   const [items, setItems] = useState(() => (annos || []).map(a => ({ ...a })));
   const [selected, setSelected] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  // Measured from the real cropped image once it loads, so the editor opens at
+  // the photo's exact width-to-height — identical to the card on the page — for
+  // any slot. `aspect` (from describeSlot) is only the pre-load fallback shape.
+  const [measuredAspect, setMeasuredAspect] = useState(null);
 
   const commit = useCallback((next) => { setItems(next); onChange(next); }, [onChange]);
 
@@ -143,9 +147,11 @@ export default function ImageAnnotator({ image, annos, onChange, onClose, title 
         </div>
 
         <div ref={wrapRef} onPointerDown={() => { setSelected(null); if (editingId) commitText(); }}
-          style={{ position: 'relative', width: '100%', aspectRatio: `${aspect}`, background: '#1c1c1c', borderRadius: 6, overflow: 'hidden', userSelect: 'none', touchAction: 'none' }}>
+          style={{ position: 'relative', width: '100%', aspectRatio: `${measuredAspect || aspect}`, background: '#1c1c1c', borderRadius: 6, overflow: 'hidden', userSelect: 'none', touchAction: 'none' }}>
           {image
-            ? <AssetImage image={image} alt={title} style={{ width: '100%', height: '100%', objectFit: fit, display: 'block', pointerEvents: 'none' }} />
+            ? <AssetImage image={image} alt={title}
+                onLoad={e => { const w = e?.target?.naturalWidth, h = e?.target?.naturalHeight; if (w && h) setMeasuredAspect(w / h); }}
+                style={{ width: '100%', height: '100%', objectFit: measuredAspect ? 'contain' : fit, display: 'block', pointerEvents: 'none' }} />
             : <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: FR.stone, fontSize: 12 }}>No image to annotate</div>}
 
           {items.map(it => it.type === 'box' ? (

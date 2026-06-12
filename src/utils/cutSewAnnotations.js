@@ -43,12 +43,19 @@ export function withSlotAnnotations(map, slot, list) {
   return next;
 }
 
-// How a given image slot should be shown in the annotator, so the drawing box
-// matches the live-preview crop exactly (same aspect + fit the preview uses).
+// How a given image slot should be shown in the annotator. The aspect here is
+// only a pre-load FALLBACK + the title — the annotator measures the real cropped
+// image and opens at its exact width-to-height, so the editor always matches the
+// card/page no matter the slot (single ref, two stacked 2:3 refs, stitch cards…).
+// Ordered so `-support` and the `…-callout-…` references are matched before the
+// generic stitch / detail close-ups.
 export function describeSlot(slot) {
-  if (slot && slot.startsWith('sketch-callout-'))     return { title: 'Garment reference', aspect: CALLOUT_REF_RATIO,     fit: 'contain' };
-  if (slot && slot.endsWith('-support'))              return { title: 'Supporting image',  aspect: CALLOUT_SUPPORT_RATIO, fit: 'cover' };
-  if (slot && slot.startsWith('construction-detail-')) return { title: 'Detail close-up',   aspect: CALLOUT_MAIN_RATIO,    fit: 'cover' };
+  const s = slot || '';
+  if (s.endsWith('-support'))               return { title: 'Supporting image', aspect: CALLOUT_SUPPORT_RATIO, fit: 'cover' };
+  if (s.startsWith('sketch-callout-'))      return { title: 'Garment reference', aspect: CALLOUT_REF_RATIO,    fit: 'contain' };
+  if (s.startsWith('seam-stitch-callout-')) return { title: 'Stitch reference',  aspect: CALLOUT_REF_RATIO,    fit: 'contain' };
+  if (s.startsWith('seam-stitch-'))         return { title: 'Stitch close-up',   aspect: CALLOUT_MAIN_RATIO,   fit: 'cover' };
+  if (s.startsWith('construction-detail-')) return { title: 'Detail close-up',   aspect: CALLOUT_MAIN_RATIO,   fit: 'cover' };
   return { title: 'Image', aspect: 1, fit: 'cover' };
 }
 
