@@ -162,6 +162,12 @@
   .pp-band .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
   .pp-band .chip{font-size:6.5px;color:var(--slate);background:var(--salt);border:0.5px solid var(--sand);border-radius:10px;padding:2px 6px}
   .pp-band .chip.cut{color:var(--soil);background:rgba(133,79,11,0.07);border-color:rgba(133,79,11,0.3)}
+  .pp-band .clab{font-size:5px;letter-spacing:0.5px;text-transform:uppercase;color:var(--stone);font-weight:700;margin-top:3px}
+  .pp-band .ln{font-size:6.5px;color:var(--slate);margin-top:2px;line-height:1.3}
+  .pp-band .ln b{font-size:5px;letter-spacing:0.4px;text-transform:uppercase;color:var(--stone);font-weight:700;margin-right:3px}
+  .pp-band .ln .bump{color:var(--soil);font-weight:600;font-family:var(--mono)}
+  .base-only{display:block}
+  body:has(.dye-input:checked) .base-only{display:none}
   .pp-mk{position:relative;width:100%;aspect-ratio:297/210;max-height:74px;margin-left:auto;background:linear-gradient(135deg,#efe9dd,#dcd2bd);border:0.5px solid var(--sand);border-radius:2px;overflow:hidden}
   .pp-mk .g{position:absolute;inset:5px;background-image:linear-gradient(rgba(58,58,58,0.06) 1px,transparent 1px),linear-gradient(90deg,rgba(58,58,58,0.06) 1px,transparent 1px);background-size:14px 14px}
   .pp-mk .t{position:absolute;left:0;bottom:0;background:rgba(58,58,58,0.78);color:var(--salt);font-family:var(--mono);font-size:6px;padding:1px 5px}
@@ -293,15 +299,15 @@
       <div class="pp-intro">Cut each fabric at the roll width shown, after the pre-cut shrink. Where marked, cut pieces bigger for wash shrinkage.</div>
       <div class="pp-bands">
         <div class="pp-band body">
-          <div><div class="role">Body</div><div class="nm">B1750</div><div class="cutat">171 <small>cm</small></div><div class="chips"><span class="chip">hang dry</span><span class="chip cut stage2-only" style="display:none">+5.3%</span><span class="chip">1.5 m</span></div></div>
+          <div><div class="role">Body</div><div class="nm">B1750</div><div class="clab">② cut at</div><div class="cutat">171 <small>cm</small></div><div class="ln"><b>before</b> hang-dry roll (pre-shrink)</div><div class="ln stage2-only" style="display:none"><b>after</b> tumble in dye → cut <span class="bump">+5.3%</span></div><div class="ln base-only"><b>after</b> none</div><div class="ln"><b>yield</b> 1.5 m / garment</div></div>
           <div class="pp-mk"><div class="g"></div><div class="a4">A4</div><div class="t">@ 171 cm · 82%</div></div>
         </div>
         <div class="pp-band pocket">
-          <div><div class="role">Pocket</div><div class="nm">B1968</div><div class="cutat">157 <small>cm</small></div><div class="chips"><span class="chip">hang dry</span><span class="chip">0.3 m</span></div></div>
+          <div><div class="role">Pocket</div><div class="nm">B1968</div><div class="clab">② cut at</div><div class="cutat">157 <small>cm</small></div><div class="ln"><b>before</b> hang-dry roll (pre-shrink)</div><div class="ln"><b>after</b> none — size final at cut</div><div class="ln"><b>yield</b> 0.3 m / garment</div></div>
           <div class="pp-mk"><div class="g"></div><div class="a4">A4</div><div class="t">@ 157 cm · 79%</div></div>
         </div>
         <div class="pp-band rib">
-          <div><div class="role">Rib</div><div class="nm">B-RIB-2×1</div><div class="cutat">88 <small>cm</small></div><div class="chips"><span class="chip">tumble dry</span><span class="chip cut stage2-only" style="display:none">+5.3%</span><span class="chip">0.18 m</span></div></div>
+          <div><div class="role">Rib</div><div class="nm">B-RIB-2×1</div><div class="clab">② cut at</div><div class="cutat">88 <small>cm</small></div><div class="ln"><b>before</b> tumble-dry roll (pre-shrink)</div><div class="ln stage2-only" style="display:none"><b>after</b> tumble in dye → cut <span class="bump">+5.3%</span></div><div class="ln base-only"><b>after</b> none</div><div class="ln"><b>yield</b> 0.18 m / garment</div></div>
           <div class="pp-mk"><div class="g"></div><div class="a4">A4</div><div class="t">@ 88 cm · 74%</div></div>
         </div>
       </div>

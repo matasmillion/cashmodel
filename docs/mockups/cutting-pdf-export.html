@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cutting — PDF export (A4 landscape, manufacturer-facing)</title>
+<title>Cutting — PDF export (A4, labeled for the factory)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
     --salt:#F5F0E8; --slate:#3A3A3A; --sand:#EBE5D5; --soil:#854F0B;
     --stone:#9A9A9A; --white:#fff; --good:#3B6D11; --warn:#854F0B;
-    --line:rgba(58,58,58,0.14);
+    --line:rgba(58,58,58,0.13);
     --serif:'Cormorant Garamond','Georgia',serif;
     --sans:'General Sans','Inter','Helvetica Neue',system-ui,sans-serif;
     --mono:ui-monospace,'SF Mono',Menlo,monospace;
@@ -18,61 +18,60 @@
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;background:#cfcabf;color:var(--slate);font-family:var(--sans);font-size:13px}
   .stage{padding:30px 20px 60px;display:flex;flex-direction:column;align-items:center;gap:14px}
-  .cap{font-size:11px;color:#5b574e;font-family:var(--mono)}
+  .cap{font-size:11px;color:#5b574e;font-family:var(--mono);max-width:1040px;line-height:1.6}
 
-  /* A4 landscape page = 297 x 210 → ratio 1.414. 1040 x 735. */
-  .page{width:1040px;height:735px;background:var(--white);box-shadow:0 6px 30px rgba(0,0,0,0.22);padding:34px 40px 26px;display:flex;flex-direction:column}
+  /* A4 landscape 297x210 → 1040x735 */
+  .page{width:1040px;height:735px;background:var(--white);box-shadow:0 6px 30px rgba(0,0,0,0.22);padding:30px 40px 22px;display:flex;flex-direction:column}
 
-  .head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1.5px solid var(--slate);padding-bottom:12px}
-  .head .co{font-size:9px;letter-spacing:1.5px;line-height:1.5}
-  .head .co b{font-size:11px;letter-spacing:1px}
-  .head h1{font-family:var(--serif);font-size:30px;font-weight:500;letter-spacing:0.3px}
+  .head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1.5px solid var(--slate);padding-bottom:11px}
+  .head .co{font-size:9px;letter-spacing:1.5px;line-height:1.5}.head .co b{font-size:11px;letter-spacing:1px}
+  .head h1{font-family:var(--serif);font-size:29px;font-weight:500}
   .head .rt{text-align:right;font-family:var(--mono);font-size:9px;color:var(--stone);line-height:1.6}
 
-  .intro{font-size:11px;color:var(--stone);margin:12px 0 4px;letter-spacing:0.2px}
-  .intro b{color:var(--slate)}
+  /* column key at top so labels are self-explanatory */
+  .legend{display:flex;gap:26px;margin:11px 0 2px;font-size:9.5px;color:var(--stone)}
+  .legend b{color:var(--slate)}
+  .legend .step{display:flex;align-items:center;gap:7px}
+  .legend .num{width:15px;height:15px;border-radius:50%;background:var(--slate);color:var(--salt);font-size:8px;font-weight:700;display:flex;align-items:center;justify-content:center}
 
-  .fabrics{flex:1;display:flex;flex-direction:column;justify-content:space-between;padding:8px 0}
-
-  /* one band per fabric */
-  .band{display:grid;grid-template-columns:330px 1fr;gap:30px;align-items:center;padding:14px 0;border-top:1px solid var(--line)}
+  .fabrics{flex:1;display:flex;flex-direction:column}
+  .band{display:grid;grid-template-columns:1fr 250px;gap:26px;align-items:center;padding:13px 0;border-top:1px solid var(--line);flex:1}
   .band:first-child{border-top:none}
 
-  .info .role{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;color:var(--soil)}
-  .info.pocket .role{color:#3a5a8c}.info.rib .role{color:var(--good)}
-  .info .nm{font-family:var(--serif);font-size:22px;line-height:1;margin:2px 0 12px}
-  .info .nm small{font-family:var(--mono);font-size:10px;color:var(--stone);font-weight:400;margin-left:6px;letter-spacing:0}
+  .nm{font-family:var(--serif);font-size:21px;line-height:1}
+  .nm .role{font-family:var(--sans);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;color:var(--soil);margin-right:9px;vertical-align:middle}
+  .band.pocket .role{color:#3a5a8c}.band.rib .role{color:var(--good)}
+  .nm small{font-family:var(--mono);font-size:10px;color:var(--stone);font-weight:400;margin-left:8px;letter-spacing:0}
 
-  .cutat{display:flex;align-items:baseline;gap:8px}
-  .cutat .lab{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--stone);font-weight:600}
-  .cutat .val{font-family:var(--mono);font-size:34px;font-weight:600;line-height:1}
-  .cutat .val small{font-size:15px;color:var(--stone);font-weight:400}
+  /* labeled spec rows — every value says what it is for */
+  .spec{margin-top:9px;display:grid;grid-template-columns:auto 1fr;column-gap:18px;row-gap:0}
+  .srow{display:contents}
+  .srow .lab{font-size:8.5px;letter-spacing:0.8px;text-transform:uppercase;color:var(--stone);font-weight:700;padding:6px 0;border-top:1px solid var(--line);white-space:nowrap}
+  .srow .val{font-size:13px;color:var(--slate);line-height:1.35;padding:6px 0;border-top:1px solid var(--line)}
+  .srow:first-child .lab,.srow:first-child .val{border-top:none}
+  .srow .val b{font-weight:600}
+  .srow.cut .val{font-family:var(--mono);font-size:24px;font-weight:600;line-height:1.05}
+  .srow.cut .val small{font-family:var(--sans);font-size:10px;color:var(--stone);font-weight:600;margin-left:8px;letter-spacing:0.3px;text-transform:uppercase}
+  .srow.after .val .when{color:var(--soil);font-weight:600}
+  .srow.after .val .bump{font-family:var(--mono);background:rgba(133,79,11,0.08);border:1px solid rgba(133,79,11,0.3);color:var(--soil);border-radius:4px;padding:1px 6px;font-weight:600}
+  .srow.yield .val{font-weight:600}
+  .srow.yield .val small{font-weight:400;color:var(--stone)}
+  .muted{color:var(--stone)}
 
-  .chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
-  .chip{font-size:10px;color:var(--slate);background:var(--salt);border:1px solid var(--sand);border-radius:20px;padding:4px 11px;display:inline-flex;align-items:center;gap:6px}
-  .chip .d{width:5px;height:5px;border-radius:50%;background:var(--stone)}
-  .chip.cut .d{background:var(--soil)}
-  .chip.cut{color:var(--soil);background:rgba(133,79,11,0.07);border-color:rgba(133,79,11,0.3)}
-  .chip .mono{font-family:var(--mono)}
+  /* A4 marker */
+  .marker{position:relative;width:100%;aspect-ratio:297/210;max-height:172px;margin-left:auto;background:linear-gradient(135deg,#efe9dd,#dcd2bd);border:1px solid var(--sand);border-radius:3px;overflow:hidden}
+  .marker .grid{position:absolute;inset:9px;background-image:linear-gradient(rgba(58,58,58,0.06) 1px,transparent 1px),linear-gradient(90deg,rgba(58,58,58,0.06) 1px,transparent 1px);background-size:24px 24px}
+  .marker .pieces{position:absolute;inset:12px;color:rgba(58,58,58,0.16);font-size:8.5px;font-family:var(--mono);display:flex;align-items:center;justify-content:center;letter-spacing:1px}
+  .marker .tag{position:absolute;left:0;bottom:0;background:rgba(58,58,58,0.8);color:var(--salt);font-family:var(--mono);font-size:8px;padding:3px 8px}
+  .marker .a4{position:absolute;right:6px;top:6px;background:var(--white);border:1px solid var(--sand);color:var(--stone);font-size:7px;font-family:var(--mono);padding:2px 6px;border-radius:3px}
+  .mcap{font-size:8px;color:var(--stone);text-align:center;margin-top:4px;letter-spacing:0.3px}
 
-  /* A4-format marker image (landscape 297:210) */
-  .marker{position:relative;width:100%;aspect-ratio:297/210;background:
-      linear-gradient(135deg,#efe9dd,#dcd2bd);
-      border:1px solid var(--sand);border-radius:3px;overflow:hidden;max-height:188px;margin-left:auto}
-  .marker .grid{position:absolute;inset:10px;background-image:
-      linear-gradient(rgba(58,58,58,0.06) 1px,transparent 1px),
-      linear-gradient(90deg,rgba(58,58,58,0.06) 1px,transparent 1px);
-      background-size:26px 26px}
-  .marker .pieces{position:absolute;inset:14px;color:rgba(58,58,58,0.18);font-size:9px;font-family:var(--mono);display:flex;align-items:center;justify-content:center;letter-spacing:1px}
-  .marker .tag{position:absolute;left:0;bottom:0;background:rgba(58,58,58,0.8);color:var(--salt);font-family:var(--mono);font-size:8.5px;padding:3px 8px;letter-spacing:0.3px}
-  .marker .a4{position:absolute;right:6px;top:6px;background:var(--white);border:1px solid var(--sand);color:var(--stone);font-size:7.5px;font-family:var(--mono);padding:2px 6px;border-radius:3px;letter-spacing:0.5px}
-
-  .foot{display:flex;justify-content:space-between;border-top:1px solid var(--line);padding-top:8px;font-size:8px;color:var(--stone);letter-spacing:0.3px}
+  .foot{display:flex;justify-content:space-between;border-top:1px solid var(--line);padding-top:7px;font-size:8px;color:var(--stone)}
 </style>
 </head>
 <body>
 <div class="stage">
-  <div class="cap">Cutting — final PDF export · A4 landscape (297 × 210 mm) · this is what the factory reads</div>
+  <div class="cap">Cutting — final PDF export · A4 landscape · every number is labeled with what it's for, in the order the factory does it.</div>
 
   <div class="page">
     <div class="head">
@@ -81,67 +80,62 @@
       <div class="rt">FW26-BB-ZH-0001<br>PAGE 11 / 25</div>
     </div>
 
-    <div class="intro">Cut each fabric at the <b>roll width</b> shown, after the pre-cut shrink. Where marked <b>cut bigger</b>, scale the marker up so the garment lands on-spec after the wash.</div>
+    <div class="legend">
+      <div class="step"><span class="num">1</span><span><b>Before cutting</b> — pre-shrink the roll</span></div>
+      <div class="step"><span class="num">2</span><span><b>Cut</b> — at the roll width, to the marker</span></div>
+      <div class="step"><span class="num">3</span><span><b>After cutting</b> — what shrinks the sewn garment, and when</span></div>
+    </div>
 
     <div class="fabrics">
 
       <!-- BODY -->
-      <div class="band">
-        <div class="info body">
-          <div class="role">Body</div>
-          <div class="nm">B1750 <small>French terry · 380 gsm</small></div>
-          <div class="cutat"><span class="lab">Cut at</span><span class="val">171 <small>cm</small></span></div>
-          <div class="chips">
-            <span class="chip"><span class="d"></span>Pre-cut: <span class="mono">hang dry</span></span>
-            <span class="chip cut"><span class="d"></span>Cut bigger <span class="mono">+5.3%</span> · tumbles in dye</span>
-            <span class="chip"><span class="d"></span>Yield <span class="mono">1.5 m/unit</span></span>
+      <div class="band body">
+        <div>
+          <div class="nm"><span class="role">Body</span>B1750 <small>French terry · 380 gsm</small></div>
+          <div class="spec">
+            <div class="srow cut"><span class="lab">② Cut the marker at</span><span class="val">171 cm <small>roll width</small></span></div>
+            <div class="srow"><span class="lab">① Before cutting</span><span class="val"><b>Hang-dry the roll</b> to pre-shrink the fabric, then lay the marker at 171 cm.</span></div>
+            <div class="srow after"><span class="lab">③ After cutting</span><span class="val">Garment is <span class="when">tumble-dried during Gone — global dye</span> (after sewing) → cut every piece <span class="bump">+5.3% bigger</span> so it lands on-spec.</span></div>
+            <div class="srow yield"><span class="lab">Fabric yield</span><span class="val">1.5 m of fabric <small>per finished garment</small></span></div>
           </div>
         </div>
-        <div class="marker">
-          <div class="grid"></div>
-          <div class="pieces">PATTERN-PIECE MARKER</div>
-          <div class="a4">A4</div>
-          <div class="tag">marker @ 171 cm · 82% utilisation</div>
+        <div>
+          <div class="marker"><div class="grid"></div><div class="pieces">PATTERN-PIECE MARKER</div><div class="a4">A4</div><div class="tag">marker @ 171 cm</div></div>
+          <div class="mcap">Pattern marker · 82% fabric utilisation</div>
         </div>
       </div>
 
       <!-- POCKET -->
-      <div class="band">
-        <div class="info pocket">
-          <div class="role">Pocket</div>
-          <div class="nm">B1968 <small>fleece · 235 gsm</small></div>
-          <div class="cutat"><span class="lab">Cut at</span><span class="val">157 <small>cm</small></span></div>
-          <div class="chips">
-            <span class="chip"><span class="d"></span>Pre-cut: <span class="mono">hang dry</span></span>
-            <span class="chip"><span class="d"></span>No wash shrink</span>
-            <span class="chip"><span class="d"></span>Yield <span class="mono">0.3 m/unit</span></span>
+      <div class="band pocket">
+        <div>
+          <div class="nm"><span class="role">Pocket</span>B1968 <small>fleece · 235 gsm</small></div>
+          <div class="spec">
+            <div class="srow cut"><span class="lab">② Cut the marker at</span><span class="val">157 cm <small>roll width</small></span></div>
+            <div class="srow"><span class="lab">① Before cutting</span><span class="val"><b>Hang-dry the roll</b> to pre-shrink the fabric, then lay the marker at 157 cm.</span></div>
+            <div class="srow after"><span class="lab">③ After cutting</span><span class="val muted">No further shrink — the pocket isn't washed, so the finished size is set at cut. Cut to the marker exactly.</span></div>
+            <div class="srow yield"><span class="lab">Fabric yield</span><span class="val">0.3 m of fabric <small>per finished garment</small></span></div>
           </div>
         </div>
-        <div class="marker">
-          <div class="grid"></div>
-          <div class="pieces">PATTERN-PIECE MARKER</div>
-          <div class="a4">A4</div>
-          <div class="tag">marker @ 157 cm · 79% utilisation</div>
+        <div>
+          <div class="marker"><div class="grid"></div><div class="pieces">PATTERN-PIECE MARKER</div><div class="a4">A4</div><div class="tag">marker @ 157 cm</div></div>
+          <div class="mcap">Pattern marker · 79% fabric utilisation</div>
         </div>
       </div>
 
       <!-- RIB -->
-      <div class="band">
-        <div class="info rib">
-          <div class="role">Rib</div>
-          <div class="nm">B-RIB-2×1 <small>cotton rib · 320 gsm</small></div>
-          <div class="cutat"><span class="lab">Cut at</span><span class="val">88 <small>cm</small></span></div>
-          <div class="chips">
-            <span class="chip"><span class="d"></span>Pre-cut: <span class="mono">tumble dry</span></span>
-            <span class="chip cut"><span class="d"></span>Cut bigger <span class="mono">+5.3%</span> · tumbles in dye</span>
-            <span class="chip"><span class="d"></span>Yield <span class="mono">0.18 m/unit</span></span>
+      <div class="band rib">
+        <div>
+          <div class="nm"><span class="role">Rib</span>B-RIB-2×1 <small>cotton rib · 320 gsm</small></div>
+          <div class="spec">
+            <div class="srow cut"><span class="lab">② Cut the marker at</span><span class="val">88 cm <small>roll width</small></span></div>
+            <div class="srow"><span class="lab">① Before cutting</span><span class="val"><b>Tumble-dry the roll</b> to pre-shrink the rib, then lay the marker at 88 cm.</span></div>
+            <div class="srow after"><span class="lab">③ After cutting</span><span class="val">Garment is <span class="when">tumble-dried during Gone — global dye</span> (after sewing) → cut every piece <span class="bump">+5.3% bigger</span> so it lands on-spec.</span></div>
+            <div class="srow yield"><span class="lab">Fabric yield</span><span class="val">0.18 m of fabric <small>per finished garment</small></span></div>
           </div>
         </div>
-        <div class="marker">
-          <div class="grid"></div>
-          <div class="pieces">PATTERN-PIECE MARKER</div>
-          <div class="a4">A4</div>
-          <div class="tag">marker @ 88 cm · 74% utilisation</div>
+        <div>
+          <div class="marker"><div class="grid"></div><div class="pieces">PATTERN-PIECE MARKER</div><div class="a4">A4</div><div class="tag">marker @ 88 cm</div></div>
+          <div class="mcap">Pattern marker · 74% fabric utilisation</div>
         </div>
       </div>
 
@@ -150,7 +144,7 @@
     <div class="foot"><span>© 2026 Foreign Resource Co. — Confidential Tech Pack</span><span>PAGE 11 / 25</span></div>
   </div>
 
-  <div class="cap" style="max-width:1040px;line-height:1.6">Only what the cutter needs: which fabric, the <b>cut-at roll width</b>, the pre-cut shrink, a "cut bigger" flag when the garment tumbles in the wash, and the A4 marker. Shrink-method internals, GSM math, and assumed/actual live in the editor — they don't clutter the factory page.</div>
+  <div class="cap">Each fabric reads as a 3-step recipe — <b>① before cutting</b> (pre-shrink the roll), <b>② cut</b> (at the labeled roll width, to the A4 marker), <b>③ after cutting</b> (what shrinks the sewn garment and exactly when, with the cut-bigger %). Yield is spelled out as "metres of fabric per finished garment." Nothing unlabeled.</div>
 </div>
 </body>
 </html>
