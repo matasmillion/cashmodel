@@ -5,7 +5,7 @@
 // that will be replaced in subsequent prompts.
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, CALLOUT_REF_RATIO, CALLOUT_MAIN_RATIO, CALLOUT_SUPPORT_RATIO, isStepLocked, isMerchLocked, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
+import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, CALLOUT_REF_RATIO, CALLOUT_MAIN_RATIO, CALLOUT_SUPPORT_RATIO, isStepLocked, isMerchLocked, isPreProduction, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
 
 // Aspect used by the Cut & Sew call-out garment reference upload/crop, matching
 // the live preview + PDF reference box so placed dots line up everywhere.
@@ -2890,10 +2890,6 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
   const addPom = () => set('poms', [...poms, { name: '', tol: '1', s: '', m: '', l: '', xl: '', method: '' }]);
   const rmPom  = (i) => set('poms', poms.filter((_, idx) => idx !== i));
 
-  const szH = data.sizeType === 'waist'
-    ? [{ key: 's', label: 'W30' }, { key: 'm', label: 'W32' }, { key: 'l', label: 'W34' }, { key: 'xl', label: 'W36' }]
-    : [{ key: 's', label: 'S' }, { key: 'm', label: 'M' }, { key: 'l', label: 'L' }, { key: 'xl', label: 'XL' }];
-
   // Sample size lives here now (moved off the Size Grading page). It is the one
   // size we sew + approve first; every other size is graded from it. Stored on
   // the existing gradedSizeMatrix.baseSize so nothing downstream has to change.
@@ -2904,6 +2900,25 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
   const gradeSizes = rawSizes.length ? rawSizes : ['S', 'M', 'L', 'XL'];
   const sampleSize = gradeSizes.includes(matrix.baseSize) ? matrix.baseSize : gradeSizes[0];
   const setSampleSize = (v) => set('gradedSizeMatrix', { ...matrix, baseSize: v });
+
+  // Until the style reaches Pre-Production, only the sample-size column is
+  // editable; the other sizes are filled by Size Grading and shown locked.
+  const sizesUnlocked = isPreProduction(data.status);
+  const baseSzH = data.sizeType === 'waist'
+    ? [{ key: 's', label: 'W30' }, { key: 'm', label: 'W32' }, { key: 'l', label: 'W34' }, { key: 'xl', label: 'W36' }]
+    : [{ key: 's', label: 'S' }, { key: 'm', label: 'M' }, { key: 'l', label: 'L' }, { key: 'xl', label: 'XL' }];
+  const sampleKey = (baseSzH.find(h => h.label === sampleSize) || {}).key;
+  const lockedCellStyle = { fontSize: 11, color: FR.stone, padding: '3px 2px', display: 'block', textAlign: 'center', fontFamily: 'ui-monospace,Menlo,monospace' };
+  const editCellStyle = { width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box' };
+  const szH = baseSzH.map(h => ({
+    key: h.key,
+    label: h.key === sampleKey ? `${h.label} · sample` : h.label,
+    render: (val, onChange) => {
+      const colLocked = !sizesUnlocked && sampleKey && h.key !== sampleKey;
+      if (colLocked) return <span style={lockedCellStyle}>{val || '—'}</span>;
+      return <input value={val || ''} onChange={e => onChange(e.target.value)} style={editCellStyle} />;
+    },
+  }));
 
   return (
     <div>
@@ -2916,7 +2931,7 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
         <Select label="Sample Size" value={sampleSize} onChange={setSampleSize} options={gradeSizes} />
       </Row>
       <p style={{ fontSize: 11, color: FR.stone, marginTop: -2, marginBottom: 14, lineHeight: 1.5 }}>
-        The sample size is the one size you make and approve first. Everything else is graded from it on the Size Grading page. Only the sample column is editable until the sample is signed off.
+        The sample size is the one size you make and approve first. Only the sample column is editable now — the other sizes fill in from Size Grading and unlock once the style reaches <strong>Pre-Production</strong>.
       </p>
 
       {data.sizeType !== 'one-size' && (
@@ -2958,6 +2973,7 @@ export function StepSizeMatrix({ data, set }) {
   const sizes = rawSizes.length ? rawSizes : ['S', 'M', 'L', 'XL'];
   const baseSize = sizes.includes(matrix.baseSize) ? matrix.baseSize : sizes[0];
   const poms = (data.poms || []).filter(p => p.name);
+  const gradingLocked = !isPreProduction(data.status);
 
   const update = (patch) => set('gradedSizeMatrix', { ...matrix, ...patch });
 
@@ -2999,6 +3015,8 @@ export function StepSizeMatrix({ data, set }) {
   return (
     <div>
       <SectionTitle>Size Grading</SectionTitle>
+      {gradingLocked && <LockedBanner status={data.status} />}
+      <fieldset disabled={gradingLocked} style={{ border: 'none', padding: 0, margin: 0, opacity: gradingLocked ? 0.45 : 1, pointerEvents: gradingLocked ? 'none' : 'auto' }}>
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, lineHeight: 1.5 }}>
         Grade rules turn the approved sample size into every other size. Enter per-size deltas; final values are computed as <code style={{ fontFamily: 'ui-monospace,Menlo,monospace', background: FR.salt, padding: '1px 5px', borderRadius: 3 }}>sample + delta</code> and write back into the Points of Measure size chart. The sample size is set and locked on the Points of Measure page.
       </p>
@@ -3080,6 +3098,7 @@ export function StepSizeMatrix({ data, set }) {
           </table>
         </div>
       )}
+      </fieldset>
     </div>
   );
 }

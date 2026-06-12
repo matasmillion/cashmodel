@@ -36,6 +36,13 @@ export function isStepLocked(stepIndex, status) {
   return current < unlockAt || current === -1;
 }
 
+// True once the pack has reached Pre-Production (or later). Gates the
+// non-sample POM size columns and the Size Grading editor: those only open
+// once the sample size is signed off and the style moves into pre-production.
+export function isPreProduction(status) {
+  return STATUSES.indexOf(status) >= STATUSES.indexOf('Pre-Production');
+}
+
 // Merchandising steps lock the moment the pack moves past the
 // Merchandising phase — competitor and storefront prep is "decided" by
 // then. Empty / undefined status counts as Merchandising (new pack).
