@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cutting redesign · Variant B — Fabric cards (in real builder)</title>
+<title>Cutting redesign · Variant B — Fabric cards (chosen) </title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -81,29 +81,26 @@
   .sec-label .lk{font-size:9px;color:var(--stone);font-weight:600;background:var(--white);border:1px solid var(--sand);border-radius:3px;padding:2px 6px;text-transform:none;letter-spacing:0.2px}
   .pill{display:inline-block;padding:3px 8px;border-radius:5px;font-size:9px;letter-spacing:0.06em;text-transform:uppercase;font-weight:600}
   .pill.prov{background:rgba(133,79,11,0.12);color:var(--warn)}
-  .pill.linked{background:rgba(58,58,58,0.06);color:var(--slate);text-transform:none;letter-spacing:0.2px;font-family:var(--mono);font-size:9px}
   .pill.warn{background:rgba(133,79,11,0.14);color:var(--warn)}
   .pill.good{background:rgba(99,153,34,0.14);color:var(--good)}
 
-  /* layout + index up top */
-  .markers{display:flex;gap:10px}
-  .mk{flex:1;background:var(--white);border:1px dashed var(--sand);border-radius:8px;height:96px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;position:relative;overflow:hidden}
-  .mk.has{border-style:solid;background:linear-gradient(135deg,#e7e0d2,#cdbf9c)}
-  .mk .plus{width:24px;height:24px;border:1px solid var(--sand);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--soil);background:var(--white)}
-  .mk .cap{font-size:9px;color:var(--stone);font-style:italic}
-  .mk .corner{position:absolute;bottom:0;left:0;right:0;background:var(--slate);color:var(--salt);font-size:9px;font-family:var(--mono);padding:3px 8px}
-  .card.locked{background:var(--salt);border:0.5px solid var(--border);border-radius:8px;padding:4px 12px}
-  .ptable{width:100%;border-collapse:separate;border-spacing:0;font-size:11px}
-  .ptable th{text-align:left;font-size:8.5px;color:var(--stone);letter-spacing:0.3px;text-transform:uppercase;font-weight:600;padding:5px 6px;border-bottom:1px solid var(--sand)}
-  .ptable td{padding:6px 6px;border-bottom:1px solid var(--sand)}
-  .ptable td.m{font-family:var(--mono);font-size:10px;color:var(--stone)}
-  .ptable tr:last-child td{border-bottom:none}
-  .tag{display:inline-block;font-size:9px;font-weight:600;border-radius:3px;padding:1px 6px}
-  .tag.body{background:rgba(133,79,11,0.12);color:var(--soil)}
-  .tag.pocket{background:rgba(58,90,140,0.12);color:#3a5a8c}
-  .lock-note{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--stone);margin-top:7px}
+  /* ── cutting plan PDF uploader ── */
+  .plan-card{background:var(--white);border:0.5px solid var(--border);border-radius:8px;padding:12px}
+  .doc-row{display:flex;align-items:center;gap:12px;padding:9px 11px;background:var(--salt);border:0.5px solid var(--border);border-radius:7px}
+  .doc-ic{width:34px;height:42px;border-radius:4px;background:var(--white);border:1px solid var(--sand);position:relative;flex:none;display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px}
+  .doc-ic .corner{position:absolute;top:0;right:0;border-width:0 9px 9px 0;border-style:solid;border-color:transparent var(--sand) transparent transparent}
+  .doc-ic .kind{font-size:7px;font-weight:700;letter-spacing:0.5px;color:var(--bad)}
+  .doc-meta{flex:1;min-width:0}
+  .doc-meta .nm{font-family:var(--mono);font-size:12px;color:var(--slate);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .doc-meta .sub{font-size:10px;color:var(--stone);margin-top:2px}
+  .doc-acts{display:flex;gap:6px}
+  .doc-acts button{background:var(--white);border:1px solid var(--sand);border-radius:6px;font-size:10px;padding:5px 10px;color:var(--slate);cursor:pointer}
+  .doc-acts button.rm{color:var(--bad);border-color:rgba(163,45,45,0.3)}
+  .drop{display:flex;align-items:center;gap:10px;justify-content:center;border:1px dashed var(--sand);border-radius:7px;padding:12px;margin-top:9px;font-size:11px;color:var(--stone);cursor:pointer}
+  .drop .plus{width:22px;height:22px;border:1px solid var(--sand);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--soil);background:var(--white)}
+  .plan-hint{font-size:10px;color:var(--stone);margin-top:8px;line-height:1.45}
 
-  /* fabric card */
+  /* ── fabric cards ── */
   .fcard{background:var(--white);border:0.5px solid var(--border);border-left:3px solid var(--sand);border-radius:10px;margin-bottom:10px;overflow:hidden}
   .fcard.body{border-left-color:var(--soil)}.fcard.pocket{border-left-color:#3a5a8c}
   .fc-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 8px}
@@ -116,18 +113,12 @@
   .fc-ref .blk .k{font-size:8px;color:var(--stone);text-transform:uppercase;letter-spacing:0.5px;font-weight:600}
   .fc-ref .blk .v{font-size:12px;font-family:var(--mono);color:var(--slate);margin-top:2px}
   .fc-ref .lockchip{margin-left:auto;align-self:center;font-size:9px;color:var(--stone)}
-  .fc-work{padding:11px 14px;display:grid;grid-template-columns:128px 1fr;gap:12px;align-items:start}
-  .marker-slot{background:var(--salt);border:1px dashed var(--sand);border-radius:6px;height:84px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;text-align:center;color:var(--stone)}
-  .marker-slot.has{border-style:solid;background:linear-gradient(135deg,#e7e0d2,#cdbf9c);justify-content:flex-end;align-items:flex-start;padding:6px}
-  .marker-slot .plus{width:22px;height:22px;border:1px solid var(--sand);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--soil);background:var(--white)}
-  .marker-slot .cap{font-size:8.5px;font-style:italic}
-  .marker-slot .fn{font-family:var(--mono);font-size:8.5px;color:var(--salt);background:var(--slate);padding:2px 6px;border-radius:3px}
-  .wfields{display:grid;grid-template-columns:1fr 1fr;gap:7px}
-  .fld{border:1px solid var(--sand);border-radius:5px;padding:6px 8px;background:var(--white)}
+  .fc-work{padding:11px 14px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .fld{border:1px solid var(--sand);border-radius:5px;padding:7px 9px;background:var(--white)}
   .fld .k{font-size:8px;color:var(--stone);text-transform:uppercase;letter-spacing:0.4px;font-weight:600}
-  .fld .v{font-size:13px;font-family:var(--mono);color:var(--slate);margin-top:1px}
+  .fld .v{font-size:14px;font-family:var(--mono);color:var(--slate);margin-top:2px}
   .fld .v small{font-size:8.5px;color:var(--stone)}
-  .fld.yield{grid-column:1 / -1;display:flex;align-items:center;justify-content:space-between;background:rgba(133,79,11,0.04)}
+  .fld.yield{background:rgba(133,79,11,0.04);display:flex;align-items:center;justify-content:space-between}
   .uprow{display:none;align-items:center;gap:7px;font-size:9.5px;color:var(--soil);background:rgba(133,79,11,0.06);border-radius:0 0 7px 7px;padding:6px 14px}
   body:has(.dye-input:checked) .uprow{display:flex}
 
@@ -169,8 +160,11 @@
   .pp-strip .k{font-size:6.5px;letter-spacing:0.5px;text-transform:uppercase;color:var(--stone)}
   .pp-strip .v{font-size:9px;margin-top:1px}
   .pp-sec{font-family:var(--serif);font-size:13px;margin:14px 0 6px}
-  .pp-img{height:120px;border:1px dashed var(--sand);border-radius:3px;background:linear-gradient(135deg,#efe9dd,#ddd3bf);display:flex;align-items:flex-end;justify-content:flex-end;padding:6px}
-  .pp-img .lab{font-family:var(--mono);font-size:7px;background:var(--slate);color:var(--salt);padding:2px 6px;border-radius:2px}
+  .pp-plan{display:flex;align-items:center;gap:10px;border:1px solid var(--sand);border-radius:3px;padding:8px}
+  .pp-plan .thumb{width:40px;height:50px;border:1px solid var(--sand);border-radius:3px;background:linear-gradient(135deg,#efe9dd,#ddd3bf);position:relative;flex:none}
+  .pp-plan .thumb .pdf{position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:6px;font-weight:700;color:var(--bad)}
+  .pp-plan .fn{font-family:var(--mono);font-size:8px;color:var(--slate)}
+  .pp-plan .mt{font-size:7px;color:var(--stone);margin-top:2px}
   .pp-tbl{width:100%;border-collapse:collapse;font-size:8px;margin-top:4px}
   .pp-tbl th{background:var(--slate);color:var(--salt);text-align:left;padding:4px 6px;font-size:6.5px;letter-spacing:0.4px;text-transform:uppercase;font-weight:600}
   .pp-tbl td{padding:4px 6px;border-bottom:0.5px solid var(--sand)}
@@ -232,28 +226,24 @@
       <div class="cap">Mockup toggle only. In the real app the dye layer appears automatically when the style references a wash/dye treatment.</div>
     </div>
 
-    <div class="sec-label">Pattern pieces layout · marker per fabric</div>
-    <div class="markers">
-      <div class="mk has"><div class="corner">B1750 · 171 cm width</div></div>
-      <div class="mk"><div class="plus">+</div><div class="cap">Pocket marker · 165 cm</div></div>
+    <!-- CUTTING PLAN — PDF uploader -->
+    <div class="sec-label">Cutting plan <span class="lk">PDF or image</span></div>
+    <div class="plan-card">
+      <div class="doc-row">
+        <div class="doc-ic"><span class="corner"></span><span class="kind">PDF</span></div>
+        <div class="doc-meta">
+          <div class="nm">FW26-BB-ZH-0001_cutting-plan.pdf</div>
+          <div class="sub">3 pages · 1.4 MB · uploaded 6/12/2026</div>
+        </div>
+        <div class="doc-acts"><button>View</button><button>Replace</button><button class="rm">Remove</button></div>
+      </div>
+      <div class="drop"><span class="plus">+</span> Drop another file, or click to browse — PDF preferred (image still accepted)</div>
+      <div class="plan-hint">Save the real cutting plan here as a <b>PDF</b> (the source document), instead of a flattened image. It rides along in the exported tech pack and on the PO to the factory. Up to three fabrics &amp; their layouts can live in one plan.</div>
     </div>
 
-    <div class="sec-label">Pattern piece index <span class="pill linked">linked · CS-HD-HEAVY-01</span></div>
-    <div class="card locked">
-      <table class="ptable">
-        <thead><tr><th>Piece #</th><th>Piece name</th><th>Qty</th><th>Fabric</th><th>Grain</th><th>Fusing</th></tr></thead>
-        <tbody>
-          <tr><td class="m">P-01</td><td>Front Body</td><td class="m">2</td><td><span class="tag body">Body</span></td><td>Lengthwise</td><td>None</td></tr>
-          <tr><td class="m">P-02</td><td>Back Body</td><td class="m">1</td><td><span class="tag body">Body</span></td><td>Lengthwise</td><td>None</td></tr>
-          <tr><td class="m">P-03</td><td>Pocket Bag</td><td class="m">2</td><td><span class="tag pocket">Pocket</span></td><td>Lengthwise</td><td>None</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="lock-note">🔒 Read-only — edit pieces on the Cut &amp; Sew block. <b style="color:var(--soil)">Behavior change vs today.</b></div>
-
+    <!-- FABRICS — reference + cutting -->
     <div class="sec-label">Fabrics — reference + cutting <span class="lk">up to 3</span></div>
 
-    <!-- BODY card -->
     <div class="fcard body">
       <div class="fc-head"><div class="l"><span class="role">Body</span><span class="nm">B1750</span><span class="desc">French terry · 380→400 gsm</span></div></div>
       <div class="fc-ref">
@@ -263,17 +253,13 @@
         <div class="lockchip">🔒 by reference</div>
       </div>
       <div class="fc-work">
-        <div class="marker-slot has"><div class="fn">B1750 · 171 cm</div></div>
-        <div class="wfields">
-          <div class="fld"><div class="k">Cutting width</div><div class="v">171 <small>cm</small></div></div>
-          <div class="fld"><div class="k">Cuttable width</div><div class="v">169 <small>cm · −2 selvage</small></div></div>
-          <div class="fld yield"><div><div class="k">Cut yield</div><div class="v">1.5 <small>m/unit</small></div></div><span class="pill prov">provisional</span></div>
-        </div>
+        <div class="fld"><div class="k">Cutting width</div><div class="v">171 <small>cm</small></div></div>
+        <div class="fld"><div class="k">Cuttable width</div><div class="v">169 <small>cm · −2 selvage</small></div></div>
+        <div class="fld yield"><div><div class="k">Cut yield</div><div class="v">1.5 <small>m/unit</small></div></div><span class="pill prov">prov</span></div>
       </div>
       <div class="uprow">↑ + dye residual +4.6% → cut yield 1.55 m/unit · factory applies on the marker</div>
     </div>
 
-    <!-- POCKET card -->
     <div class="fcard pocket">
       <div class="fc-head"><div class="l"><span class="role">Pocket</span><span class="nm">B1968</span><span class="desc">Fleece · 235 gsm</span></div></div>
       <div class="fc-ref">
@@ -283,12 +269,9 @@
         <div class="lockchip">🔒 by reference</div>
       </div>
       <div class="fc-work">
-        <div class="marker-slot"><div class="plus">+</div><div class="cap">Drop marker · 165 cm</div></div>
-        <div class="wfields">
-          <div class="fld"><div class="k">Cutting width</div><div class="v">165 <small>cm</small></div></div>
-          <div class="fld"><div class="k">Cuttable width</div><div class="v">163 <small>cm · −2 selvage</small></div></div>
-          <div class="fld yield"><div><div class="k">Cut yield</div><div class="v">0.3 <small>m/unit</small></div></div><span class="pill prov">provisional</span></div>
-        </div>
+        <div class="fld"><div class="k">Cutting width</div><div class="v">165 <small>cm</small></div></div>
+        <div class="fld"><div class="k">Cuttable width</div><div class="v">163 <small>cm · −2 selvage</small></div></div>
+        <div class="fld yield"><div><div class="k">Cut yield</div><div class="v">0.3 <small>m/unit</small></div></div><span class="pill prov">prov</span></div>
       </div>
       <div class="uprow">↑ + dye residual +4.6% → cut yield 0.31 m/unit · factory applies on the marker</div>
     </div>
@@ -299,7 +282,7 @@
     <div class="dye-only">
       <div class="dye">
         <div class="dye-h"><span class="dot"></span><div class="t">Garment dye — extra cutting allowance <span>· keyed to the treatment atom</span></div></div>
-        <p class="lead">This style gets <b>Gone — global dye</b> <span style="font-family:var(--mono);font-size:10px;color:var(--stone)">(TR-GDY-001)</span>. Cut pieces bigger for extra shrinkage. Each fabric card above now shows its combined upscale.</p>
+        <p class="lead">This style gets <b>Gone — global dye</b> <span style="font-family:var(--mono);font-size:10px;color:var(--stone)">(TR-GDY-001)</span>. Cut pieces bigger for extra shrinkage. Each fabric card above shows its combined upscale.</p>
         <div style="font-size:9px;color:var(--stone);text-transform:uppercase;letter-spacing:0.6px;font-weight:600;margin-bottom:6px">Residual shrinkage from the dye (cut → finished) — separate from the fabric's pre→post-wash number</div>
         <div class="aa">
           <div class="box"><div class="k">Assumed</div><div class="num">4.0%</div><div class="sub">default from treatment atom</div></div>
@@ -324,23 +307,14 @@
         <div><div class="k">Colorway</div><div class="v">Slate</div></div>
         <div><div class="k">Size Range</div><div class="v">S / M / L / XL</div></div>
       </div>
-      <div class="pp-sec">Pattern Pieces Layout</div>
-      <div class="pp-img"><span class="lab">B1750 · 171 cm width</span></div>
+      <div class="pp-sec">Cutting Plan</div>
+      <div class="pp-plan"><div class="thumb"><div class="pdf">PDF</div></div><div><div class="fn">FW26-BB-ZH-0001_cutting-plan.pdf</div><div class="mt">3 pages · attached source document</div></div></div>
       <div class="pp-sec">Fabrics &amp; cutting</div>
       <table class="pp-tbl">
         <thead><tr><th>Fabric</th><th>Post-wash W</th><th>Cuttable</th><th>Raw shrink</th><th>Yield</th></tr></thead>
         <tbody>
           <tr><td>Body · B1750</td><td>171 cm</td><td>169 cm</td><td>5.5% / 5.0%</td><td>1.5 m</td></tr>
           <tr><td>Pocket · B1968</td><td>165 cm</td><td>163 cm</td><td>4.0% / 3.5%</td><td>0.3 m</td></tr>
-        </tbody>
-      </table>
-      <div class="pp-sec">Pattern Piece Index</div>
-      <table class="pp-tbl">
-        <thead><tr><th>#</th><th>Piece</th><th>Qty</th><th>Fabric</th><th>Grain</th><th>Fusing</th></tr></thead>
-        <tbody>
-          <tr><td>P-01</td><td>Front Body</td><td>2</td><td>Shell</td><td>Lengthwise</td><td>None</td></tr>
-          <tr><td>P-02</td><td>Back Body</td><td>1</td><td>Shell</td><td>Lengthwise</td><td>None</td></tr>
-          <tr><td>P-03</td><td>Pocket Bag</td><td>2</td><td>Pocket</td><td>Lengthwise</td><td>None</td></tr>
         </tbody>
       </table>
       <div class="dye-only"><div class="pp-dye"><div class="h">Garment dye — Gone (TR-GDY-001) · cut bigger</div><div class="r"><span>Residual shrink (cut→finished)</span><span class="mono">assumed 4.0% · actual 4.6%</span></div></div></div>
