@@ -1823,12 +1823,13 @@ function StitchCalloutCard({ num, label, code, images, onUpload, onRemove, onRen
 // fixed row per callout card, with a leading # that ties the row to its card
 // and its placed dot. No add/remove: the eight cards (4 per page) are fixed,
 // mirroring the Call Outs pages.
-function StitchSpecTableC({ seams, rowStart, count, onUpdateAt }) {
+function StitchSpecTableC({ seams, rowStart, count, onUpdateAt, seamNames = [] }) {
   const th = { textAlign: 'left', padding: '5px 6px', background: FR.slate, color: FR.salt, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', whiteSpace: 'nowrap' };
   const td = { padding: '3px 4px', borderBottom: `1px solid ${FR.sand}`, verticalAlign: 'middle' };
   const inp = { width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue', sans-serif", boxSizing: 'border-box' };
+  // The Seam column is the stitch's name — it mirrors the card title above and
+  // is not edited here (rename the stitch card to change it).
   const cols = [
-    { key: 'operation',  label: 'Operation',   ph: 'Side seam / Hem / Collar' },
     { key: 'seamType',   label: 'Seam Type',   ph: 'Flatlock / French seam' },
     { key: 'stitchType', label: 'Stitch Type', ph: '301 / 401 / 504' },
     { key: 'machine',    label: 'Machine',     ph: 'e.g. Juki MO-6814 overlock' },
@@ -1843,6 +1844,7 @@ function StitchSpecTableC({ seams, rowStart, count, onUpdateAt }) {
         <thead>
           <tr>
             <th style={{ ...th, width: 28, textAlign: 'center' }}>#</th>
+            <th style={th}>Seam</th>
             {cols.map(c => <th key={c.key} style={th}>{c.label}</th>)}
           </tr>
         </thead>
@@ -1850,9 +1852,15 @@ function StitchSpecTableC({ seams, rowStart, count, onUpdateAt }) {
           {Array.from({ length: count }).map((_, i) => {
             const gi = rowStart + i;
             const row = seams[gi] || {};
+            const name = seamNames[i] || '';
             return (
               <tr key={gi} style={{ background: i % 2 === 0 ? FR.salt : FR.white }}>
                 <td style={{ ...td, textAlign: 'center', fontFamily: 'ui-monospace, Menlo, monospace', color: FR.stone }}>{gi + 1}</td>
+                <td style={{ ...td, fontWeight: 600 }}>
+                  {name
+                    ? <span style={{ color: FR.slate }}>{name}</span>
+                    : <span style={{ color: FR.stone, fontStyle: 'italic', fontWeight: 400 }}>Name on the card</span>}
+                </td>
                 {cols.map(c => (
                   <td key={c.key} style={td}>
                     {c.color
@@ -1929,7 +1937,7 @@ function StitchingPageBody({ refSlot, nums, rowStart, tableCount, data, set, ima
 
       <div style={{ marginBottom: 10 }}>
         <label style={STITCH_SECTION_LABEL}>Seam &amp; Stitch Specification</label>
-        <StitchSpecTableC seams={seams} rowStart={rowStart} count={tableCount} onUpdateAt={onUpdateSeamAt} />
+        <StitchSpecTableC seams={seams} rowStart={rowStart} count={tableCount} onUpdateAt={onUpdateSeamAt} seamNames={entries.map(e => e.label || '')} />
       </div>
     </>
   );

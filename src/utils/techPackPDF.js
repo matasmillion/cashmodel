@@ -402,9 +402,9 @@ export async function generateTechPackPDF(pack) {
     sectionHeading('Seam & Stitch Specification', ty); ty += 6;
     const rows = nums.map((n, i) => {
       const s = (d.seams || [])[rowStart + i] || {};
-      return [String(n), s.operation, s.seamType, s.stitchType, s.machine, s.spiSpcm, s.threadColor, s.notes];
+      return [String(n), blockFor(n).label || '', s.seamType, s.stitchType, s.machine, s.spiSpcm, s.threadColor, s.notes];
     });
-    table(['#', 'Operation', 'Seam Type', 'Stitch', 'Machine', 'SPI', 'Thread', 'Notes'],
+    table(['#', 'Seam', 'Seam Type', 'Stitch', 'Machine', 'SPI', 'Thread', 'Notes'],
       rows, 10, ty, [10, 38, 33, 22, 46, 16, 30, 82], { badgeFirstCol: true });
   }
 

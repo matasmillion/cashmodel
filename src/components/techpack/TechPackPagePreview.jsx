@@ -885,9 +885,9 @@ function PageConstruction({ d, images, pageKey = 'page1' }) {
 
   // Spec table below, one fixed row per stitch on this page (# = stitch number).
   const tableY   = refY + refH + refLabel + 40;
-  const seamCols = [
+  const seamColsRaw = [
     { key: 'num',        label: '#',           w: 28  },
-    { key: 'operation',  label: 'Operation',   w: 150 },
+    { key: 'seam',       label: 'Seam',        w: 150 },
     { key: 'seamType',   label: 'Seam Type',   w: 120 },
     { key: 'stitchType', label: 'Stitch Type', w: 90  },
     { key: 'machine',    label: 'Machine',     w: 158 },
@@ -896,7 +896,13 @@ function PageConstruction({ d, images, pageKey = 'page1' }) {
     { key: 'threadType', label: 'Thread Type', w: 120 },
     { key: 'notes',      label: 'Notes',       w: 153 },
   ];
-  const pageRows = nums.map((n, i) => ({ num: n, ...(seams[rowStart + i] || {}) }));
+  // Stretch the table so its right edge lines up with the cards and the header
+  // strip — left at padX, right at PAGE_W - padX, everything even.
+  const seamTableW = PAGE_W - padX * 2;
+  const seamRawSum = seamColsRaw.reduce((a, c) => a + c.w, 0);
+  const seamCols   = seamColsRaw.map(c => ({ ...c, w: c.w * seamTableW / seamRawSum }));
+  // The "Seam" column is the stitch's name — kept in sync with the card title.
+  const pageRows = nums.map((n, i) => ({ num: n, ...(seams[rowStart + i] || {}), seam: blockFor(n).label || '' }));
 
   return (
     <g>
