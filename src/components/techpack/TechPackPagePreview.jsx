@@ -1379,6 +1379,26 @@ function PagePom({ d, images }) {
       <SectionHeading x={tableX} y={158}>Graded Spec Table (cm)</SectionHeading>
       <GridTable x={tableX} y={170} cols={scaledCols} rows={poms} bodyRows={14} rowH={20} headerH={20} />
 
+      {/* Fit models (CLO3D) — customer-facing renders, one per size */}
+      <SectionHeading x={tableX} y={486}>Fit Models (CLO3D)</SectionHeading>
+      {(() => {
+        const rawFitSizes = Array.isArray(d.sizeRange) ? d.sizeRange : (d.sizeRange ? String(d.sizeRange).split(/[/,]+/).map(s => s.trim()).filter(Boolean) : []);
+        const fitSizes = rawFitSizes.length ? rawFitSizes : ['S', 'M', 'L', 'XL'];
+        const m = d.gradedSizeMatrix || {};
+        const fitBase = fitSizes.includes(m.baseSize) ? m.baseSize : fitSizes[0];
+        const fitGap = 12;
+        const fitW = (tableW - fitGap * (fitSizes.length - 1)) / fitSizes.length;
+        const fitH = 96;
+        const fitY = 498;
+        return fitSizes.map((s, i) => {
+          const fit = (images || []).find(img => img.slot === `fit-model-${String(s).toLowerCase()}`);
+          return (
+            <PhotoSlot key={s} x={tableX + i * (fitW + fitGap)} y={fitY} w={fitW} h={fitH}
+              label={`Size ${s}${s === fitBase ? ' · sample' : ''}`} image={fit} placeholder="CLO3D render" />
+          );
+        });
+      })()}
+
       <line x1={40} y1={640} x2={PAGE_W - 40} y2={640} stroke={FR.sand} />
       <text x={40} y={656} fontSize="10" fill={FR.stone} fontStyle="italic">
         All measurements in centimetres. Measure flat, relaxed. Tolerance ±1 cm unless otherwise specified.
@@ -1458,24 +1478,14 @@ function PageSizeMatrix({ d, images }) {
         ))}
       </g>
 
-      {/* Fit models (CLO3D) — one render per size, mirrors the editor card */}
-      <SectionHeading x={40} y={534}>Fit Models (CLO3D)</SectionHeading>
-      {(() => {
-        const fitGap = 14;
-        const fitW = (tableW - fitGap * (sizes.length - 1)) / sizes.length;
-        const fitH = 100;
-        const fitY = 546;
-        return sizes.map((s, i) => {
-          const fit = (images || []).find(img => img.slot === `fit-model-${String(s).toLowerCase()}`);
-          return (
-            <PhotoSlot key={s} x={40 + i * (fitW + fitGap)} y={fitY} w={fitW} h={fitH}
-              label={`Size ${s}${s === baseSize ? ' · sample' : ''}`} image={fit} placeholder="CLO3D render" />
-          );
-        });
-      })()}
+      {/* Graded pattern nest — internal cutting geometry, inherited from the pattern layout */}
+      <SectionHeading x={40} y={534}>Graded Pattern Nest</SectionHeading>
+      <PhotoSlot x={40} y={546} w={tableW} h={120}
+        label="Graded nest · inherited from Pattern Pieces Layout"
+        image={(images || []).find(img => img.slot === 'pattern-layout')} placeholder="Graded pattern nest" />
 
-      <text x={40} y={690} fontSize={10} fill={FR.stone} fontStyle="italic">
-        Per-size values derived as <tspan fontFamily="ui-monospace,Menlo,monospace">base + delta</tspan>. Base column comes from Points of Measure. Fit renders from CLO3D.
+      <text x={40} y={700} fontSize={10} fill={FR.stone} fontStyle="italic">
+        Per-size values derived as <tspan fontFamily="ui-monospace,Menlo,monospace">base + delta</tspan>. Base column comes from Points of Measure. Nest inherited from the Pattern Pieces Layout.
       </text>
     </g>
   );

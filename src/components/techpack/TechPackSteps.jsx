@@ -2995,6 +2995,20 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
     catch { /* clipboard blocked — no-op */ }
   };
 
+  // CLO3D fit-model renders, one slot per size, each downloadable for Shopify.
+  // These live on POM (the customer-facing page) — moved off Size Grading.
+  const fitSlot = (s) => `fit-model-${String(s).toLowerCase()}`;
+  const fitEntry = (s) => (images || []).find(img => img.slot === fitSlot(s));
+  const downloadFit = async (s) => {
+    const entry = fitEntry(s);
+    if (!entry) return;
+    const dataUrl = await entryToDataUrl(entry);
+    if (!dataUrl) return;
+    const blob = await (await fetch(dataUrl)).blob();
+    await downloadBlob(blob, `fit-model-${String(s).toLowerCase()}.png`);
+  };
+  const downloadAllFits = async (list) => { for (const s of (list || [])) { if (fitEntry(s)) await downloadFit(s); } };
+
   return (
     <div>
       <SectionTitle>Points of Measure (cm)</SectionTitle>
@@ -3068,6 +3082,35 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
         </div>
       )}
 
+      {data.sizeType !== 'one-size' && (
+        <div style={{ marginTop: 22, background: FR.white, border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 11, padding: '20px 22px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ fontFamily: "'Cormorant Garamond','Georgia',serif", fontSize: 18, color: FR.slate }}>Fit models — CLO3D, one per size</div>
+            <button type="button" onClick={() => downloadAllFits(gradeSizes)}
+              style={{ fontSize: 12.5, background: FR.white, border: '0.5px solid rgba(58,58,58,0.15)', padding: '8px 15px', borderRadius: 7, color: FR.slate, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              Download all (PNG)
+            </button>
+          </div>
+          <p style={{ fontSize: 11.5, color: FR.stone, marginTop: 6, lineHeight: 1.6 }}>
+            A render of the actual garment on a body at each size, so customers can see how it fits. Rendered from CLO3D after the sample is locked. Download each to upload to the Shopify product page.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${gradeSizes.length}, 1fr)`, gap: 14, marginTop: 16 }}>
+            {gradeSizes.map(s => {
+              const entry = fitEntry(s);
+              return (
+                <div key={s}>
+                  <PhotoUpload single label={`Size ${s}${s === sampleSize ? ' · sample' : ''}`} slotKey={fitSlot(s)} images={images} onUpload={onUpload} onRemove={onRemove} aspect="3 / 4" />
+                  <button type="button" onClick={() => downloadFit(s)} disabled={!entry}
+                    style={{ width: '100%', marginTop: -6, fontSize: 11.5, padding: '7px', borderRadius: 6, border: 'none', cursor: entry ? 'pointer' : 'default', background: entry ? FR.slate : FR.sand, color: entry ? FR.salt : FR.stone }}>
+                    Download
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <p style={{ fontSize: 10, color: FR.stone, marginTop: 14, fontStyle: 'italic' }}>
         All measurements in centimetres. Measure flat, relaxed. Tolerance ±1 cm unless otherwise specified.
       </p>
@@ -3077,23 +3120,11 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
 // StepSizeMatrix — graded size table. Sizes are derived from the Style Overview
 // sizeRange field; the user picks the sample size (whose values come straight
 // from the POM page) and enters per-size deltas. Final values: sample + delta.
-export function StepSizeMatrix({ data, set, images, onUpload, onRemove, stepLocked, stepOverridden, toggleLockOverride }) {
+export function StepSizeMatrix({ data, set, images, stepLocked, stepOverridden, toggleLockOverride }) {
   const matrix = data.gradedSizeMatrix || { baseSize: 'M', sizes: [], grading: [] };
   // Graded pattern nest — inherited read-only from the Pattern Pieces Layout
   // image (the canonical pattern geometry, carried on the linked Cut & Sew block).
   const nestImage = (images || []).find(img => img.slot === 'pattern-layout');
-  // CLO3D fit-model renders, one slot per size, each downloadable for Shopify.
-  const fitSlot = (s) => `fit-model-${String(s).toLowerCase()}`;
-  const fitEntry = (s) => (images || []).find(img => img.slot === fitSlot(s));
-  const downloadFit = async (s) => {
-    const entry = fitEntry(s);
-    if (!entry) return;
-    const dataUrl = await entryToDataUrl(entry);
-    if (!dataUrl) return;
-    const blob = await (await fetch(dataUrl)).blob();
-    await downloadBlob(blob, `fit-model-${String(s).toLowerCase()}.png`);
-  };
-  const downloadAllFits = async (list) => { for (const s of (list || [])) { if (fitEntry(s)) await downloadFit(s); } };
 
   // Sizes always come from Style Overview → sizeRange
   const rawSizes = Array.isArray(data.sizeRange)
@@ -3245,33 +3276,6 @@ export function StepSizeMatrix({ data, set, images, onUpload, onRemove, stepLock
         )}
       </div>
 
-      {/* Fit models — one CLO3D render per size, each downloadable for Shopify */}
-      <div style={{ marginTop: 26, background: FR.white, border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 11, padding: '20px 22px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ fontFamily: "'Cormorant Garamond','Georgia',serif", fontSize: 18, color: FR.slate }}>Fit models — CLO3D, one per size</div>
-          <button type="button" onClick={() => downloadAllFits(sizes)}
-            style={{ fontSize: 12.5, background: FR.white, border: '0.5px solid rgba(58,58,58,0.15)', padding: '8px 15px', borderRadius: 7, color: FR.slate, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            Download all (PNG)
-          </button>
-        </div>
-        <p style={{ fontSize: 11.5, color: FR.stone, marginTop: 6, lineHeight: 1.6 }}>
-          A render of the actual garment on a body at each size, so customers can see how it fits. Rendered from CLO3D after the sample is locked. Download each to upload to the Shopify product page.
-        </p>
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${sizes.length}, 1fr)`, gap: 14, marginTop: 16 }}>
-          {sizes.map(s => {
-            const entry = fitEntry(s);
-            return (
-              <div key={s}>
-                <PhotoUpload single label={`Size ${s}${s === baseSize ? ' · sample' : ''}`} slotKey={fitSlot(s)} images={images} onUpload={onUpload} onRemove={onRemove} aspect="3 / 4" />
-                <button type="button" onClick={() => downloadFit(s)} disabled={!entry}
-                  style={{ width: '100%', marginTop: -6, fontSize: 11.5, padding: '7px', borderRadius: 6, border: 'none', cursor: entry ? 'pointer' : 'default', background: entry ? FR.slate : FR.sand, color: entry ? FR.salt : FR.stone }}>
-                  Download
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </div>
       </fieldset>
     </div>
   );
