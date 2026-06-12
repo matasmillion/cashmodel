@@ -28,12 +28,20 @@ export const STATUSES = ['Merchandising', 'Design', 'Sampling', 'Testing', 'Pre-
 // After inserting 3 embellishments pages + 1 treatments call-outs page these
 // shifted {17,18,19,20} → {21,22,23,24}; adding the second Stitching page
 // (construction-2) shifts them once more → {22,23,24,25}.
-export const LOCKED_STEPS = new Set([22, 23, 24, 25]);
-export function isStepLocked(stepIndex, status) {
+export const LOCKED_STEPS = new Set([15, 22, 23, 24, 25]);
+export function isStepLocked(stepIndex, status, overrides) {
   if (!LOCKED_STEPS.has(stepIndex)) return false;
+  if (overrides && overrides[stepIndex]) return false; // operator chose "edit anyway"
   const unlockAt = STATUSES.indexOf('Pre-Production');
   const current = STATUSES.indexOf(status);
   return current < unlockAt || current === -1;
+}
+
+// True once the pack has reached Pre-Production (or later). Gates the
+// non-sample POM size columns and the Size Grading editor: those only open
+// once the sample size is signed off and the style moves into pre-production.
+export function isPreProduction(status) {
+  return STATUSES.indexOf(status) >= STATUSES.indexOf('Pre-Production');
 }
 
 // Merchandising steps lock the moment the pack moves past the
@@ -264,6 +272,7 @@ export const DEFAULT_DATA = {
   parentStyleId: null,
   parentStyleName: '',
   skippedSteps: [],
+  lockOverrides: {},
   revisions: [],
   samples: [],
   finalApproval: {

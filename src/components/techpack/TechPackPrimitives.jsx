@@ -191,7 +191,7 @@ export function ArrayTable({ headers, rows, onUpdate, onAdd, onRemove }) {
         <thead>
           <tr>
             {headers.map(h => (
-              <th key={h.key} style={{ textAlign: 'left', padding: '5px 6px', background: FR.slate, color: FR.salt, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+              <th key={h.key} style={{ textAlign: 'left', padding: '5px 6px', background: FR.slate, color: FR.salt, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', whiteSpace: 'nowrap', ...h.headerStyle }}>
                 {h.label}
               </th>
             ))}
@@ -202,7 +202,7 @@ export function ArrayTable({ headers, rows, onUpdate, onAdd, onRemove }) {
           {rows.map((row, ri) => (
             <tr key={ri} style={{ background: ri % 2 === 0 ? FR.salt : FR.white }}>
               {headers.map(h => (
-                <td key={h.key} style={{ padding: '3px 4px', borderBottom: `1px solid ${FR.sand}` }}>
+                <td key={h.key} style={{ padding: '3px 4px', borderBottom: `1px solid ${FR.sand}`, ...h.cellStyle }}>
                   {h.render
                     ? h.render(row[h.key], v => onUpdate(ri, h.key, v), row, ri)
                     : <input value={row[h.key] || ''} onChange={e => onUpdate(ri, h.key, e.target.value)} placeholder={h.placeholder || ''}

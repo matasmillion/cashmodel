@@ -1,6 +1,6 @@
 // Main Tech Pack builder — 14-step wizard + PLM features (revisions, cost, samples, variants)
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowLeft, History, Plus, CheckCircle, XCircle, Clock, Camera, Save } from 'lucide-react';
+import { ArrowLeft, History, Plus, CheckCircle, XCircle, Clock, Camera, Save, Undo2, Redo2 } from 'lucide-react';
 import VersionHistoryPanel from './VersionHistoryPanel';
 import { FR, DEFAULT_DATA, DEFAULT_LIBRARY, STEPS, IMG_STEPS, computeCompletion, isStepLocked, computeBOMCost, computeColorwayCost, SAMPLE_TYPES, SAMPLE_VERDICTS } from './techPackConstants';
 import SendToVendorButton from './SendToVendorButton';
@@ -829,7 +829,56 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     onBack();
   }, [saveNow, saving, onBack]);
 
-  const set = useCallback((k, v) => setData(p => ({ ...p, [k]: v })), []);
+  // ── Undo / redo ────────────────────────────────────────────────────────────
+  // Every user edit on the pages flows through set() below, so we snapshot the
+  // prior `data` there. Cmd/Ctrl+Z steps back; Cmd/Ctrl+Shift+Z (or Ctrl+Y)
+  // steps forward. Purely additive — saving and all other state are unchanged.
+  const dataRef = useRef(data);
+  useEffect(() => { dataRef.current = data; }, [data]);
+  const historyRef = useRef({ past: [], future: [] });
+  const [hist, setHist] = useState({ canUndo: false, canRedo: false });
+  const syncHist = useCallback(() => {
+    const h = historyRef.current;
+    setHist({ canUndo: h.past.length > 0, canRedo: h.future.length > 0 });
+  }, []);
+  const recordHistory = useCallback(() => {
+    const h = historyRef.current;
+    h.past.push(dataRef.current);
+    if (h.past.length > 100) h.past.shift();
+    h.future = [];
+    syncHist();
+  }, [syncHist]);
+  const undo = useCallback(() => {
+    const h = historyRef.current;
+    if (!h.past.length) return;
+    h.future.push(dataRef.current);
+    setData(h.past.pop());
+    syncHist();
+  }, [syncHist]);
+  const redo = useCallback(() => {
+    const h = historyRef.current;
+    if (!h.future.length) return;
+    h.past.push(dataRef.current);
+    setData(h.future.pop());
+    syncHist();
+  }, [syncHist]);
+
+  const set = useCallback((k, v) => { recordHistory(); setData(p => ({ ...p, [k]: v })); }, [recordHistory]);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const t = e.target;
+      const tag = (t?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || t?.isContentEditable) return; // leave native text undo alone
+      if (annoTarget) return; // the photo annotator owns the key while it's open
+      const k = e.key.toLowerCase();
+      if (k === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
+      else if (k === 'y') { e.preventDefault(); redo(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo, annoTarget]);
 
   // Async upload: insert a transient blob: placeholder so the slot renders
   // immediately, upload to Storage in the background, then atomically
@@ -1083,6 +1132,13 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     if (pickedBlockId) saveBlockSlotAnnotations(pickedBlockId, slot, next).then(map => setBlockAnnotations(map)).catch(() => {});
     else set('calloutAnnotations', withSlotAnnotations(data.calloutAnnotations, slot, next));
   };
+  // Lock state for the CURRENT step, computed off the real STEPS index so the
+  // editor lock always agrees with the sidebar padlock. `stepOverridden` = the
+  // step would be locked by status but the operator chose "edit anyway".
+  const naturalLocked = isStepLocked(step, data.status);
+  const stepOverridden = naturalLocked && !!(data.lockOverrides && data.lockOverrides[step]);
+  const stepLocked = naturalLocked && !stepOverridden;
+  const toggleLockOverride = () => set('lockOverrides', { ...(data.lockOverrides || {}), [step]: !(data.lockOverrides && data.lockOverrides[step]) });
   const stepProps = {
     data, set, images, onUpload: handleImgUpload, onRemove: handleImgRemove,
     onSeedImages: handleSeedImages,
@@ -1093,6 +1149,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
     existingSuppliers,
     onCreateRevision: createRevision,
     packId: pack.id,
+    stepLocked, stepOverridden, toggleLockOverride,
   };
 
   return (
@@ -1114,6 +1171,15 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
           <button onClick={() => setShowVersions(true)} title="Browse and restore past saved versions of this style"
             style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: FR.salt, padding: '5px 10px', borderRadius: 3, fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
             <History size={12} /> Restore points
+          </button>
+          <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.18)' }} />
+          <button onClick={undo} disabled={!hist.canUndo} title="Undo (⌘Z / Ctrl+Z)"
+            style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: FR.salt, padding: '5px 10px', borderRadius: 3, fontSize: 10, cursor: hist.canUndo ? 'pointer' : 'default', opacity: hist.canUndo ? 1 : 0.4, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Undo2 size={12} /> Undo
+          </button>
+          <button onClick={redo} disabled={!hist.canRedo} title="Redo (⌘⇧Z / Ctrl+Y)"
+            style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: FR.salt, padding: '5px 10px', borderRadius: 3, fontSize: 10, cursor: hist.canRedo ? 'pointer' : 'default', opacity: hist.canRedo ? 1 : 0.4, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Redo2 size={12} /> Redo
           </button>
           <div>
             <div style={{
@@ -1207,7 +1273,7 @@ export default function TechPackBuilder({ pack, onBack, existingSuppliers = [] }
         <div style={{ width: 220, minWidth: 220, borderRight: `1px solid ${FR.sand}`, background: FR.salt, display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '8px 0', flex: 1, overflowY: 'auto' }}>
             {STEPS.map((s, i) => {
-              const stepLocked = isStepLocked(i, data.status);
+              const stepLocked = isStepLocked(i, data.status, data.lockOverrides);
               const stepSkipped = skippedSteps.includes(i);
               const phaseChanged = i === 0 || STEPS[i - 1].phase !== s.phase;
               return (

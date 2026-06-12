@@ -821,7 +821,23 @@ export async function generateTechPackPDF(pack) {
   const sz = d.sizeType === 'waist' ? ['W30', 'W32', 'W34', 'W36'] : ['S', 'M', 'L', 'XL'];
   const pomRows = (d.poms || []).filter(p => p.name).map(p =>
     [p.name, p.tol, p.s, p.m, p.l, p.xl]);
-  table(['Measurement', 'Tol ±', ...sz], pomRows, 10, y, [70, 25, 30, 30, 30, 30]);
+  y = table(['Measurement', 'Tol ±', ...sz], pomRows, 10, y, [70, 25, 30, 30, 30, 30]);
+
+  // Fit models — customer-facing CLO3D renders, one per size.
+  const rawPomFitSizes = Array.isArray(d.sizeRange)
+    ? d.sizeRange
+    : (d.sizeRange ? String(d.sizeRange).split(/[/,]+/).map(s => s.trim()).filter(Boolean) : []);
+  const pomFitSizes = rawPomFitSizes.length ? rawPomFitSizes : ['S', 'M', 'L', 'XL'];
+  if (H - y > 30) {
+    y += 6;
+    sectionHeading('Fit Models (CLO3D)', y); y += 6;
+    const fitGap = 5;
+    const fitW = (W - 20 - fitGap * (pomFitSizes.length - 1)) / pomFitSizes.length;
+    const fitH = Math.min(60, H - y - 8);
+    pomFitSizes.forEach((s, i) => {
+      addImage(`fit-model-${String(s).toLowerCase()}`, 10 + i * (fitW + fitGap), y, fitW, fitH);
+    });
+  }
 
   // ─── Cut & Sew → Graded Size Matrix ───
   newPage('Graded Size Matrix (cm)', null, 15);
@@ -843,7 +859,15 @@ export async function generateTechPackPDF(pack) {
   };
   const matrixRows = (d.poms || []).filter(p => p.name).map(p => [p.name, ...matrixSizes.map(s => computeCell(p, s))]);
   const sizeColW = Math.floor((W - 20 - 70) / matrixSizes.length);
-  table(['Measurement', ...matrixSizes], matrixRows, 10, y, [70, ...matrixSizes.map(() => sizeColW)]);
+  y = table(['Measurement', ...matrixSizes], matrixRows, 10, y, [70, ...matrixSizes.map(() => sizeColW)]);
+
+  // Graded pattern nest — internal cutting geometry, inherited from the pattern layout.
+  if (H - y > 30) {
+    y += 6;
+    sectionHeading('Graded Pattern Nest', y); y += 6;
+    const nestH = Math.min(70, H - y - 8);
+    addImage('pattern-layout', 10, y, W - 20, nestH);
+  }
 
   // ─── Embellishments → Colorways ───
   newPage('Colorways', null, 16);

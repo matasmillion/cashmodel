@@ -3,7 +3,7 @@
 // numbered tech pack pages. The denominator stays 19 — merchandising pages
 // are pre-pack strategy and aren't counted toward the numbered total.
 
-import { FR, STEPS, CALLOUT_REF_RATIO, CALLOUT_MAIN_RATIO, CALLOUT_SUPPORT_RATIO } from './techPackConstants';
+import { FR, STEPS, CALLOUT_REF_RATIO, CALLOUT_MAIN_RATIO, CALLOUT_SUPPORT_RATIO, isPreProduction } from './techPackConstants';
 import { FabricBOMPreviewBody } from './FabricBOMPreview';
 import { AnnotationSvg } from './ImageAnnotator';
 
@@ -497,9 +497,12 @@ function GridTable({ x, y, cols, rows, bodyRows = 4, rowH = 22, headerH = 22, re
     <g>
       <rect x={x} y={y} width={tableW} height={headerH} fill={FR.slate} />
       {cols.map((c, i) => (
-        <text key={c.key} x={colX[i] + 6} y={y + 15} fontSize="8.5" fontWeight="bold" fill={FR.salt} letterSpacing="0.5">
-          {esc((c.label || c.key).toUpperCase())}
-        </text>
+        <g key={c.key}>
+          {c.headerFill && <rect x={colX[i]} y={y} width={c.w} height={headerH} fill={c.headerFill} />}
+          <text x={colX[i] + 6} y={y + 15} fontSize="8.5" fontWeight="bold" fill={FR.salt} letterSpacing="0.5">
+            {esc((c.label || c.key).toUpperCase())}
+          </text>
+        </g>
       ))}
       {Array.from({ length: bodyRows }).map((_, ri) => {
         const ry = y + headerH + ri * rowH;
@@ -513,9 +516,12 @@ function GridTable({ x, y, cols, rows, bodyRows = 4, rowH = 22, headerH = 22, re
               if (custom) return <g key={c.key}>{custom}</g>;
               const val = c.key === '#' ? String(ri + 1) : (row[c.key] ?? '');
               return (
-                <text key={c.key} x={colX[ci] + 6} y={ry + 15} fontSize="9.5" fill={c.key === '#' ? FR.stone : FR.slate}>
-                  {clampLine(esc(val), c.w - 12, 5.6)}
-                </text>
+                <g key={c.key}>
+                  {c.fill && <rect x={colX[ci]} y={ry} width={c.w} height={rowH} fill={c.fill} />}
+                  <text x={colX[ci] + 6} y={ry + 15} fontSize="9.5" fill={c.key === '#' ? FR.stone : FR.slate}>
+                    {clampLine(esc(val), c.w - 12, 5.6)}
+                  </text>
+                </g>
               );
             })}
             {!row && <text x={colX[0] + 6} y={ry + 15} fontSize="9.5" fill={FR.sand}>{ri + 1}</text>}
@@ -1349,11 +1355,28 @@ function PagePom({ d, images }) {
     ? [{ k: 's', l: 'W30' }, { k: 'm', l: 'W32' }, { k: 'l', l: 'W34' }, { k: 'xl', l: 'W36' }]
     : [{ k: 's', l: 'S' }, { k: 'm', l: 'M' }, { k: 'l', l: 'L' }, { k: 'xl', l: 'XL' }];
 
+  // Highlight the sample-size column; gray the non-sample columns while they
+  // are still locked (design phase), matching the editor.
+  const matrix = d.gradedSizeMatrix || {};
+  const rawSizes = Array.isArray(d.sizeRange) ? d.sizeRange : (d.sizeRange ? String(d.sizeRange).split(/[/,]+/).map(s => s.trim()).filter(Boolean) : []);
+  const gradeSizes = rawSizes.length ? rawSizes : ['S', 'M', 'L', 'XL'];
+  const sampleSize = gradeSizes.includes(matrix.baseSize) ? matrix.baseSize : gradeSizes[0];
+  const sizesUnlocked = isPreProduction(d.status);
+  const sampleK = (szH.find(s => s.l === sampleSize) || {}).k;
+
   const cols = [
     { key: '#',    label: '#',            w: 36  },
     { key: 'name', label: 'Measurement',  w: 234 },
     { key: 'tol',  label: 'Tol ±',        w: 60  },
-    ...szH.map(s => ({ key: s.k, label: s.l, w: 65 })),
+    ...szH.map(s => {
+      const isSample = s.k === sampleK;
+      const grayed = !isSample && sampleK && !sizesUnlocked;
+      return {
+        key: s.k, label: s.l, w: 65,
+        headerFill: isSample ? FR.soil : (grayed ? '#7C766B' : undefined),
+        fill: isSample ? '#F3ECDB' : (grayed ? '#EFEDE8' : undefined),
+      };
+    }),
   ];
 
   // Two-column layout
@@ -1377,6 +1400,26 @@ function PagePom({ d, images }) {
       <SectionHeading x={tableX} y={158}>Graded Spec Table (cm)</SectionHeading>
       <GridTable x={tableX} y={170} cols={scaledCols} rows={poms} bodyRows={14} rowH={20} headerH={20} />
 
+      {/* Fit models (CLO3D) — customer-facing renders, one per size */}
+      <SectionHeading x={tableX} y={486}>Fit Models (CLO3D)</SectionHeading>
+      {(() => {
+        const rawFitSizes = Array.isArray(d.sizeRange) ? d.sizeRange : (d.sizeRange ? String(d.sizeRange).split(/[/,]+/).map(s => s.trim()).filter(Boolean) : []);
+        const fitSizes = rawFitSizes.length ? rawFitSizes : ['S', 'M', 'L', 'XL'];
+        const m = d.gradedSizeMatrix || {};
+        const fitBase = fitSizes.includes(m.baseSize) ? m.baseSize : fitSizes[0];
+        const fitGap = 12;
+        const fitW = (tableW - fitGap * (fitSizes.length - 1)) / fitSizes.length;
+        const fitH = 96;
+        const fitY = 498;
+        return fitSizes.map((s, i) => {
+          const fit = (images || []).find(img => img.slot === `fit-model-${String(s).toLowerCase()}`);
+          return (
+            <PhotoSlot key={s} x={tableX + i * (fitW + fitGap)} y={fitY} w={fitW} h={fitH}
+              label={`Size ${s}${s === fitBase ? ' · sample' : ''}`} image={fit} placeholder="CLO3D render" />
+          );
+        });
+      })()}
+
       <line x1={40} y1={640} x2={PAGE_W - 40} y2={640} stroke={FR.sand} />
       <text x={40} y={656} fontSize="10" fill={FR.stone} fontStyle="italic">
         All measurements in centimetres. Measure flat, relaxed. Tolerance ±1 cm unless otherwise specified.
@@ -1392,7 +1435,7 @@ function PagePom({ d, images }) {
 }
 
 // ─── Page 11 — Graded Size Matrix ───────────────────────────────────────────
-function PageSizeMatrix({ d }) {
+function PageSizeMatrix({ d, images }) {
   const matrix = d.gradedSizeMatrix || { baseSize: 'M', grading: [] };
   const rawSizes = Array.isArray(d.sizeRange)
     ? d.sizeRange
@@ -1456,8 +1499,14 @@ function PageSizeMatrix({ d }) {
         ))}
       </g>
 
-      <text x={40} y={680} fontSize={10} fill={FR.stone} fontStyle="italic">
-        Per-size values derived as <tspan fontFamily="ui-monospace,Menlo,monospace">base + delta</tspan>. Base column comes from Points of Measure.
+      {/* Graded pattern nest — internal cutting geometry, inherited from the pattern layout */}
+      <SectionHeading x={40} y={534}>Graded Pattern Nest</SectionHeading>
+      <PhotoSlot x={40} y={546} w={tableW} h={120}
+        label="Graded nest · inherited from Pattern Pieces Layout"
+        image={(images || []).find(img => img.slot === 'pattern-layout')} placeholder="Graded pattern nest" />
+
+      <text x={40} y={700} fontSize={10} fill={FR.stone} fontStyle="italic">
+        Per-size values derived as <tspan fontFamily="ui-monospace,Menlo,monospace">base + delta</tspan>. Base column comes from Points of Measure. Nest inherited from the Pattern Pieces Layout.
       </text>
     </g>
   );
@@ -2026,7 +2075,7 @@ const PAGE_FNS = [
   { title: 'Cut & Sew Cost',                    phase: 'Cut & Sew',         body: ({ d }) => <PageCutSewCost d={d} /> },
   { title: 'Cutting',                           phase: 'Cut & Sew',         body: ({ d, images }) => <PagePattern d={d} images={images} /> },
   { title: 'Points of Measure',                 phase: 'Cut & Sew',         body: ({ d, images }) => <PagePom d={d} images={images} /> },
-  { title: 'Size Grading',                      phase: 'Cut & Sew',         body: ({ d }) => <PageSizeMatrix d={d} /> },
+  { title: 'Size Grading',                      phase: 'Cut & Sew',         body: ({ d, images }) => <PageSizeMatrix d={d} images={images} /> },
   // 14–18 — Embellishments
   { title: 'Colorways',                         phase: 'Embellishments',    body: ({ d }) => <PageColorways d={d} /> },
   { title: 'Artwork & Placement',               phase: 'Embellishments',    body: ({ d, images }) => <PageArtwork d={d} images={images} /> },

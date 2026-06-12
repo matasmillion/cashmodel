@@ -5,7 +5,7 @@
 // that will be replaced in subsequent prompts.
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, CALLOUT_REF_RATIO, CALLOUT_MAIN_RATIO, CALLOUT_SUPPORT_RATIO, isStepLocked, isMerchLocked, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
+import { FR, FR_COLOR_OPTIONS, BOM_COMPONENT_OPTIONS, STATUSES, APPROVAL_STATUSES, PASS_FAIL, DEFAULT_DATA, CALLOUT_REF_RATIO, CALLOUT_MAIN_RATIO, CALLOUT_SUPPORT_RATIO, isMerchLocked, isPreProduction, COLLECTIONS, PRODUCT_TYPES, deriveStyleNumber } from './techPackConstants';
 
 // Aspect used by the Cut & Sew call-out garment reference upload/crop, matching
 // the live preview + PDF reference box so placed dots line up everywhere.
@@ -19,6 +19,7 @@ export const CALLOUT_SUPPORT_ASPECT = { ratio: CALLOUT_SUPPORT_RATIO, label: 'Su
 import { listFRColors } from '../../utils/colorLibrary';
 import { Input, Select, Row, SectionTitle, CoverPhoto, PhotoUpload, AspectPhoto, ASPECTS, AssetImage, entryToDataUrl, ArrayTable, EditableSelect, FRColorCell, FilesPanel } from './TechPackPrimitives';
 import { AnnotationOverlay } from './ImageAnnotator';
+import { downloadBlob } from '../../utils/downloadBlob';
 
 // Small "Annotate (N)" pill shown under any call-out photo that has an image, so
 // the operator can open the red box / red text editor for that exact photo.
@@ -104,13 +105,31 @@ function computeFulfillmentCost(weightKg, rateCard) {
   return (rateCard.pickPack || 0) + (tier.rate || 0) + (rateCard.packagingMaterials || 0);
 }
 
-function LockedBanner({ status }) {
-  return (
-    <div style={{ padding: 14, background: FR.salt, border: `1px dashed ${FR.soil}`, borderRadius: 6, marginBottom: 16 }}>
-      <div style={{ fontSize: 12, color: FR.slate, fontWeight: 600, marginBottom: 4 }}>🔒 Locked until Pre-Production</div>
-      <div style={{ fontSize: 11, color: FR.stone, lineHeight: 1.5 }}>
-        Current status: <strong>{status || 'Design'}</strong>. This step unlocks when you set the status to <strong>Pre-Production</strong> (or later) on Page 1.
+const LOCK_OVERRIDE_BTN = { flexShrink: 0, fontSize: 11, background: FR.white, border: '0.5px solid rgba(58,58,58,0.15)', padding: '6px 12px', borderRadius: 6, color: FR.slate, cursor: 'pointer', whiteSpace: 'nowrap' };
+
+// Shown on any status-locked step. When `overridden`, the operator has chosen
+// "edit anyway" — the page is editable and this becomes a slim re-lock notice.
+// `onToggle` flips the override for this step (wired from the builder).
+function LockedBanner({ status, overridden, onToggle }) {
+  if (overridden) {
+    return (
+      <div style={{ padding: '10px 14px', background: FR.salt, border: `1px dashed ${FR.sand}`, borderRadius: 6, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ fontSize: 11, color: FR.stone, lineHeight: 1.5 }}>
+          <strong style={{ color: FR.slate }}>Lock overridden</strong> — editing enabled even though status is <strong>{status || 'Design'}</strong>.
+        </div>
+        {onToggle && <button type="button" onClick={onToggle} style={LOCK_OVERRIDE_BTN}>Re-lock</button>}
       </div>
+    );
+  }
+  return (
+    <div style={{ padding: 14, background: FR.salt, border: `1px dashed ${FR.soil}`, borderRadius: 6, marginBottom: 16, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+      <div>
+        <div style={{ fontSize: 12, color: FR.slate, fontWeight: 600, marginBottom: 4 }}>🔒 Locked until Pre-Production</div>
+        <div style={{ fontSize: 11, color: FR.stone, lineHeight: 1.5 }}>
+          Current status: <strong>{status || 'Design'}</strong>. This step unlocks when you set the status to <strong>Pre-Production</strong> (or later) on Page 1.
+        </div>
+      </div>
+      {onToggle && <button type="button" onClick={onToggle} style={LOCK_OVERRIDE_BTN}>Edit anyway</button>}
     </div>
   );
 }
@@ -2209,6 +2228,23 @@ export function CalloutGarmentRef({ label, slotKey, images, onUpload, onRemove, 
   // 2:3 portrait used by the two stacked references (strict 2:3 per operator).
   const REF_2x3 = { ratio: 2 / 3, label: 'Reference (2 : 3)', shortLabel: '2:3 reference' };
 
+  // Delete / Backspace clears the currently-armed (selected) dot — same as the
+  // chip's × button. Ignored while typing in a field or while the photo
+  // annotator modal is open (that owns the key for its own marks).
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      if (armed == null) return;
+      const tag = (e.target?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || e.target?.isContentEditable) return;
+      if (document.querySelector('[data-annotator="open"]')) return;
+      const entry = (entries || []).find(en => en.num === armed);
+      if (entry && entry.dot) { e.preventDefault(); onSetDot(armed, null); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [armed, entries, onSetDot]);
+
   // Re-open the crop modal on the already-uploaded reference so the operator
   // can reposition / zoom / crop it to the reference shape. Dots live on the
   // call-out entries (not the image), so re-cropping keeps every placed dot.
@@ -3014,10 +3050,102 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
   const updPom = (i, k, v) => set('poms', poms.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
   const addPom = () => set('poms', [...poms, { name: '', tol: '1', s: '', m: '', l: '', xl: '', method: '' }]);
   const rmPom  = (i) => set('poms', poms.filter((_, idx) => idx !== i));
+  const [copied, setCopied] = useState(false);
 
-  const szH = data.sizeType === 'waist'
+  // Sample size lives here now (moved off the Size Grading page). It is the one
+  // size we sew + approve first; every other size is graded from it. Stored on
+  // the existing gradedSizeMatrix.baseSize so nothing downstream has to change.
+  const matrix = data.gradedSizeMatrix || { baseSize: 'M', sizes: [], grading: [] };
+  const rawSizes = Array.isArray(data.sizeRange)
+    ? data.sizeRange
+    : (data.sizeRange ? String(data.sizeRange).split(/[/,]+/).map(s => s.trim()).filter(Boolean) : []);
+  const gradeSizes = rawSizes.length ? rawSizes : ['S', 'M', 'L', 'XL'];
+  const sampleSize = gradeSizes.includes(matrix.baseSize) ? matrix.baseSize : gradeSizes[0];
+  const setSampleSize = (v) => set('gradedSizeMatrix', { ...matrix, baseSize: v });
+
+  // Until the style reaches Pre-Production, only the sample-size column is
+  // editable; the other sizes are filled by Size Grading and shown locked.
+  const sizesUnlocked = isPreProduction(data.status);
+  const baseSzH = data.sizeType === 'waist'
     ? [{ key: 's', label: 'W30' }, { key: 'm', label: 'W32' }, { key: 'l', label: 'W34' }, { key: 'xl', label: 'W36' }]
     : [{ key: 's', label: 'S' }, { key: 'm', label: 'M' }, { key: 'l', label: 'L' }, { key: 'xl', label: 'XL' }];
+  const sampleKey = (baseSzH.find(h => h.label === sampleSize) || {}).key;
+  const lockedCellStyle = { fontSize: 11, color: FR.stone, padding: '3px 2px', display: 'block', textAlign: 'center', fontFamily: 'ui-monospace,Menlo,monospace' };
+  const editCellStyle = { width: '100%', border: 'none', background: 'transparent', fontSize: 11, padding: '3px 2px', color: FR.slate, outline: 'none', fontFamily: "'Helvetica Neue',sans-serif", boxSizing: 'border-box' };
+  // Graded value for a non-sample size = sample value + the per-size delta
+  // entered on the Size Grading page (grading is keyed by the size label).
+  const gradedFor = (pom, sizeLabel) => {
+    const base = parseFloat(pom[sampleKey]);
+    if (!Number.isFinite(base)) return '';
+    const g = (matrix.grading || []).find(x => x.pomName === pom.name);
+    const dv = g?.perSizeDelta?.[sizeLabel];
+    if (dv === undefined || dv === null || Number.isNaN(Number(dv))) return '';
+    return (base + Number(dv)).toFixed(1);
+  };
+  // Column styling: the sample column is highlighted (always); the non-sample
+  // columns are grayed out while they're still locked (design phase) so it's
+  // clear only the sample size is in play until grading fills the rest.
+  const sampleHeaderStyle = { background: FR.soil };
+  const sampleColCellStyle = { background: '#F3ECDB' };
+  const grayHeaderStyle = { background: '#7C766B' };
+  const grayColCellStyle = { background: '#EFEDE8' };
+  const szH = baseSzH.map(h => {
+    const isSample = h.key === sampleKey;
+    const grayed = !isSample && sampleKey && !sizesUnlocked;
+    return {
+      key: h.key,
+      label: isSample ? `${h.label} · sample` : h.label,
+      headerStyle: isSample ? sampleHeaderStyle : (grayed ? grayHeaderStyle : undefined),
+      cellStyle: isSample ? sampleColCellStyle : (grayed ? grayColCellStyle : undefined),
+      render: (val, onChange, row) => {
+        // Sample column: always editable, holds the typed QC value.
+        if (h.key === sampleKey || !sampleKey) {
+          return <input value={val || ''} onChange={e => onChange(e.target.value)} style={editCellStyle} />;
+        }
+        // Non-sample columns are filled by Size Grading. Blank + locked until the
+        // style reaches Pre-Production; then the graded value (sample + delta) is
+        // passed back here, editable, with any manual override taking priority.
+        if (!sizesUnlocked) return <span style={lockedCellStyle}>—</span>;
+        const display = (val !== undefined && val !== null && val !== '') ? val : gradedFor(row, h.label);
+        return <input value={display} onChange={e => onChange(e.target.value)} style={editCellStyle} />;
+      },
+    };
+  });
+
+  // Customer size chart export (Shopify): garment-flat cm per size, with the
+  // tolerance + method stripped. Value = manual override → graded (sample+delta).
+  const chartValue = (p, sizeLabel) => {
+    const key = (baseSzH.find(x => x.label === sizeLabel) || {}).key;
+    const override = key ? p[key] : '';
+    if (override !== undefined && override !== null && override !== '') return String(override);
+    return sizeLabel === sampleSize ? '' : gradedFor(p, sizeLabel);
+  };
+  const chartData = poms.filter(p => p.name).map(p => ({ name: p.name, values: gradeSizes.map(s => chartValue(p, s)) }));
+  const chartMatrix = [['Measurement (garment-flat, cm)', ...gradeSizes], ...chartData.map(r => [r.name, ...r.values])];
+  const csvCell = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+  const downloadChart = () => {
+    const csv = chartMatrix.map(r => r.map(csvCell).join(',')).join('\r\n');
+    downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'customer-size-chart.csv');
+  };
+  const copyChart = async () => {
+    const tsv = chartMatrix.map(r => r.join('\t')).join('\n');
+    try { await navigator.clipboard.writeText(tsv); setCopied(true); setTimeout(() => setCopied(false), 1800); }
+    catch { /* clipboard blocked — no-op */ }
+  };
+
+  // CLO3D fit-model renders, one slot per size, each downloadable for Shopify.
+  // These live on POM (the customer-facing page) — moved off Size Grading.
+  const fitSlot = (s) => `fit-model-${String(s).toLowerCase()}`;
+  const fitEntry = (s) => (images || []).find(img => img.slot === fitSlot(s));
+  const downloadFit = async (s) => {
+    const entry = fitEntry(s);
+    if (!entry) return;
+    const dataUrl = await entryToDataUrl(entry);
+    if (!dataUrl) return;
+    const blob = await (await fetch(dataUrl)).blob();
+    await downloadBlob(blob, `fit-model-${String(s).toLowerCase()}.png`);
+  };
+  const downloadAllFits = async (list) => { for (const s of (list || [])) { if (fitEntry(s)) await downloadFit(s); } };
 
   return (
     <div>
@@ -3025,7 +3153,13 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
 
       <PhotoUpload label="POM Diagram (numbered measurement points)" slotKey="pom-diagram" images={images} onUpload={onUpload} onRemove={onRemove} />
 
-      <Select label="Size Type" value={data.sizeType} onChange={v => set('sizeType', v)} options={['apparel', 'waist', 'one-size']} />
+      <Row>
+        <Select label="Size Type" value={data.sizeType} onChange={v => set('sizeType', v)} options={['apparel', 'waist', 'one-size']} />
+        <Select label="Sample Size" value={sampleSize} onChange={setSampleSize} options={gradeSizes} />
+      </Row>
+      <p style={{ fontSize: 11, color: FR.stone, marginTop: -2, marginBottom: 14, lineHeight: 1.5 }}>
+        The sample size is the one size you make and approve first. Only the sample column is editable now — the other sizes fill in from Size Grading and unlock once the style reaches <strong>Pre-Production</strong>.
+      </p>
 
       {data.sizeType !== 'one-size' && (
         <div style={{ marginBottom: 10 }}>
@@ -3037,6 +3171,7 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
               ) },
               { key: 'name',   label: 'Measurement',  placeholder: 'Chest Width' },
               ...szH,
+              { key: 'tol',    label: 'Tol ±',        placeholder: '1' },
               { key: 'method', label: 'Method',       placeholder: 'Lay flat / Tape' },
             ]}
             rows={poms} onUpdate={updPom} onAdd={addPom} onRemove={rmPom} />
@@ -3046,7 +3181,75 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
       <Input label="Measurement Method" value={data.measurementMethod} onChange={v => set('measurementMethod', v)} multiline
         placeholder="Lay garment flat on table. Smooth without stretching. Measure with flexible tape." />
 
-      <p style={{ fontSize: 10, color: FR.stone, marginTop: 8, fontStyle: 'italic' }}>
+      {data.sizeType !== 'one-size' && (
+        <div style={{ marginTop: 22, background: FR.white, border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 11, padding: '20px 22px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ fontFamily: "'Cormorant Garamond','Georgia',serif", fontSize: 18, color: FR.slate }}>Export customer size chart</div>
+            <span style={{ fontSize: 9.5, letterSpacing: 0.8, textTransform: 'uppercase', color: FR.stone, background: FR.salt, padding: '4px 10px', borderRadius: 20 }}>New · to Shopify</span>
+          </div>
+          <p style={{ fontSize: 11.5, color: FR.stone, marginTop: 8, lineHeight: 1.6, maxWidth: 560 }}>
+            Pulls the graded sizes from this spec, <strong>strips tolerance and method</strong> (those are factory-only), and labels every measurement garment-flat. Drops straight into your Shopify size-chart app — no retyping.
+          </p>
+          <div style={{ overflowX: 'auto', marginTop: 14 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, border: `0.5px solid ${FR.sand}` }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', padding: '8px 11px', background: FR.salt, color: FR.slate, fontSize: 10, fontWeight: 600, letterSpacing: 0.5 }}>Measurement (garment-flat, cm)</th>
+                  {gradeSizes.map(s => <th key={s} style={{ textAlign: 'center', padding: '8px 11px', background: FR.salt, color: FR.slate, fontSize: 10, fontWeight: 600 }}>{s}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {chartData.length === 0 ? (
+                  <tr><td colSpan={gradeSizes.length + 1} style={{ padding: 12, color: FR.stone, fontStyle: 'italic', fontSize: 11 }}>Add measurement rows above to build the chart.</td></tr>
+                ) : chartData.map((r, i) => (
+                  <tr key={i}>
+                    <td style={{ padding: '7px 11px', borderTop: `0.5px solid ${FR.sand}`, color: FR.slate }}>{r.name}</td>
+                    {r.values.map((v, j) => <td key={j} style={{ padding: '7px 11px', borderTop: `0.5px solid ${FR.sand}`, textAlign: 'center', fontFamily: 'ui-monospace,Menlo,monospace', color: v ? FR.slate : FR.stone }}>{v || '—'}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+            <button type="button" onClick={downloadChart} style={{ fontSize: 12.5, background: FR.slate, color: FR.salt, border: 'none', padding: '10px 18px', borderRadius: 7, cursor: 'pointer' }}>Download CSV</button>
+            <button type="button" onClick={copyChart} style={{ fontSize: 12.5, background: FR.white, color: FR.slate, border: '0.5px solid rgba(58,58,58,0.15)', padding: '10px 18px', borderRadius: 7, cursor: 'pointer' }}>{copied ? 'Copied' : 'Copy for Shopify'}</button>
+          </div>
+          <p style={{ fontSize: 11, color: FR.stone, marginTop: 10 }}>
+            Fills with all sizes once Size Grading is complete. Tolerance and measurement method never leave the tech pack.
+          </p>
+        </div>
+      )}
+
+      {data.sizeType !== 'one-size' && (
+        <div style={{ marginTop: 22, background: FR.white, border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 11, padding: '20px 22px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ fontFamily: "'Cormorant Garamond','Georgia',serif", fontSize: 18, color: FR.slate }}>Fit models — CLO3D, one per size</div>
+            <button type="button" onClick={() => downloadAllFits(gradeSizes)}
+              style={{ fontSize: 12.5, background: FR.white, border: '0.5px solid rgba(58,58,58,0.15)', padding: '8px 15px', borderRadius: 7, color: FR.slate, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              Download all (PNG)
+            </button>
+          </div>
+          <p style={{ fontSize: 11.5, color: FR.stone, marginTop: 6, lineHeight: 1.6 }}>
+            A render of the actual garment on a body at each size, so customers can see how it fits. Rendered from CLO3D after the sample is locked. Download each to upload to the Shopify product page.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${gradeSizes.length}, 1fr)`, gap: 14, marginTop: 16 }}>
+            {gradeSizes.map(s => {
+              const entry = fitEntry(s);
+              return (
+                <div key={s}>
+                  <PhotoUpload single label={`Size ${s}${s === sampleSize ? ' · sample' : ''}`} slotKey={fitSlot(s)} images={images} onUpload={onUpload} onRemove={onRemove} aspect="3 / 4" />
+                  <button type="button" onClick={() => downloadFit(s)} disabled={!entry}
+                    style={{ width: '100%', marginTop: -6, fontSize: 11.5, padding: '7px', borderRadius: 6, border: 'none', cursor: entry ? 'pointer' : 'default', background: entry ? FR.slate : FR.sand, color: entry ? FR.salt : FR.stone }}>
+                    Download
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <p style={{ fontSize: 10, color: FR.stone, marginTop: 14, fontStyle: 'italic' }}>
         All measurements in centimetres. Measure flat, relaxed. Tolerance ±1 cm unless otherwise specified.
       </p>
     </div>
@@ -3055,8 +3258,11 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
 // StepSizeMatrix — graded size table. Sizes are derived from the Style Overview
 // sizeRange field; the user picks the sample size (whose values come straight
 // from the POM page) and enters per-size deltas. Final values: sample + delta.
-export function StepSizeMatrix({ data, set }) {
+export function StepSizeMatrix({ data, set, images, stepLocked, stepOverridden, toggleLockOverride }) {
   const matrix = data.gradedSizeMatrix || { baseSize: 'M', sizes: [], grading: [] };
+  // Graded pattern nest — inherited read-only from the Pattern Pieces Layout
+  // image (the canonical pattern geometry, carried on the linked Cut & Sew block).
+  const nestImage = (images || []).find(img => img.slot === 'pattern-layout');
 
   // Sizes always come from Style Overview → sizeRange
   const rawSizes = Array.isArray(data.sizeRange)
@@ -3065,6 +3271,7 @@ export function StepSizeMatrix({ data, set }) {
   const sizes = rawSizes.length ? rawSizes : ['S', 'M', 'L', 'XL'];
   const baseSize = sizes.includes(matrix.baseSize) ? matrix.baseSize : sizes[0];
   const poms = (data.poms || []).filter(p => p.name);
+  const gradingLocked = stepLocked; // status lock routed via the builder's real step index (Size Grading = index 15)
 
   const update = (patch) => set('gradedSizeMatrix', { ...matrix, ...patch });
 
@@ -3106,8 +3313,10 @@ export function StepSizeMatrix({ data, set }) {
   return (
     <div>
       <SectionTitle>Size Grading</SectionTitle>
+      {(gradingLocked || stepOverridden) && <LockedBanner status={data.status} overridden={stepOverridden} onToggle={toggleLockOverride} />}
+      <fieldset disabled={gradingLocked} style={{ border: 'none', padding: 0, margin: 0, opacity: gradingLocked ? 0.45 : 1, pointerEvents: gradingLocked ? 'none' : 'auto' }}>
       <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, lineHeight: 1.5 }}>
-        Sizes are pulled from the Style Overview page. Select the sample size — its values come straight from the Points of Measure page. Enter per-size deltas for all other sizes; final values are computed as <code style={{ fontFamily: 'ui-monospace,Menlo,monospace', background: FR.salt, padding: '1px 5px', borderRadius: 3 }}>sample + delta</code>.
+        Grade rules turn the approved sample size into every other size. Enter per-size deltas; final values are computed as <code style={{ fontFamily: 'ui-monospace,Menlo,monospace', background: FR.salt, padding: '1px 5px', borderRadius: 3 }}>sample + delta</code> and write back into the Points of Measure size chart. The sample size is set and locked on the Points of Measure page.
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 18 }}>
@@ -3119,10 +3328,10 @@ export function StepSizeMatrix({ data, set }) {
         </div>
         <div>
           <label style={sectionLabel}>Sample Size</label>
-          <select value={baseSize} onChange={e => update({ baseSize: e.target.value })}
-            style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.white }}>
-            {sizes.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <div style={{ width: '100%', padding: '8px 10px', border: `1px solid ${FR.sand}`, borderRadius: 3, fontSize: 13, color: FR.slate, background: FR.salt, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontFamily: 'ui-monospace,Menlo,monospace' }}>{baseSize}</span>
+            <span style={{ fontSize: 10, color: FR.stone }}>set on Points of Measure</span>
+          </div>
         </div>
       </div>
 
@@ -3187,6 +3396,25 @@ export function StepSizeMatrix({ data, set }) {
           </table>
         </div>
       )}
+
+      {/* Pattern grade — graded nest, inherited read-only from the pattern layout */}
+      <div style={{ marginTop: 26, background: FR.white, border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 11, padding: '20px 22px' }}>
+        <div style={{ fontFamily: "'Cormorant Garamond','Georgia',serif", fontSize: 18, color: FR.slate }}>Pattern grade</div>
+        <p style={{ fontSize: 11.5, color: FR.stone, marginTop: 6, lineHeight: 1.6 }}>
+          The graded nest — every size stacked on one marker. Inherited from the Pattern Pieces Layout on the linked Cut &amp; Sew block; this is the geometry the factory cuts each size from.
+        </p>
+        {nestImage ? (
+          <div style={{ marginTop: 14, border: `1px solid ${FR.sand}`, borderRadius: 9, overflow: 'hidden', background: FR.salt }}>
+            <AssetImage image={nestImage} alt="Graded pattern nest" style={{ width: '100%', display: 'block', objectFit: 'contain', maxHeight: 320 }} />
+          </div>
+        ) : (
+          <div style={{ marginTop: 14, border: `1.5px dashed ${FR.sand}`, borderRadius: 9, background: FR.salt, padding: 36, textAlign: 'center', fontSize: 12, color: FR.stone }}>
+            No graded nest yet — add a Pattern Pieces Layout on the linked Cut &amp; Sew block.
+          </div>
+        )}
+      </div>
+
+      </fieldset>
     </div>
   );
 }
@@ -3604,8 +3832,8 @@ export function StepTreatments({ data, set, images, onUpload, onRemove }) {
     </div>
   );
 }
-export function StepLabels({ data, set, images, onUpload, onRemove }) {
-  const locked = isStepLocked(23, data.status);
+export function StepLabels({ data, set, images, onUpload, onRemove, stepLocked, stepOverridden, toggleLockOverride }) {
+  const locked = stepLocked;
 
   const packaging = data.packagingItems && data.packagingItems.length ? data.packagingItems : [{ component: '', material: '', color: '', size: '', artworkPrint: '', qtyPerOrder: '', notes: '' }];
   const updP = (i, k, v) => set('packagingItems', packaging.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
@@ -3618,7 +3846,7 @@ export function StepLabels({ data, set, images, onUpload, onRemove }) {
   return (
     <div>
       <SectionTitle>Labels &amp; Packaging</SectionTitle>
-      {locked && <LockedBanner status={data.status} />}
+      {(locked || stepOverridden) && <LockedBanner status={data.status} overridden={stepOverridden} onToggle={toggleLockOverride} />}
       <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
 
         <div style={{ marginBottom: 16 }}>
@@ -3662,8 +3890,8 @@ function computeQtyRow(row) {
   return { totalUnits, totalCost };
 }
 
-export function StepOrder({ data, set, library, saveToLibrary }) {
-  const locked = isStepLocked(24, data.status);
+export function StepOrder({ data, set, library, saveToLibrary, stepLocked, stepOverridden, toggleLockOverride }) {
+  const locked = stepLocked;
   const [unitWeightG, setUnitWeightG] = useState(data.unitWeightGrams || '500');
   const [aiKey, setAiKey] = useState(getStoredKey());
   const [aiNotes, setAiNotes] = useState('');
@@ -3728,7 +3956,7 @@ export function StepOrder({ data, set, library, saveToLibrary }) {
   return (
     <div>
       <SectionTitle>Order &amp; Delivery</SectionTitle>
-      {locked && <LockedBanner status={data.status} />}
+      {(locked || stepOverridden) && <LockedBanner status={data.status} overridden={stepOverridden} onToggle={toggleLockOverride} />}
       <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
 
         <div style={{ marginBottom: 18 }}>
@@ -3802,8 +4030,8 @@ export function StepOrder({ data, set, library, saveToLibrary }) {
     </div>
   );
 }
-export function StepCompliance({ data, set }) {
-  const locked = isStepLocked(21, data.status);
+export function StepCompliance({ data, set, stepLocked, stepOverridden, toggleLockOverride }) {
+  const locked = stepLocked;
 
   const shipping = data.shippingReqs && data.shippingReqs.length ? data.shippingReqs : [{ requirement: '', specification: '', notes: '' }];
   const updS = (i, k, v) => set('shippingReqs', shipping.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
@@ -3846,7 +4074,7 @@ export function StepCompliance({ data, set }) {
   return (
     <div>
       <SectionTitle>Compliance &amp; Testing</SectionTitle>
-      {locked && <LockedBanner status={data.status} />}
+      {(locked || stepOverridden) && <LockedBanner status={data.status} overridden={stepOverridden} onToggle={toggleLockOverride} />}
       <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
 
         <div style={{ marginBottom: 18 }}>
@@ -3899,8 +4127,8 @@ export function StepCompliance({ data, set }) {
 const INSPECTION_STAGES = ['Pre-Production', 'During Production', 'Final Random Inspection', 'Pre-Shipment'];
 const SEVERITY_OPTIONS = ['Critical', 'Major', 'Minor'];
 
-export function StepQuality({ data, set }) {
-  const locked = isStepLocked(22, data.status);
+export function StepQuality({ data, set, stepLocked, stepOverridden, toggleLockOverride }) {
+  const locked = stepLocked;
 
   const qi = data.qualityInspection || { aqlMajor: '2.5', aqlMinor: '4.0', inspectionStage: 'During Production', checklist: [], photoRequirements: '' };
   const setQI = (k, v) => set('qualityInspection', { ...qi, [k]: v });
@@ -3922,7 +4150,7 @@ export function StepQuality({ data, set }) {
   return (
     <div>
       <SectionTitle>Quality Inspection (AQL)</SectionTitle>
-      {locked && <LockedBanner status={data.status} />}
+      {(locked || stepOverridden) && <LockedBanner status={data.status} overridden={stepOverridden} onToggle={toggleLockOverride} />}
       <fieldset disabled={locked} style={{ border: 'none', padding: 0, margin: 0, opacity: locked ? 0.45 : 1, pointerEvents: locked ? 'none' : 'auto' }}>
 
         <div style={{ marginBottom: 18 }}>
