@@ -2980,8 +2980,11 @@ export function StepPom({ data, set, images, onUpload, onRemove }) {
 // StepSizeMatrix — graded size table. Sizes are derived from the Style Overview
 // sizeRange field; the user picks the sample size (whose values come straight
 // from the POM page) and enters per-size deltas. Final values: sample + delta.
-export function StepSizeMatrix({ data, set }) {
+export function StepSizeMatrix({ data, set, images }) {
   const matrix = data.gradedSizeMatrix || { baseSize: 'M', sizes: [], grading: [] };
+  // Graded pattern nest — inherited read-only from the Pattern Pieces Layout
+  // image (the canonical pattern geometry, carried on the linked Cut & Sew block).
+  const nestImage = (images || []).find(img => img.slot === 'pattern-layout');
 
   // Sizes always come from Style Overview → sizeRange
   const rawSizes = Array.isArray(data.sizeRange)
@@ -3115,6 +3118,23 @@ export function StepSizeMatrix({ data, set }) {
           </table>
         </div>
       )}
+
+      {/* Pattern grade — graded nest, inherited read-only from the pattern layout */}
+      <div style={{ marginTop: 26, background: FR.white, border: '0.5px solid rgba(58,58,58,0.15)', borderRadius: 11, padding: '20px 22px' }}>
+        <div style={{ fontFamily: "'Cormorant Garamond','Georgia',serif", fontSize: 18, color: FR.slate }}>Pattern grade</div>
+        <p style={{ fontSize: 11.5, color: FR.stone, marginTop: 6, lineHeight: 1.6 }}>
+          The graded nest — every size stacked on one marker. Inherited from the Pattern Pieces Layout on the linked Cut &amp; Sew block; this is the geometry the factory cuts each size from.
+        </p>
+        {nestImage ? (
+          <div style={{ marginTop: 14, border: `1px solid ${FR.sand}`, borderRadius: 9, overflow: 'hidden', background: FR.salt }}>
+            <AssetImage image={nestImage} alt="Graded pattern nest" style={{ width: '100%', display: 'block', objectFit: 'contain', maxHeight: 320 }} />
+          </div>
+        ) : (
+          <div style={{ marginTop: 14, border: `1.5px dashed ${FR.sand}`, borderRadius: 9, background: FR.salt, padding: 36, textAlign: 'center', fontSize: 12, color: FR.stone }}>
+            No graded nest yet — add a Pattern Pieces Layout on the linked Cut &amp; Sew block.
+          </div>
+        )}
+      </div>
       </fieldset>
     </div>
   );
