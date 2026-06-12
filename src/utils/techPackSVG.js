@@ -149,28 +149,32 @@ export function generateTechPackSVG(pack) {
     const tf = table(40, 130, ['Component', 'Fabric Type', 'Composition', 'Weight GSM', 'Color/Pantone', 'Vendor'], fabRows, [130, 160, 160, 110, 150, 333]);
     svg += tf.svg;
   }
-  // Fabric yield + cutting from library-picked fabrics. metersPerUnit is stored
-  // on pack data; post-wash width + cuttable come from the denormalized
-  // entry.cuttingRef cached by the Cutting step (guarded so missing refs don't
-  // break the row — older packs without cuttingRef just show "—").
-  const yieldFabs = (d.pickedFabrics || []).filter(p => p?.fabricId && p.metersPerUnit != null);
+  // Fabric yield + cutting from library-picked fabrics. The two-stage cutting
+  // model (pre-shrink → cut at roll width → what shrinks the garment + upscale)
+  // comes from the denormalized entry.cuttingRef cached by the Cutting step
+  // (guarded so missing refs don't break the row — older packs just show "—").
+  const yieldFabs = (d.pickedFabrics || []).filter(p => p?.fabricId);
   if (yieldFabs.length) {
-    svg += sectionHeading('Fabric Yield & Cutting', 40, 250);
-    const SELVAGE = 2;
+    svg += sectionHeading('Fabrics & Cutting', 40, 250);
     const yieldRows = yieldFabs.map(p => {
       const ref = p.cuttingRef || {};
-      const postW = ref.postWidthCm;
-      const sel = (p.selvageCm != null && p.selvageCm !== '') ? parseFloat(p.selvageCm) : SELVAGE;
-      const cut = (postW != null && Number.isFinite(postW)) ? (Math.round((postW - sel) * 10) / 10) : null;
+      const roll = ref.rollWidthCm;
+      const before = ref.preShrinkLabel || (ref.stage1 === 'hang' ? 'Hang-dry the roll' : ref.stage1 === 'tumble' ? 'Tumble-dry the roll' : 'No pre-shrink');
+      const after = ref.stage2 === 'tumble'
+        ? (ref.treatmentName ? `Tumble · ${ref.treatmentName}` : 'Tumble during wash')
+        : 'None — final at cut';
+      const bigger = (ref.stage2 === 'tumble' && ref.cutBiggerPct != null) ? `+${ref.cutBiggerPct}%` : '—';
+      const fab = ref.name ? `${p.role || '—'} · ${ref.name}` : (p.role || '—');
       return [
-        p.role || '—',
-        `${p.metersPerUnit}m/unit`,
-        postW != null ? `${postW} cm` : '—',
-        cut != null ? `${cut} cm` : '—',
-        p.yieldIsActual ? 'CLO3D actual' : 'Std. estimate',
+        fab,
+        before,
+        roll != null ? `${Math.round(roll * 10) / 10} cm` : '—',
+        after,
+        bigger,
+        p.metersPerUnit != null ? `${p.metersPerUnit} m` : '— TBD',
       ];
     });
-    const ty = table(40, 270, ['Fabric Area', 'Yield', 'Post-wash W', 'Cuttable', 'Source'], yieldRows, [220, 150, 160, 150, 363]);
+    const ty = table(40, 270, ['Fabric', 'Before cut', 'Cut at', 'After cut', 'Bigger', 'Yield'], yieldRows, [220, 200, 120, 280, 110, 113]);
     svg += ty.svg;
   }
 

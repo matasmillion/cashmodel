@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cutting — PDF export (standard table + A4 markers)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --salt:#F5F0E8; --slate:#3A3A3A; --sand:#EBE5D5; --soil:#854F0B;
+    --stone:#9A9A9A; --white:#fff; --good:#3B6D11; --warn:#854F0B;
+    --line:rgba(58,58,58,0.13);
+    --serif:'Cormorant Garamond','Georgia',serif;
+    --sans:'General Sans','Inter','Helvetica Neue',system-ui,sans-serif;
+    --mono:ui-monospace,'SF Mono',Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#cfcabf;color:var(--slate);font-family:var(--sans);font-size:13px}
+  .stage{padding:30px 20px 60px;display:flex;flex-direction:column;align-items:center;gap:14px}
+  .cap{font-size:11px;color:#5b574e;font-family:var(--mono);max-width:1040px;line-height:1.6}
+
+  /* A4 landscape 297x210 → 1040x735 */
+  .page{width:1040px;height:735px;background:var(--white);box-shadow:0 6px 30px rgba(0,0,0,0.22);padding:30px 40px 22px;display:flex;flex-direction:column}
+
+  .head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1.5px solid var(--slate);padding-bottom:11px}
+  .head .co{font-size:9px;letter-spacing:1.5px;line-height:1.5}.head .co b{font-size:11px;letter-spacing:1px}
+  .head h1{font-family:var(--serif);font-size:29px;font-weight:500}
+  .head .rt{text-align:right;font-family:var(--mono);font-size:9px;color:var(--stone);line-height:1.6}
+
+  .sec{font-family:var(--serif);font-size:16px;margin:16px 0 8px;position:relative;padding-bottom:5px}
+  .sec::after{content:'';position:absolute;left:0;bottom:0;width:34px;height:1.5px;background:var(--soil)}
+  .sec .hint{font-family:var(--sans);font-size:9px;color:var(--stone);margin-left:10px;letter-spacing:0.2px}
+
+  /* standard tech-pack columns table (dark header) */
+  table{width:100%;border-collapse:collapse}
+  thead th{background:var(--slate);color:var(--salt);text-align:left;font-size:8.5px;letter-spacing:0.5px;text-transform:uppercase;font-weight:600;padding:8px 10px}
+  thead th .s{display:block;font-size:7px;color:var(--sand);font-weight:400;letter-spacing:0.3px;margin-top:1px;text-transform:none}
+  tbody td{padding:9px 10px;border-bottom:1px solid var(--line);font-size:12px;vertical-align:middle}
+  tbody tr:nth-child(odd) td{background:rgba(245,240,232,0.5)}
+  .fab .role{font-size:8px;letter-spacing:1px;text-transform:uppercase;font-weight:700;color:var(--soil);display:block}
+  .fab.pocket .role{color:#3a5a8c}.fab.rib .role{color:var(--good)}
+  .fab .nm{font-family:var(--mono);font-size:12px}
+  .fab .d{font-size:9px;color:var(--stone)}
+  td.cutat{font-family:var(--mono);font-size:16px;font-weight:600}
+  td.cutat small{font-size:9px;color:var(--stone);font-weight:400}
+  .when{color:var(--soil);font-weight:600}
+  .bump{font-family:var(--mono);background:rgba(133,79,11,0.08);border:1px solid rgba(133,79,11,0.3);color:var(--soil);border-radius:4px;padding:1px 6px;font-weight:600;font-size:11px}
+  .muted{color:var(--stone)}
+  td.yield{font-family:var(--mono);font-weight:600}
+  td.yield small{font-size:9px;color:var(--stone);font-weight:400}
+
+  /* A4 PORTRAIT markers (210 x 297 → ratio 0.707) */
+  .markers{display:flex;gap:22px;margin-top:6px;justify-content:flex-start}
+  .mwrap{width:188px}
+  .marker{position:relative;width:100%;aspect-ratio:210/297;background:linear-gradient(135deg,#efe9dd,#dcd2bd);border:1px solid var(--sand);border-radius:2px;overflow:hidden}
+  .marker .grid{position:absolute;inset:8px;background-image:linear-gradient(rgba(58,58,58,0.06) 1px,transparent 1px),linear-gradient(90deg,rgba(58,58,58,0.06) 1px,transparent 1px);background-size:20px 20px}
+  .marker .pieces{position:absolute;inset:10px;color:rgba(58,58,58,0.16);font-size:8px;font-family:var(--mono);display:flex;align-items:center;justify-content:center;letter-spacing:1px;text-align:center}
+  .marker .a4{position:absolute;right:5px;top:5px;background:var(--white);border:1px solid var(--sand);color:var(--stone);font-size:7px;font-family:var(--mono);padding:2px 5px;border-radius:2px}
+  .mcap{font-size:9px;color:var(--slate);margin-top:6px;text-align:center;line-height:1.4}
+  .mcap b{font-family:var(--mono)}
+  .mcap .role{font-size:7.5px;letter-spacing:0.8px;text-transform:uppercase;font-weight:700;color:var(--soil)}
+
+  .foot{display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:auto;padding-top:7px;font-size:8px;color:var(--stone)}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="cap">Cutting — final PDF export · A4 landscape · standard columns table + A4-portrait pattern markers</div>
+
+  <div class="page">
+    <div class="head">
+      <div class="co"><b>FOREIGN RESOURCE CO.</b><br>CUT &amp; SEW</div>
+      <h1>Cutting</h1>
+      <div class="rt">FW26-BB-ZH-0001<br>PAGE 11 / 25</div>
+    </div>
+
+    <div class="sec">Fabrics &amp; Cutting <span class="hint">read left → right: pre-shrink, cut, then what shrinks the sewn garment</span></div>
+    <table>
+      <thead>
+        <tr>
+          <th>Fabric</th>
+          <th>① Before cut<span class="s">pre-shrink the roll</span></th>
+          <th>② Cut at<span class="s">roll / marker width</span></th>
+          <th>③ After cut<span class="s">what shrinks the garment · when</span></th>
+          <th>Cut bigger<span class="s">marker upscale</span></th>
+          <th>Fabric yield<span class="s">per garment</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="fab body"><span class="role">Body</span><span class="nm">B1750</span> <span class="d">French terry · 380 gsm</span></td>
+          <td>Hang-dry the roll</td>
+          <td class="cutat">171 <small>cm</small></td>
+          <td>Tumble-dried <span class="when">during Gone — global dye</span> <span class="d">(after sewing)</span></td>
+          <td><span class="bump">+5.3%</span></td>
+          <td class="yield">1.5 m <small>/ garment</small></td>
+        </tr>
+        <tr>
+          <td class="fab pocket"><span class="role">Pocket</span><span class="nm">B1968</span> <span class="d">fleece · 235 gsm</span></td>
+          <td>Hang-dry the roll</td>
+          <td class="cutat">157 <small>cm</small></td>
+          <td class="muted">None — not washed, size is final at cut</td>
+          <td class="muted">—</td>
+          <td class="yield">0.3 m <small>/ garment</small></td>
+        </tr>
+        <tr>
+          <td class="fab rib"><span class="role">Rib</span><span class="nm">B-RIB-2×1</span> <span class="d">cotton rib · 320 gsm</span></td>
+          <td>Tumble-dry the roll</td>
+          <td class="cutat">88 <small>cm</small></td>
+          <td>Tumble-dried <span class="when">during Gone — global dye</span> <span class="d">(after sewing)</span></td>
+          <td><span class="bump">+5.3%</span></td>
+          <td class="yield">0.18 m <small>/ garment</small></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="sec">Pattern Markers <span class="hint">cut each fabric to its marker, at the roll width above · A4</span></div>
+    <div class="markers">
+      <div class="mwrap">
+        <div class="marker"><div class="grid"></div><div class="pieces">PATTERN-PIECE MARKER</div><div class="a4">A4</div></div>
+        <div class="mcap"><span class="role">Body</span> · <b>B1750</b><br>marker @ 171 cm · 82% util</div>
+      </div>
+      <div class="mwrap">
+        <div class="marker"><div class="grid"></div><div class="pieces">PATTERN-PIECE MARKER</div><div class="a4">A4</div></div>
+        <div class="mcap"><span class="role" style="color:#3a5a8c">Pocket</span> · <b>B1968</b><br>marker @ 157 cm · 79% util</div>
+      </div>
+      <div class="mwrap">
+        <div class="marker"><div class="grid"></div><div class="pieces">PATTERN-PIECE MARKER</div><div class="a4">A4</div></div>
+        <div class="mcap"><span class="role" style="color:var(--good)">Rib</span> · <b>B-RIB-2×1</b><br>marker @ 88 cm · 74% util</div>
+      </div>
+    </div>
+
+    <div class="foot"><span>© 2026 Foreign Resource Co. — Confidential Tech Pack</span><span>PAGE 11 / 25</span></div>
+  </div>
+
+  <div class="cap">Standard dark-header columns table (matches the other tech-pack pages). Each column header has a one-line sub-caption so the cutter knows what it's for. The pattern markers are true <b>A4 portrait</b> sheets — the export shape — three across the page.</div>
+</div>
+</body>
+</html>

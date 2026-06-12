@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Part A — Fabric library: tumble-dry GSM + auto-shrinkage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --salt:#F5F0E8; --slate:#3A3A3A; --sand:#EBE5D5; --soil:#854F0B;
+    --stone:#9A9A9A; --white:#fff; --good:#3B6D11; --warn:#854F0B; --bad:#A32D2D;
+    --border:rgba(58,58,58,0.15);
+    --serif:'Cormorant Garamond','Georgia',serif;
+    --sans:'General Sans','Inter','Helvetica Neue',system-ui,sans-serif;
+    --mono:ui-monospace,'SF Mono',Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--salt);color:var(--slate);font-family:var(--sans);font-size:13px}
+  h1,h2,h3,h4{font-family:var(--serif);font-weight:400;margin:0}
+  input,select{font-family:inherit;color:inherit}
+
+  .topbar{display:flex;justify-content:space-between;align-items:center;padding:11px 22px;border-bottom:1px solid var(--border)}
+  .wordmark .big{font-family:var(--serif);font-size:19px;letter-spacing:3px}
+  .wordmark .small{font-size:8px;letter-spacing:3px;color:var(--soil);margin-top:1px}
+  .topnav{display:flex;align-items:center;gap:20px;font-size:13px}
+  .topnav .dot{width:7px;height:7px;border-radius:50%;background:var(--good);display:inline-block;margin-right:6px}
+  .topnav .on{background:var(--sand);padding:4px 10px;border-radius:6px}
+
+  .plmbar{display:flex;justify-content:space-between;align-items:center;padding:12px 22px 6px}
+  .plmbar .l{display:flex;align-items:center;gap:16px}.plmbar h1{font-size:22px}
+  .seg-tabs{display:inline-flex;gap:4px}
+  .seg-tabs button{background:transparent;border:none;padding:6px 14px;border-radius:7px;font-size:13px;cursor:pointer}
+  .seg-tabs button.on{background:var(--slate);color:var(--salt)}
+  .plmbar .r{display:flex;gap:8px}
+  .plmbar .r button{background:transparent;border:1px solid var(--border);border-radius:7px;padding:6px 12px;font-size:12px;cursor:pointer}
+  .plmbar .r button.on{background:var(--white)}
+
+  .libtabs{display:flex;gap:20px;padding:4px 22px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--stone)}
+  .libtabs span{padding:6px 0 9px;cursor:pointer}
+  .libtabs span.on{color:var(--slate);border-bottom:2px solid var(--soil);font-weight:600}
+
+  .fabhead{padding:16px 22px 8px}
+  .fabhead .back{font-size:11px;color:var(--stone);margin-bottom:8px}
+  .fabhead .row{display:flex;justify-content:space-between;align-items:flex-start}
+  .fabhead .nm{font-family:var(--serif);font-size:34px;line-height:1}
+  .fabhead .sub{font-family:var(--mono);font-size:11px;color:var(--stone);margin-top:4px}
+  .fabhead .meta{font-family:var(--mono);font-size:10px;color:var(--stone);margin-top:3px}
+  .fabhead .acts{display:flex;gap:8px;align-items:center}
+  .fabhead .acts button{border:1px solid var(--sand);background:transparent;border-radius:7px;padding:6px 11px;font-size:11px;cursor:pointer}
+  .pill-appr{background:rgba(99,153,34,0.12);color:var(--good);border:none!important;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;font-size:10px}
+
+  .body{display:grid;grid-template-columns:minmax(0,1fr) 560px;gap:18px;padding:6px 22px 60px}
+  .col{display:flex;flex-direction:column;gap:14px}
+  .card{background:var(--white);border:0.5px solid var(--border);border-radius:10px;padding:16px}
+  .card h4{font-family:var(--serif);font-size:18px;margin-bottom:12px}
+  .sub-lab{font-size:9px;color:var(--soil);font-weight:600;letter-spacing:0.6px;text-transform:uppercase;margin:14px 0 7px}
+  .sub-lab:first-child{margin-top:0}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .fld label{display:block;font-size:9px;color:var(--stone);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-bottom:3px}
+  .fld input{width:100%;padding:7px 9px;border:1px solid var(--sand);border-radius:5px;font-size:13px;background:var(--white);outline:none}
+  .hint{font-size:9px;color:var(--stone);margin-top:3px;font-family:var(--mono)}
+
+  /* NEW tumble subsection */
+  .new-tag{display:inline-block;font-size:8px;font-weight:700;letter-spacing:0.5px;color:var(--soil);background:rgba(133,79,11,0.1);border-radius:3px;padding:1px 6px;margin-left:8px;vertical-align:middle}
+  .tumble{border:1px solid rgba(133,79,11,0.3);border-radius:8px;padding:13px;background:rgba(133,79,11,0.025);margin-top:6px}
+  .derived{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:11px}
+  .dbox{border:1px solid var(--sand);border-radius:6px;padding:8px 10px;background:var(--salt)}
+  .dbox .k{font-size:8px;color:var(--stone);text-transform:uppercase;letter-spacing:0.4px;font-weight:600}
+  .dbox .v{font-size:17px;font-family:var(--mono);margin-top:3px}
+  .dbox .v small{font-size:9px;color:var(--stone)}
+  .pillrow{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:6px;font-size:10px;font-weight:600;letter-spacing:0.3px}
+  .pill.valid{background:rgba(99,153,34,0.14);color:var(--good)}
+  .pill.warn{background:rgba(133,79,11,0.14);color:var(--warn)}
+  .pill.bad{background:rgba(163,45,45,0.1);color:var(--bad)}
+  .pill .ic{font-size:11px}
+  .crosscheck{font-size:10px;color:var(--stone);line-height:1.5;margin-top:9px;padding:9px 11px;background:var(--salt);border-radius:6px;border-left:2px solid var(--sand)}
+  .crosscheck.flag{border-left-color:var(--warn);color:var(--slate)}
+  .crosscheck b{font-family:var(--mono)}
+
+  /* assumed/confirmed */
+  .aa{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:11px}
+  .aa .box{border:1px solid var(--sand);border-radius:6px;padding:9px 11px;background:var(--salt)}
+  .aa .box.actual{background:var(--white)}
+  .aa .box .k{display:flex;justify-content:space-between;align-items:center;font-size:8.5px;color:var(--stone);text-transform:uppercase;letter-spacing:0.6px;font-weight:600;margin-bottom:5px}
+  .aa .box .tag{font-size:8px;padding:1px 5px;border-radius:3px;letter-spacing:0.4px}
+  .aa .box .tag.assumed{background:rgba(133,79,11,0.12);color:var(--warn)}
+  .aa .box .v{font-size:20px;font-family:var(--mono);line-height:1}
+  .aa .box .sub{font-size:9px;color:var(--stone);margin-top:4px}
+  .aa .box input{width:70px;padding:3px 6px;border:1px solid var(--sand);border-radius:4px;font-size:16px;font-family:var(--mono);outline:none}
+
+  /* preview */
+  .preview .pframe{background:var(--white);border-radius:6px;box-shadow:0 2px 14px rgba(0,0,0,0.08);padding:18px 20px}
+  .preview .ph{font-size:9px;letter-spacing:2px;color:var(--stone);text-transform:uppercase;font-weight:600;margin-bottom:8px}
+  .pp-nm{font-family:var(--serif);font-size:22px}
+  .pp-sub{font-size:10px;color:var(--stone);margin-bottom:12px}
+  .pp-spec{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+  .pp-spec .k{font-size:7.5px;color:var(--stone);text-transform:uppercase;letter-spacing:0.4px}
+  .pp-spec .v{font-size:12px;font-family:var(--mono);margin-top:1px}
+  .pp-spec .v.new{color:var(--soil)}
+  .note{font-size:11px;color:var(--stone);line-height:1.5;margin:10px 22px;padding:11px 13px;background:var(--white);border:0.5px solid var(--border);border-radius:8px;border-left:3px solid var(--soil)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wordmark"><div class="big">ENTERPRISE RESOURCE PLANNING</div><div class="small">FOREIGN RESOURCE</div></div>
+  <div class="topnav"><span><span class="dot"></span>Cash</span><span>Marketing ▾</span><span class="on">Product ▾</span><span>Inventory ▾</span><span>Operations ▾</span><span>⚙</span></div>
+</div>
+<div class="plmbar">
+  <div class="l"><h1>Product Lifecycle Management</h1><div class="seg-tabs"><button class="on">▤ Library</button><button>⬡ Styles</button><button>◳ Production</button></div></div>
+  <div class="r"><button>⤓ Backup</button><button class="on">✦ Sync diagnostics</button><button>⛨ Storage Health</button></div>
+</div>
+<div class="libtabs"><span>Cut &amp; Sew</span><span class="on">Fabrics</span><span>Colors</span><span>Trims</span><span>Treatments</span><span>Embellishments</span><span>Vendors</span><span>Variant Mapping</span></div>
+
+<div class="fabhead">
+  <div class="back">← Fabrics</div>
+  <div class="row">
+    <div>
+      <div class="nm">B1750</div>
+      <div class="sub">B1750</div>
+      <div class="meta">French terry · KNIT · v1.1 +</div>
+    </div>
+    <div class="acts">
+      <button>✦ AI auto-fill</button><button>⤓ Export BOM PDF</button>
+      <button class="pill-appr">Approved ▾</button><button>Archive</button><button>Saved</button>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  <b>What's new (Part A):</b> the only addition is the <b>Tumble-dry GSM</b> field + the auto-shrinkage panel below it (orange-tinted). Everything above it is the existing Spec card, unchanged. This is the dependency the Cutting page reads.
+</div>
+
+<div class="body">
+  <!-- LEFT: edit column -->
+  <div class="col">
+    <div class="card">
+      <h4>Spec</h4>
+
+      <div class="sub-lab">Pre-wash (as supplied)</div>
+      <div class="grid3">
+        <div class="fld"><label>Weight (gsm)</label><input value="380"></div>
+        <div class="fld"><label>Width (cm)</label><input value="180"></div>
+        <div class="fld"><label>Stretch (%)</label><input value="0"></div>
+      </div>
+
+      <div class="sub-lab">Shrinkage</div>
+      <div class="grid2">
+        <div class="fld"><label>Warp · lengthwise (%)</label><input value="5.5"><div class="hint">→ CLO3D warp 94.5</div></div>
+        <div class="fld"><label>Weft · widthwise (%)</label><input value="5"><div class="hint">→ CLO3D weft 95</div></div>
+      </div>
+
+      <div class="sub-lab">Post-wash · hang dry (finished, as printed)</div>
+      <div class="grid2">
+        <div class="fld"><label>Weight (gsm)</label><input value="400"><div class="hint">+5.3% vs pre</div></div>
+        <div class="fld"><label>Width (cm)</label><input value="171"><div class="hint">−5% vs pre (≈ weft)</div></div>
+      </div>
+
+      <!-- NEW tumble subsection -->
+      <div class="sub-lab">Tumble-dry · machine dried <span class="new-tag">NEW</span></div>
+      <div class="tumble">
+        <div class="grid2">
+          <div class="fld"><label>Tumble-dry GSM</label><input value="421"><div class="hint">heavier after tumble → narrower</div></div>
+          <div class="fld" style="display:flex;align-items:flex-end"><div style="font-size:10px;color:var(--stone);line-height:1.5">Length stays ~constant, so width ∝ 1/GSM. Everything below is computed from this one number.</div></div>
+        </div>
+
+        <div class="derived">
+          <div class="dbox"><div class="k">Tumble width</div><div class="v">162.5 <small>cm</small></div></div>
+          <div class="dbox"><div class="k">Tumble weft shrink</div><div class="v">9.7<small>%</small></div></div>
+          <div class="dbox"><div class="k">Residual hang→tumble</div><div class="v">5.0<small>%</small></div></div>
+        </div>
+
+        <div class="pillrow">
+          <span class="pill valid"><span class="ic">✓</span> Length-constant model VALID</span>
+          <span class="pill" style="background:rgba(58,58,58,0.06);color:var(--stone)">predicted hang width 171.0 ≈ entered 171</span>
+        </div>
+
+        <div class="crosscheck">
+          Cross-check: GSM-derived hang shrink <b>5.0%</b> matches the stated weft <b>5.0%</b> — consistent. The residual <b>5.0%</b> is the cut-pattern upscale a garment-dyed style pulls (compensation = 1 ÷ (1 − 0.05) = <b>+5.3%</b>).
+        </div>
+
+        <div class="aa">
+          <div class="box"><div class="k">Assumed (GSM-derived)<span class="tag assumed">assumed</span></div><div class="v">9.7%</div><div class="sub">tumble weft, from GSM</div></div>
+          <div class="box actual"><div class="k">Actual (measured swatch)</div><div style="display:flex;align-items:baseline;gap:4px"><input placeholder="—"><span style="font-size:13px;color:var(--stone);font-family:var(--mono)">%</span></div><div class="sub">enter after PP test → flips to CONFIRMED</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- secondary: what the WARNING state looks like -->
+    <div class="card" style="border-style:dashed">
+      <div style="font-size:10px;color:var(--stone);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:8px">For reference — how a problem fabric looks</div>
+      <div class="pillrow">
+        <span class="pill warn"><span class="ic">⚠</span> GSM-width model unreliable — measure swatch</span>
+      </div>
+      <div class="crosscheck flag" style="margin-top:9px">
+        Predicted hang width <b>166</b> ≠ entered <b>171</b> (off by 5 cm) → this fabric also shrinks in length, so tumble width is <b>not</b> auto-filled. And stated warp <b>5.5%</b> implies ~10% area but GSM implies ~5% → <b>shrinkage data inconsistent — confirm with PP swatch.</b> Both numbers shown, nothing silently overwritten.
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: live preview -->
+  <div class="col preview">
+    <div class="ph">Live preview · identical to tech pack page 03</div>
+    <div class="pframe">
+      <div class="pp-nm">B1750</div>
+      <div class="pp-sub">Foshan Jufengsheng Cloth Industry Co Ltd · 100% Cotton · 380 GSM</div>
+      <div style="font-size:8px;color:var(--stone);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-top:6px">Shrinkage &amp; dry states</div>
+      <div class="pp-spec">
+        <div><div class="k">Pre-wash</div><div class="v">380 g · 180 cm</div></div>
+        <div><div class="k">Hang dry</div><div class="v">400 g · 171 cm</div></div>
+        <div><div class="k">Tumble dry</div><div class="v new">421 g · 162.5 cm</div></div>
+      </div>
+      <div class="pp-spec" style="margin-top:8px">
+        <div><div class="k">Hang weft shrink</div><div class="v">5.0%</div></div>
+        <div><div class="k">Tumble weft shrink</div><div class="v new">9.7%</div></div>
+        <div><div class="k">Residual (h→t)</div><div class="v new">5.0%</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

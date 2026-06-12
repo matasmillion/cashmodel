@@ -108,6 +108,56 @@ export function deriveShrinkSpec({ gsmPre = 0, widthPre = 0, gsmPost = 0, widthP
   return { cloWarp, cloWeft, impliedWidthShrink, impliedGsmGain };
 }
 
+/**
+ * Tumble-dry shrinkage, derived from GSM. Principle: GSM = mass ÷ area and mass
+ * is fixed, so a GSM change is a pure area change. For this fabric class length
+ * stays ~constant and shrink is width-dominant, so width ∝ 1/GSM. From one new
+ * number (tumble-dry GSM) we predict the tumble width + weft shrink, the residual
+ * a garment-dyed style pulls (hang→tumble), and a self-validation flag.
+ *
+ * Inputs as plain numbers (gsmHang/widthHang = the existing "post-wash" pair).
+ * Outputs are null where their inputs are missing (e.g. no tumble GSM entered).
+ *
+ * @returns {{ predWidthTumble:(number|null), weftShrinkTumble:(number|null),
+ *   predWidthHang:(number|null), weftShrinkHang:(number|null), residualWeft:(number|null),
+ *   modelValid:(boolean|null), hangWidthDelta:(number|null), statedWeft:(number|null),
+ *   consistent:(boolean|null) }}
+ */
+export function deriveTumbleShrink({ gsmPre = 0, widthPre = 0, gsmHang = 0, widthHang = 0, gsmTumble = 0, statedWeftPct = null } = {}) {
+  const gp = Number(gsmPre) || 0;
+  const wp = Number(widthPre) || 0;
+  const gh = Number(gsmHang) || 0;
+  const wh = Number(widthHang) || 0;
+  const gt = Number(gsmTumble) || 0;
+  const hasTumble = gp > 0 && wp > 0 && gt > 0;
+  const predWidthTumble = hasTumble ? round1(wp * gp / gt) : null;
+  const weftShrinkTumble = hasTumble ? round1((1 - gp / gt) * 100) : null;
+  const predWidthHang = (gp > 0 && wp > 0 && gh > 0) ? round1(wp * gp / gh) : null;
+  const weftShrinkHang = (gp > 0 && gh > 0) ? round1((1 - gp / gh) * 100) : null;
+  const residualWeft = (gh > 0 && gt > 0) ? round1((1 - gh / gt) * 100) : null;
+  // Self-validation: the GSM-width model is trustworthy when the predicted hang
+  // width matches the entered hang width (±1 cm). If it diverges the fabric also
+  // shrinks in length — flag it and don't trust the GSM-derived tumble width.
+  const hangWidthDelta = (predWidthHang != null && wh > 0) ? round1(predWidthHang - wh) : null;
+  const modelValid = (hangWidthDelta != null) ? (Math.abs(hangWidthDelta) <= 1) : null;
+  // Cross-check the GSM-derived hang shrink against any stated weft shrinkage.
+  const stated = (statedWeftPct != null && statedWeftPct !== '') ? Number(statedWeftPct) : null;
+  const consistent = (weftShrinkHang != null && stated != null && Number.isFinite(stated))
+    ? (Math.abs(weftShrinkHang - stated) <= 2) : null;
+  return { predWidthTumble, weftShrinkTumble, predWidthHang, weftShrinkHang, residualWeft, modelValid, hangWidthDelta, statedWeft: stated, consistent };
+}
+
+/**
+ * Cut-pattern upscale for a finished-shrink %, per direction. Compensation is
+ * 1 ÷ (1 − r), NOT ×(1 + r): a piece that loses r% must be cut 1/(1−r) bigger to
+ * land on-spec. Returns the extra % to add (e.g. 5 → 5.3), or null if out of range.
+ */
+export function cutUpscalePct(shrinkPct) {
+  const r = (Number(shrinkPct) || 0) / 100;
+  if (r <= 0 || r >= 1) return null;
+  return round1((1 / (1 - r) - 1) * 100);
+}
+
 export function emptyFabric(overrides = {}) {
   const now = new Date().toISOString();
   return {
@@ -134,6 +184,13 @@ export function emptyFabric(overrides = {}) {
     // null ⇒ not provided (the form shows the implied shrink as a cross-check).
     weight_gsm_post: null,
     width_cm_post: null,
+    // Tumble-dry (machine-dried) GSM — drives the derived tumble shrink + roll
+    // width in the Cutting step. Optional; null ⇒ tumble outputs stay blank.
+    weight_gsm_tumble: null,
+    // Measured swatch shrink at the tumble state — overrides the GSM-derived
+    // value and flips its status from ASSUMED to CONFIRMED. null ⇒ use derived.
+    measured_weft_tumble_pct: null,
+    measured_warp_tumble_pct: null,
     stretch_pct: 0,
     mill_id: '',
     lead_time_days: 0,
