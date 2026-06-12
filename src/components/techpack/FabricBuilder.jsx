@@ -25,6 +25,7 @@ import {
   FABRIC_CATEGORIES, FABRIC_WEAVES, FABRIC_WEAVE_LABEL, FABRIC_STATUSES,
   FABRIC_GARMENT_AREAS, FINISH_EXECUTED_AT, MILL_FINISH_CATALOG,
   weavesForCategory, categoryForWeave, bumpVersion, deriveShrinkSpec,
+  deriveTumbleShrink, cutUpscalePct,
 } from '../../utils/fabricLibrary';
 import { getUsdCnyRate, cnyToUsd, usdToCny } from '../../utils/fxRates';
 import { generateFabricBOMPDF } from '../../utils/fabricBOMPDF';
@@ -310,6 +311,16 @@ export default function FabricBuilder({ fabric, onBack }) {
     gsmPost: draft.weight_gsm_post, widthPost: draft.width_cm_post,
     warpPct, weftPct,
   });
+  // Tumble-dry shrink derived from the new tumble GSM (additive; the hang fields
+  // above are untouched). ASSUMED until a measured swatch overrides → CONFIRMED.
+  const tumble = deriveTumbleShrink({
+    gsmPre: draft.weight_gsm, widthPre: draft.width_cm,
+    gsmHang: draft.weight_gsm_post, widthHang: draft.width_cm_post,
+    gsmTumble: draft.weight_gsm_tumble, statedWeftPct: weftPct,
+  });
+  const tumbleWeftConfirmed = draft.measured_weft_tumble_pct != null && draft.measured_weft_tumble_pct !== '';
+  const PILL_BASE = { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 9px', borderRadius: 6, fontSize: 9.5, fontWeight: 600, letterSpacing: 0.3 };
+  const PILL_TINY = { fontSize: 8, fontWeight: 600, letterSpacing: 0.4, padding: '1px 5px', borderRadius: 3, textTransform: 'uppercase' };
 
   const setPrice = (kind, currency, raw) => {
     const value = parseFloat(raw);
@@ -723,6 +734,67 @@ export default function FabricBuilder({ fabric, onBack }) {
                   style={INPUT_STYLE} />
                 <div style={SPEC_HINT}>{shrink.impliedWidthShrink != null ? `−${shrink.impliedWidthShrink}% vs pre (≈ weft)` : 'as printed'}</div>
               </Field>
+            </div>
+
+            {/* Tumble-dry — derived from one new GSM number (width ∝ 1/GSM).
+                Additive: the pre→post(hang) fields above are untouched. */}
+            <div style={{ ...SPEC_SUBLABEL, marginTop: 14 }}>Tumble-dry (machine dried)</div>
+            <div style={{ border: '1px solid rgba(133,79,11,0.30)', background: 'rgba(133,79,11,0.025)', borderRadius: 8, padding: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                <Field label="Tumble-dry GSM">
+                  <input type="number" value={draft.weight_gsm_tumble ?? ''} placeholder="e.g. 421"
+                    onChange={e => set({ weight_gsm_tumble: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })}
+                    style={INPUT_STYLE} />
+                  <div style={SPEC_HINT}>heavier after tumble → narrower</div>
+                </Field>
+                <Field label="Tumble width (predicted)">
+                  <input type="number" value={tumble.predWidthTumble ?? ''} readOnly disabled
+                    style={{ ...INPUT_STYLE, background: FR.salt, color: tumble.predWidthTumble != null ? FR.slate : FR.stone }} />
+                  <div style={SPEC_HINT}>{tumble.weftShrinkTumble != null ? `−${tumble.weftShrinkTumble}% weft vs pre` : 'enter tumble-dry GSM'}</div>
+                </Field>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+                {tumble.residualWeft != null && (
+                  <span style={{ ...SPEC_HINT, marginTop: 0 }}>Residual hang→tumble <strong style={{ color: FR.slate }}>{tumble.residualWeft}%</strong> → cut <strong style={{ color: '#854F0B' }}>+{cutUpscalePct(tumble.residualWeft)}%</strong> bigger</span>
+                )}
+                {tumble.modelValid === true && (
+                  <span style={{ ...PILL_BASE, background: 'rgba(99,153,34,0.14)', color: '#3B6D11' }}>✓ model valid</span>
+                )}
+                {tumble.modelValid === false && (
+                  <span style={{ ...PILL_BASE, background: 'rgba(133,79,11,0.14)', color: '#854F0B' }}>⚠ measure swatch — model unreliable</span>
+                )}
+              </div>
+
+              {tumble.consistent === false && (
+                <div style={{ fontSize: 10, color: FR.slate, background: FR.salt, borderLeft: '2px solid #854F0B', borderRadius: 6, padding: '8px 10px', marginTop: 9, lineHeight: 1.5 }}>
+                  Shrinkage data inconsistent — GSM implies <strong>{tumble.weftShrinkHang}%</strong> hang weft but the stated weft is <strong>{tumble.statedWeft}%</strong>. Confirm with a PP swatch; nothing is overwritten.
+                </div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+                <div style={{ border: `1px solid ${FR.sand}`, borderRadius: 6, padding: '8px 10px', background: FR.salt }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <span style={{ fontSize: 8.5, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>Assumed</span>
+                    <span style={{ ...PILL_TINY, background: 'rgba(133,79,11,0.12)', color: '#854F0B' }}>assumed</span>
+                  </div>
+                  <div style={{ fontSize: 16, fontFamily: 'ui-monospace, Menlo, monospace', color: FR.slate }}>{tumble.weftShrinkTumble != null ? `${tumble.weftShrinkTumble}%` : '—'}</div>
+                  <div style={{ fontSize: 9, color: FR.stone, marginTop: 3 }}>tumble weft, from GSM</div>
+                </div>
+                <div style={{ border: `1px solid ${FR.sand}`, borderRadius: 6, padding: '8px 10px', background: '#fff' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <span style={{ fontSize: 8.5, color: FR.stone, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>Actual (measured)</span>
+                    {tumbleWeftConfirmed && <span style={{ ...PILL_TINY, background: 'rgba(99,153,34,0.14)', color: '#3B6D11' }}>confirmed</span>}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                    <input type="number" step="0.1" value={draft.measured_weft_tumble_pct ?? ''} placeholder="—"
+                      onChange={e => set({ measured_weft_tumble_pct: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })}
+                      style={{ ...INPUT_STYLE, width: 72 }} />
+                    <span style={{ fontSize: 12, color: FR.stone }}>%</span>
+                  </div>
+                  <div style={{ fontSize: 9, color: FR.stone, marginTop: 3 }}>enter after PP test → confirmed</div>
+                </div>
+              </div>
             </div>
           </div>
 
