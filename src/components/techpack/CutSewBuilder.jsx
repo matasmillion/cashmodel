@@ -864,6 +864,7 @@ export default function CutSewBuilder({ block, onBack }) {
                     ) },
                     { key: 'name', label: 'Measurement', placeholder: 'Chest Width' },
                     ...szH,
+                    { key: 'tol', label: 'Tol ±', placeholder: '1' },
                     { key: 'method', label: 'Method', placeholder: 'Lay flat / Tape' },
                   ]}
                   rows={pomRows}
