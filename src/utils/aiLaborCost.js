@@ -150,6 +150,12 @@ function buildUserMessage({ vendor, garment, samRate }) {
   const rateBlock = samRate
     ? `\nVENDOR SAM RATE (from contract): $${samRate}/min — multiply this by your SAM-minute estimate. Do NOT use regional CMT benchmarks; use the rate above.\n`
     : '';
+  const calloutBlock = (garment.constructionCallouts && garment.constructionCallouts.length)
+    ? garment.constructionCallouts.map((c, i) => `  ${i + 1}. ${c.title || '(untitled)'}${c.description ? ` — ${c.description}` : ''}`).join('\n')
+    : '  (none specified)';
+  const stitchBlock = (garment.stitchOperations && garment.stitchOperations.length)
+    ? garment.stitchOperations.map((s, i) => `  ${i + 1}. ${s.seam || '(unnamed seam)'} — stitch ${s.stitchType || '—'}${s.seamType ? `, ${s.seamType}` : ''}${s.machine ? `, ${s.machine}` : ''}${s.spi ? `, ${s.spi}` : ''}`).join('\n')
+    : '  (none specified)';
   return `VENDOR
 Name: ${vendor.name || '—'}
 Country: ${vendor.country || '—'}
@@ -164,8 +170,14 @@ Designer notes: ${garment.designNotes || '—'}
 Key features: ${garment.keyFeatures || '—'}
 Fit: ${garment.fit || '—'}
 
+CONSTRUCTION CALL-OUTS (from the Construction pages — what is being built)
+${calloutBlock}
+
+STITCH OPERATIONS (from the Sewing pages — each seam's stitch type / machine / SPI)
+${stitchBlock}
+
 COMPLEXITY DRIVERS THAT BELONG IN YOUR CMT NUMBER
-Seam operations: ${garment.seamCount}    ← drives sewing SAM
+Seam operations: ${garment.seamCount}    ← drives sewing SAM (use the stitch list above for the real operation mix)
 Pattern pieces:  ${garment.pieceCount}   ← drives cutting + handling SAM
 
 CONTEXT THAT BELONGS ELSEWHERE — for awareness only, DO NOT add the dollar value into your number

@@ -1667,6 +1667,21 @@ export function CutSewLaborCostBlock({ data, set, sectionLabel }) {
         city: v?.city || '',
         samRateUsdPerMin: v?.samRateUsdPerMin || '',
       };
+      // Specs the AI should read off the Construction (07–08) and Sewing (09–10)
+      // pages so the estimate reflects the real build, not just the BOM counts.
+      const constructionCallouts = [...(data.constructionDetailsPage1 || []), ...(data.constructionDetailsPage2 || [])]
+        .filter(c => c && (c.title || c.description))
+        .map(c => ({ title: c.title || '', description: c.description || '' }));
+      const blocks = data.seamStitchBlocks || [];
+      const seamRows = data.seams || [];
+      const stitchOperations = [];
+      for (let i = 0; i < 8; i++) {
+        const label = (blocks.find(b => b.num === i + 1) || {}).label || '';
+        const s = seamRows[i] || {};
+        if (label || s.seamType || s.stitchType) {
+          stitchOperations.push({ seam: label, seamType: s.seamType || '', stitchType: s.stitchType || '', machine: s.machine || '', spi: s.spiSpcm || '' });
+        }
+      }
       const garment = {
         styleName: data.styleName,
         styleNumber: data.styleNumber,
@@ -1678,9 +1693,11 @@ export function CutSewLaborCostBlock({ data, set, sectionLabel }) {
         fabricsCount: (data.pickedFabrics || []).length,
         fabricsList: (data.pickedFabrics || []).map(f => f.role).filter(Boolean).join(', '),
         trimsCount: (data.pickedTrims || []).length,
-        seamCount: (data.seams || []).filter(s => s.operation).length,
+        seamCount: stitchOperations.length,
         pieceCount: (data.patternPieces || []).filter(p => p.pieceName).length,
         treatmentsCount: (data.treatments || []).filter(t => t.treatment).length,
+        constructionCallouts,
+        stitchOperations,
       };
       const result = await estimateLaborCost({ vendor, garment });
       set('cutSewLaborCost', String(result.value.toFixed(2)));
@@ -1983,16 +2000,13 @@ export function StepConstruction({ data, set, images, onUpload, onRemove, annota
         data={data} set={set} images={images} onUpload={onUpload} onRemove={onRemove}
         annotations={annotations} onAnnotate={onAnnotate}
       />
-
-      <CutSewLaborCostBlock data={data} set={set} sectionLabel={STITCH_SECTION_LABEL} />
-      <CutSewCostChat data={data} set={set} sectionLabel={STITCH_SECTION_LABEL} />
     </div>
   );
 }
 
 // Stitching — page 2 (stitches 5–8). Continuation page: garment reference,
-// 2×2 grid of cards, and the spec table for rows 5 onward. The labor
-// calculator lives on page 1 only (one labor cost per garment).
+// 2×2 grid of cards, and the spec table for rows 5 onward. (The labor
+// calculator lives on its own Cut & Sew Cost page now.)
 export function StepConstruction2({ data, set, images, onUpload, onRemove, annotations, onAnnotate }) {
   const totalSeams = (data.seams || []).length;
   const tableCount = Math.max(4, totalSeams - 4);
@@ -2011,6 +2025,29 @@ export function StepConstruction2({ data, set, images, onUpload, onRemove, annot
         data={data} set={set} images={images} onUpload={onUpload} onRemove={onRemove}
         annotations={annotations} onAnnotate={onAnnotate}
       />
+    </div>
+  );
+}
+
+// Cut & Sew Cost — dedicated internal page (after Sewing 2). Holds the full AI
+// labor estimate + cost chat (moved off Sewing 1). The estimate reads every
+// construction call-out and stitch operation off pages 07–10. Internal only —
+// excluded from the exported factory pack.
+export function StepCutSewCost({ data, set }) {
+  return (
+    <div>
+      <SectionTitle>Cut &amp; Sew Cost</SectionTitle>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, border: '0.5px solid rgba(133,79,11,0.45)', background: 'rgba(133,79,11,0.06)', borderRadius: 6, padding: '8px 14px', marginBottom: 14 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#854F0B', flex: '0 0 auto' }} />
+        <span style={{ fontSize: 11, color: '#854F0B', fontWeight: 600, letterSpacing: 0.3 }}>
+          Internal — for your eyes only. This page is left out of the exported factory tech pack.
+        </span>
+      </div>
+      <p style={{ fontSize: 11, color: FR.stone, marginBottom: 14, fontStyle: 'italic' }}>
+        The AI reads every construction call-out (Construction 1–2) and stitch operation (Sewing 1–2), plus your BOM and chosen vendor, to estimate best-case cut &amp; sew labor. Argue with it or paste a real factory quote in the chat to refine.
+      </p>
+      <CutSewLaborCostBlock data={data} set={set} sectionLabel={STITCH_SECTION_LABEL} />
+      <CutSewCostChat data={data} set={set} sectionLabel={STITCH_SECTION_LABEL} />
     </div>
   );
 }
@@ -3805,9 +3842,10 @@ export const STEP_FNS = [
   StepFlatlays,            // 07 Cut & Sew — Flat Lay
   StepSketches,            // 08 Cut & Sew — Call Outs (page 1)
   StepSketches2,           // 09 Cut & Sew — Call Outs (page 2)
-  StepConstruction,        // 10 Cut & Sew — Stitching (page 1, stitches 1–4)
-  StepConstruction2,       // 11 Cut & Sew — Stitching (page 2, stitches 5–8)
-  StepPattern,             // 12 Cut & Sew — Pattern & Cutting
+  StepConstruction,        // 10 Cut & Sew — Sewing (page 1, stitches 1–4)
+  StepConstruction2,       // 11 Cut & Sew — Sewing (page 2, stitches 5–8)
+  StepCutSewCost,          // 11$ Cut & Sew — Cost (internal, AI labor estimate + chat)
+  StepPattern,             // 12 Cut & Sew — Cutting
   StepPom,                 // 13 Cut & Sew — POM
   StepSizeMatrix,          // 14 Cut & Sew — Size Grading (skippable)
   StepColor,               // 15 Embellishments — Colorways

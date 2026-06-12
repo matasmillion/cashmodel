@@ -733,7 +733,7 @@ export async function generateTechPackPDF(pack) {
   drawStitchingPage('Sewing (2)', 11, [5, 6, 7, 8], 4, 'page2');
 
   // ─── Cut & Sew → Pattern & Cutting ───
-  newPage('Cutting', null, 12);
+  newPage('Cutting', null, 13);
   y = 28;
   const ppRows = (d.patternPieces || []).filter(p => p.name || p.pieceName).map(p =>
     [p.pieceName || p.name, p.quantity || p.qty, p.fabric, p.grain, p.fusing, p.notes]);
@@ -756,7 +756,7 @@ export async function generateTechPackPDF(pack) {
   field('Cutting Notes', d.cuttingNotes || d.cuttingInstructions, 10, y);
 
   // ─── Cut & Sew → Points of Measure ───
-  newPage('Points of Measure (cm)', null, 13);
+  newPage('Points of Measure (cm)', null, 14);
   y = 28;
   field('Size Type', d.sizeType, 10, y); y += 14;
   const sz = d.sizeType === 'waist' ? ['W30', 'W32', 'W34', 'W36'] : ['S', 'M', 'L', 'XL'];
@@ -765,7 +765,7 @@ export async function generateTechPackPDF(pack) {
   table(['Measurement', 'Tol ±', ...sz], pomRows, 10, y, [70, 25, 30, 30, 30, 30]);
 
   // ─── Cut & Sew → Graded Size Matrix ───
-  newPage('Graded Size Matrix (cm)', null, 14);
+  newPage('Graded Size Matrix (cm)', null, 15);
   y = 28;
   const matrix = d.gradedSizeMatrix || { baseSize: 'M', grading: [] };
   const rawMSizes = Array.isArray(d.sizeRange)
@@ -787,7 +787,7 @@ export async function generateTechPackPDF(pack) {
   table(['Measurement', ...matrixSizes], matrixRows, 10, y, [70, ...matrixSizes.map(() => sizeColW)]);
 
   // ─── Embellishments → Colorways ───
-  newPage('Colorways', null, 15);
+  newPage('Colorways', null, 16);
   y = 28;
   sectionHeading('Colorway Specification', y); y += 8;
   const cwRows = (d.colorways || []).filter(c => c.name).map(c =>
@@ -795,7 +795,7 @@ export async function generateTechPackPDF(pack) {
   table(['Name', 'FR Color', 'Pantone', 'Hex', 'Fabric Swatch', 'Approval'], cwRows, 10, y, [55, 45, 50, 40, 60, 27]);
 
   // ─── Embellishments → Artwork & Placement ───
-  newPage('Artwork & Placement', null, 16);
+  newPage('Artwork & Placement', null, 17);
   y = 28;
   sectionHeading('Logo & Method', y); y += 8;
   field('Front Logo', d.logoFront, 10, y);
@@ -807,7 +807,7 @@ export async function generateTechPackPDF(pack) {
   table(['Placement', 'Artwork File', 'Method', 'Size (cm)', 'Position From', 'Color', 'Notes'], apRows, 10, y, [40, 45, 40, 25, 40, 30, 57]);
 
   // ─── Treatments → Garment Treatments ───
-  newPage('Garment Treatments', null, 17);
+  newPage('Garment Treatments', null, 18);
   y = 28;
   sectionHeading('Wash & Dye', y); y += 8;
   const trtRows = (d.treatments || []).filter(t => t.treatment).map(t =>
@@ -820,7 +820,7 @@ export async function generateTechPackPDF(pack) {
   table(['Area', 'Technique', 'Intensity', 'Notes'], distRows, 10, y, [50, 50, 30, 147]);
 
   // ─── QC → Compliance & Testing ───
-  newPage('Compliance & Testing', null, 18);
+  newPage('Compliance & Testing', null, 19);
   y = 28;
   sectionHeading('Shipping Requirements', y); y += 8;
   const shipRows = (d.shippingReqs || []).filter(r => r.requirement || r.specification).map(r =>
@@ -833,7 +833,7 @@ export async function generateTechPackPDF(pack) {
   table(['Test', 'Standard', 'Requirement', 'Test Method', 'Pass-Fail'], testRows, 10, y, [55, 55, 55, 60, 52]);
 
   // ─── QC → Quality Inspection (AQL) ───
-  newPage('Quality Inspection (AQL)', null, 19);
+  newPage('Quality Inspection (AQL)', null, 20);
   y = 28;
   const qi = d.qualityInspection || { aqlMajor: '2.5', aqlMinor: '4.0', inspectionStage: 'During Production', checklist: [], photoRequirements: '' };
   sectionHeading('AQL Standard', y); y += 8;
@@ -852,7 +852,7 @@ export async function generateTechPackPDF(pack) {
   (qi.photoRequirements || '—').split('\n').forEach((line, i) => doc.text(line, 10, y + i * 5, { maxWidth: W - 20 }));
 
   // ─── Packaging → Labels & Packaging ───
-  newPage('Labels & Packaging', null, 20);
+  newPage('Labels & Packaging', null, 21);
   y = 28;
   field('Packaging', d.packaging, 10, y); y += 14;
   field('Packaging Notes', d.packagingNotes, 10, y); y += 14;
@@ -864,7 +864,7 @@ export async function generateTechPackPDF(pack) {
   careLines.forEach((line, i) => doc.text(line, 10, y + i * 5));
 
   // ─── Logistics → Order & Delivery ───
-  newPage('Order & Delivery', null, 21);
+  newPage('Order & Delivery', null, 22);
   y = 28;
   sectionHeading('Quantity Per Size', y); y += 8;
   const qRows = (d.quantities || []).filter(q => q.colorway).map(q =>
@@ -880,14 +880,14 @@ export async function generateTechPackPDF(pack) {
   field('Target Arrival', d.targetArrivalDate, 200, y);
 
   // ─── Logistics → Packing List ───
-  newPage('Packing List', null, 21);
+  newPage('Packing List', null, 22);
   y = 28;
   const pkRows = (d.cartons || []).filter(c => c.cartonNum).map(c =>
     [c.cartonNum, c.colorway, c.sizeBreakdown, c.qtyPerCarton, c.dims, c.grossWeight, c.netWeight]);
   table(['#', 'Colorway', 'Size Breakdown', 'Qty', 'Dims (cm)', 'Gross kg', 'Net kg'], pkRows, 10, y, [15, 40, 60, 25, 40, 30, 67]);
 
   // ─── Sign-off → Review & Revision ───
-  newPage('Review & Revision', null, 22);
+  newPage('Review & Revision', null, 23);
   y = 40;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
